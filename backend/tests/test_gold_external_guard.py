@@ -101,6 +101,34 @@ def test_symlinked_configured_root_is_rejected_without_writing_outside(tmp_path)
     assert not (outside / "external_send_attempts.jsonl").exists()
 
 
+def test_root_swap_before_attempt_open_cannot_redirect_send(tmp_path, monkeypatch):
+    from app.services import gold_external_guard
+
+    root = tmp_path / "gold_shadow"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    detached = tmp_path / "detached"
+    real_open = gold_external_guard.os.open
+    swapped = False
+
+    def swap_before_write_open(path, flags, mode=0o777, *, dir_fd=None):
+        nonlocal swapped
+        if not swapped and flags & os.O_WRONLY:
+            root.rename(detached)
+            root.symlink_to(outside, target_is_directory=True)
+            swapped = True
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(gold_external_guard.os, "open", swap_before_write_open)
+
+    with pytest.raises((GoldExternalSendDenied, OSError)):
+        DisabledGoldNotifier(root).send("telegram", {})
+
+    assert not (outside / "external_send_attempts.jsonl").exists()
+    assert (detached / "external_send_attempts.jsonl").exists()
+
+
 def test_attempt_storage_is_private_and_fsynced(tmp_path, monkeypatch):
     root = tmp_path / "gold_shadow"
     fsynced = []

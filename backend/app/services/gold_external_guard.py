@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import stat
 import threading
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -54,11 +53,6 @@ def _validate_channel(channel: str) -> None:
 
 def _record_attempt(root: Path, channel: str) -> None:
     root = Path(root)
-    _reject_symlink(root)
-    root.mkdir(mode=0o700, parents=True, exist_ok=True)
-    _reject_symlink(root)
-    os.chmod(root, 0o700)
-    path = root / _ATTEMPTS_FILENAME
     row = json.dumps(
         {
             "schema_version": 1,
@@ -67,74 +61,86 @@ def _record_attempt(root: Path, channel: str) -> None:
         },
         separators=(",", ":"),
     ).encode("utf-8") + b"\n"
+    root_descriptor = _open_root(root, create=True)
     flags = os.O_APPEND | os.O_CREAT | os.O_WRONLY | os.O_CLOEXEC
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
-    descriptor = os.open(path, flags, 0o600)
     try:
-        os.fchmod(descriptor, 0o600)
-        view = memoryview(row)
-        while view:
-            view = view[os.write(descriptor, view) :]
-        os.fsync(descriptor)
+        descriptor = os.open(
+            _ATTEMPTS_FILENAME, flags, 0o600, dir_fd=root_descriptor
+        )
+        try:
+            os.fchmod(descriptor, 0o600)
+            view = memoryview(row)
+            while view:
+                view = view[os.write(descriptor, view) :]
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        _fsync_directory(root_descriptor)
     finally:
-        os.close(descriptor)
-    _fsync_directory(root)
+        os.close(root_descriptor)
 
 
 def _validated_attempt_rows(root: Path) -> list[dict[str, object]]:
     root = Path(root)
-    _reject_symlink(root)
-    path = root / _ATTEMPTS_FILENAME
-    if not _reject_symlink(path):
-        return []
     rows: list[dict[str, object]] = []
+    try:
+        root_descriptor = _open_root(root, create=False)
+    except FileNotFoundError:
+        return rows
     with _LOCK:
         flags = os.O_RDONLY | os.O_CLOEXEC
         if hasattr(os, "O_NOFOLLOW"):
             flags |= os.O_NOFOLLOW
-        descriptor = os.open(path, flags)
         try:
-            with os.fdopen(descriptor, encoding="utf-8", closefd=False) as handle:
-                for line_number, line in enumerate(handle, start=1):
-                    try:
-                        value = json.loads(line)
-                    except json.JSONDecodeError as exc:
-                        raise ValueError(
-                            f"invalid external send attempt at line {line_number}"
-                        ) from exc
-                    if (
-                        not isinstance(value, dict)
-                        or value.get("schema_version") != 1
-                        or not isinstance(value.get("attempted_at"), str)
-                        or not isinstance(value.get("channel"), str)
-                    ):
-                        raise ValueError(f"invalid external send attempt at line {line_number}")
-                    _validate_channel(value["channel"])
-                    rows.append(value)
+            try:
+                descriptor = os.open(_ATTEMPTS_FILENAME, flags, dir_fd=root_descriptor)
+            except FileNotFoundError:
+                return rows
+            try:
+                with os.fdopen(descriptor, encoding="utf-8", closefd=False) as handle:
+                    for line_number, line in enumerate(handle, start=1):
+                        try:
+                            value = json.loads(line)
+                        except json.JSONDecodeError as exc:
+                            raise ValueError(
+                                f"invalid external send attempt at line {line_number}"
+                            ) from exc
+                        if (
+                            not isinstance(value, dict)
+                            or value.get("schema_version") != 1
+                            or not isinstance(value.get("attempted_at"), str)
+                            or not isinstance(value.get("channel"), str)
+                        ):
+                            raise ValueError(
+                                f"invalid external send attempt at line {line_number}"
+                            )
+                        _validate_channel(value["channel"])
+                        rows.append(value)
+            finally:
+                os.close(descriptor)
         finally:
-            os.close(descriptor)
+            os.close(root_descriptor)
     return rows
 
 
-def _reject_symlink(path: Path) -> bool:
-    try:
-        mode = os.lstat(path).st_mode
-    except FileNotFoundError:
-        return False
-    if stat.S_ISLNK(mode):
-        raise OSError(f"symlink is not allowed: {path}")
-    return True
-
-
-def _fsync_directory(root: Path) -> None:
+def _open_root(root: Path, *, create: bool) -> int:
     flags = os.O_RDONLY | os.O_CLOEXEC
     if hasattr(os, "O_DIRECTORY"):
         flags |= os.O_DIRECTORY
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
-    descriptor = os.open(root, flags)
     try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
+        descriptor = os.open(root, flags)
+    except FileNotFoundError:
+        if not create:
+            raise
+        root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        descriptor = os.open(root, flags)
+    os.fchmod(descriptor, 0o700)
+    return descriptor
+
+
+def _fsync_directory(descriptor: int) -> None:
+    os.fsync(descriptor)

@@ -104,3 +104,39 @@ Result: `All checks passed!`
 - `backend/app/services/gold_external_guard.py`: reject symlinked configured roots and dangling or live symlinked attempt files with `lstat` before any count or write operation.
 - `backend/tests/test_gold_external_guard.py`: add RED/GREEN coverage for both `send()` and `attempt_count()` symlink cases, including the no-outside-write assertion.
 - `.superpowers/sdd/task-3-report.md`: append this review-fix evidence.
+
+## Task 3 Re-Review TOCTOU Fix
+
+### RED
+
+Added `test_root_swap_before_attempt_open_cannot_redirect_send` with a deterministic `os.open` hook that swaps the configured root path immediately before the attempt-file write-open, then ran:
+
+```bash
+cd backend && uv run --extra dev pytest tests/test_gold_external_guard.py -q
+```
+
+Result: `1 failed, 13 passed in 0.35s`.
+
+The failure showed the prior path-based implementation created `outside/external_send_attempts.jsonl` after the root was swapped.
+
+### GREEN
+
+Changed root handling to open the Gold directory with `O_DIRECTORY | O_NOFOLLOW`, use `fchmod` on the trusted directory descriptor, open/read `external_send_attempts.jsonl` relative to that descriptor with `O_NOFOLLOW`, and fsync both the file and trusted directory descriptor. Then ran:
+
+```bash
+cd backend && uv run --extra dev pytest tests/test_gold_external_guard.py -q
+```
+
+Result: `14 passed in 0.10s`.
+
+```bash
+cd backend && uv run --extra dev ruff check app/services/gold_external_guard.py tests/test_gold_external_guard.py
+```
+
+Result: `All checks passed!`
+
+### Files Changed
+
+- `backend/app/services/gold_external_guard.py`: replace path-based root/file operations with descriptor-relative, no-follow opens and trusted-descriptor fsyncs.
+- `backend/tests/test_gold_external_guard.py`: add deterministic root-swap TOCTOU regression coverage.
+- `.superpowers/sdd/task-3-report.md`: append this re-review evidence.
