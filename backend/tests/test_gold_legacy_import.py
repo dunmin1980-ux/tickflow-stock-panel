@@ -157,25 +157,25 @@ def test_get_import_rejects_schema_valid_normalized_row_tampering(tmp_path):
         store.get_import(result.import_id)
 
 
-def test_get_import_upgrades_legacy_index_metadata_once(tmp_path):
+def test_legacy_index_requires_manual_reimport_without_rewriting_metadata(tmp_path):
     store = GoldShadowStore(tmp_path)
     result = GoldLegacyImporter(store).import_bytes("monitor.log", fixture_bytes())
     index_path = store.root / "import_index.jsonl"
     legacy_metadata = json.loads(index_path.read_text(encoding="utf-8"))
     del legacy_metadata["normalized_sha256"]
-    index_path.write_text(json.dumps(legacy_metadata, ensure_ascii=False) + "\n", encoding="utf-8")
+    legacy_index = json.dumps(legacy_metadata, ensure_ascii=False) + "\n"
+    index_path.write_text(legacy_index, encoding="utf-8")
 
-    migrated = GoldShadowStore(tmp_path).get_import(result.import_id)
-    migrated_index = index_path.read_text(encoding="utf-8")
+    with pytest.raises(
+        GoldShadowStorageReadError,
+        match=r"^legacy_import_requires_manual_reimport_from_original_bytes$",
+    ):
+        GoldShadowStore(tmp_path).get_import(result.import_id)
 
-    assert migrated is not None
-    assert len(json.loads(migrated_index)["normalized_sha256"]) == 64
-    assert GoldShadowStore(tmp_path).get_import(result.import_id) is not None
-    assert index_path.read_text(encoding="utf-8") == migrated_index
+    assert index_path.read_text(encoding="utf-8") == legacy_index
 
 
-@pytest.mark.parametrize("corruption", ["missing", "malformed"])
-def test_legacy_index_upgrade_rejects_unreadable_normalized_file(tmp_path, corruption):
+def test_tampered_legacy_index_requires_manual_reimport_without_rewriting_metadata(tmp_path):
     store = GoldShadowStore(tmp_path)
     result = GoldLegacyImporter(store).import_bytes("monitor.log", fixture_bytes())
     index_path = store.root / "import_index.jsonl"
@@ -184,12 +184,14 @@ def test_legacy_index_upgrade_rejects_unreadable_normalized_file(tmp_path, corru
     legacy_index = json.dumps(legacy_metadata, ensure_ascii=False) + "\n"
     index_path.write_text(legacy_index, encoding="utf-8")
     import_path = store.root / "imports" / f"{result.import_id}.jsonl"
-    if corruption == "missing":
-        import_path.unlink()
-    else:
-        import_path.write_text("{bad\n", encoding="utf-8")
+    row = json.loads(import_path.read_text(encoding="utf-8"))
+    row["price"] = 20.00
+    import_path.write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
 
-    with pytest.raises(GoldShadowStorageReadError, match="unable to read import"):
+    with pytest.raises(
+        GoldShadowStorageReadError,
+        match=r"^legacy_import_requires_manual_reimport_from_original_bytes$",
+    ):
         GoldShadowStore(tmp_path).get_import(result.import_id)
 
     assert index_path.read_text(encoding="utf-8") == legacy_index

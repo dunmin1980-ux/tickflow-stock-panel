@@ -43,6 +43,7 @@ _IMPORT_METADATA_FIELDS = frozenset(
     {"import_id", "sha256", "normalized_sha256", "filename", "imported_at", "sample_count"}
 )
 _LEGACY_IMPORT_METADATA_FIELDS = _IMPORT_METADATA_FIELDS - {"normalized_sha256"}
+_LEGACY_IMPORT_REIMPORT_REQUIRED = "legacy_import_requires_manual_reimport_from_original_bytes"
 _COMPARISON_RUN_METADATA_FIELDS = frozenset(
     {
         "schema_version",
@@ -478,25 +479,12 @@ class GoldShadowStore:
         )
         try:
             for row in rows:
-                self._validate_import_metadata(
-                    row, allow_legacy=set(row) == _LEGACY_IMPORT_METADATA_FIELDS
-                )
+                if set(row) == _LEGACY_IMPORT_METADATA_FIELDS:
+                    raise GoldShadowStorageReadError(_LEGACY_IMPORT_REIMPORT_REQUIRED)
+                self._validate_import_metadata(row)
         except ValueError as exc:
             raise GoldShadowStorageReadError("unable to read import_index.jsonl") from exc
-        if not any(set(row) == _LEGACY_IMPORT_METADATA_FIELDS for row in rows):
-            return rows
-
-        upgraded_rows: list[dict[str, Any]] = []
-        for row in rows:
-            if set(row) == _LEGACY_IMPORT_METADATA_FIELDS:
-                import_rows = self._read_import_rows_locked(row)
-                upgraded_rows.append(
-                    {**row, "normalized_sha256": self._canonical_jsonl_sha256(import_rows)}
-                )
-            else:
-                upgraded_rows.append(row)
-        self._replace_jsonl_locked("import_index.jsonl", upgraded_rows)
-        return upgraded_rows
+        return rows
 
     def _read_import_rows_locked(self, metadata: dict[str, Any]) -> list[dict[str, Any]]:
         import_id = metadata["import_id"]
@@ -647,19 +635,13 @@ class GoldShadowStore:
             raise ValueError("import signal is invalid")
 
     @classmethod
-    def _validate_import_metadata(cls, row: dict[str, Any], *, allow_legacy: bool = False) -> None:
-        fields = set(row) if isinstance(row, dict) else set()
-        if fields == _IMPORT_METADATA_FIELDS:
-            has_normalized_digest = True
-        elif allow_legacy and fields == _LEGACY_IMPORT_METADATA_FIELDS:
-            has_normalized_digest = False
-        else:
+    def _validate_import_metadata(cls, row: dict[str, Any]) -> None:
+        if not isinstance(row, dict) or set(row) != _IMPORT_METADATA_FIELDS:
             raise ValueError("invalid import metadata")
         cls._validate_import_digest(row["import_id"])
         if row["sha256"] != row["import_id"]:
             raise ValueError("import digest mismatch")
-        if has_normalized_digest:
-            cls._validate_import_digest(row["normalized_sha256"])
+        cls._validate_import_digest(row["normalized_sha256"])
         filename = row["filename"]
         if not isinstance(filename, str) or cls._safe_basename(filename) != filename:
             raise ValueError("invalid import filename")
