@@ -54,6 +54,13 @@ def test_snapshot_requires_tickflow_source(tmp_path):
         GoldShadowStore(tmp_path).append_snapshot(row)
 
 
+def test_snapshot_requires_integration_symbol(tmp_path):
+    row = valid_snapshot()
+    row["symbol"] = "000001.SZ"
+    with pytest.raises(ValueError, match="symbol"):
+        GoldShadowStore(tmp_path).append_snapshot(row)
+
+
 def test_append_and_restart_restore_latest_snapshot(tmp_path):
     first = GoldShadowStore(tmp_path)
     first.append_snapshot(snapshot())
@@ -189,7 +196,12 @@ def test_candidate_key_is_signal_symbol_and_market_date(tmp_path):
     assert store.register_candidate("恐慌极端", "600489.SH", "2026-07-17") is True
 
 
-def test_candidate_dedupe_survives_restart_and_does_not_cross_signal_or_symbol(tmp_path):
+def test_register_candidate_requires_integration_symbol(tmp_path):
+    with pytest.raises(ValueError, match="symbol"):
+        GoldShadowStore(tmp_path).register_candidate("恐慌极端", "000001.SZ", "2026-07-16")
+
+
+def test_candidate_dedupe_survives_restart_and_does_not_cross_signal(tmp_path):
     first = GoldShadowStore(tmp_path)
     assert first.register_candidate("恐慌极端", "600489.SH", "2026-07-16") is True
 
@@ -197,7 +209,6 @@ def test_candidate_dedupe_survives_restart_and_does_not_cross_signal_or_symbol(t
 
     assert second.register_candidate("恐慌极端", "600489.SH", "2026-07-16") is False
     assert second.register_candidate("均值回归", "600489.SH", "2026-07-16") is True
-    assert second.register_candidate("恐慌极端", "000001.SZ", "2026-07-16") is True
 
 
 def test_candidate_event_recovers_after_state_write_failure(tmp_path, monkeypatch):

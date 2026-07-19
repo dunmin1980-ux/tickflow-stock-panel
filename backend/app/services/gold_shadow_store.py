@@ -44,6 +44,8 @@ def validate_gold_snapshot(snapshot: dict[str, Any]) -> None:
             raise ValueError(f"{field} must be a string")
     if snapshot["quote_source"] != "tickflow":
         raise ValueError("quote_source must be tickflow")
+    if snapshot["symbol"] != "600489.SH":
+        raise ValueError("symbol must be 600489.SH")
     if type(snapshot.get("quote_ts")) is not int:
         raise ValueError("quote_ts must be an integer")
     for field in _NUMERIC_FIELDS:
@@ -139,6 +141,8 @@ class GoldShadowStore:
 
     def register_candidate(self, signal: str, symbol: str, market_date: str) -> bool:
         """Register exactly one candidate for (signal, symbol, market_date)."""
+        if symbol != "600489.SH":
+            raise ValueError("symbol must be 600489.SH")
         key = self._candidate_key(signal, symbol, market_date)
         with _LOCK:
             snapshots = self._read_jsonl_locked("snapshots.jsonl", raise_on_failure=True)
