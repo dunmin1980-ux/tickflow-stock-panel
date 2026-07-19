@@ -9,6 +9,7 @@ ARG NPM_REGISTRY=https://registry.npmmirror.com
 ARG PYPI_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
 # 备用 PyPI 源:主源同步延迟/故障时自动兜底(阿里云与清华互为补充)
 ARG PYPI_FALLBACK=https://mirrors.aliyun.com/pypi/simple
+ARG UV_HTTP_TIMEOUT=120
 ARG BACKEND_EXTRAS=
 ARG CODEX_CLI_VERSION=0.144.3
 
@@ -69,6 +70,7 @@ ARG USE_CN_MIRROR=1
 ARG APT_MIRROR=http://mirrors.cloud.tencent.com
 ARG PYPI_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
 ARG PYPI_FALLBACK=https://mirrors.aliyun.com/pypi/simple
+ARG UV_HTTP_TIMEOUT=120
 ARG BACKEND_EXTRAS=
 ARG INCLUDE_STOCKSDK=0
 WORKDIR /app
@@ -111,7 +113,8 @@ COPY README.md /README.md
 COPY backend/pyproject.toml backend/uv.lock* ./
 # uv 原生支持同时挂多个 index(主源 + 备用源),会自动在两源中查找,
 # 比逐个重试更稳健 —— 任一源缺包时另一源补位。
-RUN if [ "$USE_CN_MIRROR" = "1" ]; then \
+RUN export UV_HTTP_TIMEOUT="$UV_HTTP_TIMEOUT"; \
+    if [ "$USE_CN_MIRROR" = "1" ]; then \
       export UV_DEFAULT_INDEX="$PYPI_INDEX" UV_EXTRA_INDEX_URL="$PYPI_FALLBACK"; \
     fi; \
     set -- --no-dev; \
