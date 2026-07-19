@@ -5,8 +5,9 @@ import json
 import logging
 import math
 import os
+import string
 import threading
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +32,14 @@ _NUMERIC_FIELDS = (
     "V",
     "A",
 )
+_IMPORT_ROW_FIELDS = frozenset(
+    {"schema_version", "observed_at", "price", "P", "V", "A", "state", "signals"}
+)
+_IMPORT_NUMERIC_FIELDS = ("price", "P", "V", "A")
+_IMPORT_METADATA_FIELDS = frozenset(
+    {"import_id", "sha256", "filename", "imported_at", "sample_count"}
+)
+_GOLD_STATES = frozenset({"恐慌", "死机", "贪婪"})
 
 
 def validate_gold_snapshot(snapshot: dict[str, Any]) -> None:
@@ -190,6 +199,81 @@ class GoldShadowStore:
         rows.reverse()
         return rows[: max(0, limit)]
 
+    def commit_import(
+        self, digest: str, filename: str, rows: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Durably commit normalized samples before publishing their index metadata."""
+        self._validate_import_digest(digest)
+        if not rows:
+            raise ValueError("import rows must not be empty")
+        normalized_rows = [dict(row) for row in rows]
+        for row in normalized_rows:
+            self._validate_import_row(row)
+        safe_filename = self._safe_basename(filename)
+
+        with _LOCK:
+            index = self._read_import_index_locked()
+            existing = next((row for row in index if row["sha256"] == digest), None)
+            if existing is not None:
+                return dict(existing)
+
+            self._write_import_rows_locked(digest, normalized_rows)
+            metadata = {
+                "import_id": digest,
+                "sha256": digest,
+                "filename": safe_filename,
+                "imported_at": datetime.now(UTC).isoformat(),
+                "sample_count": len(normalized_rows),
+            }
+            self._replace_jsonl_locked("import_index.jsonl", [*index, metadata])
+            return dict(metadata)
+
+    def find_import_by_sha256(self, digest: str) -> dict[str, Any] | None:
+        if not self._is_import_digest(digest):
+            return None
+        with _LOCK:
+            row = next(
+                (row for row in self._read_import_index_locked() if row["sha256"] == digest),
+                None,
+            )
+        return dict(row) if row is not None else None
+
+    def get_import(self, import_id: str) -> dict[str, Any] | None:
+        if not self._is_import_digest(import_id):
+            return None
+        with _LOCK:
+            metadata = next(
+                (
+                    row
+                    for row in self._read_import_index_locked()
+                    if row["import_id"] == import_id
+                ),
+                None,
+            )
+            if metadata is None:
+                return None
+            filename = f"imports/{import_id}.jsonl"
+            path = self.root / filename
+            if not path.is_file():
+                raise GoldShadowStorageReadError(f"unable to read import {import_id}")
+            rows = self._read_jsonl_locked(
+                filename, raise_on_failure=True, reject_malformed=True
+            )
+            try:
+                for row in rows:
+                    self._validate_import_row(row)
+            except ValueError as exc:
+                raise GoldShadowStorageReadError(f"unable to read import {import_id}") from exc
+            if len(rows) != metadata["sample_count"]:
+                raise GoldShadowStorageReadError(f"unable to read import {import_id}")
+        return {**metadata, "rows": [dict(row) for row in rows]}
+
+    def list_imports(self, limit: int = MAX_RECORDS) -> list[dict[str, Any]]:
+        with _LOCK:
+            rows = self._read_import_index_locked()
+        rows.reverse()
+        return [dict(row) for row in rows[: max(0, limit)]]
+
     def write_health(
         self,
         *,
@@ -255,7 +339,11 @@ class GoldShadowStore:
         self._fsync_root_locked()
 
     def _read_jsonl_locked(
-        self, filename: str, *, raise_on_failure: bool = False
+        self,
+        filename: str,
+        *,
+        raise_on_failure: bool = False,
+        reject_malformed: bool = False,
     ) -> list[dict[str, Any]]:
         path = self.root / filename
         if not path.exists():
@@ -271,9 +359,13 @@ class GoldShadowStore:
                         row = json.loads(text)
                     except json.JSONDecodeError:
                         logger.warning("gold_shadow_store malformed %s line %d", filename, line_number)
+                        if reject_malformed:
+                            raise GoldShadowStorageReadError(f"unable to read {filename}") from None
                         continue
                     if not isinstance(row, dict):
                         logger.warning("gold_shadow_store malformed %s line %d", filename, line_number)
+                        if reject_malformed:
+                            raise GoldShadowStorageReadError(f"unable to read {filename}")
                         continue
                     rows.append(row)
         except (OSError, UnicodeDecodeError) as exc:
@@ -306,6 +398,17 @@ class GoldShadowStore:
         value = self._read_json_state_locked("candidate_state.json")
         keys = value.get("keys", []) if isinstance(value, dict) else value
         return [key for key in keys if isinstance(key, str)] if isinstance(keys, list) else []
+
+    def _read_import_index_locked(self) -> list[dict[str, Any]]:
+        rows = self._read_jsonl_locked(
+            "import_index.jsonl", raise_on_failure=True, reject_malformed=True
+        )
+        try:
+            for row in rows:
+                self._validate_import_metadata(row)
+        except ValueError as exc:
+            raise GoldShadowStorageReadError("unable to read import_index.jsonl") from exc
+        return rows
 
     def _read_candidate_event_keys_locked(self) -> set[str]:
         return {
@@ -376,6 +479,76 @@ class GoldShadowStore:
     def _validate_snapshot(snapshot: dict[str, Any]) -> None:
         validate_gold_snapshot(snapshot)
 
+    @staticmethod
+    def _is_import_digest(digest: object) -> bool:
+        return (
+            isinstance(digest, str)
+            and len(digest) == 64
+            and all(character in string.hexdigits for character in digest)
+            and digest == digest.lower()
+        )
+
+    @classmethod
+    def _validate_import_digest(cls, digest: object) -> None:
+        if not cls._is_import_digest(digest):
+            raise ValueError("invalid import digest")
+
+    @staticmethod
+    def _safe_basename(filename: str) -> str:
+        basename = str(filename).replace("\\", "/").rsplit("/", 1)[-1]
+        return "upload" if basename in {"", ".", ".."} else basename
+
+    @classmethod
+    def _validate_import_row(cls, row: dict[str, Any]) -> None:
+        if not isinstance(row, dict) or set(row) != _IMPORT_ROW_FIELDS:
+            raise ValueError("normalized import fields are required")
+        if type(row["schema_version"]) is not int or row["schema_version"] != 1:
+            raise ValueError("import schema_version must be 1")
+        observed_at = row["observed_at"]
+        if not isinstance(observed_at, str):
+            raise ValueError("import observed_at must be a string")
+        try:
+            parsed_at = datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("import observed_at is invalid") from exc
+        if parsed_at.utcoffset() is None:
+            raise ValueError("import observed_at must include a timezone")
+        for field in _IMPORT_NUMERIC_FIELDS:
+            value = row[field]
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+            ):
+                raise ValueError(f"import {field} must be finite")
+        if row["state"] not in _GOLD_STATES:
+            raise ValueError("import state is invalid")
+        signals = row["signals"]
+        if not isinstance(signals, list) or not all(isinstance(item, str) for item in signals):
+            raise ValueError("import signals must be a list of strings")
+
+    @classmethod
+    def _validate_import_metadata(cls, row: dict[str, Any]) -> None:
+        if not isinstance(row, dict) or set(row) != _IMPORT_METADATA_FIELDS:
+            raise ValueError("invalid import metadata")
+        cls._validate_import_digest(row["import_id"])
+        if row["sha256"] != row["import_id"]:
+            raise ValueError("import digest mismatch")
+        filename = row["filename"]
+        if not isinstance(filename, str) or cls._safe_basename(filename) != filename:
+            raise ValueError("invalid import filename")
+        imported_at = row["imported_at"]
+        if not isinstance(imported_at, str):
+            raise ValueError("invalid import timestamp")
+        try:
+            parsed_at = datetime.fromisoformat(imported_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("invalid import timestamp") from exc
+        if parsed_at.utcoffset() is None:
+            raise ValueError("invalid import timestamp")
+        if type(row["sample_count"]) is not int or row["sample_count"] <= 0:
+            raise ValueError("invalid import sample count")
+
     def _read_json_state_locked(self, filename: str, *, raise_on_failure: bool = False) -> Any:
         path = self.root / filename
         if not path.exists():
@@ -405,17 +578,52 @@ class GoldShadowStore:
         self._ensure_root()
         path = self.root / filename
         temporary = path.with_name(f".{path.name}.tmp")
-        with temporary.open("w", encoding="utf-8") as handle:
-            for row in rows:
-                handle.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-        os.chmod(path, 0o600)
+        descriptor = os.open(temporary, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o600)
+        os.chmod(temporary, 0o600)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                for row in rows:
+                    handle.write(
+                        json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
+                    )
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, path)
+            os.chmod(path, 0o600)
+            self._fsync_root_locked()
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def _write_import_rows_locked(self, digest: str, rows: list[dict[str, Any]]) -> None:
+        self._ensure_root()
+        imports = self.root / "imports"
+        imports.mkdir(mode=0o700, exist_ok=True)
+        os.chmod(imports, 0o700)
         self._fsync_root_locked()
+        path = imports / f"{digest}.jsonl"
+        temporary = imports / f".{digest}.jsonl.tmp"
+        descriptor = os.open(temporary, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o600)
+        os.chmod(temporary, 0o600)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                for row in rows:
+                    handle.write(
+                        json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
+                    )
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, path)
+            os.chmod(path, 0o600)
+            self._fsync_directory_locked(imports)
+        finally:
+            temporary.unlink(missing_ok=True)
 
     def _fsync_root_locked(self) -> None:
-        descriptor = os.open(self.root, os.O_RDONLY)
+        self._fsync_directory_locked(self.root)
+
+    @staticmethod
+    def _fsync_directory_locked(path: Path) -> None:
+        descriptor = os.open(path, os.O_RDONLY)
         try:
             os.fsync(descriptor)
         finally:
