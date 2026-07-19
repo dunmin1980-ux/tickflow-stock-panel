@@ -366,12 +366,32 @@ class GoldShadowStore:
         """Append a validated manual observation review to durable private storage."""
         self._validate_observation_review(review)
         with _LOCK:
-            self._read_observation_reviews_locked()
-            self._append_jsonl_locked("observation_reviews.jsonl", review)
+            try:
+                root_descriptor = self._open_root_descriptor(create=True)
+            except OSError as exc:
+                raise GoldShadowStorageReadError(
+                    "unable to write observation_reviews.jsonl"
+                ) from exc
+            try:
+                self._read_observation_reviews_at_locked(root_descriptor)
+                self._append_observation_review_at_locked(root_descriptor, review)
+            finally:
+                os.close(root_descriptor)
 
     def list_observation_reviews(self) -> list[dict[str, Any]]:
         with _LOCK:
-            rows = self._read_observation_reviews_locked()
+            try:
+                root_descriptor = self._open_root_descriptor(create=False)
+            except FileNotFoundError:
+                return []
+            except OSError as exc:
+                raise GoldShadowStorageReadError(
+                    "unable to read observation_reviews.jsonl"
+                ) from exc
+            try:
+                rows = self._read_observation_reviews_at_locked(root_descriptor)
+            finally:
+                os.close(root_descriptor)
         return [dict(row) for row in rows]
 
     def write_health(
@@ -405,20 +425,47 @@ class GoldShadowStore:
         return value if isinstance(value, dict) else None
 
     def read_holidays(self) -> list[str]:
-        """Read deployment-provided holidays without creating or modifying them."""
-        path = self.root / "holidays.json"
-        if not path.exists():
-            return []
+        """Read and validate the required deployment-provided holiday calendar."""
+        root_descriptor: int | None = None
         try:
-            value = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            logger.warning("gold_shadow_store holidays read failed: %s", exc)
-            return []
-        return value if isinstance(value, list) else []
+            root_descriptor = self._open_root_descriptor(create=False)
+            flags = os.O_RDONLY | os.O_CLOEXEC
+            if hasattr(os, "O_NOFOLLOW"):
+                flags |= os.O_NOFOLLOW
+            descriptor = os.open("holidays.json", flags, dir_fd=root_descriptor)
+            with os.fdopen(descriptor, encoding="utf-8") as handle:
+                value = json.load(handle)
+            if not isinstance(value, list) or not all(isinstance(day, str) for day in value):
+                raise ValueError("holiday calendar must be a list of dates")
+            for day in value:
+                if date.fromisoformat(day).isoformat() != day:
+                    raise ValueError("holiday calendar contains an invalid date")
+            return list(value)
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
+            raise GoldShadowStorageReadError("unable to read holidays.json") from exc
+        finally:
+            if root_descriptor is not None:
+                os.close(root_descriptor)
 
     def _ensure_root(self) -> None:
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
         os.chmod(self.root, 0o700)
+
+    def _open_root_descriptor(self, *, create: bool) -> int:
+        flags = os.O_RDONLY | os.O_CLOEXEC
+        if hasattr(os, "O_DIRECTORY"):
+            flags |= os.O_DIRECTORY
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        try:
+            descriptor = os.open(self.root, flags)
+        except FileNotFoundError:
+            if not create:
+                raise
+            self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
+            descriptor = os.open(self.root, flags)
+        os.fchmod(descriptor, 0o700)
+        return descriptor
 
     def _append_jsonl_locked(self, filename: str, row: dict[str, Any]) -> None:
         self._ensure_root()
@@ -541,18 +588,69 @@ class GoldShadowStore:
             raise GoldShadowStorageReadError("unable to read comparison_index.jsonl") from exc
         return rows
 
-    def _read_observation_reviews_locked(self) -> list[dict[str, Any]]:
-        rows = self._read_jsonl_locked(
-            "observation_reviews.jsonl", raise_on_failure=True, reject_malformed=True
-        )
+    def _read_observation_reviews_at_locked(
+        self, root_descriptor: int
+    ) -> list[dict[str, Any]]:
+        flags = os.O_RDONLY | os.O_CLOEXEC
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
         try:
+            try:
+                descriptor = os.open(
+                    "observation_reviews.jsonl", flags, dir_fd=root_descriptor
+                )
+            except FileNotFoundError:
+                return []
+            rows: list[dict[str, Any]] = []
+            with os.fdopen(descriptor, encoding="utf-8") as handle:
+                for line_number, line in enumerate(handle, start=1):
+                    try:
+                        row = json.loads(line)
+                    except json.JSONDecodeError as exc:
+                        raise ValueError(
+                            f"invalid observation review at line {line_number}"
+                        ) from exc
+                    if not isinstance(row, dict):
+                        raise ValueError(f"invalid observation review at line {line_number}")
+                    rows.append(row)
             for row in rows:
                 self._validate_observation_review(row)
-        except ValueError as exc:
+        except (OSError, UnicodeError, ValueError) as exc:
             raise GoldShadowStorageReadError(
                 "unable to read observation_reviews.jsonl"
             ) from exc
         return rows
+
+    def _append_observation_review_at_locked(
+        self, root_descriptor: int, review: dict[str, Any]
+    ) -> None:
+        flags = os.O_APPEND | os.O_CREAT | os.O_RDWR | os.O_CLOEXEC
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        try:
+            descriptor = os.open(
+                "observation_reviews.jsonl", flags, 0o600, dir_fd=root_descriptor
+            )
+            try:
+                os.fchmod(descriptor, 0o600)
+                if os.lseek(descriptor, 0, os.SEEK_END) > 0:
+                    os.lseek(descriptor, -1, os.SEEK_END)
+                    if os.read(descriptor, 1) != b"\n":
+                        os.write(descriptor, b"\n")
+                encoded = (
+                    json.dumps(review, ensure_ascii=False, separators=(",", ":")) + "\n"
+                ).encode("utf-8")
+                view = memoryview(encoded)
+                while view:
+                    view = view[os.write(descriptor, view) :]
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            os.fsync(root_descriptor)
+        except OSError as exc:
+            raise GoldShadowStorageReadError(
+                "unable to write observation_reviews.jsonl"
+            ) from exc
 
     def _read_candidate_event_keys_locked(self) -> set[str]:
         return {

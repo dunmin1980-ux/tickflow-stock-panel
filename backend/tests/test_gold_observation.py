@@ -1,5 +1,7 @@
 import hashlib
+import io
 import json
+import os
 import stat
 from datetime import date, datetime, timedelta
 
@@ -10,12 +12,14 @@ from app.services.gold_external_guard import (
     GoldExternalSendDenied,
 )
 from app.services.gold_observation import GoldObservationService
-from app.services.gold_shadow_store import GoldShadowStore
+from app.services.gold_shadow_store import GoldShadowStorageReadError, GoldShadowStore
 
 
 @pytest.fixture
 def service(tmp_path):
     store = GoldShadowStore(tmp_path)
+    store.root.mkdir(mode=0o700, parents=True)
+    (store.root / "holidays.json").write_text("[]\n", encoding="utf-8")
     notifier = DisabledGoldNotifier(store.root)
     return GoldObservationService(store, notifier)
 
@@ -78,6 +82,28 @@ def _seed_valid_days(service: GoldObservationService, count: int) -> list[dict]:
     return runs
 
 
+def _restart_review(note: str = "restart reviewed") -> dict:
+    return {
+        "schema_version": 1,
+        "review_type": "restart",
+        "verified": True,
+        "note": note,
+        "reviewed_at": "2026-07-20T12:00:00+00:00",
+    }
+
+
+def _day_review(market_date: date, run_id: str) -> dict:
+    return {
+        "schema_version": 1,
+        "review_type": "day",
+        "market_date": market_date.isoformat(),
+        "run_id": run_id,
+        "verified": True,
+        "note": "persisted full-day review",
+        "reviewed_at": "2026-07-20T12:00:00+00:00",
+    }
+
+
 def test_nine_valid_days_remain_collecting(service):
     _seed_valid_days(service, count=9)
 
@@ -98,6 +124,97 @@ def test_ten_days_and_restart_review_are_review_eligible(service):
     assert result["complete_trading_days"] == 10
     assert "notifications_enabled" not in result
     assert not any(name.startswith(("activate", "enable")) for name in dir(service))
+
+
+def test_weekend_comparison_runs_cannot_be_reviewed_or_counted(service):
+    first_saturday = date(2026, 7, 4)
+    for offset in range(10):
+        market_date = first_saturday + timedelta(days=offset * 7)
+        run = _commit_run(service.store, market_date)
+        with pytest.raises(ValueError, match="trading day"):
+            service.review_day(
+                market_date,
+                run["run_id"],
+                verified=True,
+                note="weekend must not count",
+            )
+        service.store.append_observation_review(_day_review(market_date, run["run_id"]))
+    service.review_restart(verified=True, note="restart reviewed")
+
+    result = service.status()
+
+    assert result["status"] == "collecting"
+    assert result["complete_trading_days"] == 0
+
+
+def test_configured_holiday_cannot_be_reviewed_or_counted(service):
+    market_date = _trading_dates(1)[0]
+    (service.store.root / "holidays.json").write_text(
+        json.dumps([market_date.isoformat()]),
+        encoding="utf-8",
+    )
+    run = _commit_run(service.store, market_date)
+
+    with pytest.raises(ValueError, match="trading day"):
+        service.review_day(
+            market_date,
+            run["run_id"],
+            verified=True,
+            note="configured holiday must not count",
+        )
+    service.store.append_observation_review(_day_review(market_date, run["run_id"]))
+
+    result = service.status()
+    assert result["status"] == "collecting"
+    assert result["complete_trading_days"] == 0
+
+
+@pytest.mark.parametrize(
+    "calendar_contents",
+    [None, "{not-json", '["not-a-date"]', '{"holidays": []}'],
+)
+def test_unavailable_or_corrupt_calendar_fails_closed(service, calendar_contents):
+    path = service.store.root / "holidays.json"
+    if calendar_contents is None:
+        path.unlink()
+    else:
+        path.write_text(calendar_contents, encoding="utf-8")
+
+    result = service.status()
+
+    assert result["status"] == "failed"
+    assert "trading_calendar_unavailable" in result["reasons"]
+
+
+def test_symlinked_calendar_fails_closed_without_reading_outside(service, tmp_path):
+    outside = tmp_path / "outside-holidays.json"
+    outside.write_text("[]\n", encoding="utf-8")
+    calendar = service.store.root / "holidays.json"
+    calendar.unlink()
+    calendar.symlink_to(outside)
+
+    result = service.status()
+
+    assert result["status"] == "failed"
+    assert "trading_calendar_unavailable" in result["reasons"]
+
+
+def test_unreadable_calendar_fails_closed(service, monkeypatch):
+    from app.services import gold_shadow_store
+
+    real_open = gold_shadow_store.os.open
+
+    def fail_calendar_open(path, flags, mode=0o777, *, dir_fd=None):
+        if os.fspath(path) == "holidays.json":
+            raise PermissionError("injected unreadable calendar")
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(gold_shadow_store.os, "open", fail_calendar_open)
+
+    result = service.status()
+
+    assert result["status"] == "failed"
+    assert "trading_calendar_unavailable" in result["reasons"]
 
 
 def test_external_attempt_forces_failed(service):
@@ -294,7 +411,7 @@ def test_reviews_survive_restart_and_use_private_storage(service):
 
 
 def test_corrupted_review_state_fails_closed(service):
-    service.store.root.mkdir(mode=0o700, parents=True)
+    service.store.root.mkdir(mode=0o700, parents=True, exist_ok=True)
     (service.store.root / "observation_reviews.jsonl").write_text(
         '{"schema_version":1,"review_type":"restart"}\n',
         encoding="utf-8",
@@ -303,6 +420,128 @@ def test_corrupted_review_state_fails_closed(service):
     result = service.status()
 
     assert result["status"] == "failed"
+
+
+def test_symlinked_review_file_is_rejected_without_outside_read_or_write(service, tmp_path):
+    outside = tmp_path / "outside-reviews.jsonl"
+    outside.write_text(json.dumps(_restart_review("outside")) + "\n", encoding="utf-8")
+    original = outside.read_bytes()
+    path = service.store.root / "observation_reviews.jsonl"
+    path.symlink_to(outside)
+
+    with pytest.raises(GoldShadowStorageReadError):
+        service.store.list_observation_reviews()
+    with pytest.raises((GoldShadowStorageReadError, OSError)):
+        service.review_restart(verified=True, note="must remain local")
+
+    assert outside.read_bytes() == original
+
+
+def test_dangling_review_file_symlink_is_rejected_for_read_and_write(service, tmp_path):
+    path = service.store.root / "observation_reviews.jsonl"
+    outside = tmp_path / "missing-reviews.jsonl"
+    path.symlink_to(outside)
+
+    with pytest.raises(GoldShadowStorageReadError):
+        service.store.list_observation_reviews()
+    with pytest.raises((GoldShadowStorageReadError, OSError)):
+        service.review_restart(verified=True, note="must remain local")
+
+    assert not outside.exists()
+
+
+def test_symlinked_review_root_is_rejected_without_outside_read_or_write(tmp_path):
+    store = GoldShadowStore(tmp_path)
+    outside = tmp_path / "outside-root"
+    outside.mkdir()
+    outside_path = outside / "observation_reviews.jsonl"
+    outside_path.write_text(json.dumps(_restart_review("outside")) + "\n", encoding="utf-8")
+    original = outside_path.read_bytes()
+    store.root.parent.mkdir(parents=True)
+    store.root.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(GoldShadowStorageReadError):
+        store.list_observation_reviews()
+    with pytest.raises((GoldShadowStorageReadError, OSError)):
+        store.append_observation_review(_restart_review("must remain local"))
+
+    assert outside_path.read_bytes() == original
+
+
+def test_dangling_review_root_is_rejected_without_creating_target(tmp_path):
+    store = GoldShadowStore(tmp_path)
+    missing = tmp_path / "missing-root"
+    store.root.parent.mkdir(parents=True)
+    store.root.symlink_to(missing, target_is_directory=True)
+
+    with pytest.raises(GoldShadowStorageReadError):
+        store.list_observation_reviews()
+    with pytest.raises(GoldShadowStorageReadError):
+        store.append_observation_review(_restart_review())
+
+    assert not missing.exists()
+
+
+def test_root_swap_before_review_write_cannot_redirect_append(tmp_path, monkeypatch):
+    from app.services import gold_shadow_store
+
+    store = GoldShadowStore(tmp_path)
+    store.root.mkdir(mode=0o700, parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    detached = tmp_path / "detached"
+    real_open = gold_shadow_store.os.open
+    swapped = False
+
+    def swap_before_write_open(path, flags, mode=0o777, *, dir_fd=None):
+        nonlocal swapped
+        if (
+            not swapped
+            and flags & (os.O_WRONLY | os.O_RDWR)
+            and os.fspath(path).endswith("observation_reviews.jsonl")
+        ):
+            store.root.rename(detached)
+            store.root.symlink_to(outside, target_is_directory=True)
+            swapped = True
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(gold_shadow_store.os, "open", swap_before_write_open)
+
+    store.append_observation_review(_restart_review())
+
+    assert swapped is True
+    assert not (outside / "observation_reviews.jsonl").exists()
+    assert (detached / "observation_reviews.jsonl").exists()
+
+
+def test_root_swap_before_review_read_cannot_redirect_read(tmp_path, monkeypatch):
+    store = GoldShadowStore(tmp_path)
+    store.append_observation_review(_restart_review("trusted"))
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "observation_reviews.jsonl").write_text(
+        json.dumps(_restart_review("outside")) + "\n",
+        encoding="utf-8",
+    )
+    detached = tmp_path / "detached"
+    real_open = io.open
+    swapped = False
+
+    def swap_before_read(file, *args, **kwargs):
+        nonlocal swapped
+        is_review_path = os.fspath(file).endswith("observation_reviews.jsonl") if not isinstance(file, int) else False
+        if not swapped and (is_review_path or isinstance(file, int)):
+            store.root.rename(detached)
+            store.root.symlink_to(outside, target_is_directory=True)
+            swapped = True
+        return real_open(file, *args, **kwargs)
+
+    monkeypatch.setattr(io, "open", swap_before_read)
+
+    rows = store.list_observation_reviews()
+
+    assert swapped is True
+    assert rows[0]["note"] == "trusted"
 
 
 def test_corrupted_comparison_run_fails_closed(service):
@@ -317,7 +556,7 @@ def test_corrupted_comparison_run_fails_closed(service):
 
 
 def test_corrupted_external_attempt_state_fails_closed(service):
-    service.store.root.mkdir(mode=0o700, parents=True)
+    service.store.root.mkdir(mode=0o700, parents=True, exist_ok=True)
     (service.store.root / "external_send_attempts.jsonl").write_text(
         '{"schema_version":1}\n',
         encoding="utf-8",

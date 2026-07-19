@@ -34,6 +34,12 @@ class GoldObservationService:
         market_date_text = self._market_date_text(market_date)
         clean_note = self._validated_note(verified, note)
         try:
+            holidays = {date.fromisoformat(day) for day in self.store.read_holidays()}
+        except GoldShadowStorageReadError as exc:
+            raise ValueError("trading calendar is unavailable") from exc
+        if not _is_trading_day(market_date, holidays):
+            raise ValueError("market_date must be a configured trading day")
+        try:
             runs = self.store.list_comparison_runs(limit=_ALL_RUNS_LIMIT)
         except GoldShadowStorageReadError as exc:
             raise ValueError("comparison state is invalid") from exc
@@ -87,6 +93,15 @@ class GoldObservationService:
             canonical_runs, chain_reasons = _canonical_runs(runs)
             reasons.extend(chain_reasons)
 
+        holidays: set[date] = set()
+        calendar_available = False
+        try:
+            holidays = {date.fromisoformat(day) for day in self.store.read_holidays()}
+        except GoldShadowStorageReadError:
+            reasons.append("trading_calendar_unavailable")
+        else:
+            calendar_available = True
+
         reviews: list[dict[str, Any]] = []
         try:
             reviews = self.store.list_observation_reviews()
@@ -106,10 +121,12 @@ class GoldObservationService:
             thresholds_pass = _thresholds_pass(run)
             if thresholds_pass is None:
                 reasons.append(f"automatic_tolerance_state_corrupt:{metadata['run_id']}")
-            elif thresholds_pass:
-                passing_runs[market_date_text] = metadata["run_id"]
-            else:
+            elif not thresholds_pass:
                 reasons.append(f"automatic_tolerance_failed:{metadata['run_id']}")
+            elif calendar_available and _is_trading_day(
+                date.fromisoformat(market_date_text), holidays
+            ):
+                passing_runs[market_date_text] = metadata["run_id"]
 
         latest_day_reviews: dict[str, dict[str, Any]] = {}
         latest_restart_review: dict[str, Any] | None = None
@@ -220,3 +237,7 @@ def _thresholds_pass(run: dict[str, Any]) -> bool | None:
     if not isinstance(stage_a, dict) or type(stage_a.get("thresholds_pass")) is not bool:
         return None
     return stage_a["thresholds_pass"]
+
+
+def _is_trading_day(market_date: date, holidays: set[date]) -> bool:
+    return market_date.weekday() < 5 and market_date not in holidays
