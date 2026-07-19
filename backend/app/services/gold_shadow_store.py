@@ -42,6 +42,7 @@ _IMPORT_NUMERIC_FIELDS = ("price", "P", "V", "A")
 _IMPORT_METADATA_FIELDS = frozenset(
     {"import_id", "sha256", "normalized_sha256", "filename", "imported_at", "sample_count"}
 )
+_LEGACY_IMPORT_METADATA_FIELDS = _IMPORT_METADATA_FIELDS - {"normalized_sha256"}
 _COMPARISON_RUN_METADATA_FIELDS = frozenset(
     {
         "schema_version",
@@ -236,6 +237,7 @@ class GoldShadowStore:
             index = self._read_import_index_locked()
             existing = next((row for row in index if row["sha256"] == digest), None)
             if existing is not None:
+                self._read_import_rows_locked(existing)
                 return dict(existing)
 
             self._write_import_rows_locked(digest, normalized_rows)
@@ -258,6 +260,8 @@ class GoldShadowStore:
                 (row for row in self._read_import_index_locked() if row["sha256"] == digest),
                 None,
             )
+            if row is not None:
+                self._read_import_rows_locked(row)
         return dict(row) if row is not None else None
 
     def get_import(self, import_id: str) -> dict[str, Any] | None:
@@ -274,22 +278,7 @@ class GoldShadowStore:
             )
             if metadata is None:
                 return None
-            filename = f"imports/{import_id}.jsonl"
-            path = self.root / filename
-            if not path.is_file():
-                raise GoldShadowStorageReadError(f"unable to read import {import_id}")
-            rows = self._read_jsonl_locked(
-                filename, raise_on_failure=True, reject_malformed=True
-            )
-            try:
-                for row in rows:
-                    self._validate_import_row(row)
-            except ValueError as exc:
-                raise GoldShadowStorageReadError(f"unable to read import {import_id}") from exc
-            if len(rows) != metadata["sample_count"]:
-                raise GoldShadowStorageReadError(f"unable to read import {import_id}")
-            if self._canonical_jsonl_sha256(rows) != metadata["normalized_sha256"]:
-                raise GoldShadowStorageReadError(f"unable to read import {import_id}")
+            rows = self._read_import_rows_locked(metadata)
         return {**metadata, "rows": [dict(row) for row in rows]}
 
     def list_imports(self, limit: int = MAX_RECORDS) -> list[dict[str, Any]]:
@@ -489,9 +478,42 @@ class GoldShadowStore:
         )
         try:
             for row in rows:
-                self._validate_import_metadata(row)
+                self._validate_import_metadata(
+                    row, allow_legacy=set(row) == _LEGACY_IMPORT_METADATA_FIELDS
+                )
         except ValueError as exc:
             raise GoldShadowStorageReadError("unable to read import_index.jsonl") from exc
+        if not any(set(row) == _LEGACY_IMPORT_METADATA_FIELDS for row in rows):
+            return rows
+
+        upgraded_rows: list[dict[str, Any]] = []
+        for row in rows:
+            if set(row) == _LEGACY_IMPORT_METADATA_FIELDS:
+                import_rows = self._read_import_rows_locked(row)
+                upgraded_rows.append(
+                    {**row, "normalized_sha256": self._canonical_jsonl_sha256(import_rows)}
+                )
+            else:
+                upgraded_rows.append(row)
+        self._replace_jsonl_locked("import_index.jsonl", upgraded_rows)
+        return upgraded_rows
+
+    def _read_import_rows_locked(self, metadata: dict[str, Any]) -> list[dict[str, Any]]:
+        import_id = metadata["import_id"]
+        filename = f"imports/{import_id}.jsonl"
+        if not (self.root / filename).is_file():
+            raise GoldShadowStorageReadError(f"unable to read import {import_id}")
+        try:
+            rows = self._read_jsonl_locked(filename, raise_on_failure=True, reject_malformed=True)
+            for row in rows:
+                self._validate_import_row(row)
+            if len(rows) != metadata["sample_count"]:
+                raise ValueError("import sample count mismatch")
+            normalized_digest = metadata.get("normalized_sha256")
+            if normalized_digest is not None and self._canonical_jsonl_sha256(rows) != normalized_digest:
+                raise ValueError("import normalized digest mismatch")
+        except (GoldShadowStorageReadError, ValueError) as exc:
+            raise GoldShadowStorageReadError(f"unable to read import {import_id}") from exc
         return rows
 
     def _read_comparison_index_locked(self) -> list[dict[str, Any]]:
@@ -625,13 +647,19 @@ class GoldShadowStore:
             raise ValueError("import signal is invalid")
 
     @classmethod
-    def _validate_import_metadata(cls, row: dict[str, Any]) -> None:
-        if not isinstance(row, dict) or set(row) != _IMPORT_METADATA_FIELDS:
+    def _validate_import_metadata(cls, row: dict[str, Any], *, allow_legacy: bool = False) -> None:
+        fields = set(row) if isinstance(row, dict) else set()
+        if fields == _IMPORT_METADATA_FIELDS:
+            has_normalized_digest = True
+        elif allow_legacy and fields == _LEGACY_IMPORT_METADATA_FIELDS:
+            has_normalized_digest = False
+        else:
             raise ValueError("invalid import metadata")
         cls._validate_import_digest(row["import_id"])
         if row["sha256"] != row["import_id"]:
             raise ValueError("import digest mismatch")
-        cls._validate_import_digest(row["normalized_sha256"])
+        if has_normalized_digest:
+            cls._validate_import_digest(row["normalized_sha256"])
         filename = row["filename"]
         if not isinstance(filename, str) or cls._safe_basename(filename) != filename:
             raise ValueError("invalid import filename")
