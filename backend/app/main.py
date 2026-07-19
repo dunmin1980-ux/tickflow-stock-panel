@@ -13,9 +13,18 @@ from fastapi.staticfiles import StaticFiles
 
 from app import __version__
 from app.api import analysis, auth as auth_api, backtest, data, ext_data, financials, indices, intraday, kline, market_recap, monitor_rules, alerts, overview, pipeline, rps, screener, settings as settings_api, signals, stock_analysis, strategy, watchlist
+from app.api import gold
 from app.api.routes import router as core_router
 from app.config import settings
 from app.jobs import daily_pipeline
+from app.services.gold_comparison_runs import GoldComparisonRunner
+from app.services.gold_external_guard import DisabledGoldNotifier
+from app.services.gold_legacy_import import GoldLegacyImporter
+from app.services.gold_observation import GoldObservationService
+from app.services.gold_scheduler import GoldSampler, register_gold_sampler
+from app.services.gold_shadow import GoldShadowService
+from app.services.gold_shadow_store import GoldShadowStore
+from app.services.gold_tickflow import GoldTickFlowGateway
 from app.services.quote_service import QuoteService
 from app.tickflow import client as tf_client
 from app.tickflow.policy import detect_capabilities
@@ -26,6 +35,34 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+def _initialize_gold_runtime(app: FastAPI, store: DataStore) -> None:
+    app.state.gold_shadow_service = None
+    app.state.gold_store = None
+    app.state.gold_legacy_importer = None
+    app.state.gold_comparison_runner = None
+    app.state.gold_observation_service = None
+    if not settings.gold_workspace_enabled:
+        return
+
+    gold_store = GoldShadowStore(store.data_dir)
+    gold_notifier = DisabledGoldNotifier(gold_store.root)
+    gold_gateway = GoldTickFlowGateway(
+        gold_store,
+        capset_provider=lambda: app.state.capabilities,
+    )
+    gold_service = GoldShadowService(gold_store, gold_notifier)
+    gold_sampler = GoldSampler(gold_gateway, gold_service)
+    app.state.gold_store = gold_store
+    app.state.gold_shadow_service = gold_service
+    app.state.gold_legacy_importer = GoldLegacyImporter(gold_store)
+    app.state.gold_comparison_runner = GoldComparisonRunner(gold_store)
+    app.state.gold_observation_service = GoldObservationService(gold_store, gold_notifier)
+    if app.state.scheduler is not None:
+        register_gold_sampler(app.state.scheduler, gold_sampler)
+    else:
+        gold_service.fail("scheduler_unavailable", "Gold sampler scheduler is unavailable")
 
 
 @asynccontextmanager
@@ -100,6 +137,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:  # noqa: BLE001
         logger.warning("scheduler not started: %s", e)
         app.state.scheduler = None
+
+    _initialize_gold_runtime(app, store)
 
     # depth sealed: 启动补跑(当天文件不存在) + 盘中轮询(有能力时)
     try:
@@ -328,6 +367,7 @@ async def auth_middleware(request: Request, call_next):
 # 路由
 app.include_router(core_router)
 app.include_router(auth_api.router)
+app.include_router(gold.router)
 app.include_router(kline.router)
 app.include_router(watchlist.router)
 app.include_router(screener.router)
