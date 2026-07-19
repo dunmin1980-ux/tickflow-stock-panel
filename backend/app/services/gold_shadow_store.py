@@ -209,6 +209,17 @@ class GoldShadowStore:
         with _LOCK:
             return self._read_json_state_locked("health.json", raise_on_failure=True)
 
+    def write_daily_history(self, payload: dict[str, Any]) -> None:
+        if payload.get("source") != "tickflow":
+            raise ValueError("daily history source must be tickflow")
+        with _LOCK:
+            self._write_json_state_locked("daily_history.json", payload)
+
+    def read_daily_history(self) -> dict[str, Any] | None:
+        with _LOCK:
+            value = self._read_json_state_locked("daily_history.json", raise_on_failure=True)
+        return value if isinstance(value, dict) else None
+
     def read_holidays(self) -> list[str]:
         """Read deployment-provided holidays without creating or modifying them."""
         path = self.root / "holidays.json"

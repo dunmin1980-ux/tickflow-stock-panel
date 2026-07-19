@@ -35,6 +35,29 @@ def snapshot(
     }
 
 
+def test_daily_history_round_trip_uses_private_json_state_file(tmp_path):
+    store = GoldShadowStore(tmp_path)
+    payload = {
+        "schema_version": 1,
+        "source": "tickflow",
+        "expected_market_date": "2026-07-16",
+        "fetched_at": "2026-07-16T15:05:00+08:00",
+        "sha256": "a" * 64,
+        "rows": [{"date": "2026-07-15", "close": 20.12}],
+    }
+
+    store.write_daily_history(payload)
+
+    path = tmp_path / "user_data" / "gold_shadow" / "daily_history.json"
+    assert store.read_daily_history() == payload
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+def test_daily_history_rejects_non_tickflow_source(tmp_path):
+    with pytest.raises(ValueError, match="source must be tickflow"):
+        GoldShadowStore(tmp_path).write_daily_history({"source": "tushare"})
+
+
 def valid_snapshot():
     return snapshot()
 
