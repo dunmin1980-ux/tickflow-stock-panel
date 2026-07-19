@@ -1,10 +1,13 @@
+import json
 from datetime import date, datetime
 
 import pytest
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.market_time import CN_TZ
+from app.services.gold_calendar import GoldCalendarAuthority
 from app.services.gold_scheduler import GoldSampler, register_gold_sampler
+from app.services.gold_shadow_store import GoldShadowStore
 
 
 def at(stamp: str) -> datetime:
@@ -20,7 +23,8 @@ class FakeGateway:
         self.quote_calls += 1
         return {"symbol": "600489.SH", "quote_source": "tickflow"}
 
-    def get_completed_closes(self, expected_date: date) -> list[float]:
+    def get_completed_closes(self, expected_date: date, *, calendar) -> list[float]:
+        assert calendar.previous_trading_day(expected_date) == date(2026, 7, 15)
         self.history_calls.append(expected_date)
         return [1.0] * 60
 
@@ -30,20 +34,87 @@ class FakeService:
         self.calls = 0
         self.failures: list[tuple[str, str]] = []
 
-    def evaluate_quote(self, quote, *, completed_closes, expected_date) -> None:
+    def evaluate_quote(self, quote, *, completed_closes, expected_date, calendar) -> None:
         self.calls += 1
         assert quote["symbol"] == "600489.SH"
         assert completed_closes == [1.0] * 60
         assert expected_date == date(2026, 7, 16)
+        assert calendar.is_trading_day(expected_date) is True
 
     def fail(self, code: str, message: str) -> None:
         self.failures.append((code, message))
 
 
-def test_sampler_calls_gateway_once_inside_session():
+def write_calendar(
+    tmp_path, *, covered_years=(2026,), holidays=()
+) -> GoldCalendarAuthority:
+    store = GoldShadowStore(tmp_path)
+    store.root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    (store.root / "holidays.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "timezone": "Asia/Shanghai",
+                "covered_years": list(covered_years),
+                "holidays": list(holidays),
+            }
+        ),
+        encoding="utf-8",
+    )
+    return GoldCalendarAuthority(store)
+
+
+@pytest.mark.parametrize(
+    ("stamp", "calendar_kwargs", "expected_failures"),
+    [
+        (
+            "2026-07-16T10:00:00+08:00",
+            None,
+            [("calendar_unconfigured", "Gold trading calendar is unavailable")],
+        ),
+        (
+            "2026-07-16T10:00:00+08:00",
+            {"covered_years": (2025,)},
+            [("calendar_unconfigured", "Gold trading calendar is unavailable")],
+        ),
+        (
+            "2026-01-01T10:00:00+08:00",
+            {},
+            [("calendar_unconfigured", "Gold trading calendar is unavailable")],
+        ),
+        ("2026-07-18T10:00:00+08:00", {}, []),
+        ("2026-07-16T10:00:00+08:00", {"holidays": ("2026-07-16",)}, []),
+    ],
+)
+def test_sampler_calendar_preflight_blocks_all_paid_calls(
+    tmp_path, stamp, calendar_kwargs, expected_failures
+):
     gateway = FakeGateway()
     service = FakeService()
-    sampler = GoldSampler(gateway, service, clock=lambda: at("2026-07-16T10:00:00+08:00"))
+    authority = (
+        GoldCalendarAuthority(GoldShadowStore(tmp_path))
+        if calendar_kwargs is None
+        else write_calendar(tmp_path, **calendar_kwargs)
+    )
+    sampler = GoldSampler(gateway, service, authority, clock=lambda: at(stamp))
+
+    sampler.run_once()
+
+    assert gateway.quote_calls == 0
+    assert gateway.history_calls == []
+    assert service.calls == 0
+    assert service.failures == expected_failures
+
+
+def test_sampler_calls_gateway_once_inside_session(tmp_path):
+    gateway = FakeGateway()
+    service = FakeService()
+    sampler = GoldSampler(
+        gateway,
+        service,
+        write_calendar(tmp_path),
+        clock=lambda: at("2026-07-16T10:00:00+08:00"),
+    )
 
     sampler.run_once()
 
@@ -62,10 +133,10 @@ def test_sampler_calls_gateway_once_inside_session():
         "2026-07-18T10:00:00+08:00",
     ],
 )
-def test_sampler_never_calls_tickflow_outside_session(stamp):
+def test_sampler_never_calls_tickflow_outside_session(tmp_path, stamp):
     gateway = FakeGateway()
     service = FakeService()
-    sampler = GoldSampler(gateway, service, clock=lambda: at(stamp))
+    sampler = GoldSampler(gateway, service, write_calendar(tmp_path), clock=lambda: at(stamp))
 
     assert sampler.run_once() is None
     assert gateway.quote_calls == 0
@@ -73,7 +144,7 @@ def test_sampler_never_calls_tickflow_outside_session(stamp):
     assert service.calls == 0
 
 
-def test_sampler_records_safe_failure_without_rethrowing():
+def test_sampler_records_safe_failure_without_rethrowing(tmp_path):
     class ExplodingGateway(FakeGateway):
         def get_quote(self) -> dict[str, object]:
             raise RuntimeError("token=must-not-appear")
@@ -82,6 +153,7 @@ def test_sampler_records_safe_failure_without_rethrowing():
     sampler = GoldSampler(
         ExplodingGateway(),
         service,
+        write_calendar(tmp_path),
         clock=lambda: at("2026-07-16T10:00:00+08:00"),
     )
 
@@ -89,11 +161,12 @@ def test_sampler_records_safe_failure_without_rethrowing():
     assert service.failures == [("gold_sampling_failed", "Gold sampling failed")]
 
 
-def test_registers_five_minute_single_instance_job():
+def test_registers_five_minute_single_instance_job(tmp_path):
     scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")
     sampler = GoldSampler(
         FakeGateway(),
         FakeService(),
+        write_calendar(tmp_path),
         clock=lambda: datetime(2026, 7, 16, 10, 0, tzinfo=CN_TZ),
     )
 

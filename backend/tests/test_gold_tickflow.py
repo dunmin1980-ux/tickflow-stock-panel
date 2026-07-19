@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.services.gold_calendar import GoldCalendarAuthority
 from app.services.gold_shadow_store import GoldShadowStore
 from app.services.gold_tickflow import GOLD_SYMBOL, GoldDataError, GoldTickFlowGateway
 from app.tickflow.capabilities import Cap, CapabilityLimits, CapabilitySet
@@ -40,7 +41,10 @@ class FakeKlines:
         return {self.symbol: self.rows}
 
 
-def daily_rows(count: int, *, start: date = date(2026, 3, 1)) -> list[dict[str, object]]:
+def daily_rows(
+    count: int, *, start: date | None = None
+) -> list[dict[str, object]]:
+    start = start or date.fromordinal(date(2026, 7, 15).toordinal() - count + 1)
     return [
         {
             "symbol": GOLD_SYMBOL,
@@ -56,12 +60,30 @@ def capset(*caps: Cap) -> CapabilitySet:
 
 
 def make_gateway(tmp_path, client, *, capabilities=None):
+    calendar_for(tmp_path)
     return GoldTickFlowGateway(
         GoldShadowStore(tmp_path),
         lambda: capabilities or capset(Cap.QUOTE_BATCH, Cap.KLINE_DAILY_BATCH),
         client_factory=lambda: client,
         clock=lambda: datetime(2026, 7, 16, 15, 5),
     )
+
+
+def calendar_for(tmp_path, *, holidays=()):
+    store = GoldShadowStore(tmp_path)
+    store.root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    (store.root / "holidays.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "timezone": "Asia/Shanghai",
+                "covered_years": [2026],
+                "holidays": list(holidays),
+            }
+        ),
+        encoding="utf-8",
+    )
+    return GoldCalendarAuthority(store).load(date(2026, 7, 16))
 
 
 def test_gateway_uses_only_paid_tickflow_namespaces(tmp_path):
@@ -178,8 +200,19 @@ def test_gateway_rejects_fewer_than_sixty_completed_sessions(tmp_path):
         make_gateway(tmp_path, client).get_completed_closes(date(2026, 7, 16))
 
 
+def test_gateway_requires_history_to_end_on_authoritative_preceding_session(tmp_path):
+    rows = daily_rows(60, start=date(2026, 5, 16))
+    client = SimpleNamespace(quotes=FakeQuotes(), klines=FakeKlines(rows))
+
+    with pytest.raises(GoldDataError, match="history_preceding_session_mismatch"):
+        make_gateway(tmp_path, client).get_completed_closes(
+            date(2026, 7, 16), calendar=calendar_for(tmp_path)
+        )
+
+
 def test_gateway_reads_valid_same_day_cache_without_requesting_sdk(tmp_path):
     store = GoldShadowStore(tmp_path)
+    calendar_for(tmp_path)
     rows = [{"date": row["date"], "close": row["close"]} for row in daily_rows(60)]
     payload = daily_cache_payload(rows, expected_date=date(2026, 7, 16))
     store.write_daily_history(payload)
@@ -190,6 +223,7 @@ def test_gateway_reads_valid_same_day_cache_without_requesting_sdk(tmp_path):
 
 def test_gateway_rejects_cache_with_non_tickflow_source(tmp_path):
     store = GoldShadowStore(tmp_path)
+    calendar_for(tmp_path)
     rows = [{"date": row["date"], "close": row["close"]} for row in daily_rows(60)]
     payload = daily_cache_payload(rows, expected_date=date(2026, 7, 16))
     payload["source"] = "tushare"
@@ -203,6 +237,7 @@ def test_gateway_rejects_cache_with_non_tickflow_source(tmp_path):
 @pytest.mark.parametrize("bad_date", ["2026-07-16", "2026-07-17"])
 def test_gateway_rejects_cache_rows_on_or_after_expected_market_date(tmp_path, bad_date):
     store = GoldShadowStore(tmp_path)
+    calendar_for(tmp_path)
     rows = [{"date": row["date"], "close": row["close"]} for row in daily_rows(60)]
     payload = daily_cache_payload(rows, expected_date=date(2026, 7, 16))
     payload["rows"].append({"date": bad_date, "close": 99.0})

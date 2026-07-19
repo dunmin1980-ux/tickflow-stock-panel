@@ -17,6 +17,7 @@ from app.api import gold
 from app.api.routes import router as core_router
 from app.config import settings
 from app.jobs import daily_pipeline
+from app.services.gold_calendar import GoldCalendarAuthority
 from app.services.gold_comparison_runs import GoldComparisonRunner
 from app.services.gold_external_guard import DisabledGoldNotifier
 from app.services.gold_legacy_import import GoldLegacyImporter
@@ -48,18 +49,24 @@ def _initialize_gold_runtime(app: FastAPI, store: DataStore) -> None:
         return
 
     gold_store = GoldShadowStore(store.data_dir)
+    gold_calendar = GoldCalendarAuthority(gold_store)
     gold_notifier = DisabledGoldNotifier(gold_store.root)
     gold_gateway = GoldTickFlowGateway(
         gold_store,
         capset_provider=lambda: app.state.capabilities,
+        calendar_authority=gold_calendar,
     )
-    gold_service = GoldShadowService(gold_store, gold_notifier)
-    gold_sampler = GoldSampler(gold_gateway, gold_service)
+    gold_service = GoldShadowService(
+        gold_store, gold_notifier, calendar_authority=gold_calendar
+    )
+    gold_sampler = GoldSampler(gold_gateway, gold_service, gold_calendar)
     app.state.gold_store = gold_store
     app.state.gold_shadow_service = gold_service
     app.state.gold_legacy_importer = GoldLegacyImporter(gold_store)
     app.state.gold_comparison_runner = GoldComparisonRunner(gold_store)
-    app.state.gold_observation_service = GoldObservationService(gold_store, gold_notifier)
+    app.state.gold_observation_service = GoldObservationService(
+        gold_store, gold_notifier, gold_calendar
+    )
     if app.state.scheduler is not None:
         try:
             register_gold_sampler(app.state.scheduler, gold_sampler)

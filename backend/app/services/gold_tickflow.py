@@ -9,6 +9,8 @@ from datetime import date, datetime
 from typing import Any
 
 from app.market_time import cn_now
+from app.services.gold_calendar import GoldCalendarAuthority, GoldTradingCalendar
+from app.services.gold_errors import GoldDataError
 from app.services.gold_shadow_store import GoldShadowStore
 from app.tickflow.capabilities import Cap, CapabilitySet
 from app.tickflow.client import get_paid_realtime_client
@@ -18,12 +20,6 @@ GOLD_SYMBOL = "600489.SH"
 _CACHE_SCHEMA_VERSION = 1
 
 
-class GoldDataError(RuntimeError):
-    def __init__(self, code: str) -> None:
-        self.code = code
-        super().__init__(code)
-
-
 class GoldTickFlowGateway:
     def __init__(
         self,
@@ -31,11 +27,13 @@ class GoldTickFlowGateway:
         capset_provider: Callable[[], CapabilitySet],
         client_factory: Callable[[], Any | None] = get_paid_realtime_client,
         clock: Callable[[], datetime] = cn_now,
+        calendar_authority: GoldCalendarAuthority | None = None,
     ) -> None:
         self.store = store
         self.capset_provider = capset_provider
         self.client_factory = client_factory
         self.clock = clock
+        self.calendar_authority = calendar_authority or GoldCalendarAuthority(store)
 
     def get_quote(self) -> dict[str, object]:
         client = self._paid_client(Cap.QUOTE_BATCH)
@@ -50,10 +48,19 @@ class GoldTickFlowGateway:
             raise GoldDataError("quote_contract_invalid")
         return {**rows[0], "quote_source": "tickflow"}
 
-    def get_completed_closes(self, expected_date: date) -> list[float]:
+    def get_completed_closes(
+        self,
+        expected_date: date,
+        *,
+        calendar: GoldTradingCalendar | None = None,
+    ) -> list[float]:
+        calendar = calendar or self.calendar_authority.load(expected_date)
+        expected_previous_date = calendar.previous_trading_day(expected_date)
         cached = self.store.read_daily_history()
         if cached is not None:
-            cached_date, rows = self._validated_cache(cached, expected_date)
+            cached_date, rows = self._validated_cache(
+                cached, expected_date, expected_previous_date
+            )
             if cached_date == expected_date:
                 return self._latest_closes(rows)
 
@@ -66,7 +73,9 @@ class GoldTickFlowGateway:
             adjust="none",
             as_dataframe=False,
         )
-        rows = self._normalize_history_response(raw, expected_date)
+        rows = self._normalize_history_response(
+            raw, expected_date, expected_previous_date
+        )
         closes = self._latest_closes(rows)
         self.store.write_daily_history(
             {
@@ -97,7 +106,10 @@ class GoldTickFlowGateway:
         sleep_between_batches(1, limit.rpm)
 
     def _validated_cache(
-        self, payload: dict[str, Any], expected_date: date
+        self,
+        payload: dict[str, Any],
+        expected_date: date,
+        expected_previous_date: date,
     ) -> tuple[date, list[dict[str, object]]]:
         if payload.get("source") != "tickflow":
             raise GoldDataError("daily_cache_invalid")
@@ -108,7 +120,8 @@ class GoldTickFlowGateway:
             raise GoldDataError("daily_cache_invalid")
         rows = self._normalize_rows(
             payload.get("rows"),
-            market_date,
+            expected_date,
+            expected_previous_date,
             require_normalized_shape=True,
             reject_non_completed=True,
             error_code="daily_cache_invalid",
@@ -119,13 +132,17 @@ class GoldTickFlowGateway:
         return market_date, rows
 
     def _normalize_history_response(
-        self, raw: Any, expected_date: date
+        self,
+        raw: Any,
+        expected_date: date,
+        expected_previous_date: date,
     ) -> list[dict[str, object]]:
         if not isinstance(raw, dict) or set(raw) != {GOLD_SYMBOL}:
             raise GoldDataError("history_contract_invalid")
         return self._normalize_rows(
             raw[GOLD_SYMBOL],
             expected_date,
+            expected_previous_date,
             require_normalized_shape=False,
             reject_non_completed=False,
             error_code="history_contract_invalid",
@@ -135,6 +152,7 @@ class GoldTickFlowGateway:
         self,
         rows: Any,
         expected_date: date,
+        expected_previous_date: date,
         *,
         require_normalized_shape: bool,
         reject_non_completed: bool,
@@ -169,6 +187,11 @@ class GoldTickFlowGateway:
             if row_date < expected_date:
                 normalized.append({"date": row_date.isoformat(), "close": float(close)})
         normalized.sort(key=lambda row: str(row["date"]))
+        if (
+            not normalized
+            or normalized[-1]["date"] != expected_previous_date.isoformat()
+        ):
+            raise GoldDataError("history_preceding_session_mismatch")
         return normalized
 
     @staticmethod

@@ -28,10 +28,21 @@ def quote(*, market_date="2026-07-16", observed_at=None) -> dict:
     }
 
 
-def make_service(tmp_path, *, clock=None, holidays="[]") -> GoldShadowService:
+def calendar_payload(*, holidays=(), covered_years=(2026,)) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "timezone": "Asia/Shanghai",
+        "covered_years": list(covered_years),
+        "holidays": list(holidays),
+    }
+
+
+def make_service(tmp_path, *, clock=None, holidays=()) -> GoldShadowService:
     store = GoldShadowStore(tmp_path)
     store.root.mkdir(parents=True)
-    (store.root / "holidays.json").write_text(holidays, encoding="utf-8")
+    (store.root / "holidays.json").write_text(
+        json.dumps(calendar_payload(holidays=holidays)), encoding="utf-8"
+    )
     return GoldShadowService(
         store,
         DisabledGoldNotifier(tmp_path / "user_data" / "gold_shadow"),
@@ -127,7 +138,7 @@ def test_configured_holiday_is_skipped(tmp_path):
     service = make_service(
         tmp_path,
         clock=lambda: datetime(2026, 6, 19, 15, 0, tzinfo=CN_TZ),
-        holidays='["2026-06-19"]',
+        holidays=("2026-06-19",),
     )
 
     result = evaluate(
@@ -141,22 +152,18 @@ def test_configured_holiday_is_skipped(tmp_path):
 
 
 def test_validated_calendar_is_read_once_and_reused_for_closure(service, monkeypatch):
-    calendar_path = service.store.root / "holidays.json"
     raw_quote = quote()
     completed_closes = fixture()["completed_closes"]
-    original_read_text = Path.read_text
     reads = 0
 
-    def read_calendar(path, *args, **kwargs):
+    def read_calendar():
         nonlocal reads
-        if path != calendar_path:
-            return original_read_text(path, *args, **kwargs)
         reads += 1
         if reads == 1:
-            return '["2026-07-16"]'
+            return calendar_payload(holidays=("2026-07-16",))
         raise OSError("calendar unavailable after validation")
 
-    monkeypatch.setattr(Path, "read_text", read_calendar)
+    monkeypatch.setattr(service.store, "read_calendar_config", read_calendar)
 
     result = service.evaluate_quote(
         raw_quote,

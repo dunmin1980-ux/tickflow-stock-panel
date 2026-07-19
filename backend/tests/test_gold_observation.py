@@ -15,11 +15,29 @@ from app.services.gold_observation import GoldObservationService
 from app.services.gold_shadow_store import GoldShadowStorageReadError, GoldShadowStore
 
 
+def _calendar_payload(*, holidays=(), covered_years=(2026,)) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "timezone": "Asia/Shanghai",
+        "covered_years": list(covered_years),
+        "holidays": list(holidays),
+    }
+
+
+def _write_calendar(store: GoldShadowStore, *, holidays=(), covered_years=(2026,)) -> None:
+    (store.root / "holidays.json").write_text(
+        json.dumps(
+            _calendar_payload(holidays=holidays, covered_years=covered_years)
+        ),
+        encoding="utf-8",
+    )
+
+
 @pytest.fixture
 def service(tmp_path):
     store = GoldShadowStore(tmp_path)
     store.root.mkdir(mode=0o700, parents=True)
-    (store.root / "holidays.json").write_text("[]\n", encoding="utf-8")
+    _write_calendar(store)
     notifier = DisabledGoldNotifier(store.root)
     return GoldObservationService(store, notifier)
 
@@ -216,10 +234,7 @@ def test_weekend_comparison_runs_cannot_be_reviewed_or_counted(service):
 
 def test_configured_holiday_cannot_be_reviewed_or_counted(service):
     market_date = _trading_dates(1)[0]
-    (service.store.root / "holidays.json").write_text(
-        json.dumps([market_date.isoformat()]),
-        encoding="utf-8",
-    )
+    _write_calendar(service.store, holidays=(market_date.isoformat(),))
     run = _commit_run(service.store, market_date)
 
     with pytest.raises(ValueError, match="trading day"):

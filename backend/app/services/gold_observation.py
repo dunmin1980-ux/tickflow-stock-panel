@@ -5,6 +5,7 @@ from collections import defaultdict
 from datetime import UTC, date, datetime
 from typing import Any, Protocol
 
+from app.services.gold_calendar import GoldCalendarAuthority, GoldCalendarError
 from app.services.gold_shadow_store import GoldShadowStorageReadError, GoldShadowStore
 
 VALID_STATUSES = frozenset({"collecting", "failed", "review_eligible"})
@@ -20,9 +21,15 @@ class _AttemptCounter(Protocol):
 class GoldObservationService:
     """Derive review eligibility without exposing any notification activation path."""
 
-    def __init__(self, store: GoldShadowStore, notifier: _AttemptCounter) -> None:
+    def __init__(
+        self,
+        store: GoldShadowStore,
+        notifier: _AttemptCounter,
+        calendar_authority: GoldCalendarAuthority | None = None,
+    ) -> None:
         self.store = store
         self.notifier = notifier
+        self.calendar_authority = calendar_authority or GoldCalendarAuthority(store)
 
     def review_day(
         self,
@@ -34,10 +41,10 @@ class GoldObservationService:
         market_date_text = self._market_date_text(market_date)
         clean_note = self._validated_note(verified, note)
         try:
-            holidays = {date.fromisoformat(day) for day in self.store.read_holidays()}
-        except GoldShadowStorageReadError as exc:
+            calendar = self.calendar_authority.load(market_date)
+        except GoldCalendarError as exc:
             raise ValueError("trading calendar is unavailable") from exc
-        if not _is_trading_day(market_date, holidays):
+        if not calendar.is_trading_day(market_date):
             raise ValueError("market_date must be a configured trading day")
         try:
             runs = self.store.list_comparison_runs(limit=_ALL_RUNS_LIMIT)
@@ -93,14 +100,11 @@ class GoldObservationService:
             canonical_runs, chain_reasons = _canonical_runs(runs)
             reasons.extend(chain_reasons)
 
-        holidays: set[date] = set()
-        calendar_available = False
+        calendar = None
         try:
-            holidays = {date.fromisoformat(day) for day in self.store.read_holidays()}
-        except GoldShadowStorageReadError:
+            calendar = self.calendar_authority.load()
+        except GoldCalendarError:
             reasons.append("trading_calendar_unavailable")
-        else:
-            calendar_available = True
 
         reviews: list[dict[str, Any]] = []
         reviews_available = True
@@ -130,12 +134,17 @@ class GoldObservationService:
                 elif not thresholds_pass:
                     automatic_passed = False
                     reasons.append(f"automatic_tolerance_failed:{metadata['run_id']}")
-                elif calendar_available:
-                    automatic_passed = _is_trading_day(
-                        date.fromisoformat(market_date_text), holidays
-                    )
-                    if automatic_passed:
-                        passing_runs[market_date_text] = metadata["run_id"]
+                elif calendar is not None:
+                    try:
+                        automatic_passed = calendar.is_trading_day(
+                            date.fromisoformat(market_date_text)
+                        )
+                    except GoldCalendarError:
+                        if "trading_calendar_unavailable" not in reasons:
+                            reasons.append("trading_calendar_unavailable")
+                    else:
+                        if automatic_passed:
+                            passing_runs[market_date_text] = metadata["run_id"]
             automatic_states[market_date_text] = automatic_passed
 
         latest_day_reviews: dict[str, dict[str, Any]] = {}
@@ -268,7 +277,3 @@ def _thresholds_pass(run: dict[str, Any]) -> bool | None:
     if not isinstance(stage_a, dict) or type(stage_a.get("thresholds_pass")) is not bool:
         return None
     return stage_a["thresholds_pass"]
-
-
-def _is_trading_day(market_date: date, holidays: set[date]) -> bool:
-    return market_date.weekday() < 5 and market_date not in holidays

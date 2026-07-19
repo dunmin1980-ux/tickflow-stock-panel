@@ -1,26 +1,25 @@
 """Isolated evaluation orchestration for the single-symbol gold shadow."""
 from __future__ import annotations
 
-import json
 import logging
 import math
-from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta
-from pathlib import Path
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from app.market_time import CN_TZ, cn_now
+from app.services.gold_calendar import (
+    GoldCalendarAuthority,
+    GoldCalendarError,
+    GoldTradingCalendar,
+    is_beijing_session,
+)
 from app.services.gold_external_guard import DisabledGoldNotifier
 from app.services.gold_pva import GoldPvaResult, calculate_pva
 
 logger = logging.getLogger(__name__)
 _UNSET = object()
 QUOTE_MAX_AGE = timedelta(minutes=10)
-_QUOTE_TIMESTAMP_WINDOWS = (
-    (time(9, 30), time(11, 30)),
-    (time(13, 0), time(15, 0)),
-)
 
 
 @dataclass(frozen=True)
@@ -55,10 +54,12 @@ class GoldShadowService:
         notifier: DisabledGoldNotifier,
         *,
         clock=cn_now,
+        calendar_authority: GoldCalendarAuthority | None = None,
     ) -> None:
         self.store = store
         self.notifier = notifier
         self.clock = clock
+        self.calendar_authority = calendar_authority or GoldCalendarAuthority(store)
 
     def evaluate_quote(
         self,
@@ -66,6 +67,7 @@ class GoldShadowService:
         *,
         completed_closes: list[float],
         expected_date: date,
+        calendar: GoldTradingCalendar | None = None,
     ) -> GoldEvaluation:
         if quote.get("symbol") != self.SYMBOL:
             return self.fail("quote_symbol_mismatch", "TickFlow quote symbol does not match Gold")
@@ -78,16 +80,18 @@ class GoldShadowService:
         quote_ts, quote_time = parsed
         if quote_time.date() != expected_date:
             return self.fail("stale_market_date", "TickFlow quote market date is stale")
-        holidays = self._configured_holidays(expected_date)
-        if holidays is None:
+        try:
+            calendar = calendar or self.calendar_authority.load(expected_date)
+            trading_day = calendar.is_trading_day(expected_date)
+        except GoldCalendarError:
             return self.fail("calendar_unconfigured", "Gold holiday calendar unavailable")
-        if self._market_closed(expected_date, holidays):
+        if not trading_day:
             return GoldEvaluation(None, "market_closed", expected_date.isoformat())
         if quote_time > now:
             return self.fail("quote_timestamp_future", "TickFlow quote timestamp is in the future")
         if now - quote_time > QUOTE_MAX_AGE:
             return self.fail("quote_timestamp_stale", "TickFlow quote is older than 600 seconds")
-        if not self._quote_timestamp_in_session(quote_time):
+        if not is_beijing_session(quote_time):
             return self.fail("quote_timestamp_out_of_session", "TickFlow quote is outside session")
         if len(completed_closes) != 60:
             return self.fail("history_insufficient", "Gold requires exactly 60 completed closes")
@@ -141,26 +145,6 @@ class GoldShadowService:
             "telegram_send_count": send_count,
         }
 
-    def _configured_holidays(self, expected_date: date) -> set[date] | None:
-        del expected_date
-        path = Path(self.store.root) / "holidays.json"
-        try:
-            configured = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-            return None
-        if isinstance(configured, Mapping):
-            configured = configured.get("holidays")
-        if not isinstance(configured, list) or not all(isinstance(day, str) for day in configured):
-            return None
-        try:
-            return {date.fromisoformat(day) for day in configured}
-        except ValueError:
-            return None
-
-    @staticmethod
-    def _market_closed(market_date: date, holidays: set[date]) -> bool:
-        return market_date.weekday() >= 5 or market_date in holidays
-
     def _beijing_now(self) -> datetime:
         now = self.clock()
         return now.replace(tzinfo=CN_TZ) if now.tzinfo is None else now.astimezone(CN_TZ)
@@ -172,11 +156,6 @@ class GoldShadowService:
         except (TypeError, ValueError):
             return None
         return previous_close if math.isfinite(previous_close) and previous_close > 0 else None
-
-    @staticmethod
-    def _quote_timestamp_in_session(quote_time: datetime) -> bool:
-        observed_time = quote_time.timetz().replace(tzinfo=None)
-        return any(start <= observed_time <= end for start, end in _QUOTE_TIMESTAMP_WINDOWS)
 
     def _build_snapshot(
         self,

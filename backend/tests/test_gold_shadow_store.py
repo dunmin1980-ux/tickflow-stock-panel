@@ -421,9 +421,15 @@ def test_append_snapshot_preserves_file_when_snapshot_read_fails(tmp_path, monke
     assert path.read_bytes() == original
 
 
-def test_holidays_are_read_only(tmp_path):
+def test_calendar_config_is_read_only(tmp_path):
     path = tmp_path / "user_data/gold_shadow/holidays.json"
     path.parent.mkdir(parents=True)
-    path.write_text(json.dumps(["2026-10-01"]), encoding="utf-8")
+    payload = {
+        "schema_version": 1,
+        "timezone": "Asia/Shanghai",
+        "covered_years": [2026],
+        "holidays": ["2026-10-01"],
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
 
-    assert GoldShadowStore(tmp_path).read_holidays() == ["2026-10-01"]
+    assert GoldShadowStore(tmp_path).read_calendar_config() == payload

@@ -515,8 +515,8 @@ class GoldShadowStore:
             value = self._read_json_state_locked("daily_history.json", raise_on_failure=True)
         return value if isinstance(value, dict) else None
 
-    def read_holidays(self) -> list[str]:
-        """Read and validate the required deployment-provided holiday calendar."""
+    def read_calendar_config(self) -> Any:
+        """Read the deployment calendar without following links or interpreting schema."""
         root_descriptor: int | None = None
         try:
             root_descriptor = self._open_root_descriptor(create=False)
@@ -525,14 +525,8 @@ class GoldShadowStore:
                 flags |= os.O_NOFOLLOW
             descriptor = os.open("holidays.json", flags, dir_fd=root_descriptor)
             with os.fdopen(descriptor, encoding="utf-8") as handle:
-                value = json.load(handle)
-            if not isinstance(value, list) or not all(isinstance(day, str) for day in value):
-                raise ValueError("holiday calendar must be a list of dates")
-            for day in value:
-                if date.fromisoformat(day).isoformat() != day:
-                    raise ValueError("holiday calendar contains an invalid date")
-            return list(value)
-        except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
+                return json.load(handle)
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
             raise GoldShadowStorageReadError("unable to read holidays.json") from exc
         finally:
             if root_descriptor is not None:
