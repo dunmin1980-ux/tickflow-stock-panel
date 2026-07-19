@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.api import auth as auth_api
+from app.api import gold as gold_api
 from app.main import app
 from app.services import auth as auth_service
+from app.services.gold_legacy_import import GoldImportError
 
 LEGACY_FIXTURE = (
     "2026-07-16 15:00:00 INFO price=19.99 P=-12.59 V=-0.13 A=-0.93 "
@@ -329,6 +332,55 @@ def test_upload_never_returns_raw_content(enabled_client):
     }
     assert "raw" not in response.json()
     assert enabled_client.gold_fakes.importer.upload == ("monitor.log", LEGACY_FIXTURE)
+
+
+def test_upload_reader_stops_at_maximum_plus_one_without_unbounded_reads(monkeypatch):
+    class RecordingUpload:
+        def __init__(self, payload: bytes) -> None:
+            self.payload = payload
+            self.offset = 0
+            self.read_sizes: list[int] = []
+
+        async def read(self, size: int = -1) -> bytes:
+            assert size > 0
+            self.read_sizes.append(size)
+            chunk = self.payload[self.offset : self.offset + size]
+            self.offset += len(chunk)
+            return chunk
+
+    monkeypatch.setattr(gold_api, "MAX_UPLOAD_BYTES", 8)
+    upload = RecordingUpload(b"0123456789abcdef")
+
+    with pytest.raises(GoldImportError, match=r"^upload_too_large$"):
+        asyncio.run(gold_api._read_upload_bounded(upload))
+
+    assert upload.offset == 9
+    assert upload.read_sizes == [9]
+
+
+def test_upload_offloads_sync_import_work_from_event_loop(
+    enabled_client, monkeypatch
+):
+    calls = []
+
+    async def recording_to_thread(function, *args):
+        calls.append((function, args))
+        return function(*args)
+
+    monkeypatch.setattr(gold_api.asyncio, "to_thread", recording_to_thread)
+
+    response = enabled_client.post(
+        "/api/gold/imports/legacy",
+        files={"file": ("monitor.log", LEGACY_FIXTURE, "text/plain")},
+    )
+
+    assert response.status_code == 201
+    assert calls == [
+        (
+            enabled_client.gold_fakes.importer.import_bytes,
+            ("monitor.log", LEGACY_FIXTURE),
+        )
+    ]
 
 
 def test_enabled_reads_and_comparison_delegate_to_services(enabled_client):

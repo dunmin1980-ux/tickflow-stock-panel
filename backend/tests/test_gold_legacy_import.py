@@ -31,6 +31,19 @@ def downgrade_import_metadata(store: GoldShadowStore) -> tuple[dict[str, object]
     return metadata, serialized
 
 
+def normalized_row(*, minute: int = 0) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "observed_at": f"2026-07-16T14:{minute:02d}:00+08:00",
+        "price": 19.99,
+        "P": -12.59,
+        "V": -0.13,
+        "A": -0.93,
+        "state": "恐慌",
+        "signals": ["恐慌极端"],
+    }
+
+
 def test_import_normalizes_and_discards_raw_text(tmp_path):
     importer = GoldLegacyImporter(GoldShadowStore(tmp_path))
 
@@ -63,6 +76,95 @@ def test_import_normalizes_and_discards_raw_text(tmp_path):
         "state": "恐慌",
         "signals": ["恐慌极端"],
     }
+
+
+def test_txt_extension_uses_legacy_text_parser(tmp_path):
+    result = GoldLegacyImporter(GoldShadowStore(tmp_path)).import_bytes(
+        "MONITOR.TXT", fixture_bytes()
+    )
+
+    assert result.filename == "MONITOR.TXT"
+    assert result.sample_count == 1
+
+
+@pytest.mark.parametrize("extension", ["json", "JSON"])
+def test_json_import_requires_array_of_exact_normalized_rows(tmp_path, extension):
+    store = GoldShadowStore(tmp_path)
+    rows = [normalized_row(minute=55), normalized_row(minute=56)]
+    payload = json.dumps(rows, ensure_ascii=False, separators=(",", ":")).encode()
+
+    result = GoldLegacyImporter(store).import_bytes(f"../../samples.{extension}", payload)
+
+    assert result.filename == f"samples.{extension}"
+    assert result.sample_count == 2
+    assert store.get_import(result.import_id)["rows"] == rows
+
+
+def test_jsonl_import_accepts_one_exact_object_per_nonempty_line(tmp_path):
+    store = GoldShadowStore(tmp_path)
+    rows = [normalized_row(minute=55), normalized_row(minute=56)]
+    payload = (
+        json.dumps(rows[0], ensure_ascii=False)
+        + "\n\n"
+        + json.dumps(rows[1], ensure_ascii=False)
+        + "\n"
+    ).encode()
+
+    result = GoldLegacyImporter(store).import_bytes("samples.JsOnL", payload)
+
+    assert result.sample_count == 2
+    assert store.get_import(result.import_id)["rows"] == rows
+
+
+def test_import_rejects_unsupported_extension_before_parsing(tmp_path, monkeypatch):
+    def unexpected_parse(_text):
+        pytest.fail("unsupported upload was parsed")
+
+    monkeypatch.setattr(gold_legacy_import, "parse_legacy_text", unexpected_parse)
+    store = GoldShadowStore(tmp_path)
+
+    with pytest.raises(GoldImportError, match=r"^invalid_extension$"):
+        GoldLegacyImporter(store).import_bytes("../../monitor.csv", fixture_bytes())
+
+    assert not store.root.exists()
+
+
+@pytest.mark.parametrize(
+    ("filename", "payload", "code"),
+    [
+        ("rows.json", b"{}", "invalid_json_structure"),
+        ("rows.json", b"[", "invalid_json"),
+        ("rows.jsonl", b"[]\n", "invalid_json_structure"),
+        ("rows.jsonl", b"{\n", "invalid_json"),
+        ("rows.json", b"[]", "no_valid_samples"),
+        ("rows.jsonl", b"\n \n", "no_valid_samples"),
+    ],
+)
+def test_json_formats_reject_invalid_or_empty_structures(tmp_path, filename, payload, code):
+    store = GoldShadowStore(tmp_path)
+
+    with pytest.raises(GoldImportError, match=rf"^{code}$"):
+        GoldLegacyImporter(store).import_bytes(filename, payload)
+
+    assert not (store.root / "import_index.jsonl").exists()
+    assert not (store.root / "imports").exists()
+
+
+@pytest.mark.parametrize("filename", ["rows.json", "rows.jsonl"])
+def test_json_formats_reject_extra_source_fields_without_partial_writes(tmp_path, filename):
+    store = GoldShadowStore(tmp_path)
+    rows = [normalized_row(minute=55), {**normalized_row(minute=56), "raw": "secret"}]
+    if filename.endswith(".jsonl"):
+        payload = "\n".join(json.dumps(row, ensure_ascii=False) for row in rows).encode()
+    else:
+        payload = json.dumps(rows, ensure_ascii=False).encode()
+
+    with pytest.raises(GoldImportError, match=r"^invalid_sample$") as caught:
+        GoldLegacyImporter(store).import_bytes(filename, payload)
+
+    assert "secret" not in str(caught.value)
+    assert not (store.root / "import_index.jsonl").exists()
+    assert not (store.root / "imports").exists()
 
 
 def test_import_rejects_oversize_before_parsing(tmp_path, monkeypatch):

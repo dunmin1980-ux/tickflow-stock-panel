@@ -1,13 +1,14 @@
 """Authenticated API surface for the isolated Gold research workspace."""
 from __future__ import annotations
 
+import asyncio
 from datetime import date
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Path, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 
-from app.services.gold_legacy_import import GoldImportError
+from app.services.gold_legacy_import import MAX_UPLOAD_BYTES, GoldImportError
 from app.services.gold_shadow_store import GoldShadowStorageReadError
 
 router = APIRouter(prefix="/api/gold", tags=["gold-research"])
@@ -39,6 +40,7 @@ _SCHEDULER_UNAVAILABLE_ERROR = {
     "code": "scheduler_unavailable",
     "message": "Gold sampler scheduler is unavailable",
 }
+_UPLOAD_CHUNK_BYTES = 64 * 1024
 
 GoldLimit = Annotated[int, Query(ge=1, le=1000)]
 GoldRunId = Annotated[
@@ -89,6 +91,20 @@ def _storage_unavailable() -> HTTPException:
         status_code=503,
         detail={"code": "gold_storage_unavailable"},
     )
+
+
+async def _read_upload_bounded(file: UploadFile) -> bytes:
+    limit = MAX_UPLOAD_BYTES + 1
+    payload = bytearray()
+    while len(payload) < limit:
+        remaining = limit - len(payload)
+        chunk = await file.read(min(_UPLOAD_CHUNK_BYTES, remaining))
+        if not chunk:
+            break
+        payload.extend(chunk[:remaining])
+    if len(payload) > MAX_UPLOAD_BYTES:
+        raise GoldImportError("upload_too_large")
+    return bytes(payload)
 
 
 @router.get("/status")
@@ -155,7 +171,10 @@ def candidates(request: Request, limit: GoldLimit = 100):
 async def import_legacy(request: Request, file: Annotated[UploadFile, File()]):
     importer = _state(request, "gold_legacy_importer")
     try:
-        result = importer.import_bytes(file.filename or "upload", await file.read())
+        payload = await _read_upload_bounded(file)
+        result = await asyncio.to_thread(
+            importer.import_bytes, file.filename or "upload", payload
+        )
     except GoldImportError as exc:
         raise HTTPException(status_code=400, detail={"code": str(exc)}) from None
     except GoldShadowStorageReadError:

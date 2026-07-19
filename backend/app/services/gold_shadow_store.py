@@ -109,6 +109,38 @@ def validate_gold_snapshot(snapshot: dict[str, Any]) -> None:
             raise ValueError(f"{field} must be a list of strings")
 
 
+def validate_gold_import_row(row: dict[str, Any]) -> None:
+    """Validate one exact normalized legacy import row."""
+    if not isinstance(row, dict) or set(row) != _IMPORT_ROW_FIELDS:
+        raise ValueError("normalized import fields are required")
+    if type(row["schema_version"]) is not int or row["schema_version"] != 1:
+        raise ValueError("import schema_version must be 1")
+    observed_at = row["observed_at"]
+    if not isinstance(observed_at, str):
+        raise ValueError("import observed_at must be a string")
+    try:
+        parsed_at = datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("import observed_at is invalid") from exc
+    if parsed_at.utcoffset() is None:
+        raise ValueError("import observed_at must include a timezone")
+    for field in _IMPORT_NUMERIC_FIELDS:
+        value = row[field]
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+        ):
+            raise ValueError(f"import {field} must be finite")
+    if row["state"] not in _GOLD_STATES:
+        raise ValueError("import state is invalid")
+    signals = row["signals"]
+    if not isinstance(signals, list) or not all(isinstance(item, str) for item in signals):
+        raise ValueError("import signals must be a list of strings")
+    if not all(signal in LEGACY_SIGNAL_VOCABULARY for signal in signals):
+        raise ValueError("import signal is invalid")
+
+
 class GoldShadowStorageReadError(RuntimeError):
     """Raised when existing shadow storage cannot be read reliably."""
 
@@ -815,34 +847,7 @@ class GoldShadowStore:
 
     @classmethod
     def _validate_import_row(cls, row: dict[str, Any]) -> None:
-        if not isinstance(row, dict) or set(row) != _IMPORT_ROW_FIELDS:
-            raise ValueError("normalized import fields are required")
-        if type(row["schema_version"]) is not int or row["schema_version"] != 1:
-            raise ValueError("import schema_version must be 1")
-        observed_at = row["observed_at"]
-        if not isinstance(observed_at, str):
-            raise ValueError("import observed_at must be a string")
-        try:
-            parsed_at = datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
-        except ValueError as exc:
-            raise ValueError("import observed_at is invalid") from exc
-        if parsed_at.utcoffset() is None:
-            raise ValueError("import observed_at must include a timezone")
-        for field in _IMPORT_NUMERIC_FIELDS:
-            value = row[field]
-            if (
-                isinstance(value, bool)
-                or not isinstance(value, (int, float))
-                or not math.isfinite(value)
-            ):
-                raise ValueError(f"import {field} must be finite")
-        if row["state"] not in _GOLD_STATES:
-            raise ValueError("import state is invalid")
-        signals = row["signals"]
-        if not isinstance(signals, list) or not all(isinstance(item, str) for item in signals):
-            raise ValueError("import signals must be a list of strings")
-        if not all(signal in LEGACY_SIGNAL_VOCABULARY for signal in signals):
-            raise ValueError("import signal is invalid")
+        validate_gold_import_row(row)
 
     @classmethod
     def _validate_import_metadata(cls, row: dict[str, Any]) -> None:
