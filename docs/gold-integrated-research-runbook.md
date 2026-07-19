@@ -41,6 +41,19 @@ docker compose up -d --build
 
 打开正常平台导航中的 `/gold`。启用后应显示“中金黄金”、固定代码 `600489.SH`、本地采样健康状态、Legacy 导入与 Shadow 对账、以及观察门槛。侧边栏和原有认证流程保持不变。
 
+## Docker 构建检查
+
+部署前可在仓库根目录运行：
+
+```bash
+docker compose config --quiet
+docker compose build
+```
+
+默认国内构建会把 Debian deb822 软件源切换到腾讯镜像；Python 依赖仍使用既有的清华主索引和阿里云备用索引。`uv` 下载超时在构建命令内设为 `120` 秒，不会写入最终应用运行环境，也不会改变依赖版本、锁文件、重试次数或数据源。Task 14 验证中，上述原样构建成功生成 `tickflow-gold-integrated-design-app:latest`，且没有启动 Compose 服务。
+
+若构建日志仍报告 Python wheel 下载超时，先确认错误中的 `UV_HTTP_TIMEOUT` 为 `120s`，再检查 Docker Desktop 网络和两个既有 Python 镜像的连通性。不要通过填入真实 Key、修改锁文件或临时替换 Python 镜像来绕过构建失败。`docker compose build` 只构建镜像；需要启动时仍显式执行前述 `docker compose up -d --build`。
+
 ## 固定运行边界
 
 - 标的固定为 `600489.SH`，不能由页面或环境变量改为其他证券。
