@@ -78,9 +78,10 @@ class GoldShadowService:
         quote_ts, quote_time = parsed
         if quote_time.date() != expected_date:
             return self.fail("stale_market_date", "TickFlow quote market date is stale")
-        if self._configured_holidays(expected_date) is None:
+        holidays = self._configured_holidays(expected_date)
+        if holidays is None:
             return self.fail("calendar_unconfigured", "Gold holiday calendar unavailable")
-        if self._market_closed(expected_date):
+        if self._market_closed(expected_date, holidays):
             return GoldEvaluation(None, "market_closed", expected_date.isoformat())
         if quote_time > now:
             return self.fail("quote_timestamp_future", "TickFlow quote timestamp is in the future")
@@ -156,9 +157,9 @@ class GoldShadowService:
         except ValueError:
             return None
 
-    def _market_closed(self, market_date: date) -> bool:
-        holidays = self._configured_holidays(market_date)
-        return market_date.weekday() >= 5 or market_date in (holidays or set())
+    @staticmethod
+    def _market_closed(market_date: date, holidays: set[date]) -> bool:
+        return market_date.weekday() >= 5 or market_date in holidays
 
     def _beijing_now(self) -> datetime:
         now = self.clock()

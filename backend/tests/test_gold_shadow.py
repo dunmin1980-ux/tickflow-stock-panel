@@ -140,6 +140,35 @@ def test_configured_holiday_is_skipped(tmp_path):
     assert service.store.read_health() is None
 
 
+def test_validated_calendar_is_read_once_and_reused_for_closure(service, monkeypatch):
+    calendar_path = service.store.root / "holidays.json"
+    raw_quote = quote()
+    completed_closes = fixture()["completed_closes"]
+    original_read_text = Path.read_text
+    reads = 0
+
+    def read_calendar(path, *args, **kwargs):
+        nonlocal reads
+        if path != calendar_path:
+            return original_read_text(path, *args, **kwargs)
+        reads += 1
+        if reads == 1:
+            return '["2026-07-16"]'
+        raise OSError("calendar unavailable after validation")
+
+    monkeypatch.setattr(Path, "read_text", read_calendar)
+
+    result = service.evaluate_quote(
+        raw_quote,
+        completed_closes=completed_closes,
+        expected_date=date(2026, 7, 16),
+    )
+
+    assert result.error_code == "market_closed"
+    assert reads == 1
+    assert service.store.list_snapshots(10) == []
+
+
 def test_future_quote_fails_closed(service):
     service.clock = lambda: datetime(2026, 7, 16, 10, 0, tzinfo=CN_TZ)
 
