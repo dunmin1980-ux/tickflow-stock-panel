@@ -41,16 +41,14 @@ class GoldTickFlowGateway:
         client = self._paid_client(Cap.QUOTE_BATCH)
         self._pace(Cap.QUOTE_BATCH)
         rows = client.quotes.get(symbols=[GOLD_SYMBOL], as_dataframe=False) or []
-        if not isinstance(rows, list):
+        if (
+            not isinstance(rows, list)
+            or len(rows) != 1
+            or not isinstance(rows[0], dict)
+            or rows[0].get("symbol") != GOLD_SYMBOL
+        ):
             raise GoldDataError("quote_contract_invalid")
-        matches = [
-            row
-            for row in rows
-            if isinstance(row, dict) and row.get("symbol") == GOLD_SYMBOL
-        ]
-        if len(matches) != 1:
-            raise GoldDataError("quote_contract_invalid")
-        return {**matches[0], "quote_source": "tickflow"}
+        return {**rows[0], "quote_source": "tickflow"}
 
     def get_completed_closes(self, expected_date: date) -> list[float]:
         cached = self.store.read_daily_history()
@@ -109,7 +107,11 @@ class GoldTickFlowGateway:
         if market_date is None or not isinstance(payload.get("fetched_at"), str):
             raise GoldDataError("daily_cache_invalid")
         rows = self._normalize_rows(
-            payload.get("rows"), expected_date, require_normalized_shape=True, error_code="daily_cache_invalid"
+            payload.get("rows"),
+            market_date,
+            require_normalized_shape=True,
+            reject_non_completed=True,
+            error_code="daily_cache_invalid",
         )
         sha256 = payload.get("sha256")
         if not isinstance(sha256, str) or sha256 != self._rows_digest(rows):
@@ -122,7 +124,11 @@ class GoldTickFlowGateway:
         if not isinstance(raw, dict) or set(raw) != {GOLD_SYMBOL}:
             raise GoldDataError("history_contract_invalid")
         return self._normalize_rows(
-            raw[GOLD_SYMBOL], expected_date, require_normalized_shape=False, error_code="history_contract_invalid"
+            raw[GOLD_SYMBOL],
+            expected_date,
+            require_normalized_shape=False,
+            reject_non_completed=False,
+            error_code="history_contract_invalid",
         )
 
     def _normalize_rows(
@@ -131,6 +137,7 @@ class GoldTickFlowGateway:
         expected_date: date,
         *,
         require_normalized_shape: bool,
+        reject_non_completed: bool,
         error_code: str,
     ) -> list[dict[str, object]]:
         if not isinstance(rows, list):
@@ -157,6 +164,8 @@ class GoldTickFlowGateway:
             ):
                 raise GoldDataError(error_code)
             seen_dates.add(row_date)
+            if reject_non_completed and row_date >= expected_date:
+                raise GoldDataError(error_code)
             if row_date < expected_date:
                 normalized.append({"date": row_date.isoformat(), "close": float(close)})
         normalized.sort(key=lambda row: str(row["date"]))

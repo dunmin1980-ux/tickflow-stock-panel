@@ -130,6 +130,21 @@ def test_gateway_rejects_wrong_quote_symbol(tmp_path):
         make_gateway(tmp_path, client).get_quote()
 
 
+def test_gateway_rejects_mixed_symbol_quote_response(tmp_path):
+    client = SimpleNamespace(
+        quotes=FakeQuotes(
+            [
+                {"symbol": GOLD_SYMBOL, "last_price": 19.99},
+                {"symbol": "000001.SZ", "last_price": 10.0},
+            ]
+        ),
+        klines=FakeKlines(),
+    )
+
+    with pytest.raises(GoldDataError, match="quote_contract_invalid"):
+        make_gateway(tmp_path, client).get_quote()
+
+
 def test_gateway_rejects_wrong_history_symbol(tmp_path):
     client = SimpleNamespace(quotes=FakeQuotes(), klines=FakeKlines(symbol="000001.SZ"))
 
@@ -179,6 +194,19 @@ def test_gateway_rejects_cache_with_non_tickflow_source(tmp_path):
     payload = daily_cache_payload(rows, expected_date=date(2026, 7, 16))
     payload["source"] = "tushare"
     store._write_json_state_locked("daily_history.json", payload)
+    gateway = GoldTickFlowGateway(store, lambda: CapabilitySet(), client_factory=lambda: None)
+
+    with pytest.raises(GoldDataError, match="daily_cache_invalid"):
+        gateway.get_completed_closes(date(2026, 7, 16))
+
+
+@pytest.mark.parametrize("bad_date", ["2026-07-16", "2026-07-17"])
+def test_gateway_rejects_cache_rows_on_or_after_expected_market_date(tmp_path, bad_date):
+    store = GoldShadowStore(tmp_path)
+    rows = [{"date": row["date"], "close": row["close"]} for row in daily_rows(60)]
+    payload = daily_cache_payload(rows, expected_date=date(2026, 7, 16))
+    payload["rows"].append({"date": bad_date, "close": 99.0})
+    store.write_daily_history(payload)
     gateway = GoldTickFlowGateway(store, lambda: CapabilitySet(), client_factory=lambda: None)
 
     with pytest.raises(GoldDataError, match="daily_cache_invalid"):
