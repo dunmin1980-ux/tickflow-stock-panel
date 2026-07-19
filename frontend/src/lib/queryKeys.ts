@@ -21,6 +21,14 @@ export const QK = {
   indexQuotes:    ['index-quotes'] as const,
   indexList:      ['index-list'] as const,
 
+  // Gold research workspace
+  goldStatus:          ['gold-status'] as const,
+  goldSnapshots:       ['gold-snapshots'] as const,
+  goldCandidates:      ['gold-candidates'] as const,
+  goldImports:         ['gold-imports'] as const,
+  goldComparisons:     ['gold-comparisons'] as const,
+  goldObservationGate: ['gold-observation-gate'] as const,
+
   // Watchlist
   watchlist:            ['watchlist'] as const,
   watchlistQuotes:      ['watchlist-quotes'] as const,

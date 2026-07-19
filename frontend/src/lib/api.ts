@@ -920,9 +920,127 @@ export interface StrategyAlertEvent {
   [key: string]: unknown
 }
 
+// ===== Gold research workspace =====
+export type GoldState = '恐慌' | '死机' | '贪婪'
+export type GoldSignal = '恐慌极端' | '惯性衰竭' | '均值回归' | '贪婪态' | '止盈触发'
+export type GoldCandidateSignal = Exclude<GoldSignal, '止盈触发'>
+export type GoldGateStatus = 'collecting' | 'failed' | 'review_eligible'
+
+export interface GoldShadowSnapshot {
+  schema_version: 1
+  observed_at: string
+  market_date: string
+  symbol: '600489.SH'
+  quote_source: 'tickflow'
+  quote_ts: number
+  price: number
+  previous_close: number
+  legacy_reference_60: number
+  native_ema60: number
+  P: number
+  V: number
+  A: number
+  state: GoldState
+  candidate_signals: GoldCandidateSignal[]
+  new_candidate_signals: GoldCandidateSignal[]
+}
+
+export interface GoldHealth {
+  latest_success_at: string | null
+  latest_market_date: string | null
+  consecutive_failures: number
+  last_error: { code: string; message: string } | null
+}
+
+export interface GoldStatus {
+  enabled: boolean
+  symbol: '600489.SH' | null
+  latest: GoldShadowSnapshot | null
+  latest_market_date: string | null
+  health: GoldHealth
+  external_send_count: number
+}
+
+export interface GoldCandidate {
+  key: string
+  signal: GoldCandidateSignal
+  symbol: '600489.SH'
+  market_date: string
+}
+
+export interface GoldImport {
+  import_id: string
+  sha256: string
+  normalized_sha256?: string
+  filename: string
+  imported_at: string
+  sample_count: number
+}
+
+export interface GoldComparisonSummary {
+  schema_version: 1
+  run_id: string
+  market_date: string
+  legacy_import_id: string
+  legacy_digest: string
+  shadow_digest: string
+  comparator_version: '1'
+  legacy_sample_count: number
+  shadow_sample_count: number
+  supersedes_run_id: string | null
+  row_count: number
+  rows_sha256: string
+  summary_sha256: string
+}
+
+export interface GoldComparisonRun extends GoldComparisonSummary {
+  rows: Record<string, unknown>[]
+}
+
+export interface GoldRows<T> {
+  rows: T[]
+}
+
+export interface GoldComparisonRequest {
+  import_id: string
+  market_date: string
+}
+
+export interface GoldObservationGate {
+  status: GoldGateStatus
+  required_complete_trading_days: number
+  complete_trading_days: number
+  external_send_count: number | null
+  reasons: string[]
+}
+
+export type GoldObservationReviewRequest =
+  | { kind: 'day'; market_date: string; run_id: string; complete_window_verified: boolean; note: string }
+  | { kind: 'restart'; verified: boolean; note: string }
+
 // ===== API surface =====
 export const api = {
   health: () => request<{ status: string; version: string; mode: string }>('/health'),
+
+  // ===== Gold research workspace =====
+  goldStatus: () => request<GoldStatus>('/api/gold/status'),
+  goldSnapshots: (limit = 100) => request<GoldRows<GoldShadowSnapshot>>(`/api/gold/snapshots?limit=${limit}`),
+  goldCandidates: (limit = 100) => request<GoldRows<GoldCandidate>>(`/api/gold/candidates?limit=${limit}`),
+  goldImportLegacy: (file: File) => {
+    const body = new FormData()
+    body.append('file', file)
+    return request<GoldImport>('/api/gold/imports/legacy', { method: 'POST', body })
+  },
+  goldImports: (limit = 100) => request<GoldRows<GoldImport>>(`/api/gold/imports?limit=${limit}`),
+  goldRunComparison: (payload: GoldComparisonRequest) => request<GoldComparisonSummary>('/api/gold/comparisons', {
+    method: 'POST', body: JSON.stringify(payload),
+  }),
+  goldComparisons: (limit = 100) => request<GoldRows<GoldComparisonSummary>>(`/api/gold/comparisons?limit=${limit}`),
+  goldComparison: (runId: string) => request<GoldComparisonRun>(`/api/gold/comparisons/${encodeURIComponent(runId)}`),
+  goldObservationGate: () => request<GoldObservationGate>('/api/gold/observation-gate'),
+  goldReviewObservation: (payload: GoldObservationReviewRequest) => request<GoldObservationGate>('/api/gold/observation-reviews', {
+    method: 'POST', body: JSON.stringify(payload),
+  }),
 
   // ===== Auth (访问认证) =====
   authStatus: () =>
