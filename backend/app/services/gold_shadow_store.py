@@ -11,6 +11,8 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from app.services.gold_legacy_schema import LEGACY_SIGNAL_VOCABULARY
+
 logger = logging.getLogger(__name__)
 
 MAX_DAYS = 30
@@ -526,6 +528,8 @@ class GoldShadowStore:
         signals = row["signals"]
         if not isinstance(signals, list) or not all(isinstance(item, str) for item in signals):
             raise ValueError("import signals must be a list of strings")
+        if not all(signal in LEGACY_SIGNAL_VOCABULARY for signal in signals):
+            raise ValueError("import signal is invalid")
 
     @classmethod
     def _validate_import_metadata(cls, row: dict[str, Any]) -> None:

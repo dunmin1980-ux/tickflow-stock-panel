@@ -5,6 +5,7 @@ import hashlib
 import math
 from dataclasses import dataclass
 
+from app.services.gold_legacy_schema import LEGACY_SIGNAL_VOCABULARY
 from app.services.gold_shadow_compare import LegacySample, parse_legacy_text
 from app.services.gold_shadow_store import GoldShadowStore
 
@@ -40,8 +41,8 @@ def normalize_legacy_sample(sample: LegacySample) -> dict[str, object]:
         raise ValueError("legacy sample timestamp must include a timezone")
     if sample.state not in _GOLD_STATES:
         raise ValueError("legacy sample state is invalid")
-    if not all(isinstance(signal, str) for signal in sample.signals):
-        raise ValueError("legacy sample signals must be strings")
+    if not all(signal in LEGACY_SIGNAL_VOCABULARY for signal in sample.signals):
+        raise ValueError("legacy sample signal is invalid")
     return {
         "schema_version": 1,
         "observed_at": sample.observed_at.isoformat(),

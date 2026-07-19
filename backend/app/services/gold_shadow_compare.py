@@ -11,6 +11,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
+from app.services.gold_legacy_schema import LEGACY_SIGNAL_VOCABULARY
 from app.services.gold_shadow_store import validate_gold_snapshot
 
 logger = logging.getLogger(__name__)
@@ -20,13 +21,12 @@ P_TOLERANCE = 0.10
 V_TOLERANCE = 0.02
 A_TOLERANCE = 0.02
 MATCH_WINDOW_SECONDS = 150
-PVA_SIGNALS = frozenset({"恐慌极端", "惯性衰竭", "均值回归", "贪婪态"})
+PVA_SIGNALS = frozenset(LEGACY_SIGNAL_VOCABULARY[:-1])
 
 _CN_TZ = timezone(timedelta(hours=8))
 _UTC = UTC
 _UNIX_EPOCH = datetime(1970, 1, 1, tzinfo=_UTC)
-_PVA_SIGNAL_ORDER = ("恐慌极端", "惯性衰竭", "均值回归", "贪婪态")
-_LEGACY_SIGNAL_TERMS = (*_PVA_SIGNAL_ORDER, "止盈触发")
+_PVA_SIGNAL_ORDER = LEGACY_SIGNAL_VOCABULARY[:-1]
 _GOLD_STATES = frozenset({"恐慌", "死机", "贪婪"})
 _POSITIVE_SNAPSHOT_FIELDS = (
     "price",
@@ -186,7 +186,7 @@ def parse_legacy_text(
         if "[ALERT]" in line:
             if pending_index is not None:
                 signals = list(rows[pending_index].signals)
-                for signal in _LEGACY_SIGNAL_TERMS:
+                for signal in LEGACY_SIGNAL_VOCABULARY:
                     if signal in line and signal not in signals:
                         signals.append(signal)
                 rows[pending_index] = replace(rows[pending_index], signals=tuple(signals))

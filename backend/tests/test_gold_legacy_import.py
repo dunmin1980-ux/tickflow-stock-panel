@@ -4,11 +4,13 @@ import hashlib
 import json
 import logging
 import stat
+from datetime import datetime
 
 import pytest
 
 from app.services import gold_legacy_import
 from app.services.gold_legacy_import import GoldImportError, GoldLegacyImporter
+from app.services.gold_shadow_compare import LegacySample
 from app.services.gold_shadow_store import GoldShadowStore
 
 
@@ -170,6 +172,48 @@ def test_store_rejects_non_normalized_import_rows_before_writing(tmp_path):
 
     with pytest.raises(ValueError, match="normalized import fields"):
         store.commit_import(digest, "monitor.log", [unsafe_row])
+
+    assert not (store.root / "import_index.jsonl").exists()
+    assert not (store.root / "imports" / f"{digest}.jsonl").exists()
+
+
+def test_importer_rejects_non_vocabulary_signal_before_persistence(tmp_path, monkeypatch):
+    store = GoldShadowStore(tmp_path)
+    sample = LegacySample(
+        observed_at=datetime.fromisoformat("2026-07-16T15:00:00+08:00"),
+        price=19.99,
+        p=-12.59,
+        v=-0.13,
+        a=-0.93,
+        state="恐慌",
+        signals=("api_key=source-line-secret",),
+        source_line=1,
+    )
+    monkeypatch.setattr(gold_legacy_import, "parse_legacy_text", lambda _text: [sample])
+
+    with pytest.raises(GoldImportError, match=r"^invalid_sample$"):
+        GoldLegacyImporter(store).import_bytes("monitor.log", b"synthetic valid UTF-8")
+
+    assert not (store.root / "import_index.jsonl").exists()
+    assert not (store.root / "imports").exists()
+
+
+def test_store_rejects_non_vocabulary_signal_before_persistence(tmp_path):
+    store = GoldShadowStore(tmp_path)
+    digest = "b" * 64
+    row = {
+        "schema_version": 1,
+        "observed_at": "2026-07-16T15:00:00+08:00",
+        "price": 19.99,
+        "P": -12.59,
+        "V": -0.13,
+        "A": -0.93,
+        "state": "恐慌",
+        "signals": ["api_key=source-line-secret"],
+    }
+
+    with pytest.raises(ValueError, match="import signal is invalid"):
+        store.commit_import(digest, "monitor.log", [row])
 
     assert not (store.root / "import_index.jsonl").exists()
     assert not (store.root / "imports" / f"{digest}.jsonl").exists()
