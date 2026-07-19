@@ -152,6 +152,16 @@ def test_ten_days_and_restart_review_are_review_eligible(service):
     assert not any(name.startswith(("activate", "enable")) for name in dir(service))
 
 
+def test_explicit_failed_restart_review_forces_failed_status(service):
+    service.review_restart(verified=False, note="restart recovery failed")
+
+    result = service.status()
+
+    assert result["status"] == "failed"
+    assert result["reasons"] == ["restart_recovery_failed"]
+    assert result["restart_review"] == {"recorded": True, "verified": False}
+
+
 def test_status_exposes_sanitized_persisted_review_state(service):
     dates = _trading_dates(3)
     verified_run = _commit_run(service.store, dates[0], passing=True)

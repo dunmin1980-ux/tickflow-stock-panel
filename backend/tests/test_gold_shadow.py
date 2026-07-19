@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from app.market_time import CN_TZ
+from app.services.gold_errors import GoldDataError
 from app.services.gold_external_guard import DisabledGoldNotifier
 from app.services.gold_shadow import GoldShadowService
 from app.services.gold_shadow_store import GoldShadowStore
@@ -245,6 +246,23 @@ def test_previous_close_must_be_positive(service):
 
     assert result.error_code == "previous_close_missing"
     assert service.store.list_snapshots(10) == []
+
+
+def test_evaluator_maps_snapshot_storage_failure_without_raw_details(
+    service, monkeypatch
+):
+    def fail_commit(_snapshot, *, now):
+        raise OSError(f"snapshot-storage-secret:{now.isoformat()}")
+
+    monkeypatch.setattr(service.store, "commit_evaluation", fail_commit)
+
+    with pytest.raises(GoldDataError) as caught:
+        evaluate(service, quote())
+
+    assert caught.value.code == "gold_storage_write_failed"
+    assert str(caught.value) == "gold_storage_write_failed"
+    assert caught.value.__cause__ is None
+    assert "snapshot-storage-secret" not in repr(caught.value)
 
 
 def test_duplicate_quote_timestamp_reuses_committed_snapshot(service):

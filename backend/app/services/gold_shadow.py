@@ -14,8 +14,10 @@ from app.services.gold_calendar import (
     GoldTradingCalendar,
     is_beijing_session,
 )
+from app.services.gold_errors import GoldDataError
 from app.services.gold_external_guard import DisabledGoldNotifier
 from app.services.gold_pva import GoldPvaResult, calculate_pva
+from app.services.gold_shadow_store import GoldShadowStorageReadError
 
 logger = logging.getLogger(__name__)
 _UNSET = object()
@@ -111,6 +113,8 @@ class GoldShadowService:
             committed = self.store.commit_evaluation(snapshot, now=now)
             self._record_success(committed)
             return GoldEvaluation(committed, None, None)
+        except (GoldShadowStorageReadError, OSError):
+            raise GoldDataError("gold_storage_write_failed") from None
         except (KeyError, TypeError, ValueError):
             return self.fail("evaluation_failed", "Gold evaluation failed")
 

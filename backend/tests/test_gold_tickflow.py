@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.services.gold_calendar import GoldCalendarAuthority
-from app.services.gold_shadow_store import GoldShadowStore
+from app.services.gold_shadow_store import GoldShadowStorageReadError, GoldShadowStore
 from app.services.gold_tickflow import GOLD_SYMBOL, GoldDataError, GoldTickFlowGateway
 from app.tickflow.capabilities import Cap, CapabilityLimits, CapabilitySet
 
@@ -165,6 +165,90 @@ def test_gateway_rejects_mixed_symbol_quote_response(tmp_path):
 
     with pytest.raises(GoldDataError, match="quote_contract_invalid"):
         make_gateway(tmp_path, client).get_quote()
+
+
+def test_gateway_maps_quote_sdk_exception_without_raw_details(tmp_path):
+    class ExplodingQuotes:
+        def get(self, **_kwargs):
+            raise RuntimeError("status=503 token=quote-sdk-secret")
+
+    client = SimpleNamespace(quotes=ExplodingQuotes(), klines=FakeKlines())
+
+    with pytest.raises(GoldDataError) as caught:
+        make_gateway(tmp_path, client).get_quote()
+
+    assert caught.value.code == "tickflow_request_failed"
+    assert str(caught.value) == "tickflow_request_failed"
+    assert caught.value.__cause__ is None
+    assert "quote-sdk-secret" not in repr(caught.value)
+
+
+def test_gateway_maps_history_sdk_exception_without_raw_details(tmp_path):
+    class ExplodingKlines:
+        def batch(self, *_args, **_kwargs):
+            raise RuntimeError("status=429 token=history-sdk-secret")
+
+    client = SimpleNamespace(quotes=FakeQuotes(), klines=ExplodingKlines())
+
+    with pytest.raises(GoldDataError) as caught:
+        make_gateway(tmp_path, client).get_completed_closes(date(2026, 7, 16))
+
+    assert caught.value.code == "tickflow_request_failed"
+    assert str(caught.value) == "tickflow_request_failed"
+    assert caught.value.__cause__ is None
+    assert "history-sdk-secret" not in repr(caught.value)
+
+
+def test_gateway_maps_capability_provider_exception_without_raw_details(tmp_path):
+    calendar_for(tmp_path)
+
+    def exploding_capabilities():
+        raise RuntimeError("capability-provider-secret")
+
+    gateway = GoldTickFlowGateway(
+        GoldShadowStore(tmp_path),
+        exploding_capabilities,
+        client_factory=lambda: SimpleNamespace(quotes=FakeQuotes(), klines=FakeKlines()),
+    )
+
+    with pytest.raises(GoldDataError) as caught:
+        gateway.get_quote()
+
+    assert caught.value.code == "tickflow_capability_unavailable"
+    assert caught.value.__cause__ is None
+    assert "capability-provider-secret" not in repr(caught.value)
+
+
+def test_gateway_maps_history_storage_read_failure(tmp_path, monkeypatch):
+    gateway = make_gateway(
+        tmp_path, SimpleNamespace(quotes=FakeQuotes(), klines=FakeKlines())
+    )
+
+    def fail_read():
+        raise GoldShadowStorageReadError("storage-read-secret")
+
+    monkeypatch.setattr(gateway.store, "read_daily_history", fail_read)
+
+    with pytest.raises(GoldDataError, match="gold_storage_read_failed") as caught:
+        gateway.get_completed_closes(date(2026, 7, 16))
+
+    assert "storage-read-secret" not in repr(caught.value)
+
+
+def test_gateway_maps_history_storage_write_failure(tmp_path, monkeypatch):
+    gateway = make_gateway(
+        tmp_path, SimpleNamespace(quotes=FakeQuotes(), klines=FakeKlines())
+    )
+
+    def fail_write(_payload):
+        raise OSError("storage-write-secret")
+
+    monkeypatch.setattr(gateway.store, "write_daily_history", fail_write)
+
+    with pytest.raises(GoldDataError, match="gold_storage_write_failed") as caught:
+        gateway.get_completed_closes(date(2026, 7, 16))
+
+    assert "storage-write-secret" not in repr(caught.value)
 
 
 def test_gateway_rejects_wrong_history_symbol(tmp_path):

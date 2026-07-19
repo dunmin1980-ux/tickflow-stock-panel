@@ -12,9 +12,9 @@ from apscheduler.triggers.cron import CronTrigger
 from app.market_time import CN_TZ, cn_now
 from app.services.gold_calendar import (
     GoldCalendarAuthority,
-    GoldCalendarError,
     is_beijing_session,
 )
+from app.services.gold_errors import GoldDataError, safe_gold_error
 
 logger = logging.getLogger(__name__)
 class GoldSampler:
@@ -50,20 +50,21 @@ class GoldSampler:
                 expected_date=now.date(),
                 calendar=calendar,
             )
-        except GoldCalendarError:
-            self._record_failure(
-                "calendar_unconfigured", "Gold trading calendar is unavailable"
-            )
+        except GoldDataError as exc:
+            self._record_failure(exc.code)
         except Exception:
-            self._record_failure("gold_sampling_failed", "Gold sampling failed")
+            self._record_failure("gold_sampling_failed")
 
     def _beijing_now(self) -> datetime:
         now = self.clock()
         return now.replace(tzinfo=CN_TZ) if now.tzinfo is None else now.astimezone(CN_TZ)
 
-    def _record_failure(self, code: str, message: str) -> None:
+    def _record_failure(self, code: str) -> None:
+        safe_error = safe_gold_error(code)
+        if safe_error is None:
+            safe_error = ("gold_sampling_failed", "Gold sampling failed")
         try:
-            self.service.fail(code, message)
+            self.service.fail(*safe_error)
         except Exception:
             logger.warning("gold sampler failure could not be persisted")
 

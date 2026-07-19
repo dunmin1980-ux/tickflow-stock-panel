@@ -11,7 +11,7 @@ from typing import Any
 from app.market_time import cn_now
 from app.services.gold_calendar import GoldCalendarAuthority, GoldTradingCalendar
 from app.services.gold_errors import GoldDataError
-from app.services.gold_shadow_store import GoldShadowStore
+from app.services.gold_shadow_store import GoldShadowStorageReadError, GoldShadowStore
 from app.tickflow.capabilities import Cap, CapabilitySet
 from app.tickflow.client import get_paid_realtime_client
 from app.tickflow.rate_limits import resolve_limit, sleep_between_batches
@@ -37,8 +37,13 @@ class GoldTickFlowGateway:
 
     def get_quote(self) -> dict[str, object]:
         client = self._paid_client(Cap.QUOTE_BATCH)
-        self._pace(Cap.QUOTE_BATCH)
-        rows = client.quotes.get(symbols=[GOLD_SYMBOL], as_dataframe=False) or []
+        try:
+            self._pace(Cap.QUOTE_BATCH)
+            rows = client.quotes.get(symbols=[GOLD_SYMBOL], as_dataframe=False) or []
+        except GoldDataError:
+            raise
+        except Exception:
+            raise GoldDataError("tickflow_request_failed") from None
         if (
             not isinstance(rows, list)
             or len(rows) != 1
@@ -56,7 +61,10 @@ class GoldTickFlowGateway:
     ) -> list[float]:
         calendar = calendar or self.calendar_authority.load(expected_date)
         expected_previous_date = calendar.previous_trading_day(expected_date)
-        cached = self.store.read_daily_history()
+        try:
+            cached = self.store.read_daily_history()
+        except (GoldShadowStorageReadError, OSError):
+            raise GoldDataError("gold_storage_read_failed") from None
         if cached is not None:
             cached_date, rows = self._validated_cache(
                 cached, expected_date, expected_previous_date
@@ -65,45 +73,63 @@ class GoldTickFlowGateway:
                 return self._latest_closes(rows)
 
         client = self._paid_client(Cap.KLINE_DAILY_BATCH)
-        self._pace(Cap.KLINE_DAILY_BATCH)
-        raw = client.klines.batch(
-            [GOLD_SYMBOL],
-            period="1d",
-            count=90,
-            adjust="none",
-            as_dataframe=False,
-        )
+        try:
+            self._pace(Cap.KLINE_DAILY_BATCH)
+            raw = client.klines.batch(
+                [GOLD_SYMBOL],
+                period="1d",
+                count=90,
+                adjust="none",
+                as_dataframe=False,
+            )
+        except GoldDataError:
+            raise
+        except Exception:
+            raise GoldDataError("tickflow_request_failed") from None
         rows = self._normalize_history_response(
             raw, expected_date, expected_previous_date
         )
         closes = self._latest_closes(rows)
-        self.store.write_daily_history(
-            {
-                "schema_version": _CACHE_SCHEMA_VERSION,
-                "source": "tickflow",
-                "expected_market_date": expected_date.isoformat(),
-                "fetched_at": self.clock().isoformat(),
-                "sha256": self._rows_digest(rows),
-                "rows": rows,
-            }
-        )
+        try:
+            self.store.write_daily_history(
+                {
+                    "schema_version": _CACHE_SCHEMA_VERSION,
+                    "source": "tickflow",
+                    "expected_market_date": expected_date.isoformat(),
+                    "fetched_at": self.clock().isoformat(),
+                    "sha256": self._rows_digest(rows),
+                    "rows": rows,
+                }
+            )
+        except (GoldShadowStorageReadError, OSError):
+            raise GoldDataError("gold_storage_write_failed") from None
         return closes
 
     def _paid_client(self, cap: Cap) -> Any:
-        capset = self.capset_provider()
-        if capset is None or not capset.has(cap):
+        try:
+            capset = self.capset_provider()
+            capability_available = capset is not None and capset.has(cap)
+        except Exception:
+            raise GoldDataError("tickflow_capability_unavailable") from None
+        if not capability_available:
             raise GoldDataError("tickflow_capability_unavailable")
         try:
             client = self.client_factory()
-        except Exception as exc:
-            raise GoldDataError("tickflow_paid_client_unavailable") from exc
+        except Exception:
+            raise GoldDataError("tickflow_paid_client_unavailable") from None
         if client is None:
             raise GoldDataError("tickflow_paid_client_unavailable")
         return client
 
     def _pace(self, cap: Cap) -> None:
-        limit = resolve_limit(self.capset_provider(), cap)
-        sleep_between_batches(1, limit.rpm)
+        try:
+            limit = resolve_limit(self.capset_provider(), cap)
+        except Exception:
+            raise GoldDataError("tickflow_capability_unavailable") from None
+        try:
+            sleep_between_batches(1, limit.rpm)
+        except Exception:
+            raise GoldDataError("tickflow_request_failed") from None
 
     def _validated_cache(
         self,

@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import date, datetime
 
 import pytest
@@ -6,7 +7,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.market_time import CN_TZ
 from app.services.gold_calendar import GoldCalendarAuthority
+from app.services.gold_errors import GoldDataError
+from app.services.gold_external_guard import DisabledGoldNotifier
 from app.services.gold_scheduler import GoldSampler, register_gold_sampler
+from app.services.gold_shadow import GoldShadowService
 from app.services.gold_shadow_store import GoldShadowStore
 
 
@@ -159,6 +163,98 @@ def test_sampler_records_safe_failure_without_rethrowing(tmp_path):
 
     assert sampler.run_once() is None
     assert service.failures == [("gold_sampling_failed", "Gold sampling failed")]
+
+
+@pytest.mark.parametrize(
+    ("code", "message"),
+    [
+        ("tickflow_capability_unavailable", "TickFlow capability is unavailable"),
+        ("tickflow_paid_client_unavailable", "TickFlow paid client is unavailable"),
+        ("tickflow_request_failed", "TickFlow request failed"),
+        ("quote_contract_invalid", "TickFlow quote contract is invalid"),
+        ("history_contract_invalid", "TickFlow history contract is invalid"),
+        (
+            "history_preceding_session_mismatch",
+            "TickFlow history does not end on the expected trading session",
+        ),
+        ("calendar_unconfigured", "Gold trading calendar is unavailable"),
+        ("quote_timestamp_stale", "TickFlow quote timestamp is stale"),
+        ("quote_timestamp_future", "TickFlow quote timestamp is in the future"),
+        ("quote_timestamp_out_of_session", "TickFlow quote is outside session"),
+        ("gold_storage_read_failed", "Gold storage read failed"),
+        ("gold_storage_write_failed", "Gold storage write failed"),
+    ],
+)
+def test_sampler_persists_only_allowlisted_gold_error_codes(
+    tmp_path, code, message
+):
+    class FailingGateway(FakeGateway):
+        def get_quote(self):
+            raise GoldDataError(code)
+
+    service = FakeService()
+    sampler = GoldSampler(
+        FailingGateway(),
+        service,
+        write_calendar(tmp_path),
+        clock=lambda: at("2026-07-16T10:00:00+08:00"),
+    )
+
+    sampler.run_once()
+
+    assert service.failures == [(code, message)]
+
+
+def test_sampler_collapses_unknown_gold_error_code(tmp_path):
+    class FailingGateway(FakeGateway):
+        def get_quote(self):
+            raise GoldDataError("sdk-secret-unknown-code")
+
+    service = FakeService()
+    sampler = GoldSampler(
+        FailingGateway(),
+        service,
+        write_calendar(tmp_path),
+        clock=lambda: at("2026-07-16T10:00:00+08:00"),
+    )
+
+    sampler.run_once()
+
+    assert service.failures == [("gold_sampling_failed", "Gold sampling failed")]
+    assert "sdk-secret" not in repr(service.failures)
+
+
+def test_sampler_never_persists_logs_or_returns_raw_exception_details(tmp_path, caplog):
+    class ExplodingGateway(FakeGateway):
+        def get_quote(self):
+            raise RuntimeError("status=503 token=raw-sdk-secret")
+
+    authority = write_calendar(tmp_path)
+    store = authority.store
+    service = GoldShadowService(
+        store,
+        DisabledGoldNotifier(store.root),
+        calendar_authority=authority,
+    )
+    sampler = GoldSampler(
+        ExplodingGateway(),
+        service,
+        authority,
+        clock=lambda: at("2026-07-16T10:00:00+08:00"),
+    )
+
+    with caplog.at_level(logging.WARNING):
+        sampler.run_once()
+
+    health_text = (store.root / "health.json").read_text(encoding="utf-8")
+    status_text = json.dumps(service.status(), ensure_ascii=False)
+    assert store.read_health()["last_error"] == {
+        "code": "gold_sampling_failed",
+        "message": "Gold sampling failed",
+    }
+    assert "raw-sdk-secret" not in health_text
+    assert "raw-sdk-secret" not in status_text
+    assert "raw-sdk-secret" not in caplog.text
 
 
 def test_registers_five_minute_single_instance_job(tmp_path):

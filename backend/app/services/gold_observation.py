@@ -178,6 +178,8 @@ class GoldObservationService:
         restart_verified = (
             latest_restart_review is not None and latest_restart_review["verified"] is True
         )
+        if latest_restart_review is not None and latest_restart_review["verified"] is False:
+            reasons.append("restart_recovery_failed")
         canonical_days = []
         for market_date_text, metadata in sorted(canonical_runs.items(), reverse=True):
             review = latest_day_reviews.get(market_date_text) if reviews_available else None
