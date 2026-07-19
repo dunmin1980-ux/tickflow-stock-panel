@@ -41,6 +41,20 @@ _IMPORT_NUMERIC_FIELDS = ("price", "P", "V", "A")
 _IMPORT_METADATA_FIELDS = frozenset(
     {"import_id", "sha256", "filename", "imported_at", "sample_count"}
 )
+_COMPARISON_RUN_METADATA_FIELDS = frozenset(
+    {
+        "schema_version",
+        "run_id",
+        "market_date",
+        "legacy_import_id",
+        "legacy_digest",
+        "shadow_digest",
+        "comparator_version",
+        "legacy_sample_count",
+        "shadow_sample_count",
+        "supersedes_run_id",
+    }
+)
 _GOLD_STATES = frozenset({"恐慌", "死机", "贪婪"})
 
 
@@ -276,6 +290,67 @@ class GoldShadowStore:
         rows.reverse()
         return [dict(row) for row in rows[: max(0, limit)]]
 
+    def comparison_snapshots(self) -> list[dict[str, Any]]:
+        """Return validated snapshots for a deterministic comparison run."""
+        with _LOCK:
+            rows = self._read_jsonl_locked(
+                "snapshots.jsonl", raise_on_failure=True, reject_malformed=True
+            )
+            try:
+                for row in rows:
+                    self._validate_snapshot(row)
+            except ValueError as exc:
+                raise GoldShadowStorageReadError("unable to read snapshots.jsonl") from exc
+        return [dict(row) for row in rows]
+
+    def commit_comparison_run(
+        self, metadata: dict[str, Any], rows: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Commit a run data file before atomically publishing its metadata."""
+        prepared_rows = [dict(row) for row in rows]
+        self._validate_comparison_run_rows(prepared_rows)
+        with _LOCK:
+            index = self._read_comparison_index_locked()
+            existing = next((row for row in index if row["run_id"] == metadata.get("run_id")), None)
+            if existing is not None:
+                return dict(existing)
+
+            same_day_runs = [row for row in index if row["market_date"] == metadata.get("market_date")]
+            committed = {
+                **metadata,
+                "supersedes_run_id": same_day_runs[-1]["run_id"] if same_day_runs else None,
+            }
+            self._validate_comparison_run_metadata(committed)
+            self._write_comparison_run_rows_locked(committed["run_id"], prepared_rows)
+            self._replace_jsonl_locked("comparison_index.jsonl", [*index, committed])
+            return dict(committed)
+
+    def get_comparison_run(self, run_id: str) -> dict[str, Any] | None:
+        if not self._is_import_digest(run_id):
+            return None
+        with _LOCK:
+            metadata = next(
+                (row for row in self._read_comparison_index_locked() if row["run_id"] == run_id),
+                None,
+            )
+            if metadata is None:
+                return None
+            filename = f"comparison_runs/{run_id}.jsonl"
+            if not (self.root / filename).is_file():
+                raise GoldShadowStorageReadError(f"unable to read comparison run {run_id}")
+            rows = self._read_jsonl_locked(filename, raise_on_failure=True, reject_malformed=True)
+            try:
+                self._validate_comparison_run_rows(rows)
+            except ValueError as exc:
+                raise GoldShadowStorageReadError(f"unable to read comparison run {run_id}") from exc
+        return {**metadata, "rows": [dict(row) for row in rows]}
+
+    def list_comparison_runs(self, limit: int = MAX_RECORDS) -> list[dict[str, Any]]:
+        with _LOCK:
+            rows = self._read_comparison_index_locked()
+        rows.sort(key=lambda row: (row["market_date"], row["run_id"]), reverse=True)
+        return [dict(row) for row in rows[: max(0, limit)]]
+
     def write_health(
         self,
         *,
@@ -410,6 +485,17 @@ class GoldShadowStore:
                 self._validate_import_metadata(row)
         except ValueError as exc:
             raise GoldShadowStorageReadError("unable to read import_index.jsonl") from exc
+        return rows
+
+    def _read_comparison_index_locked(self) -> list[dict[str, Any]]:
+        rows = self._read_jsonl_locked(
+            "comparison_index.jsonl", raise_on_failure=True, reject_malformed=True
+        )
+        try:
+            for row in rows:
+                self._validate_comparison_run_metadata(row)
+        except ValueError as exc:
+            raise GoldShadowStorageReadError("unable to read comparison_index.jsonl") from exc
         return rows
 
     def _read_candidate_event_keys_locked(self) -> set[str]:
@@ -552,6 +638,63 @@ class GoldShadowStore:
             raise ValueError("invalid import timestamp")
         if type(row["sample_count"]) is not int or row["sample_count"] <= 0:
             raise ValueError("invalid import sample count")
+
+    @classmethod
+    def _validate_comparison_run_metadata(cls, row: dict[str, Any]) -> None:
+        if not isinstance(row, dict) or set(row) != _COMPARISON_RUN_METADATA_FIELDS:
+            raise ValueError("invalid comparison run metadata")
+        if type(row["schema_version"]) is not int or row["schema_version"] != 1:
+            raise ValueError("invalid comparison run schema version")
+        for field in ("run_id", "legacy_import_id", "legacy_digest", "shadow_digest"):
+            cls._validate_import_digest(row[field])
+        if row["comparator_version"] != "1":
+            raise ValueError("invalid comparison comparator version")
+        market_date = row["market_date"]
+        if not isinstance(market_date, str):
+            raise ValueError("invalid comparison market date")
+        try:
+            if date.fromisoformat(market_date).isoformat() != market_date:
+                raise ValueError("invalid comparison market date")
+        except ValueError as exc:
+            raise ValueError("invalid comparison market date") from exc
+        for field in ("legacy_sample_count", "shadow_sample_count"):
+            if type(row[field]) is not int or row[field] < 0:
+                raise ValueError("invalid comparison sample count")
+        supersedes_run_id = row["supersedes_run_id"]
+        if supersedes_run_id is not None:
+            cls._validate_import_digest(supersedes_run_id)
+
+    @staticmethod
+    def _validate_comparison_run_rows(rows: list[dict[str, Any]]) -> None:
+        if not rows or any(not isinstance(row, dict) for row in rows):
+            raise ValueError("comparison run rows are invalid")
+        summaries = [row for row in rows if row.get("type") == "summary"]
+        if len(summaries) != 1 or rows[-1] is not summaries[0]:
+            raise ValueError("comparison run requires one terminal summary")
+
+    def _write_comparison_run_rows_locked(self, run_id: str, rows: list[dict[str, Any]]) -> None:
+        self._ensure_root()
+        runs = self.root / "comparison_runs"
+        runs.mkdir(mode=0o700, exist_ok=True)
+        os.chmod(runs, 0o700)
+        self._fsync_root_locked()
+        path = runs / f"{run_id}.jsonl"
+        temporary = runs / f".{run_id}.jsonl.tmp"
+        descriptor = os.open(temporary, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o600)
+        os.chmod(temporary, 0o600)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                for row in rows:
+                    handle.write(
+                        json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
+                    )
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, path)
+            os.chmod(path, 0o600)
+            self._fsync_directory_locked(runs)
+        finally:
+            temporary.unlink(missing_ok=True)
 
     def _read_json_state_locked(self, filename: str, *, raise_on_failure: bool = False) -> Any:
         path = self.root / filename
