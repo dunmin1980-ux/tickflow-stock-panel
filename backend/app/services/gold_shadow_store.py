@@ -61,6 +61,20 @@ _COMPARISON_RUN_METADATA_FIELDS = frozenset(
         "summary_sha256",
     }
 )
+_OBSERVATION_DAY_REVIEW_FIELDS = frozenset(
+    {
+        "schema_version",
+        "review_type",
+        "market_date",
+        "run_id",
+        "verified",
+        "note",
+        "reviewed_at",
+    }
+)
+_OBSERVATION_RESTART_REVIEW_FIELDS = frozenset(
+    {"schema_version", "review_type", "verified", "note", "reviewed_at"}
+)
 _GOLD_STATES = frozenset({"恐慌", "死机", "贪婪"})
 
 
@@ -348,6 +362,18 @@ class GoldShadowStore:
         rows.sort(key=lambda row: (row["market_date"], row["run_id"]), reverse=True)
         return [dict(row) for row in rows[: max(0, limit)]]
 
+    def append_observation_review(self, review: dict[str, Any]) -> None:
+        """Append a validated manual observation review to durable private storage."""
+        self._validate_observation_review(review)
+        with _LOCK:
+            self._read_observation_reviews_locked()
+            self._append_jsonl_locked("observation_reviews.jsonl", review)
+
+    def list_observation_reviews(self) -> list[dict[str, Any]]:
+        with _LOCK:
+            rows = self._read_observation_reviews_locked()
+        return [dict(row) for row in rows]
+
     def write_health(
         self,
         *,
@@ -513,6 +539,19 @@ class GoldShadowStore:
                 self._validate_comparison_run_metadata(row)
         except ValueError as exc:
             raise GoldShadowStorageReadError("unable to read comparison_index.jsonl") from exc
+        return rows
+
+    def _read_observation_reviews_locked(self) -> list[dict[str, Any]]:
+        rows = self._read_jsonl_locked(
+            "observation_reviews.jsonl", raise_on_failure=True, reject_malformed=True
+        )
+        try:
+            for row in rows:
+                self._validate_observation_review(row)
+        except ValueError as exc:
+            raise GoldShadowStorageReadError(
+                "unable to read observation_reviews.jsonl"
+            ) from exc
         return rows
 
     def _read_candidate_event_keys_locked(self) -> set[str]:
@@ -686,6 +725,40 @@ class GoldShadowStore:
             raise ValueError("invalid comparison row count")
         cls._validate_import_digest(row["rows_sha256"])
         cls._validate_import_digest(row["summary_sha256"])
+
+    @classmethod
+    def _validate_observation_review(cls, row: dict[str, Any]) -> None:
+        if not isinstance(row, dict) or row.get("review_type") not in {"day", "restart"}:
+            raise ValueError("invalid observation review")
+        expected_fields = (
+            _OBSERVATION_DAY_REVIEW_FIELDS
+            if row["review_type"] == "day"
+            else _OBSERVATION_RESTART_REVIEW_FIELDS
+        )
+        if set(row) != expected_fields:
+            raise ValueError("invalid observation review fields")
+        if type(row["schema_version"]) is not int or row["schema_version"] != 1:
+            raise ValueError("invalid observation review schema version")
+        if type(row["verified"]) is not bool:
+            raise ValueError("invalid observation review verification")
+        if not isinstance(row["note"], str) or not row["note"].strip():
+            raise ValueError("invalid observation review note")
+        reviewed_at = row["reviewed_at"]
+        if not isinstance(reviewed_at, str):
+            raise ValueError("invalid observation review timestamp")
+        try:
+            parsed_at = datetime.fromisoformat(reviewed_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("invalid observation review timestamp") from exc
+        if parsed_at.utcoffset() is None:
+            raise ValueError("invalid observation review timestamp")
+        if row["review_type"] == "day":
+            try:
+                if date.fromisoformat(row["market_date"]).isoformat() != row["market_date"]:
+                    raise ValueError("invalid observation review market date")
+            except (TypeError, ValueError) as exc:
+                raise ValueError("invalid observation review market date") from exc
+            cls._validate_import_digest(row["run_id"])
 
     @classmethod
     def _validate_comparison_run_rows(
