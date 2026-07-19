@@ -83,7 +83,12 @@ class GoldLegacyImporter:
             raise GoldImportError("archive_not_allowed")
 
         digest = hashlib.sha256(payload).hexdigest()
-        existing = self.store.find_import_by_sha256(digest)
+        try:
+            existing, repair_required = self.store.resolve_import_upload(digest)
+        except ValueError as exc:
+            if str(exc) != "legacy_import_original_mismatch":
+                raise
+            raise GoldImportError("legacy_import_original_mismatch") from None
         if existing is not None:
             return self._result(existing)
 
@@ -99,5 +104,15 @@ class GoldLegacyImporter:
         except (TypeError, ValueError):
             raise GoldImportError("invalid_sample") from None
 
-        metadata = self.store.commit_import(digest, _safe_basename(filename), normalized)
+        if repair_required:
+            try:
+                metadata = self.store.repair_legacy_import(
+                    digest, _safe_basename(filename), normalized
+                )
+            except ValueError as exc:
+                if str(exc) != "legacy_import_original_mismatch":
+                    raise
+                raise GoldImportError("legacy_import_original_mismatch") from None
+        else:
+            metadata = self.store.commit_import(digest, _safe_basename(filename), normalized)
         return self._result(metadata)

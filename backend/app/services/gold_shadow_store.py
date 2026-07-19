@@ -44,6 +44,7 @@ _IMPORT_METADATA_FIELDS = frozenset(
 )
 _LEGACY_IMPORT_METADATA_FIELDS = _IMPORT_METADATA_FIELDS - {"normalized_sha256"}
 _LEGACY_IMPORT_REIMPORT_REQUIRED = "legacy_import_requires_manual_reimport_from_original_bytes"
+_LEGACY_IMPORT_ORIGINAL_MISMATCH = "legacy_import_original_mismatch"
 _COMPARISON_RUN_METADATA_FIELDS = frozenset(
     {
         "schema_version",
@@ -266,6 +267,64 @@ class GoldShadowStore:
             }
             self._replace_jsonl_locked("import_index.jsonl", [*index, metadata])
             return dict(metadata)
+
+    def repair_legacy_import(
+        self, digest: str, filename: str, rows: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Replace one legacy import only when re-uploaded raw bytes match its digest."""
+        self._validate_import_digest(digest)
+        if not rows:
+            raise ValueError("import rows must not be empty")
+        normalized_rows = [dict(row) for row in rows]
+        for row in normalized_rows:
+            self._validate_import_row(row)
+        normalized_digest = self._canonical_jsonl_sha256(normalized_rows)
+
+        with _LOCK:
+            index = self._read_import_index_for_repair_locked()
+            matching_positions = [
+                position for position, row in enumerate(index) if row["sha256"] == digest
+            ]
+            if len(matching_positions) != 1:
+                raise ValueError(_LEGACY_IMPORT_ORIGINAL_MISMATCH)
+            position = matching_positions[0]
+            existing = index[position]
+            if "normalized_sha256" in existing:
+                self._read_import_rows_locked(existing)
+                return dict(existing)
+
+            self._write_import_rows_locked(digest, normalized_rows)
+            repaired = {
+                **existing,
+                "normalized_sha256": normalized_digest,
+                "filename": self._safe_basename(filename),
+                "sample_count": len(normalized_rows),
+            }
+            self._validate_import_metadata(repaired)
+            repaired_index = [*index]
+            repaired_index[position] = repaired
+            self._replace_jsonl_locked("import_index.jsonl", repaired_index)
+            return dict(repaired)
+
+    def resolve_import_upload(
+        self, digest: str
+    ) -> tuple[dict[str, Any] | None, bool]:
+        """Resolve a duplicate or legacy repair target without trusting import data."""
+        self._validate_import_digest(digest)
+        with _LOCK:
+            index = self._read_import_index_for_repair_locked()
+            matches = [row for row in index if row["sha256"] == digest]
+            if len(matches) > 1:
+                raise GoldShadowStorageReadError("unable to read import_index.jsonl")
+            if matches:
+                existing = matches[0]
+                if "normalized_sha256" in existing:
+                    self._read_import_rows_locked(existing)
+                    return dict(existing), False
+                return None, True
+            if any("normalized_sha256" not in row for row in index):
+                raise ValueError(_LEGACY_IMPORT_ORIGINAL_MISMATCH)
+            return None, False
 
     def find_import_by_sha256(self, digest: str) -> dict[str, Any] | None:
         if not self._is_import_digest(digest):
@@ -559,6 +618,20 @@ class GoldShadowStore:
             raise GoldShadowStorageReadError("unable to read import_index.jsonl") from exc
         return rows
 
+    def _read_import_index_for_repair_locked(self) -> list[dict[str, Any]]:
+        rows = self._read_jsonl_locked(
+            "import_index.jsonl", raise_on_failure=True, reject_malformed=True
+        )
+        try:
+            for row in rows:
+                if set(row) == _LEGACY_IMPORT_METADATA_FIELDS:
+                    self._validate_legacy_import_metadata(row)
+                else:
+                    self._validate_import_metadata(row)
+        except ValueError as exc:
+            raise GoldShadowStorageReadError("unable to read import_index.jsonl") from exc
+        return rows
+
     def _read_import_rows_locked(self, metadata: dict[str, Any]) -> list[dict[str, Any]]:
         import_id = metadata["import_id"]
         filename = f"imports/{import_id}.jsonl"
@@ -781,6 +854,27 @@ class GoldShadowStore:
         cls._validate_import_digest(row["normalized_sha256"])
         filename = row["filename"]
         if not isinstance(filename, str) or cls._safe_basename(filename) != filename:
+            raise ValueError("invalid import filename")
+        imported_at = row["imported_at"]
+        if not isinstance(imported_at, str):
+            raise ValueError("invalid import timestamp")
+        try:
+            parsed_at = datetime.fromisoformat(imported_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("invalid import timestamp") from exc
+        if parsed_at.utcoffset() is None:
+            raise ValueError("invalid import timestamp")
+        if type(row["sample_count"]) is not int or row["sample_count"] <= 0:
+            raise ValueError("invalid import sample count")
+
+    @classmethod
+    def _validate_legacy_import_metadata(cls, row: dict[str, Any]) -> None:
+        if not isinstance(row, dict) or set(row) != _LEGACY_IMPORT_METADATA_FIELDS:
+            raise ValueError("invalid legacy import metadata")
+        cls._validate_import_digest(row["import_id"])
+        if row["sha256"] != row["import_id"]:
+            raise ValueError("import digest mismatch")
+        if not isinstance(row["filename"], str):
             raise ValueError("invalid import filename")
         imported_at = row["imported_at"]
         if not isinstance(imported_at, str):

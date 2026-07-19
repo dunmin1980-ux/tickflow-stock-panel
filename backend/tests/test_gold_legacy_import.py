@@ -22,6 +22,15 @@ def fixture_bytes(*, minute: int = 0) -> bytes:
     ).encode()
 
 
+def downgrade_import_metadata(store: GoldShadowStore) -> tuple[dict[str, object], str]:
+    index_path = store.root / "import_index.jsonl"
+    metadata = json.loads(index_path.read_text(encoding="utf-8"))
+    del metadata["normalized_sha256"]
+    serialized = json.dumps(metadata, ensure_ascii=False, separators=(",", ":")) + "\n"
+    index_path.write_text(serialized, encoding="utf-8")
+    return metadata, serialized
+
+
 def test_import_normalizes_and_discards_raw_text(tmp_path):
     importer = GoldLegacyImporter(GoldShadowStore(tmp_path))
 
@@ -195,6 +204,148 @@ def test_tampered_legacy_index_requires_manual_reimport_without_rewriting_metada
         GoldShadowStore(tmp_path).get_import(result.import_id)
 
     assert index_path.read_text(encoding="utf-8") == legacy_index
+
+
+def test_reupload_repairs_legacy_import_from_original_bytes_without_trusting_normalized_file(
+    tmp_path,
+):
+    store = GoldShadowStore(tmp_path)
+    importer = GoldLegacyImporter(store)
+    original = importer.import_bytes("monitor.log", fixture_bytes())
+    legacy_metadata, _ = downgrade_import_metadata(store)
+    import_path = store.root / "imports" / f"{original.import_id}.jsonl"
+    tampered = json.loads(import_path.read_text(encoding="utf-8"))
+    tampered["price"] = 999.0
+    import_path.write_text(
+        json.dumps(tampered, ensure_ascii=False, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+    repaired = importer.import_bytes("../../repair.LOG", fixture_bytes())
+
+    metadata = store.list_imports(10)[0]
+    persisted = json.loads(import_path.read_text(encoding="utf-8"))
+    assert repaired.import_id == original.import_id
+    assert repaired.filename == "repair.LOG"
+    assert repaired.sample_count == 1
+    assert metadata == {
+        **legacy_metadata,
+        "normalized_sha256": metadata["normalized_sha256"],
+        "filename": "repair.LOG",
+        "sample_count": 1,
+    }
+    assert persisted["price"] == 19.99
+    assert "normalized_sha256" in metadata
+
+
+def test_legacy_repair_rejects_different_original_bytes_without_writes(tmp_path):
+    store = GoldShadowStore(tmp_path)
+    importer = GoldLegacyImporter(store)
+    original = importer.import_bytes("monitor.log", fixture_bytes())
+    _, legacy_index = downgrade_import_metadata(store)
+    import_path = store.root / "imports" / f"{original.import_id}.jsonl"
+    legacy_rows = import_path.read_bytes()
+
+    with pytest.raises(GoldImportError, match=r"^legacy_import_original_mismatch$"):
+        importer.import_bytes("wrong.log", fixture_bytes(minute=5))
+
+    assert (store.root / "import_index.jsonl").read_text(encoding="utf-8") == legacy_index
+    assert import_path.read_bytes() == legacy_rows
+    assert len(list((store.root / "imports").glob("*.jsonl"))) == 1
+
+
+def test_legacy_repair_rejects_nonmatching_digest_before_decoding(
+    tmp_path, monkeypatch
+):
+    store = GoldShadowStore(tmp_path)
+    importer = GoldLegacyImporter(store)
+    importer.import_bytes("monitor.log", fixture_bytes())
+    downgrade_import_metadata(store)
+
+    def unexpected_parse(_text):
+        pytest.fail("nonmatching repair bytes were decoded and parsed")
+
+    monkeypatch.setattr(gold_legacy_import, "parse_legacy_text", unexpected_parse)
+
+    with pytest.raises(GoldImportError, match=r"^legacy_import_original_mismatch$"):
+        importer.import_bytes("wrong.log", b"\xff")
+
+
+def test_legacy_repair_data_write_interruption_is_atomic_and_retryable(tmp_path, monkeypatch):
+    store = GoldShadowStore(tmp_path)
+    importer = GoldLegacyImporter(store)
+    original = importer.import_bytes("monitor.log", fixture_bytes())
+    _, legacy_index = downgrade_import_metadata(store)
+    import_path = store.root / "imports" / f"{original.import_id}.jsonl"
+    previous_rows = import_path.read_bytes()
+
+    import app.services.gold_shadow_store as store_module
+
+    real_replace = store_module.os.replace
+
+    def fail_data_replace(source, target):
+        if target == import_path:
+            raise OSError("injected repair data failure")
+        return real_replace(source, target)
+
+    monkeypatch.setattr(store_module.os, "replace", fail_data_replace)
+
+    with pytest.raises(OSError, match="injected repair data failure"):
+        importer.import_bytes("repair.log", fixture_bytes())
+
+    assert (store.root / "import_index.jsonl").read_text(encoding="utf-8") == legacy_index
+    assert import_path.read_bytes() == previous_rows
+    assert list((store.root / "imports").glob("*.tmp")) == []
+
+    monkeypatch.setattr(store_module.os, "replace", real_replace)
+    assert importer.import_bytes("repair.log", fixture_bytes()).import_id == original.import_id
+
+
+def test_legacy_repair_index_write_interruption_commits_data_first_and_is_retryable(
+    tmp_path, monkeypatch
+):
+    store = GoldShadowStore(tmp_path)
+    importer = GoldLegacyImporter(store)
+    original = importer.import_bytes("monitor.log", fixture_bytes())
+    _, legacy_index = downgrade_import_metadata(store)
+    import_path = store.root / "imports" / f"{original.import_id}.jsonl"
+    tampered = json.loads(import_path.read_text(encoding="utf-8"))
+    tampered["price"] = 999.0
+    import_path.write_text(json.dumps(tampered, ensure_ascii=False) + "\n", encoding="utf-8")
+    original_replace = store._replace_jsonl_locked
+
+    def fail_index_replace(filename, rows):
+        if filename == "import_index.jsonl":
+            raise OSError("injected repair index failure")
+        return original_replace(filename, rows)
+
+    monkeypatch.setattr(store, "_replace_jsonl_locked", fail_index_replace)
+
+    with pytest.raises(OSError, match="injected repair index failure"):
+        importer.import_bytes("repair.log", fixture_bytes())
+
+    assert (store.root / "import_index.jsonl").read_text(encoding="utf-8") == legacy_index
+    assert json.loads(import_path.read_text(encoding="utf-8"))["price"] == 19.99
+
+    monkeypatch.setattr(store, "_replace_jsonl_locked", original_replace)
+    assert importer.import_bytes("repair.log", fixture_bytes()).import_id == original.import_id
+
+
+def test_repaired_reupload_is_idempotent_and_verifies_normalized_digest(tmp_path):
+    store = GoldShadowStore(tmp_path)
+    importer = GoldLegacyImporter(store)
+    importer.import_bytes("monitor.log", fixture_bytes())
+    downgrade_import_metadata(store)
+    repaired = importer.import_bytes("repair.log", fixture_bytes())
+    index_path = store.root / "import_index.jsonl"
+    repaired_index = index_path.read_bytes()
+
+    duplicate = importer.import_bytes("ignored.log", fixture_bytes())
+
+    assert duplicate == repaired
+    assert index_path.read_bytes() == repaired_index
+    assert len(store.list_imports(10)) == 1
+    assert len(list((store.root / "imports").glob("*.jsonl"))) == 1
 
 
 def test_find_import_by_sha256_rejects_tampered_duplicate_backing_file(tmp_path):
