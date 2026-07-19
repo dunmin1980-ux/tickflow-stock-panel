@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
+import pytest
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from app import main
 from app.config import Settings
@@ -76,3 +80,54 @@ def test_enabled_runtime_without_scheduler_remains_readable_and_records_failure(
         "code": "scheduler_unavailable",
         "message": "Gold sampler scheduler is unavailable",
     }
+
+
+def test_scheduler_registration_failure_does_not_abort_app_lifespan(
+    monkeypatch, tmp_path
+):
+    class RejectingScheduler:
+        def add_job(self, *_args, **_kwargs):
+            raise RuntimeError("scheduler-registration-secret")
+
+    @asynccontextmanager
+    async def test_lifespan(app):
+        app.state.scheduler = RejectingScheduler()
+        app.state.capabilities = object()
+        main._initialize_gold_runtime(app, SimpleNamespace(data_dir=tmp_path))
+        yield
+
+    monkeypatch.setattr(main, "settings", SimpleNamespace(gold_workspace_enabled=True))
+    test_app = FastAPI(lifespan=test_lifespan)
+    test_app.include_router(main.gold.router)
+
+    @test_app.get("/api/runtime-probe")
+    def runtime_probe():
+        return {"ready": True}
+
+    with TestClient(test_app) as client:
+        normal_response = client.get("/api/runtime-probe")
+        gold_response = client.get("/api/gold/status")
+
+    assert normal_response.status_code == 200
+    assert normal_response.json() == {"ready": True}
+    assert gold_response.status_code == 200
+    assert gold_response.json()["health"]["last_error"] == {
+        "code": "scheduler_unavailable",
+        "message": "Gold sampler scheduler is unavailable",
+    }
+    assert "scheduler-registration-secret" not in gold_response.text
+    health_text = (tmp_path / "user_data" / "gold_shadow" / "health.json").read_text()
+    assert "scheduler-registration-secret" not in health_text
+
+
+def test_unrelated_gold_initialization_failure_is_not_masked(monkeypatch, tmp_path):
+    app = runtime_app(SimpleNamespace())
+    monkeypatch.setattr(main, "settings", SimpleNamespace(gold_workspace_enabled=True))
+
+    def broken_store(_data_dir):
+        raise RuntimeError("gold store construction failed")
+
+    monkeypatch.setattr(main, "GoldShadowStore", broken_store)
+
+    with pytest.raises(RuntimeError, match="gold store construction failed"):
+        main._initialize_gold_runtime(app, SimpleNamespace(data_dir=tmp_path))

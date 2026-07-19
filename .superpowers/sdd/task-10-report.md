@@ -83,3 +83,61 @@ Result: exit zero.
 No Task 10 blocking concerns. Broad Ruff checks of the two pre-existing modified modules still
 report the same baseline lint debt: 23 findings in `app/main.py` and 3 in `app/config.py`. The
 Task 10 router and tests are clean, and the baseline/current broad finding counts are unchanged.
+
+## Review Fix: Scheduler Registration Isolation
+
+### RED
+
+```bash
+cd backend && uv run --extra dev pytest tests/test_gold_runtime.py \
+  -k "scheduler_registration_failure or unrelated_gold_initialization_failure" -q
+```
+
+Result: `1 failed, 1 passed, 4 deselected in 3.97s`. A non-`None` shared scheduler whose
+`add_job` raised `RuntimeError("scheduler-registration-secret")` escaped through TestClient
+lifespan startup before `yield`, so neither the ordinary probe API nor the Gold API became
+reachable. The companion test confirmed unrelated Gold store-construction failures already
+propagated.
+
+### GREEN
+
+The registration call is now the only added exception boundary. It records
+`scheduler_unavailable` with the fixed message `Gold sampler scheduler is unavailable`, logs no
+exception details, and leaves all initialized Gold read services available.
+
+```bash
+cd backend && uv run --extra dev pytest tests/test_gold_runtime.py \
+  -k "scheduler_registration_failure or unrelated_gold_initialization_failure" -q
+```
+
+Result: `2 passed, 4 deselected in 1.95s`. The lifespan completed, the ordinary probe and Gold
+status routes both returned `200`, and neither API output nor persisted health contained the
+injected scheduler exception text.
+
+### Final Verification
+
+```bash
+cd backend && uv run --extra dev pytest tests/test_gold_api.py tests/test_gold_runtime.py -q
+```
+
+Result: `29 passed in 3.24s`.
+
+```bash
+cd backend && uv run --extra dev pytest tests/test_gold_*.py -q
+```
+
+Result: `296 passed in 17.53s`.
+
+```bash
+cd backend && uv run --extra dev ruff check \
+  app/api/gold.py tests/test_gold_api.py tests/test_gold_runtime.py
+```
+
+Result: `All checks passed!`.
+
+```bash
+cd backend && uv run --extra dev python -m compileall -q \
+  app/api/gold.py app/config.py app/main.py
+```
+
+Result: exit zero.

@@ -60,7 +60,11 @@ def _initialize_gold_runtime(app: FastAPI, store: DataStore) -> None:
     app.state.gold_comparison_runner = GoldComparisonRunner(gold_store)
     app.state.gold_observation_service = GoldObservationService(gold_store, gold_notifier)
     if app.state.scheduler is not None:
-        register_gold_sampler(app.state.scheduler, gold_sampler)
+        try:
+            register_gold_sampler(app.state.scheduler, gold_sampler)
+        except Exception:
+            logger.warning("Gold sampler scheduler registration is unavailable")
+            gold_service.fail("scheduler_unavailable", "Gold sampler scheduler is unavailable")
     else:
         gold_service.fail("scheduler_unavailable", "Gold sampler scheduler is unavailable")
 
