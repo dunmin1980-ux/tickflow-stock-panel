@@ -52,9 +52,9 @@ docker compose up -d --build
 
 ## 日常检查
 
-1. 查看 `/gold` 顶部状态，确认 `enabled`、最近成功时间、最近市场日期、连续失败数和下一次调度时间符合预期。
+1. 查看 `/gold` 顶部状态，确认工作区已启用、最近成功时间、最近市场日期和连续失败数符合预期。下一次调度时间不在顶部状态中显示；需要时调用 `GET /api/gold/health` 查看 `next_scheduled_run`。
 2. `calendar_unconfigured` 或 `trading_calendar_unavailable`：检查 `holidays.json` 是否存在、可读且为严格日期数组，然后重启应用。
-3. `tickflow_capability_unavailable` 或 `tickflow_paid_client_unavailable`：在现有“设置 → 凭据与能力”中重新检测 Key 和订阅能力。不要创建 Gold 专用 Key 文件。
+3. `gold_sampling_failed`：调度器会把未处理的行情网关、能力、客户端或历史数据异常统一持久化为此错误，不会保留网关内部错误码。先调用 `GET /api/gold/health` 确认健康状态和下一次调度时间，再到现有“设置 → 凭据与能力”重新检测 Key 与订阅能力，并检查 TickFlow 网络可用性；不要创建 Gold 专用 Key 文件。
 4. 每个交易日手动导入 Legacy 文件、运行同日对账，并只对当前 canonical 对账运行记录人工完整窗口评审。被后续运行取代的结果不能计入门槛。
 5. 外发尝试数必须为 `0`。任何非零计数或外发状态损坏都会使观察门槛失败；不要尝试接通外部通道。
 
