@@ -65,3 +65,42 @@ Result: exit zero. TypeScript and Vite production build completed successfully.
 
 No Task 11 blocking concerns. The Vite build reports the repository's existing large-chunk warning;
 this task does not add a route or bundle entry and does not change chunking.
+
+## Review Fix: Backend-Valid Zero Boundaries And Table-Driven Contracts
+
+### RED
+
+```bash
+cd frontend && node --experimental-strip-types scripts/test-gold-contracts.mjs
+```
+
+Result: exit 1 with the added zero-boundary assertion:
+
+```text
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+actual: [ undefined, undefined ]
+expected: [ 0, 0 ]
+```
+
+This proved that both `quote_ts=0` and `native_ema60=0` were rejected by unsupported positivity
+checks.
+
+### GREEN
+
+Removed positivity checks only for `quote_ts` and `native_ema60`; `quote_ts` remains an integer,
+all numeric fields remain finite, and positivity remains required for `price`, `previous_close`,
+and `legacy_reference_60`.
+
+```bash
+cd frontend && node --experimental-strip-types scripts/test-gold-contracts.mjs
+```
+
+Result: exit zero. The table-driven script rejects `NaN` and `Infinity` for every snapshot numeric
+field, wrong sources, unknown states and signals, and fractional or negative send counts while
+accepting both valid zero boundaries and retaining disabled/gate/activation-state coverage.
+
+```bash
+cd frontend && corepack pnpm build
+```
+
+Result: exit zero. TypeScript and Vite production build completed successfully.

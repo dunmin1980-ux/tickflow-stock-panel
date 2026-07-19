@@ -56,11 +56,41 @@ const enabled = {
   external_send_count: 0,
 }
 assert.equal(normalizeGoldStatus(enabled)?.latest?.quote_source, 'tickflow')
-assert.equal(normalizeGoldStatus({ ...enabled, external_send_count: -1 }), null)
-assert.equal(normalizeGoldStatus({
-  ...enabled,
-  latest: { ...enabled.latest, candidate_signals: ['notifications_enabled'] },
-}), null)
+
+const statusWithLatest = (latest) => ({ ...enabled, latest: { ...enabled.latest, ...latest } })
+
+assert.deepEqual([
+  normalizeGoldStatus(statusWithLatest({ quote_ts: 0 }))?.latest?.quote_ts,
+  normalizeGoldStatus(statusWithLatest({ native_ema60: 0 }))?.latest?.native_ema60,
+], [0, 0])
+
+for (const field of [
+  'quote_ts',
+  'price',
+  'previous_close',
+  'legacy_reference_60',
+  'native_ema60',
+  'P',
+  'V',
+  'A',
+]) {
+  for (const value of [NaN, Infinity]) {
+    assert.equal(normalizeGoldStatus(statusWithLatest({ [field]: value })), null, `${field}=${value}`)
+  }
+}
+
+for (const latest of [
+  { quote_source: 'other' },
+  { state: 'unknown' },
+  { candidate_signals: ['unknown'] },
+]) {
+  assert.equal(normalizeGoldStatus(statusWithLatest(latest)), null)
+}
+
+for (const external_send_count of [-1, 0.5]) {
+  assert.equal(normalizeGoldStatus({ ...enabled, external_send_count }), null)
+}
+
 assert.equal(normalizeGoldGate({
   status: 'failed',
   required_complete_trading_days: 10,

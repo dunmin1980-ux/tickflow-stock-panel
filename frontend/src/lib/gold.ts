@@ -86,11 +86,10 @@ function normalizeSnapshot(value: unknown): GoldShadowSnapshot | null {
     || !isFiniteNumber(a)) {
     return null
   }
-  if (!Number.isInteger(quoteTs) || quoteTs <= 0
+  if (!Number.isInteger(quoteTs)
     || price <= 0
     || previousClose <= 0
-    || legacyReference60 <= 0
-    || nativeEma60 <= 0) {
+    || legacyReference60 <= 0) {
     return null
   }
   const candidateSignals = normalizeSignals(value.candidate_signals)
