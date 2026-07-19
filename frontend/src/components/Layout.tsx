@@ -41,6 +41,7 @@ import {
   RadioTower,
   CheckCircle2,
   BookOpenCheck,
+  Coins,
   ExternalLink,
   Sun,
   Moon,
@@ -65,8 +66,9 @@ const CORE_INDEXES = [
 ] as const
 
 type CoreIndex = (typeof CORE_INDEXES)[number]
+type NavItem = { to: string; label: string; icon: React.ComponentType<{ className?: string }> }
 
-const nav = [
+const nav: NavItem[] = [
   { to: '/',                label: '看板',     icon: LayoutDashboard },
   { to: '/watchlist',  label: '自选',   icon: Star },
   { to: '/screener',   label: '策略',   icon: ScanSearch },
@@ -291,6 +293,11 @@ export function Layout() {
     queryKey: QK.analysisMenus,
     queryFn: api.analysisMenus,
   })
+  const { data: goldStatus } = useQuery({
+    queryKey: QK.goldStatus,
+    queryFn: api.goldStatus,
+    staleTime: 60_000,
+  })
 
   // 数据同步状态轮询: 有活跃 job 时「数据」菜单项显示转圈
   const { data: pipelineJobs } = useQuery({
@@ -381,9 +388,14 @@ export function Layout() {
   // 合并内置页面 + 可见的扩展分析菜单
   const analysisNav = (analysisMenus?.items ?? [])
     .filter(m => m.visible)
-    .map(m => ({ to: `/analysis/${m.id}`, label: m.label, icon: m.icon === 'tags' ? Tags : BarChart3 }))
+    .map<NavItem>(m => ({ to: `/analysis/${m.id}`, label: m.label, icon: m.icon === 'tags' ? Tags : BarChart3 }))
+  const goldNav: NavItem[] = goldStatus?.enabled
+    ? [{ to: '/gold', label: '中金黄金', icon: Coins }]
+    : []
 
-  const allNav = [...nav, ...analysisNav]
+  const allNav: NavItem[] = Array.from(nav)
+  for (const item of goldNav) allNav.push(item)
+  for (const item of analysisNav) allNav.push(item)
   const savedOrder = prefs?.nav_order ?? []
 
   const navItems = savedOrder.length > 0
@@ -393,7 +405,7 @@ export function Layout() {
           .map(id => byTo.get(id) ?? byTo.get(`/analysis/${id}`))
           .filter(Boolean)
         const seen = new Set(ordered.map(n => n!.to))
-        return [...ordered as typeof allNav, ...allNav.filter(n => !seen.has(n.to))]
+        return [...ordered as NavItem[], ...allNav.filter(n => !seen.has(n.to))]
       })()
     : allNav
 

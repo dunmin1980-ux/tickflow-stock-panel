@@ -26,6 +26,7 @@ const Branding = lazy(() => import('./pages/Branding').then(m => ({ default: m.B
 const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })))
 const Indices = lazy(() => import('./pages/Indices').then(m => ({ default: m.Indices })))
 const Dev = lazy(() => import('./pages/Dev').then(m => ({ default: m.Dev })))
+const GoldWorkspace = lazy(() => import('./pages/GoldWorkspace').then(m => ({ default: m.GoldWorkspace })))
 
 // 首次使用守卫 —— 未完成向导则重定向到 /onboarding
 // 只挂在根路由上;/onboarding 本身不被守卫,避免循环重定向。
@@ -79,6 +80,7 @@ export const router = createBrowserRouter([
       { path: 'backtest', element: <Backtest /> },
       { path: 'financials', element: <Financials /> },
       { path: 'data', element: <Data /> },
+      { path: 'gold', element: <GoldWorkspace /> },
       { path: 'monitor', element: <Monitor /> },
       { path: 'limit-ladder', element: <LimitUpLadder /> },
       { path: 'indices', element: <Indices /> },
