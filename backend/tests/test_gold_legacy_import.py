@@ -11,7 +11,7 @@ import pytest
 from app.services import gold_legacy_import
 from app.services.gold_legacy_import import GoldImportError, GoldLegacyImporter
 from app.services.gold_shadow_compare import LegacySample
-from app.services.gold_shadow_store import GoldShadowStore
+from app.services.gold_shadow_store import GoldShadowStorageReadError, GoldShadowStore
 
 
 def fixture_bytes(*, minute: int = 0) -> bytes:
@@ -31,6 +31,7 @@ def test_import_normalizes_and_discards_raw_text(tmp_path):
     persisted = path.read_text(encoding="utf-8")
     row = json.loads(persisted)
     assert result.sample_count == 1
+    assert not hasattr(result, "normalized_sha256")
     assert "[ALERT]" not in persisted
     assert "legacy-secret" not in persisted
     assert set(row) == {
@@ -142,6 +143,18 @@ def test_store_gets_normalized_rows_and_lists_newest_first(tmp_path):
     assert imported["import_id"] == first.import_id
     assert imported["rows"][0]["observed_at"] == "2026-07-16T15:00:00+08:00"
     assert store.get_import("../unsafe") is None
+
+
+def test_get_import_rejects_schema_valid_normalized_row_tampering(tmp_path):
+    store = GoldShadowStore(tmp_path)
+    result = GoldLegacyImporter(store).import_bytes("monitor.log", fixture_bytes())
+    path = store.root / "imports" / f"{result.import_id}.jsonl"
+    row = json.loads(path.read_text(encoding="utf-8"))
+    row["price"] = 20.00
+    path.write_text(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+
+    with pytest.raises(GoldShadowStorageReadError, match="unable to read import"):
+        store.get_import(result.import_id)
 
 
 def test_import_storage_is_private(tmp_path):

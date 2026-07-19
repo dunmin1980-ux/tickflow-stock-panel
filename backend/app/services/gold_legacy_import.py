@@ -66,6 +66,16 @@ class GoldLegacyImporter:
     def __init__(self, store: GoldShadowStore) -> None:
         self.store = store
 
+    @staticmethod
+    def _result(metadata: dict[str, object]) -> GoldImportResult:
+        return GoldImportResult(
+            import_id=str(metadata["import_id"]),
+            sha256=str(metadata["sha256"]),
+            filename=str(metadata["filename"]),
+            imported_at=str(metadata["imported_at"]),
+            sample_count=int(metadata["sample_count"]),
+        )
+
     def import_bytes(self, filename: str, payload: bytes) -> GoldImportResult:
         if len(payload) > MAX_UPLOAD_BYTES:
             raise GoldImportError("upload_too_large")
@@ -75,7 +85,7 @@ class GoldLegacyImporter:
         digest = hashlib.sha256(payload).hexdigest()
         existing = self.store.find_import_by_sha256(digest)
         if existing is not None:
-            return GoldImportResult(**existing)
+            return self._result(existing)
 
         try:
             text = payload.decode("utf-8", errors="strict")
@@ -90,4 +100,4 @@ class GoldLegacyImporter:
             raise GoldImportError("invalid_sample") from None
 
         metadata = self.store.commit_import(digest, _safe_basename(filename), normalized)
-        return GoldImportResult(**metadata)
+        return self._result(metadata)

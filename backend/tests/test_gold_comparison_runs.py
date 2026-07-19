@@ -229,3 +229,80 @@ def test_run_file_contains_comparison_rows_and_exactly_one_terminal_summary(tmp_
     rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
     assert [row["type"] for row in rows] == ["missing_shadow", "unmatched_shadow", "summary"]
+
+
+def test_schema_valid_normalized_import_tampering_rejects_comparison_run(tmp_path):
+    runner = make_runner(tmp_path)
+    market_date = date(2026, 7, 16)
+    import_id = commit_import(runner.store, "valid-json-tamper", [legacy_row(market_date)])
+    runner.store.commit_evaluation(snapshot(market_date))
+    path = runner.store.root / "imports" / f"{import_id}.jsonl"
+    row = json.loads(path.read_text(encoding="utf-8"))
+    row["price"] = 20.00
+    path.write_text(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+
+    with pytest.raises(GoldShadowStorageReadError, match="unable to read import"):
+        runner.run(import_id, market_date)
+
+    assert not (runner.store.root / "comparison_index.jsonl").exists()
+
+
+@pytest.mark.parametrize(
+    "corruption",
+    ["missing", "truncated", "removed_row", "duplicate_summary", "reordered", "tampered", "malformed"],
+)
+def test_indexed_run_corruption_fails_closed(tmp_path, corruption):
+    runner = make_runner(tmp_path)
+    market_date = date(2026, 7, 16)
+    import_id = commit_import(
+        runner.store,
+        f"integrity-{corruption}",
+        [legacy_row(market_date), legacy_row(market_date, minute=5)],
+    )
+    runner.store.commit_evaluation(snapshot(market_date))
+    runner.store.commit_evaluation(snapshot(market_date, minute=5))
+    run = runner.run(import_id, market_date)
+    path = runner.store.root / "comparison_runs" / f"{run['run_id']}.jsonl"
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+    if corruption == "missing":
+        path.unlink()
+    elif corruption == "truncated":
+        path.write_text(json.dumps(rows[0]) + "\n", encoding="utf-8")
+    elif corruption == "removed_row":
+        path.write_text(
+            "".join(json.dumps(row) + "\n" for row in [rows[0], rows[-1]]), encoding="utf-8"
+        )
+    elif corruption == "duplicate_summary":
+        path.write_text(
+            "".join(json.dumps(row) + "\n" for row in [*rows, rows[-1]]), encoding="utf-8"
+        )
+    elif corruption == "reordered":
+        path.write_text(
+            "".join(json.dumps(row) + "\n" for row in [rows[1], rows[0], rows[-1]]), encoding="utf-8"
+        )
+    elif corruption == "tampered":
+        rows[0]["checks"]["price"] = False
+        path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    else:
+        path.write_text(path.read_text(encoding="utf-8") + "{bad\n", encoding="utf-8")
+
+    with pytest.raises(GoldShadowStorageReadError):
+        runner.get_run(run["run_id"])
+
+
+def test_idempotent_commit_and_list_reject_tampered_indexed_run(tmp_path):
+    runner = make_runner(tmp_path)
+    market_date = date(2026, 7, 16)
+    import_id = commit_import(runner.store, "integrity-access", [legacy_row(market_date)])
+    runner.store.commit_evaluation(snapshot(market_date))
+    run = runner.run(import_id, market_date)
+    path = runner.store.root / "comparison_runs" / f"{run['run_id']}.jsonl"
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    rows[0]["checks"]["price"] = False
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+    with pytest.raises(GoldShadowStorageReadError):
+        runner.run(import_id, market_date)
+    with pytest.raises(GoldShadowStorageReadError):
+        runner.list_runs(10)

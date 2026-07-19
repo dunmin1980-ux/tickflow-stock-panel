@@ -1,6 +1,7 @@
 """Persistent storage for the isolated gold-monitor shadow pipeline."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import math
@@ -39,7 +40,7 @@ _IMPORT_ROW_FIELDS = frozenset(
 )
 _IMPORT_NUMERIC_FIELDS = ("price", "P", "V", "A")
 _IMPORT_METADATA_FIELDS = frozenset(
-    {"import_id", "sha256", "filename", "imported_at", "sample_count"}
+    {"import_id", "sha256", "normalized_sha256", "filename", "imported_at", "sample_count"}
 )
 _COMPARISON_RUN_METADATA_FIELDS = frozenset(
     {
@@ -53,6 +54,9 @@ _COMPARISON_RUN_METADATA_FIELDS = frozenset(
         "legacy_sample_count",
         "shadow_sample_count",
         "supersedes_run_id",
+        "row_count",
+        "rows_sha256",
+        "summary_sha256",
     }
 )
 _GOLD_STATES = frozenset({"恐慌", "死机", "贪婪"})
@@ -226,6 +230,7 @@ class GoldShadowStore:
         for row in normalized_rows:
             self._validate_import_row(row)
         safe_filename = self._safe_basename(filename)
+        normalized_digest = self._canonical_jsonl_sha256(normalized_rows)
 
         with _LOCK:
             index = self._read_import_index_locked()
@@ -237,6 +242,7 @@ class GoldShadowStore:
             metadata = {
                 "import_id": digest,
                 "sha256": digest,
+                "normalized_sha256": normalized_digest,
                 "filename": safe_filename,
                 "imported_at": datetime.now(UTC).isoformat(),
                 "sample_count": len(normalized_rows),
@@ -282,6 +288,8 @@ class GoldShadowStore:
                 raise GoldShadowStorageReadError(f"unable to read import {import_id}") from exc
             if len(rows) != metadata["sample_count"]:
                 raise GoldShadowStorageReadError(f"unable to read import {import_id}")
+            if self._canonical_jsonl_sha256(rows) != metadata["normalized_sha256"]:
+                raise GoldShadowStorageReadError(f"unable to read import {import_id}")
         return {**metadata, "rows": [dict(row) for row in rows]}
 
     def list_imports(self, limit: int = MAX_RECORDS) -> list[dict[str, Any]]:
@@ -313,12 +321,16 @@ class GoldShadowStore:
             index = self._read_comparison_index_locked()
             existing = next((row for row in index if row["run_id"] == metadata.get("run_id")), None)
             if existing is not None:
+                self._read_comparison_run_rows_locked(existing)
                 return dict(existing)
 
             same_day_runs = [row for row in index if row["market_date"] == metadata.get("market_date")]
             committed = {
                 **metadata,
                 "supersedes_run_id": same_day_runs[-1]["run_id"] if same_day_runs else None,
+                "row_count": len(prepared_rows),
+                "rows_sha256": self._canonical_jsonl_sha256(prepared_rows),
+                "summary_sha256": self._canonical_json_sha256(prepared_rows[-1]),
             }
             self._validate_comparison_run_metadata(committed)
             self._write_comparison_run_rows_locked(committed["run_id"], prepared_rows)
@@ -335,19 +347,14 @@ class GoldShadowStore:
             )
             if metadata is None:
                 return None
-            filename = f"comparison_runs/{run_id}.jsonl"
-            if not (self.root / filename).is_file():
-                raise GoldShadowStorageReadError(f"unable to read comparison run {run_id}")
-            rows = self._read_jsonl_locked(filename, raise_on_failure=True, reject_malformed=True)
-            try:
-                self._validate_comparison_run_rows(rows)
-            except ValueError as exc:
-                raise GoldShadowStorageReadError(f"unable to read comparison run {run_id}") from exc
+            rows = self._read_comparison_run_rows_locked(metadata)
         return {**metadata, "rows": [dict(row) for row in rows]}
 
     def list_comparison_runs(self, limit: int = MAX_RECORDS) -> list[dict[str, Any]]:
         with _LOCK:
             rows = self._read_comparison_index_locked()
+            for row in rows:
+                self._read_comparison_run_rows_locked(row)
         rows.sort(key=lambda row: (row["market_date"], row["run_id"]), reverse=True)
         return [dict(row) for row in rows[: max(0, limit)]]
 
@@ -624,6 +631,7 @@ class GoldShadowStore:
         cls._validate_import_digest(row["import_id"])
         if row["sha256"] != row["import_id"]:
             raise ValueError("import digest mismatch")
+        cls._validate_import_digest(row["normalized_sha256"])
         filename = row["filename"]
         if not isinstance(filename, str) or cls._safe_basename(filename) != filename:
             raise ValueError("invalid import filename")
@@ -664,13 +672,59 @@ class GoldShadowStore:
         if supersedes_run_id is not None:
             cls._validate_import_digest(supersedes_run_id)
 
-    @staticmethod
-    def _validate_comparison_run_rows(rows: list[dict[str, Any]]) -> None:
+        if type(row["row_count"]) is not int or row["row_count"] <= 0:
+            raise ValueError("invalid comparison row count")
+        cls._validate_import_digest(row["rows_sha256"])
+        cls._validate_import_digest(row["summary_sha256"])
+
+    @classmethod
+    def _validate_comparison_run_rows(
+        cls, rows: list[dict[str, Any]], metadata: dict[str, Any] | None = None
+    ) -> None:
         if not rows or any(not isinstance(row, dict) for row in rows):
             raise ValueError("comparison run rows are invalid")
         summaries = [row for row in rows if row.get("type") == "summary"]
         if len(summaries) != 1 or rows[-1] is not summaries[0]:
             raise ValueError("comparison run requires one terminal summary")
+        if metadata is not None and (
+            metadata["row_count"] != len(rows)
+            or metadata["rows_sha256"] != cls._canonical_jsonl_sha256(rows)
+            or metadata["summary_sha256"] != cls._canonical_json_sha256(rows[-1])
+        ):
+            raise ValueError("comparison run integrity mismatch")
+
+    def _read_comparison_run_rows_locked(self, metadata: dict[str, Any]) -> list[dict[str, Any]]:
+        run_id = metadata["run_id"]
+        filename = f"comparison_runs/{run_id}.jsonl"
+        if not (self.root / filename).is_file():
+            raise GoldShadowStorageReadError(f"unable to read comparison run {run_id}")
+        try:
+            rows = self._read_jsonl_locked(filename, raise_on_failure=True, reject_malformed=True)
+            self._validate_comparison_run_rows(rows, metadata)
+        except (GoldShadowStorageReadError, ValueError) as exc:
+            raise GoldShadowStorageReadError(f"unable to read comparison run {run_id}") from exc
+        return rows
+
+    @staticmethod
+    def _canonical_json_bytes(row: dict[str, Any]) -> bytes:
+        try:
+            return json.dumps(
+                row, ensure_ascii=False, separators=(",", ":"), sort_keys=True, allow_nan=False
+            ).encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            raise ValueError("canonical JSON is invalid") from exc
+
+    @classmethod
+    def _canonical_json_sha256(cls, row: dict[str, Any]) -> str:
+        return hashlib.sha256(cls._canonical_json_bytes(row)).hexdigest()
+
+    @classmethod
+    def _canonical_jsonl_sha256(cls, rows: list[dict[str, Any]]) -> str:
+        digest = hashlib.sha256()
+        for row in rows:
+            digest.update(cls._canonical_json_bytes(row))
+            digest.update(b"\n")
+        return digest.hexdigest()
 
     def _write_comparison_run_rows_locked(self, run_id: str, rows: list[dict[str, Any]]) -> None:
         self._ensure_root()
