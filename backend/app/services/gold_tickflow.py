@@ -67,7 +67,7 @@ class GoldTickFlowGateway:
             raise GoldDataError("gold_storage_read_failed") from None
         if cached is not None:
             cached_date, rows = self._validated_cache(
-                cached, expected_date, expected_previous_date
+                cached, expected_date, expected_previous_date, calendar
             )
             if cached_date == expected_date:
                 return self._latest_closes(rows)
@@ -136,6 +136,7 @@ class GoldTickFlowGateway:
         payload: dict[str, Any],
         expected_date: date,
         expected_previous_date: date,
+        calendar: GoldTradingCalendar,
     ) -> tuple[date, list[dict[str, object]]]:
         if payload.get("source") != "tickflow":
             raise GoldDataError("daily_cache_invalid")
@@ -144,10 +145,17 @@ class GoldTickFlowGateway:
         market_date = self._parse_date(payload.get("expected_market_date"))
         if market_date is None or not isinstance(payload.get("fetched_at"), str):
             raise GoldDataError("daily_cache_invalid")
+        if market_date > expected_date:
+            raise GoldDataError("daily_cache_invalid")
+        cached_previous_date = (
+            expected_previous_date
+            if market_date == expected_date
+            else calendar.previous_trading_day(market_date)
+        )
         rows = self._normalize_rows(
             payload.get("rows"),
-            expected_date,
-            expected_previous_date,
+            market_date,
+            cached_previous_date,
             require_normalized_shape=True,
             reject_non_completed=True,
             error_code="daily_cache_invalid",

@@ -305,6 +305,30 @@ def test_gateway_reads_valid_same_day_cache_without_requesting_sdk(tmp_path):
     assert gateway.get_completed_closes(date(2026, 7, 16)) == [float(row["close"]) for row in rows]
 
 
+def test_gateway_refreshes_valid_cache_from_prior_market_date(tmp_path):
+    store = GoldShadowStore(tmp_path)
+    calendar_for(tmp_path)
+    cached_rows = [
+        {"date": row["date"], "close": row["close"]} for row in daily_rows(60)
+    ]
+    store.write_daily_history(
+        daily_cache_payload(cached_rows, expected_date=date(2026, 7, 16))
+    )
+    refreshed_start = date.fromordinal(date(2026, 7, 16).toordinal() - 59)
+    refreshed_rows = daily_rows(60, start=refreshed_start)
+    klines = FakeKlines(refreshed_rows)
+    gateway = GoldTickFlowGateway(
+        store,
+        lambda: capset(Cap.KLINE_DAILY_BATCH),
+        client_factory=lambda: SimpleNamespace(klines=klines),
+    )
+
+    assert gateway.get_completed_closes(date(2026, 7, 17)) == [
+        float(row["close"]) for row in refreshed_rows
+    ]
+    assert len(klines.calls) == 1
+
+
 def test_gateway_rejects_cache_with_non_tickflow_source(tmp_path):
     store = GoldShadowStore(tmp_path)
     calendar_for(tmp_path)
