@@ -237,7 +237,6 @@ export function GoldWorkspace() {
           {gate ? (
             <GoldObservationPanel
               gate={gate}
-              comparisons={comparisons}
               isFetching={observationQuery.isFetching}
             />
           ) : (

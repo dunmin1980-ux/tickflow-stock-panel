@@ -95,12 +95,36 @@ class FakeObservationService:
         self.reviews.append(("restart", verified, note))
 
     def status(self):
+        latest_day_review = next(
+            (review for review in reversed(self.reviews) if review[0] == "day"),
+            None,
+        )
         return {
             "status": "collecting",
             "required_complete_trading_days": 10,
             "complete_trading_days": len(self.reviews),
             "external_send_count": 0,
             "reasons": [],
+            "canonical_days": [
+                {
+                    "market_date": "2026-07-16",
+                    "run_id": VALID_ID,
+                    "automatic_passed": True,
+                    "review_recorded": latest_day_review is not None,
+                    "review_verified": (
+                        latest_day_review[3] if latest_day_review is not None else None
+                    ),
+                }
+            ],
+            "restart_review": {
+                "recorded": any(review[0] == "restart" for review in self.reviews),
+                "verified": (
+                    next(
+                        (review[1] for review in reversed(self.reviews) if review[0] == "restart"),
+                        None,
+                    )
+                ),
+            },
         }
 
 
@@ -213,6 +237,8 @@ def test_disabled_health_and_observation_gate_remain_readable(authenticated_clie
         "complete_trading_days": 0,
         "external_send_count": 0,
         "reasons": ["gold_workspace_disabled"],
+        "canonical_days": [],
+        "restart_review": {"recorded": False, "verified": None},
     }
 
 
@@ -337,6 +363,22 @@ def test_enabled_reads_and_comparison_delegate_to_services(enabled_client):
     ]
     assert enabled_client.gold_fakes.runner.limits == [6]
     assert enabled_client.gold_fakes.runner.request == (VALID_ID, "2026-07-16")
+
+
+def test_observation_gate_passes_through_sanitized_review_state(enabled_client):
+    response = enabled_client.get("/api/gold/observation-gate")
+
+    assert response.status_code == 200
+    assert response.json()["canonical_days"] == [
+        {
+            "market_date": "2026-07-16",
+            "run_id": VALID_ID,
+            "automatic_passed": True,
+            "review_recorded": False,
+            "review_verified": None,
+        }
+    ]
+    assert response.json()["restart_review"] == {"recorded": False, "verified": None}
 
 
 def test_observation_reviews_use_discriminated_request_models(enabled_client):

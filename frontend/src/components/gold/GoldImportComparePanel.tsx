@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
@@ -16,6 +16,7 @@ import {
   type GoldImport,
 } from '@/lib/api'
 import { cn } from '@/lib/cn'
+import { nextGoldMarketDate } from '@/lib/gold'
 import { QK } from '@/lib/queryKeys'
 
 interface GoldImportComparePanelProps {
@@ -109,14 +110,19 @@ export function GoldImportComparePanel({
   const [selectedImportId, setSelectedImportId] = useState(imports[0]?.import_id ?? '')
   const [marketDate, setMarketDate] = useState(initialMarketDate)
   const [selectedRunId, setSelectedRunId] = useState('')
+  const marketDateEdited = useRef(false)
 
   useEffect(() => {
     if (!selectedImportId && imports[0]) setSelectedImportId(imports[0].import_id)
   }, [imports, selectedImportId])
 
   useEffect(() => {
-    if (!marketDate && initialMarketDate) setMarketDate(initialMarketDate)
-  }, [initialMarketDate, marketDate])
+    setMarketDate(current => nextGoldMarketDate(
+      current,
+      initialMarketDate,
+      marketDateEdited.current,
+    ))
+  }, [initialMarketDate])
 
   useEffect(() => {
     if (!selectedRunId && comparisons[0]) {
@@ -267,7 +273,10 @@ export function GoldImportComparePanel({
               <input
                 type="date"
                 value={marketDate}
-                onChange={event => setMarketDate(event.target.value)}
+                onChange={event => {
+                  marketDateEdited.current = true
+                  setMarketDate(event.target.value)
+                }}
                 className="mt-1 h-8 w-full rounded-input border border-border bg-base px-2 font-mono text-xs text-secondary outline-none focus:border-accent/50"
               />
             </label>

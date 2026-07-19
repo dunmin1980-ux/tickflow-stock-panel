@@ -126,6 +126,73 @@ def test_ten_days_and_restart_review_are_review_eligible(service):
     assert not any(name.startswith(("activate", "enable")) for name in dir(service))
 
 
+def test_status_exposes_sanitized_persisted_review_state(service):
+    dates = _trading_dates(3)
+    verified_run = _commit_run(service.store, dates[0], passing=True)
+    rejected_run = _commit_run(service.store, dates[1], passing=False)
+    pending_run = _commit_run(service.store, dates[2], passing=True)
+    service.review_day(
+        dates[0], verified_run["run_id"], verified=True, note="complete window verified"
+    )
+    service.review_day(
+        dates[1], rejected_run["run_id"], verified=False, note="window incomplete"
+    )
+    service.review_restart(verified=False, note="restart recovery incomplete")
+
+    result = service.status()
+
+    assert result["canonical_days"] == [
+        {
+            "market_date": dates[2].isoformat(),
+            "run_id": pending_run["run_id"],
+            "automatic_passed": True,
+            "review_recorded": False,
+            "review_verified": None,
+        },
+        {
+            "market_date": dates[1].isoformat(),
+            "run_id": rejected_run["run_id"],
+            "automatic_passed": False,
+            "review_recorded": True,
+            "review_verified": False,
+        },
+        {
+            "market_date": dates[0].isoformat(),
+            "run_id": verified_run["run_id"],
+            "automatic_passed": True,
+            "review_recorded": True,
+            "review_verified": True,
+        },
+    ]
+    assert result["restart_review"] == {"recorded": True, "verified": False}
+    serialized = json.dumps(result)
+    assert "complete window verified" not in serialized
+    assert "restart recovery incomplete" not in serialized
+    assert "notifications_enabled" not in result
+
+
+def test_corrupt_review_storage_reports_unknown_persisted_review_state(service):
+    market_date = _trading_dates(1)[0]
+    run = _commit_run(service.store, market_date)
+    (service.store.root / "observation_reviews.jsonl").write_text(
+        '{"schema_version":1,"review_type":"restart"}\n',
+        encoding="utf-8",
+    )
+
+    result = service.status()
+
+    assert result["canonical_days"] == [
+        {
+            "market_date": market_date.isoformat(),
+            "run_id": run["run_id"],
+            "automatic_passed": True,
+            "review_recorded": None,
+            "review_verified": None,
+        }
+    ]
+    assert result["restart_review"] == {"recorded": None, "verified": None}
+
+
 def test_weekend_comparison_runs_cannot_be_reviewed_or_counted(service):
     first_saturday = date(2026, 7, 4)
     for offset in range(10):

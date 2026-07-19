@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict'
-import { normalizeGoldStatus, normalizeGoldGate } from '../src/lib/gold.ts'
+import { readFileSync } from 'node:fs'
+import {
+  nextGoldMarketDate,
+  normalizeGoldStatus,
+  normalizeGoldGate,
+} from '../src/lib/gold.ts'
 
 const disabled = {
   enabled: false,
@@ -16,13 +21,31 @@ const disabled = {
 }
 assert.equal(normalizeGoldStatus(disabled).enabled, false)
 assert.equal(normalizeGoldStatus({ enabled: true, symbol: '000001.SZ' }), null)
-assert.equal(normalizeGoldGate({
+const normalizedGate = normalizeGoldGate({
   status: 'review_eligible',
   required_complete_trading_days: 10,
   complete_trading_days: 10,
   external_send_count: 0,
   reasons: [],
-}).status, 'review_eligible')
+  canonical_days: [{
+    market_date: '2026-07-20',
+    run_id: 'a'.repeat(64),
+    automatic_passed: true,
+    review_recorded: true,
+    review_verified: true,
+    note: 'must not cross the UI boundary',
+  }],
+  restart_review: { recorded: true, verified: true, note: 'must not be exposed' },
+})
+assert.equal(normalizedGate.status, 'review_eligible')
+assert.deepEqual(normalizedGate.canonical_days, [{
+  market_date: '2026-07-20',
+  run_id: 'a'.repeat(64),
+  automatic_passed: true,
+  review_recorded: true,
+  review_verified: true,
+}])
+assert.deepEqual(normalizedGate.restart_review, { recorded: true, verified: true })
 assert.equal(normalizeGoldGate({ status: 'notifications_enabled' }), null)
 
 const enabled = {
@@ -97,4 +120,32 @@ assert.equal(normalizeGoldGate({
   complete_trading_days: 0,
   external_send_count: null,
   reasons: ['external_send_state_corrupt'],
+  canonical_days: [{
+    market_date: '2026-07-20',
+    run_id: 'b'.repeat(64),
+    automatic_passed: null,
+    review_recorded: null,
+    review_verified: null,
+  }],
+  restart_review: { recorded: null, verified: null },
 })?.status, 'failed')
+
+assert.equal(normalizeGoldGate({
+  status: 'collecting',
+  required_complete_trading_days: 10,
+  complete_trading_days: 0,
+  external_send_count: 0,
+  reasons: [],
+}), null)
+
+assert.equal(nextGoldMarketDate('2026-07-18', '2026-07-20', false), '2026-07-20')
+assert.equal(nextGoldMarketDate('2026-07-18', '2026-07-20', true), '2026-07-18')
+assert.equal(nextGoldMarketDate('2026-07-18', '', false), '2026-07-18')
+
+const observationPanel = readFileSync(
+  new URL('../src/components/gold/GoldObservationPanel.tsx', import.meta.url),
+  'utf8',
+)
+assert.match(observationPanel, /external_send_count === null\s*\?\s*['"]无法确认['"]/)
+assert.match(observationPanel, /gate\.canonical_days/)
+assert.match(observationPanel, /gate\.restart_review/)

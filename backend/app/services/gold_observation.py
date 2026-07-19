@@ -103,30 +103,40 @@ class GoldObservationService:
             calendar_available = True
 
         reviews: list[dict[str, Any]] = []
+        reviews_available = True
         try:
             reviews = self.store.list_observation_reviews()
         except GoldShadowStorageReadError:
+            reviews_available = False
             reasons.append("observation_review_state_corrupt")
 
         passing_runs: dict[str, str] = {}
+        automatic_states: dict[str, bool | None] = {}
         for market_date_text, metadata in canonical_runs.items():
+            automatic_passed: bool | None = None
+            run: dict[str, Any] | None = None
+            run_read_failed = False
             try:
                 run = self.store.get_comparison_run(metadata["run_id"])
             except GoldShadowStorageReadError:
+                run_read_failed = True
                 reasons.append(f"comparison_run_corrupt:{metadata['run_id']}")
-                continue
-            if run is None:
-                reasons.append(f"comparison_run_missing:{metadata['run_id']}")
-                continue
-            thresholds_pass = _thresholds_pass(run)
-            if thresholds_pass is None:
-                reasons.append(f"automatic_tolerance_state_corrupt:{metadata['run_id']}")
-            elif not thresholds_pass:
-                reasons.append(f"automatic_tolerance_failed:{metadata['run_id']}")
-            elif calendar_available and _is_trading_day(
-                date.fromisoformat(market_date_text), holidays
-            ):
-                passing_runs[market_date_text] = metadata["run_id"]
+            thresholds_pass = _thresholds_pass(run) if run is not None else None
+            if not run_read_failed:
+                if run is None:
+                    reasons.append(f"comparison_run_missing:{metadata['run_id']}")
+                elif thresholds_pass is None:
+                    reasons.append(f"automatic_tolerance_state_corrupt:{metadata['run_id']}")
+                elif not thresholds_pass:
+                    automatic_passed = False
+                    reasons.append(f"automatic_tolerance_failed:{metadata['run_id']}")
+                elif calendar_available:
+                    automatic_passed = _is_trading_day(
+                        date.fromisoformat(market_date_text), holidays
+                    )
+                    if automatic_passed:
+                        passing_runs[market_date_text] = metadata["run_id"]
+            automatic_states[market_date_text] = automatic_passed
 
         latest_day_reviews: dict[str, dict[str, Any]] = {}
         latest_restart_review: dict[str, Any] | None = None
@@ -148,6 +158,25 @@ class GoldObservationService:
         restart_verified = (
             latest_restart_review is not None and latest_restart_review["verified"] is True
         )
+        canonical_days = []
+        for market_date_text, metadata in sorted(canonical_runs.items(), reverse=True):
+            review = latest_day_reviews.get(market_date_text) if reviews_available else None
+            review_matches = review is not None and review["run_id"] == metadata["run_id"]
+            canonical_days.append(
+                {
+                    "market_date": market_date_text,
+                    "run_id": metadata["run_id"],
+                    "automatic_passed": automatic_states.get(market_date_text),
+                    "review_recorded": review_matches if reviews_available else None,
+                    "review_verified": review["verified"] if review_matches else None,
+                }
+            )
+        restart_review = {
+            "recorded": latest_restart_review is not None if reviews_available else None,
+            "verified": (
+                latest_restart_review["verified"] if latest_restart_review is not None else None
+            ),
+        }
 
         if reasons:
             state = "failed"
@@ -161,6 +190,8 @@ class GoldObservationService:
             "complete_trading_days": complete_days,
             "external_send_count": external_send_count,
             "reasons": reasons,
+            "canonical_days": canonical_days,
+            "restart_review": restart_review,
         }
 
     @staticmethod

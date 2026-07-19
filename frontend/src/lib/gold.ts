@@ -27,6 +27,18 @@ const isNonNegativeInteger = (value: unknown): value is number =>
 const isStringOrNull = (value: unknown): value is string | null =>
   typeof value === 'string' || value === null
 
+const isBooleanOrNull = (value: unknown): value is boolean | null =>
+  typeof value === 'boolean' || value === null
+
+function normalizeReviewState(recorded: unknown, verified: unknown) {
+  if (!isBooleanOrNull(recorded)
+    || !isBooleanOrNull(verified)
+    || (recorded === true ? typeof verified !== 'boolean' : verified !== null)) {
+    return null
+  }
+  return { recorded, verified }
+}
+
 function normalizeSignals(value: unknown): GoldCandidateSignal[] | null {
   if (!Array.isArray(value) || !value.every((signal): signal is GoldCandidateSignal =>
     typeof signal === 'string' && GOLD_SIGNALS.has(signal as GoldCandidateSignal))) {
@@ -159,8 +171,34 @@ export function normalizeGoldGate(value: unknown): GoldObservationGate | null {
     || !isNonNegativeInteger(value.complete_trading_days)
     || !(value.external_send_count === null || isNonNegativeInteger(value.external_send_count))
     || !Array.isArray(value.reasons)
-    || !value.reasons.every((reason) => typeof reason === 'string')) {
+    || !value.reasons.every((reason) => typeof reason === 'string')
+    || !Array.isArray(value.canonical_days)
+    || !isRecord(value.restart_review)) {
     return null
+  }
+  const restartReview = normalizeReviewState(
+    value.restart_review.recorded,
+    value.restart_review.verified,
+  )
+  if (restartReview === null) return null
+  const canonicalDays = []
+  for (const day of value.canonical_days) {
+    if (!isRecord(day)
+      || typeof day.market_date !== 'string'
+      || typeof day.run_id !== 'string'
+      || !/^[0-9a-f]{64}$/.test(day.run_id)
+      || !isBooleanOrNull(day.automatic_passed)) {
+      return null
+    }
+    const review = normalizeReviewState(day.review_recorded, day.review_verified)
+    if (review === null) return null
+    canonicalDays.push({
+      market_date: day.market_date,
+      run_id: day.run_id,
+      automatic_passed: day.automatic_passed,
+      review_recorded: review.recorded,
+      review_verified: review.verified,
+    })
   }
   return {
     status: value.status as GoldGateStatus,
@@ -168,5 +206,18 @@ export function normalizeGoldGate(value: unknown): GoldObservationGate | null {
     complete_trading_days: value.complete_trading_days,
     external_send_count: value.external_send_count,
     reasons: [...value.reasons],
+    canonical_days: canonicalDays,
+    restart_review: {
+      recorded: restartReview.recorded,
+      verified: restartReview.verified,
+    },
   }
+}
+
+export function nextGoldMarketDate(
+  current: string,
+  initialMarketDate: string,
+  manuallyEdited: boolean,
+) {
+  return manuallyEdited || !initialMarketDate ? current : initialMarketDate
 }

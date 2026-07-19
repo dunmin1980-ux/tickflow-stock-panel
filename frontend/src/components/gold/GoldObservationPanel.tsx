@@ -11,8 +11,8 @@ import {
 } from 'lucide-react'
 import {
   api,
-  type GoldComparisonSummary,
   type GoldGateStatus,
+  type GoldObservationDayState,
   type GoldObservationReviewRequest,
   type GoldObservationGate,
 } from '@/lib/api'
@@ -21,7 +21,6 @@ import { QK } from '@/lib/queryKeys'
 
 interface GoldObservationPanelProps {
   gate: GoldObservationGate
-  comparisons: GoldComparisonSummary[]
   isFetching: boolean
 }
 
@@ -39,9 +38,24 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : '复核记录失败'
 }
 
+function automaticState(day: GoldObservationDayState) {
+  if (day.automatic_passed === null) return { label: '自动：无法确认', tone: 'text-muted' }
+  return day.automatic_passed
+    ? { label: '自动：通过', tone: 'text-bear' }
+    : { label: '自动：未通过', tone: 'text-danger' }
+}
+
+function reviewState(day: GoldObservationDayState) {
+  if (day.review_recorded === null) return { label: '复核：无法确认', tone: 'text-muted' }
+  if (!day.review_recorded) return { label: '复核：未记录', tone: 'text-warning' }
+  if (day.review_verified === null) return { label: '复核：无法确认', tone: 'text-muted' }
+  return day.review_verified
+    ? { label: '复核：通过', tone: 'text-bear' }
+    : { label: '复核：未通过', tone: 'text-danger' }
+}
+
 export function GoldObservationPanel({
   gate,
-  comparisons,
   isFetching,
 }: GoldObservationPanelProps) {
   const queryClient = useQueryClient()
@@ -50,36 +64,23 @@ export function GoldObservationPanel({
   const [dayNote, setDayNote] = useState('')
   const [restartVerified, setRestartVerified] = useState(false)
   const [restartNote, setRestartNote] = useState('')
-  const [lastDayResult, setLastDayResult] = useState<boolean | null>(null)
-  const [lastRestartResult, setLastRestartResult] = useState<boolean | null>(null)
-
-  const supersededIds = useMemo(
-    () => new Set(comparisons.flatMap(row => row.supersedes_run_id ? [row.supersedes_run_id] : [])),
-    [comparisons],
-  )
-  const canonicalRuns = useMemo(() => {
-    const dates = new Set<string>()
-    return comparisons.filter(row => {
-      if (supersededIds.has(row.run_id) || dates.has(row.market_date)) return false
-      dates.add(row.market_date)
-      return true
-    }).slice(0, 10)
-  }, [comparisons, supersededIds])
+  const canonicalDays = useMemo(() => gate.canonical_days.slice(0, 10), [gate.canonical_days])
 
   useEffect(() => {
-    if (!selectedRunId && canonicalRuns[0]) setSelectedRunId(canonicalRuns[0].run_id)
-  }, [canonicalRuns, selectedRunId])
+    if (!canonicalDays.some(day => day.run_id === selectedRunId)) {
+      setSelectedRunId(canonicalDays[0]?.run_id ?? '')
+    }
+  }, [canonicalDays, selectedRunId])
 
   const reviewMutation = useMutation({
     mutationFn: (payload: GoldObservationReviewRequest) => api.goldReviewObservation(payload),
-    onSuccess: (_data, payload) => {
-      if (payload.kind === 'day') setLastDayResult(payload.complete_window_verified)
-      else setLastRestartResult(payload.verified)
+    onSuccess: data => {
+      queryClient.setQueryData(QK.goldObservationGate, data)
       queryClient.invalidateQueries({ queryKey: QK.goldObservationGate })
     },
   })
 
-  const selectedRun = canonicalRuns.find(row => row.run_id === selectedRunId)
+  const selectedRun = canonicalDays.find(day => day.run_id === selectedRunId)
 
   const submitDayReview = (event: FormEvent) => {
     event.preventDefault()
@@ -104,11 +105,20 @@ export function GoldObservationPanel({
   }
 
   const completeDays = Math.min(10, gate.complete_trading_days)
-  const restartState = lastRestartResult !== null
-    ? lastRestartResult ? '本次已记录为通过' : '本次已记录为未通过'
-    : gate.status === 'review_eligible'
-      ? '已满足'
-      : '等待人工记录'
+  const restartState = gate.restart_review.recorded === null
+    ? '无法确认'
+    : !gate.restart_review.recorded
+      ? '未记录'
+      : gate.restart_review.verified === null
+        ? '无法确认'
+        : gate.restart_review.verified ? '已通过' : '未通过'
+  const externalSendValue = gate.external_send_count === null ? '无法确认' : `${gate.external_send_count} 次`
+  const externalSendRequirement = gate.external_send_count === null
+    ? '无法确认'
+    : gate.external_send_count === 0 ? '满足' : '未满足'
+  const externalSendTone = gate.external_send_count === null
+    ? 'text-muted'
+    : gate.external_send_count === 0 ? 'text-bear' : 'text-danger'
 
   return (
     <section className="min-w-0 border-y border-border" aria-labelledby="gold-observation-title">
@@ -156,15 +166,16 @@ export function GoldObservationPanel({
             <dt className="text-muted">要求天数</dt>
             <dd className="font-mono text-secondary">{gate.required_complete_trading_days}</dd>
             <dt className="text-muted">重启复核状态</dt>
-            <dd className={cn('break-words', lastRestartResult === false ? 'text-danger' : 'text-secondary')}>{restartState}</dd>
+            <dd className={cn(
+              'break-words',
+              gate.restart_review.recorded === null
+                ? 'text-muted'
+                : gate.restart_review.verified === false ? 'text-danger' : 'text-secondary',
+            )}>{restartState}</dd>
             <dt className="text-muted">外发尝试</dt>
-            <dd className={cn('font-mono', gate.external_send_count === 0 ? 'text-bear' : 'text-danger')}>
-              {gate.external_send_count === null ? '状态不可用' : `${gate.external_send_count} 次`}
-            </dd>
+            <dd className={cn('font-mono', externalSendTone)}>{externalSendValue}</dd>
             <dt className="text-muted">零外发要求</dt>
-            <dd className={gate.external_send_count === 0 ? 'text-bear' : 'text-danger'}>
-              {gate.external_send_count === 0 ? '满足' : '未满足'}
-            </dd>
+            <dd className={externalSendTone}>{externalSendRequirement}</dd>
           </dl>
 
           <div className="mt-3">
@@ -192,30 +203,30 @@ export function GoldObservationPanel({
               <div className="flex items-center gap-1.5 text-[10px] font-medium text-secondary">
                 <CalendarCheck2 className="h-3 w-3 text-muted" />逐日 run 状态
               </div>
-              <span className="font-mono text-[10px] text-muted">最近 {canonicalRuns.length} 日</span>
+              <span className="font-mono text-[10px] text-muted">最近 {canonicalDays.length} 日</span>
             </div>
             <div className="grid min-h-20 grid-cols-1 gap-px overflow-hidden border border-border bg-border sm:grid-cols-2 xl:grid-cols-5">
-              {canonicalRuns.map(row => (
-                <div key={row.run_id} className="min-w-0 bg-base px-2 py-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-[10px] text-secondary">{row.market_date}</span>
-                    <span className="text-[9px] text-bear">canonical</span>
+              {canonicalDays.map(day => {
+                const automatic = automaticState(day)
+                const review = reviewState(day)
+                return (
+                  <div key={day.run_id} className="min-w-0 bg-base px-2 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-[10px] text-secondary">{day.market_date}</span>
+                      <span className="text-[9px] text-bear">canonical</span>
+                    </div>
+                    <div className="mt-1 truncate font-mono text-[9px] text-muted" title={day.run_id}>{shortId(day.run_id)}</div>
+                    <div className={cn('mt-1 text-[9px]', automatic.tone)}>{automatic.label}</div>
+                    <div className={cn('mt-0.5 text-[9px]', review.tone)}>{review.label}</div>
                   </div>
-                  <div className="mt-1 truncate font-mono text-[9px] text-muted" title={row.run_id}>{shortId(row.run_id)}</div>
-                  <div className="mt-1 text-[9px] text-muted">{row.row_count} 条对账证据</div>
-                </div>
-              ))}
-              {canonicalRuns.length === 0 && (
+                )
+              })}
+              {canonicalDays.length === 0 && (
                 <div className="col-span-full flex min-h-20 items-center justify-center gap-1.5 bg-base text-[10px] text-muted">
                   <CircleDashed className="h-3 w-3" />暂无逐日 run
                 </div>
               )}
             </div>
-            {lastDayResult !== null && (
-              <p className={cn('mt-1.5 text-[10px]', lastDayResult ? 'text-bear' : 'text-danger')}>
-                本次完整日复核已记录为{lastDayResult ? '通过' : '未通过'}。
-              </p>
-            )}
           </div>
 
           <div className="grid border-t border-border md:grid-cols-2 md:divide-x md:divide-border">
@@ -231,8 +242,8 @@ export function GoldObservationPanel({
                   className="mt-1 h-8 w-full rounded-input border border-border bg-base px-2 font-mono text-xs text-secondary outline-none focus:border-accent/50"
                 >
                   <option value="">请选择</option>
-                  {canonicalRuns.map(row => (
-                    <option key={row.run_id} value={row.run_id}>{row.market_date} · {shortId(row.run_id)}</option>
+                  {canonicalDays.map(day => (
+                    <option key={day.run_id} value={day.run_id}>{day.market_date} · {shortId(day.run_id)}</option>
                   ))}
                 </select>
               </label>

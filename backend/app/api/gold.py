@@ -32,6 +32,8 @@ _DISABLED_GATE = {
     "complete_trading_days": 0,
     "external_send_count": 0,
     "reasons": ["gold_workspace_disabled"],
+    "canonical_days": [],
+    "restart_review": {"recorded": False, "verified": None},
 }
 _SCHEDULER_UNAVAILABLE_ERROR = {
     "code": "scheduler_unavailable",

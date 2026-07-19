@@ -1006,12 +1006,27 @@ export interface GoldComparisonRequest {
   market_date: string
 }
 
+export interface GoldObservationDayState {
+  market_date: string
+  run_id: string
+  automatic_passed: boolean | null
+  review_recorded: boolean | null
+  review_verified: boolean | null
+}
+
+export interface GoldObservationRestartState {
+  recorded: boolean | null
+  verified: boolean | null
+}
+
 export interface GoldObservationGate {
   status: GoldGateStatus
   required_complete_trading_days: number
   complete_trading_days: number
   external_send_count: number | null
   reasons: string[]
+  canonical_days: GoldObservationDayState[]
+  restart_review: GoldObservationRestartState
 }
 
 export type GoldObservationReviewRequest =
