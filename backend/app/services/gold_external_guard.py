@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 import threading
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -53,7 +54,9 @@ def _validate_channel(channel: str) -> None:
 
 def _record_attempt(root: Path, channel: str) -> None:
     root = Path(root)
+    _reject_symlink(root)
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    _reject_symlink(root)
     os.chmod(root, 0o700)
     path = root / _ATTEMPTS_FILENAME
     row = json.dumps(
@@ -80,8 +83,10 @@ def _record_attempt(root: Path, channel: str) -> None:
 
 
 def _validated_attempt_rows(root: Path) -> list[dict[str, object]]:
-    path = Path(root) / _ATTEMPTS_FILENAME
-    if not path.exists():
+    root = Path(root)
+    _reject_symlink(root)
+    path = root / _ATTEMPTS_FILENAME
+    if not _reject_symlink(path):
         return []
     rows: list[dict[str, object]] = []
     with _LOCK:
@@ -110,6 +115,16 @@ def _validated_attempt_rows(root: Path) -> list[dict[str, object]]:
         finally:
             os.close(descriptor)
     return rows
+
+
+def _reject_symlink(path: Path) -> bool:
+    try:
+        mode = os.lstat(path).st_mode
+    except FileNotFoundError:
+        return False
+    if stat.S_ISLNK(mode):
+        raise OSError(f"symlink is not allowed: {path}")
+    return True
 
 
 def _fsync_directory(root: Path) -> None:

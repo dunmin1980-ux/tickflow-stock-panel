@@ -68,3 +68,39 @@ Result: clean.
 ## Concerns
 
 No blocking concerns. Full-suite output contains 9 existing deprecation warnings; no new warnings were introduced by this task.
+
+## Task 3 Review Fixes
+
+### RED
+
+Added regression tests for dangling attempt-file symlinks and symlinked configured roots, then ran:
+
+```bash
+cd backend && uv run --extra dev pytest tests/test_gold_external_guard.py -q
+```
+
+Result: `2 failed, 11 passed in 0.17s`.
+
+The dangling-file test showed `attempt_count()` incorrectly returned zero. The configured-root test showed `attempt_count()` incorrectly returned zero and exposed that `send()` could write through the root symlink.
+
+### GREEN
+
+Added lstat-based symlink rejection for the configured root before and after directory creation, and for attempt-file entries before the missing-file fast path. Then ran:
+
+```bash
+cd backend && uv run --extra dev pytest tests/test_gold_external_guard.py -q
+```
+
+Result: `13 passed in 0.07s`.
+
+```bash
+cd backend && uv run --extra dev ruff check app/services/gold_external_guard.py tests/test_gold_external_guard.py
+```
+
+Result: `All checks passed!`
+
+### Files Changed
+
+- `backend/app/services/gold_external_guard.py`: reject symlinked configured roots and dangling or live symlinked attempt files with `lstat` before any count or write operation.
+- `backend/tests/test_gold_external_guard.py`: add RED/GREEN coverage for both `send()` and `attempt_count()` symlink cases, including the no-outside-write assertion.
+- `.superpowers/sdd/task-3-report.md`: append this review-fix evidence.

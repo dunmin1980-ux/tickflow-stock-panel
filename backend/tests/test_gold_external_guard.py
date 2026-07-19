@@ -73,6 +73,34 @@ def test_symlinked_attempt_file_is_rejected(tmp_path):
     assert target.read_text() == ""
 
 
+def test_dangling_attempt_file_symlink_is_rejected_by_send_and_count(tmp_path):
+    root = tmp_path / "gold_shadow"
+    root.mkdir()
+    attempt_file = root / "external_send_attempts.jsonl"
+    attempt_file.symlink_to(tmp_path / "missing.jsonl")
+
+    with pytest.raises(OSError):
+        attempt_count(root)
+    with pytest.raises(OSError):
+        DisabledGoldNotifier(root).send("telegram", {})
+
+    assert not (tmp_path / "missing.jsonl").exists()
+
+
+def test_symlinked_configured_root_is_rejected_without_writing_outside(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    root = tmp_path / "gold_shadow"
+    root.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(OSError):
+        attempt_count(root)
+    with pytest.raises(OSError):
+        DisabledGoldNotifier(root).send("telegram", {})
+
+    assert not (outside / "external_send_attempts.jsonl").exists()
+
+
 def test_attempt_storage_is_private_and_fsynced(tmp_path, monkeypatch):
     root = tmp_path / "gold_shadow"
     fsynced = []
