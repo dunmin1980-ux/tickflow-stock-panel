@@ -4,6 +4,7 @@
 #       如确需启用,传入 --build-arg INCLUDE_STOCKSDK=1 显式开启,使用风险自负。
 ARG USE_CN_MIRROR=1
 ARG INCLUDE_STOCKSDK=0
+ARG APT_MIRROR=http://mirrors.cloud.tencent.com
 ARG NPM_REGISTRY=https://registry.npmmirror.com
 ARG PYPI_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
 # 备用 PyPI 源:主源同步延迟/故障时自动兜底(阿里云与清华互为补充)
@@ -65,6 +66,7 @@ RUN if [ "$USE_CN_MIRROR" = "1" ]; then npm config set registry "$NPM_REGISTRY";
 # === Stage 2: Python 运行时 ===
 FROM python:3.11-slim AS runtime
 ARG USE_CN_MIRROR=1
+ARG APT_MIRROR=http://mirrors.cloud.tencent.com
 ARG PYPI_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
 ARG PYPI_FALLBACK=https://mirrors.aliyun.com/pypi/simple
 ARG BACKEND_EXTRAS=
@@ -75,9 +77,15 @@ WORKDIR /app
 # Codex CLI 从官方 npm 包提取原生二进制，不依赖运行时 Node.js。
 # bookworm 自带 nodejs 18.19, 满足插件 engines>=18; --no-install-recommends 精简,
 # 自带 libnode/libc-ares 等全部动态依赖, 无需手动补库。
-# 国内构建走 apt mirror 已在 debian 镜像sources.list 配好, 无需额外换源。
+# 国内构建显式改写 deb822 URI；关闭 USE_CN_MIRROR 时保留官方源。
 # tesseract-ocr: 自选截图导入（始终安装）; nodejs: 仅 INCLUDE_STOCKSDK=1 时安装
-RUN apt-get update \
+RUN if [ "$USE_CN_MIRROR" = "1" ]; then \
+      sed -i \
+        -e "s|http://deb.debian.org/debian-security|${APT_MIRROR}/debian-security|g" \
+        -e "s|http://deb.debian.org/debian|${APT_MIRROR}/debian|g" \
+        /etc/apt/sources.list.d/debian.sources; \
+    fi \
+    && apt-get update \
     && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng \
     && if [ "$INCLUDE_STOCKSDK" = "1" ]; then \
          apt-get install -y --no-install-recommends nodejs \
