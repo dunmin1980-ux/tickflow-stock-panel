@@ -52,24 +52,32 @@ def _commit_run(
     *,
     passing: bool = True,
     revision: int = 1,
+    legacy_excluded: int = 0,
+    shadow_excluded: int = 0,
 ) -> dict:
     date_text = market_date.isoformat()
     return store.commit_comparison_run(
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "run_id": _digest(f"run:{date_text}:{revision}"),
             "market_date": date_text,
             "legacy_import_id": _digest(f"import:{date_text}:{revision}"),
             "legacy_digest": _digest(f"legacy:{date_text}:{revision}"),
             "shadow_digest": _digest(f"shadow:{date_text}:{revision}"),
-            "comparator_version": "1",
+            "comparator_version": "2",
             "legacy_sample_count": 1,
             "shadow_sample_count": 1,
+            "legacy_excluded_out_of_session_count": legacy_excluded,
+            "shadow_excluded_out_of_session_count": shadow_excluded,
         },
         [
             {
                 "schema_version": 1,
                 "type": "summary",
+                "quality": {
+                    "legacy_excluded_out_of_session_count": legacy_excluded,
+                    "shadow_excluded_out_of_session_count": shadow_excluded,
+                },
                 "stage_a": {"thresholds_pass": passing},
             }
         ],
@@ -344,6 +352,55 @@ def test_failed_tolerance_forces_failed_even_with_manual_review(service):
 
     assert result["status"] == "failed"
     assert result["complete_trading_days"] == 9
+
+
+def test_out_of_session_comparison_evidence_forces_gate_failure(service):
+    market_date = _trading_dates(1)[0]
+    run = _commit_run(service.store, market_date, legacy_excluded=1)
+    service.review_day(
+        market_date,
+        run["run_id"],
+        verified=True,
+        note="review cannot override excluded evidence",
+    )
+    service.review_restart(verified=True, note="restart reviewed")
+
+    result = service.status()
+
+    assert result["status"] == "failed"
+    assert f"comparison_out_of_session_exclusions:{run['run_id']}" in result["reasons"]
+    assert result["complete_trading_days"] == 0
+
+
+def test_legacy_comparison_without_quality_metadata_forces_gate_failure(service):
+    market_date = _trading_dates(1)[0]
+    run_id = _digest("legacy-quality-run")
+    run = service.store.commit_comparison_run(
+        {
+            "schema_version": 1,
+            "run_id": run_id,
+            "market_date": market_date.isoformat(),
+            "legacy_import_id": _digest("legacy-quality-import"),
+            "legacy_digest": _digest("legacy-quality-legacy"),
+            "shadow_digest": _digest("legacy-quality-shadow"),
+            "comparator_version": "1",
+            "legacy_sample_count": 1,
+            "shadow_sample_count": 1,
+        },
+        [
+            {
+                "schema_version": 1,
+                "type": "summary",
+                "stage_a": {"thresholds_pass": True},
+            }
+        ],
+    )
+
+    result = service.status()
+
+    assert result["status"] == "failed"
+    assert f"comparison_quality_metadata_missing:{run['run_id']}" in result["reasons"]
+    assert result["complete_trading_days"] == 0
 
 
 def test_missing_manual_full_day_review_remains_collecting(service):

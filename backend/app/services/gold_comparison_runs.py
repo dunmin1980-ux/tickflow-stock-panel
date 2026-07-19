@@ -7,6 +7,7 @@ from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
+from app.services.gold_calendar import is_beijing_session
 from app.services.gold_shadow_compare import (
     LegacySample,
     ShadowSample,
@@ -16,7 +17,7 @@ from app.services.gold_shadow_compare import (
 from app.services.gold_shadow_store import GoldShadowStore
 
 _CN_TZ = timezone(timedelta(hours=8))
-_COMPARATOR_VERSION = "1"
+_COMPARATOR_VERSION = "2"
 
 
 def _run_id(
@@ -24,7 +25,7 @@ def _run_id(
     market_date: date,
     legacy_digest: str,
     shadow_digest: str,
-    comparator_version: str = "1",
+    comparator_version: str = "2",
 ) -> str:
     payload = f"{market_date.isoformat()}|{legacy_digest}|{shadow_digest}|{comparator_version}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -104,18 +105,33 @@ class GoldComparisonRunner:
         if imported is None:
             raise ValueError("unknown import")
 
-        legacy = _canonicalize_legacy(imported["rows"], market_date)
-        shadow = _canonicalize_shadow(self.store.comparison_snapshots(), market_date)
-        legacy_digest = _sample_digest(legacy)
-        shadow_digest = _sample_digest(shadow)
+        legacy_evidence = _canonicalize_legacy(imported["rows"], market_date)
+        shadow_evidence = _canonicalize_shadow(
+            self.store.comparison_snapshots(), market_date
+        )
+        legacy = _canonicalize_samples(
+            [sample for sample in legacy_evidence if is_beijing_session(sample.observed_at)]
+        )
+        shadow = _canonicalize_samples(
+            [sample for sample in shadow_evidence if is_beijing_session(sample.observed_at)]
+        )
+        legacy_excluded = len(legacy_evidence) - len(legacy)
+        shadow_excluded = len(shadow_evidence) - len(shadow)
+        legacy_digest = _sample_digest(legacy_evidence)
+        shadow_digest = _sample_digest(shadow_evidence)
         run_id = _run_id(
             market_date=market_date,
             legacy_digest=legacy_digest,
             shadow_digest=shadow_digest,
         )
         report = compare_samples(legacy, shadow)
+        quality = {
+            "legacy_excluded_out_of_session_count": legacy_excluded,
+            "shadow_excluded_out_of_session_count": shadow_excluded,
+        }
+        summary = {**report.summary, "quality": quality}
         metadata = {
-            "schema_version": 1,
+            "schema_version": 2,
             "run_id": run_id,
             "market_date": market_date.isoformat(),
             "legacy_import_id": import_id,
@@ -124,8 +140,9 @@ class GoldComparisonRunner:
             "comparator_version": _COMPARATOR_VERSION,
             "legacy_sample_count": len(legacy),
             "shadow_sample_count": len(shadow),
+            **quality,
         }
-        return self.store.commit_comparison_run(metadata, [*report.rows, report.summary])
+        return self.store.commit_comparison_run(metadata, [*report.rows, summary])
 
     def get_run(self, run_id: str) -> dict[str, Any] | None:
         return self.store.get_comparison_run(run_id)

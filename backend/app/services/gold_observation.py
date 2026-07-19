@@ -126,9 +126,20 @@ class GoldObservationService:
                 run_read_failed = True
                 reasons.append(f"comparison_run_corrupt:{metadata['run_id']}")
             thresholds_pass = _thresholds_pass(run) if run is not None else None
+            quality_clean = _comparison_quality_clean(metadata)
             if not run_read_failed:
                 if run is None:
                     reasons.append(f"comparison_run_missing:{metadata['run_id']}")
+                elif quality_clean is None:
+                    automatic_passed = False
+                    reasons.append(
+                        f"comparison_quality_metadata_missing:{metadata['run_id']}"
+                    )
+                elif not quality_clean:
+                    automatic_passed = False
+                    reasons.append(
+                        f"comparison_out_of_session_exclusions:{metadata['run_id']}"
+                    )
                 elif thresholds_pass is None:
                     reasons.append(f"automatic_tolerance_state_corrupt:{metadata['run_id']}")
                 elif not thresholds_pass:
@@ -277,3 +288,15 @@ def _thresholds_pass(run: dict[str, Any]) -> bool | None:
     if not isinstance(stage_a, dict) or type(stage_a.get("thresholds_pass")) is not bool:
         return None
     return stage_a["thresholds_pass"]
+
+
+def _comparison_quality_clean(metadata: dict[str, Any]) -> bool | None:
+    if metadata.get("schema_version") != 2 or metadata.get("comparator_version") != "2":
+        return None
+    counts = (
+        metadata.get("legacy_excluded_out_of_session_count"),
+        metadata.get("shadow_excluded_out_of_session_count"),
+    )
+    if any(type(count) is not int or count < 0 for count in counts):
+        return None
+    return counts == (0, 0)

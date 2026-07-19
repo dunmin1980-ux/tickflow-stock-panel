@@ -977,14 +977,12 @@ export interface GoldImport {
   sample_count: number
 }
 
-export interface GoldComparisonSummary {
-  schema_version: 1
+interface GoldComparisonCommon {
   run_id: string
   market_date: string
   legacy_import_id: string
   legacy_digest: string
   shadow_digest: string
-  comparator_version: '1'
   legacy_sample_count: number
   shadow_sample_count: number
   supersedes_run_id: string | null
@@ -993,7 +991,22 @@ export interface GoldComparisonSummary {
   summary_sha256: string
 }
 
-export interface GoldComparisonRun extends GoldComparisonSummary {
+export type GoldComparisonSummary = GoldComparisonCommon & (
+  | {
+    schema_version: 1
+    comparator_version: '1'
+    legacy_excluded_out_of_session_count?: never
+    shadow_excluded_out_of_session_count?: never
+  }
+  | {
+    schema_version: 2
+    comparator_version: '2'
+    legacy_excluded_out_of_session_count: number
+    shadow_excluded_out_of_session_count: number
+  }
+)
+
+export type GoldComparisonRun = GoldComparisonSummary & {
   rows: Record<string, unknown>[]
 }
 

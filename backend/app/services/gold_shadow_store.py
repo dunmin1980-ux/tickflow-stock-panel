@@ -45,7 +45,7 @@ _IMPORT_METADATA_FIELDS = frozenset(
 _LEGACY_IMPORT_METADATA_FIELDS = _IMPORT_METADATA_FIELDS - {"normalized_sha256"}
 _LEGACY_IMPORT_REIMPORT_REQUIRED = "legacy_import_requires_manual_reimport_from_original_bytes"
 _LEGACY_IMPORT_ORIGINAL_MISMATCH = "legacy_import_original_mismatch"
-_COMPARISON_RUN_METADATA_FIELDS = frozenset(
+_COMPARISON_RUN_V1_METADATA_FIELDS = frozenset(
     {
         "schema_version",
         "run_id",
@@ -60,6 +60,18 @@ _COMPARISON_RUN_METADATA_FIELDS = frozenset(
         "row_count",
         "rows_sha256",
         "summary_sha256",
+    }
+)
+_COMPARISON_RUN_V2_METADATA_FIELDS = _COMPARISON_RUN_V1_METADATA_FIELDS | frozenset(
+    {
+        "legacy_excluded_out_of_session_count",
+        "shadow_excluded_out_of_session_count",
+    }
+)
+_COMPARISON_QUALITY_FIELDS = frozenset(
+    {
+        "legacy_excluded_out_of_session_count",
+        "shadow_excluded_out_of_session_count",
     }
 )
 _OBSERVATION_DAY_REVIEW_FIELDS = frozenset(
@@ -428,6 +440,7 @@ class GoldShadowStore:
                 "summary_sha256": self._canonical_json_sha256(prepared_rows[-1]),
             }
             self._validate_comparison_run_metadata(committed)
+            self._validate_comparison_run_rows(prepared_rows, committed)
             self._write_comparison_run_rows_locked(committed["run_id"], prepared_rows)
             self._replace_jsonl_locked("comparison_index.jsonl", [*index, committed])
             return dict(committed)
@@ -889,13 +902,22 @@ class GoldShadowStore:
 
     @classmethod
     def _validate_comparison_run_metadata(cls, row: dict[str, Any]) -> None:
-        if not isinstance(row, dict) or set(row) != _COMPARISON_RUN_METADATA_FIELDS:
+        if not isinstance(row, dict):
             raise ValueError("invalid comparison run metadata")
-        if type(row["schema_version"]) is not int or row["schema_version"] != 1:
+        schema_version = row.get("schema_version")
+        if type(schema_version) is not int or schema_version not in {1, 2}:
+            raise ValueError("invalid comparison run schema version")
+        expected_fields = (
+            _COMPARISON_RUN_V1_METADATA_FIELDS
+            if schema_version == 1
+            else _COMPARISON_RUN_V2_METADATA_FIELDS
+        )
+        if set(row) != expected_fields:
             raise ValueError("invalid comparison run schema version")
         for field in ("run_id", "legacy_import_id", "legacy_digest", "shadow_digest"):
             cls._validate_import_digest(row[field])
-        if row["comparator_version"] != "1":
+        expected_comparator_version = "1" if schema_version == 1 else "2"
+        if row["comparator_version"] != expected_comparator_version:
             raise ValueError("invalid comparison comparator version")
         market_date = row["market_date"]
         if not isinstance(market_date, str):
@@ -908,6 +930,10 @@ class GoldShadowStore:
         for field in ("legacy_sample_count", "shadow_sample_count"):
             if type(row[field]) is not int or row[field] < 0:
                 raise ValueError("invalid comparison sample count")
+        if schema_version == 2:
+            for field in _COMPARISON_QUALITY_FIELDS:
+                if type(row[field]) is not int or row[field] < 0:
+                    raise ValueError("invalid comparison exclusion count")
         supersedes_run_id = row["supersedes_run_id"]
         if supersedes_run_id is not None:
             cls._validate_import_digest(supersedes_run_id)
@@ -966,6 +992,17 @@ class GoldShadowStore:
             or metadata["summary_sha256"] != cls._canonical_json_sha256(rows[-1])
         ):
             raise ValueError("comparison run integrity mismatch")
+        if metadata is not None and metadata["schema_version"] == 2:
+            quality = rows[-1].get("quality")
+            expected_quality = {
+                field: metadata[field] for field in _COMPARISON_QUALITY_FIELDS
+            }
+            if (
+                not isinstance(quality, dict)
+                or set(quality) != _COMPARISON_QUALITY_FIELDS
+                or quality != expected_quality
+            ):
+                raise ValueError("comparison quality metadata mismatch")
 
     def _read_comparison_run_rows_locked(self, metadata: dict[str, Any]) -> list[dict[str, Any]]:
         run_id = metadata["run_id"]

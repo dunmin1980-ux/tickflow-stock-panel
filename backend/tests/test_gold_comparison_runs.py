@@ -12,16 +12,22 @@ from app.services.gold_shadow_store import GoldShadowStorageReadError, GoldShado
 CN_TZ = timezone(timedelta(hours=8))
 
 
-def observed_at(market_date: date, *, minute: int = 0) -> str:
+def observed_at(market_date: date, *, hour: int = 14, minute: int = 0) -> str:
     return datetime(
-        market_date.year, market_date.month, market_date.day, 15, minute, tzinfo=CN_TZ
+        market_date.year, market_date.month, market_date.day, hour, minute, tzinfo=CN_TZ
     ).isoformat()
 
 
-def legacy_row(market_date: date, *, minute: int = 0, price: float = 19.99) -> dict[str, object]:
+def legacy_row(
+    market_date: date,
+    *,
+    hour: int = 14,
+    minute: int = 0,
+    price: float = 19.99,
+) -> dict[str, object]:
     return {
         "schema_version": 1,
-        "observed_at": observed_at(market_date, minute=minute),
+        "observed_at": observed_at(market_date, hour=hour, minute=minute),
         "price": price,
         "P": -12.59,
         "V": -0.13,
@@ -31,8 +37,16 @@ def legacy_row(market_date: date, *, minute: int = 0, price: float = 19.99) -> d
     }
 
 
-def snapshot(market_date: date, *, minute: int = 0, price: float = 19.99) -> dict[str, object]:
-    at = datetime.fromisoformat(observed_at(market_date, minute=minute))
+def snapshot(
+    market_date: date,
+    *,
+    hour: int = 14,
+    minute: int = 0,
+    price: float = 19.99,
+) -> dict[str, object]:
+    at = datetime.fromisoformat(
+        observed_at(market_date, hour=hour, minute=minute)
+    )
     return {
         "schema_version": 1,
         "observed_at": at.isoformat(),
@@ -118,6 +132,136 @@ def test_run_filters_legacy_and_shadow_to_exact_beijing_market_date(tmp_path):
         "missing_shadow": 0,
         "unmatched_shadow": 0,
     }
+
+
+def test_matching_1510_rows_are_excluded_with_persisted_quality_counts(tmp_path):
+    runner = make_runner(tmp_path)
+    market_date = date(2026, 7, 16)
+    import_id = commit_import(
+        runner.store,
+        "finalization-only",
+        [legacy_row(market_date, hour=15, minute=10)],
+    )
+    runner.store.commit_evaluation(snapshot(market_date, hour=15, minute=10))
+
+    run = runner.run(import_id, market_date)
+    persisted = runner.get_run(run["run_id"])
+
+    assert run["schema_version"] == 2
+    assert run["comparator_version"] == "2"
+    assert run["legacy_sample_count"] == 0
+    assert run["shadow_sample_count"] == 0
+    assert run["legacy_excluded_out_of_session_count"] == 1
+    assert run["shadow_excluded_out_of_session_count"] == 1
+    assert persisted is not None
+    assert persisted["rows"][-1]["quality"] == {
+        "legacy_excluded_out_of_session_count": 1,
+        "shadow_excluded_out_of_session_count": 1,
+    }
+    assert persisted["rows"][-1]["totals"]["matched"] == 0
+
+
+def test_comparison_session_boundaries_are_inclusive_and_other_rows_are_counted(tmp_path):
+    runner = make_runner(tmp_path)
+    market_date = date(2026, 7, 16)
+    included = [(9, 30), (11, 30), (13, 0), (15, 0)]
+    excluded = [(9, 29), (11, 31), (12, 59), (15, 1)]
+    legacy_rows = [
+        legacy_row(market_date, hour=hour, minute=minute)
+        for hour, minute in [*included, *excluded]
+    ]
+    import_id = commit_import(runner.store, "session-boundaries", legacy_rows)
+    for hour, minute in [*included, *excluded]:
+        runner.store.commit_evaluation(
+            snapshot(market_date, hour=hour, minute=minute)
+        )
+
+    run = runner.run(import_id, market_date)
+
+    assert run["legacy_sample_count"] == 4
+    assert run["shadow_sample_count"] == 4
+    assert run["legacy_excluded_out_of_session_count"] == 4
+    assert run["shadow_excluded_out_of_session_count"] == 4
+
+
+def test_run_identity_changes_when_excluded_target_date_evidence_changes(tmp_path):
+    runner = make_runner(tmp_path)
+    market_date = date(2026, 7, 16)
+    first_import = commit_import(
+        runner.store,
+        "excluded-a",
+        [legacy_row(market_date, hour=15, minute=10, price=19.99)],
+    )
+    second_import = commit_import(
+        runner.store,
+        "excluded-b",
+        [legacy_row(market_date, hour=15, minute=10, price=20.00)],
+    )
+
+    first = runner.run(first_import, market_date)
+    second = runner.run(second_import, market_date)
+
+    assert second["run_id"] != first["run_id"]
+    assert second["legacy_digest"] != first["legacy_digest"]
+    assert second["supersedes_run_id"] == first["run_id"]
+
+
+def test_legacy_v1_comparison_metadata_remains_readable(tmp_path):
+    store = GoldShadowStore(tmp_path)
+    market_date = date(2026, 7, 16)
+    run_id = hashlib.sha256(b"legacy-v1-run").hexdigest()
+    committed = store.commit_comparison_run(
+        {
+            "schema_version": 1,
+            "run_id": run_id,
+            "market_date": market_date.isoformat(),
+            "legacy_import_id": hashlib.sha256(b"legacy-v1-import").hexdigest(),
+            "legacy_digest": hashlib.sha256(b"legacy-v1-legacy").hexdigest(),
+            "shadow_digest": hashlib.sha256(b"legacy-v1-shadow").hexdigest(),
+            "comparator_version": "1",
+            "legacy_sample_count": 1,
+            "shadow_sample_count": 1,
+        },
+        [
+            {
+                "schema_version": 1,
+                "type": "summary",
+                "stage_a": {"thresholds_pass": True},
+            }
+        ],
+    )
+
+    assert committed["schema_version"] == 1
+    assert store.get_comparison_run(run_id)["run_id"] == run_id
+
+
+def test_comparison_metadata_rejects_boolean_schema_version(tmp_path):
+    store = GoldShadowStore(tmp_path)
+    run_id = hashlib.sha256(b"boolean-schema-run").hexdigest()
+
+    with pytest.raises(ValueError, match="schema version"):
+        store.commit_comparison_run(
+            {
+                "schema_version": True,
+                "run_id": run_id,
+                "market_date": "2026-07-16",
+                "legacy_import_id": hashlib.sha256(b"boolean-import").hexdigest(),
+                "legacy_digest": hashlib.sha256(b"boolean-legacy").hexdigest(),
+                "shadow_digest": hashlib.sha256(b"boolean-shadow").hexdigest(),
+                "comparator_version": "1",
+                "legacy_sample_count": 1,
+                "shadow_sample_count": 1,
+            },
+            [
+                {
+                    "schema_version": 1,
+                    "type": "summary",
+                    "stage_a": {"thresholds_pass": True},
+                }
+            ],
+        )
+
+    assert not (store.root / "comparison_index.jsonl").exists()
 
 
 def test_run_canonicalizes_multiple_same_day_samples(tmp_path):
