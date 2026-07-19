@@ -43,6 +43,7 @@ def _initialize_gold_runtime(app: FastAPI, store: DataStore) -> None:
     app.state.gold_legacy_importer = None
     app.state.gold_comparison_runner = None
     app.state.gold_observation_service = None
+    app.state.gold_sampler_registered = False
     if not settings.gold_workspace_enabled:
         return
 
@@ -62,6 +63,7 @@ def _initialize_gold_runtime(app: FastAPI, store: DataStore) -> None:
     if app.state.scheduler is not None:
         try:
             register_gold_sampler(app.state.scheduler, gold_sampler)
+            app.state.gold_sampler_registered = True
         except Exception:
             logger.warning("Gold sampler scheduler registration is unavailable")
             gold_service.fail("scheduler_unavailable", "Gold sampler scheduler is unavailable")

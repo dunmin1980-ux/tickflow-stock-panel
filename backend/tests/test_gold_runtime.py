@@ -43,6 +43,7 @@ def test_disabled_runtime_does_not_initialize_gold_storage(monkeypatch, tmp_path
     assert app.state.gold_legacy_importer is None
     assert app.state.gold_comparison_runner is None
     assert app.state.gold_observation_service is None
+    assert app.state.gold_sampler_registered is False
     assert not (tmp_path / "user_data" / "gold_shadow").exists()
 
 
@@ -60,6 +61,7 @@ def test_enabled_runtime_initializes_services_and_registers_five_minute_job(
     assert app.state.gold_legacy_importer is not None
     assert app.state.gold_comparison_runner is not None
     assert app.state.gold_observation_service is not None
+    assert app.state.gold_sampler_registered is True
     job = scheduler.get_job("gold_sampler_5m")
     assert job is not None
     assert str(job.trigger) == "cron[day_of_week='mon-fri', minute='*/5']"
@@ -74,6 +76,7 @@ def test_enabled_runtime_without_scheduler_remains_readable_and_records_failure(
     main._initialize_gold_runtime(app, SimpleNamespace(data_dir=tmp_path))
 
     status = app.state.gold_shadow_service.status()
+    assert app.state.gold_sampler_registered is False
     assert status["enabled"] is True
     assert status["health"]["consecutive_failures"] == 1
     assert status["health"]["last_error"] == {
@@ -106,16 +109,25 @@ def test_scheduler_registration_failure_does_not_abort_app_lifespan(
 
     with TestClient(test_app) as client:
         normal_response = client.get("/api/runtime-probe")
-        gold_response = client.get("/api/gold/status")
+        gold_status_response = client.get("/api/gold/status")
+        gold_health_response = client.get("/api/gold/health")
 
     assert normal_response.status_code == 200
     assert normal_response.json() == {"ready": True}
-    assert gold_response.status_code == 200
-    assert gold_response.json()["health"]["last_error"] == {
+    assert test_app.state.gold_sampler_registered is False
+    assert gold_status_response.status_code == 200
+    assert gold_status_response.json()["health"]["last_error"] == {
         "code": "scheduler_unavailable",
         "message": "Gold sampler scheduler is unavailable",
     }
-    assert "scheduler-registration-secret" not in gold_response.text
+    assert gold_health_response.status_code == 200
+    assert gold_health_response.json()["next_scheduled_run"] is None
+    assert gold_health_response.json()["last_error"] == {
+        "code": "scheduler_unavailable",
+        "message": "Gold sampler scheduler is unavailable",
+    }
+    assert "scheduler-registration-secret" not in gold_status_response.text
+    assert "scheduler-registration-secret" not in gold_health_response.text
     health_text = (tmp_path / "user_data" / "gold_shadow" / "health.json").read_text()
     assert "scheduler-registration-secret" not in health_text
 

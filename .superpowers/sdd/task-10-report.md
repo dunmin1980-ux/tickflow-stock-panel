@@ -141,3 +141,64 @@ cd backend && uv run --extra dev python -m compileall -q \
 ```
 
 Result: exit zero.
+
+## Re-Review Fix: Gold Sampler Registration State
+
+### RED
+
+```bash
+cd backend && uv run --extra dev pytest \
+  tests/test_gold_runtime.py::test_scheduler_registration_failure_does_not_abort_app_lifespan \
+  tests/test_gold_api.py::test_health_contains_late_scheduler_lookup_failure -q
+```
+
+Result: `2 failed in 4.68s`. After registration failure, `app.state.scheduler` remained non-`None`
+and `/api/gold/health` called a missing `get_job`, raising `AttributeError`. A scheduler that broke
+after successful registration also leaked its `RuntimeError("late-scheduler-secret")` from
+`get_job` and returned no health response.
+
+### GREEN
+
+`app.state.gold_sampler_registered` now starts `False` for disabled, scheduler-less, and failed
+registration states, and changes to `True` only after `register_gold_sampler` returns successfully.
+The health endpoint consults that state before scheduler access and contains later `get_job`
+failures as a safe Gold-only health response.
+
+```bash
+cd backend && uv run --extra dev pytest \
+  tests/test_gold_runtime.py::test_scheduler_registration_failure_does_not_abort_app_lifespan \
+  tests/test_gold_api.py::test_health_contains_late_scheduler_lookup_failure -q
+```
+
+Result: `2 passed in 3.73s`. Both Gold status and health returned `200` after registration failure;
+health returned `next_scheduled_run: null` and the stable `scheduler_unavailable` error. A later
+`get_job` exception produced the same safe response without changing the normal Gold status API or
+exposing exception details.
+
+### Final Verification
+
+```bash
+cd backend && uv run --extra dev pytest tests/test_gold_api.py tests/test_gold_runtime.py -q
+```
+
+Result: `30 passed in 3.03s`.
+
+```bash
+cd backend && uv run --extra dev pytest tests/test_gold_*.py -q
+```
+
+Result: `297 passed in 17.45s`.
+
+```bash
+cd backend && uv run --extra dev ruff check \
+  app/api/gold.py tests/test_gold_api.py tests/test_gold_runtime.py
+```
+
+Result: `All checks passed!`.
+
+```bash
+cd backend && uv run --extra dev python -m compileall -q \
+  app/api/gold.py app/config.py app/main.py
+```
+
+Result: exit zero.

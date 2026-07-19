@@ -33,6 +33,10 @@ _DISABLED_GATE = {
     "external_send_count": 0,
     "reasons": ["gold_workspace_disabled"],
 }
+_SCHEDULER_UNAVAILABLE_ERROR = {
+    "code": "scheduler_unavailable",
+    "message": "Gold sampler scheduler is unavailable",
+}
 
 GoldLimit = Annotated[int, Query(ge=1, le=1000)]
 GoldRunId = Annotated[
@@ -97,8 +101,23 @@ def health(request: Request):
     if service is None:
         return {**_DISABLED_HEALTH, "next_scheduled_run": None}
     result = dict(service.status()["health"])
+    if not getattr(request.app.state, "gold_sampler_registered", False):
+        return {**result, "next_scheduled_run": None}
     scheduler = getattr(request.app.state, "scheduler", None)
-    job = scheduler.get_job("gold_sampler_5m") if scheduler is not None else None
+    if scheduler is None:
+        return {
+            **result,
+            "last_error": _SCHEDULER_UNAVAILABLE_ERROR,
+            "next_scheduled_run": None,
+        }
+    try:
+        job = scheduler.get_job("gold_sampler_5m")
+    except Exception:
+        return {
+            **result,
+            "last_error": _SCHEDULER_UNAVAILABLE_ERROR,
+            "next_scheduled_run": None,
+        }
     next_run = getattr(job, "next_run_time", None)
     result["next_scheduled_run"] = next_run.isoformat() if next_run is not None else None
     return result

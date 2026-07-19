@@ -112,6 +112,8 @@ def reset_gold_state():
         "gold_legacy_importer",
         "gold_comparison_runner",
         "gold_observation_service",
+        "gold_sampler_registered",
+        "scheduler",
     )
     previous = {name: getattr(app.state, name, None) for name in names}
     for name in names:
@@ -212,6 +214,28 @@ def test_disabled_health_and_observation_gate_remain_readable(authenticated_clie
         "external_send_count": 0,
         "reasons": ["gold_workspace_disabled"],
     }
+
+
+def test_health_contains_late_scheduler_lookup_failure(enabled_client):
+    class BrokenScheduler:
+        def get_job(self, _job_id):
+            raise RuntimeError("late-scheduler-secret")
+
+    app.state.scheduler = BrokenScheduler()
+    app.state.gold_sampler_registered = True
+
+    status = enabled_client.get("/api/gold/status")
+    health = enabled_client.get("/api/gold/health")
+
+    assert status.status_code == 200
+    assert status.json()["health"]["last_error"] is None
+    assert health.status_code == 200
+    assert health.json()["next_scheduled_run"] is None
+    assert health.json()["last_error"] == {
+        "code": "scheduler_unavailable",
+        "message": "Gold sampler scheduler is unavailable",
+    }
+    assert "late-scheduler-secret" not in health.text
 
 
 @pytest.mark.parametrize(
