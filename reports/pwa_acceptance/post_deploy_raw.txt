@@ -1,0 +1,53 @@
+Captured: 2026-07-21T00:51:01+08:00
+
+tailscale serve status:
+https://vm-0-9-ubuntu.tail21c236.ts.net (tailnet only)
+|-- / proxy http://127.0.0.1:8787
+
+https://vm-0-9-ubuntu.tail21c236.ts.net:8443 (tailnet only)
+|-- / proxy http://127.0.0.1:3019
+
+tailscale serve status --json:
+{
+  "TCP": {
+    "443": {"HTTPS": true},
+    "8443": {"HTTPS": true}
+  },
+  "Web": {
+    "vm-0-9-ubuntu.tail21c236.ts.net:443": {
+      "Handlers": {"/": {"Proxy": "http://127.0.0.1:8787"}}
+    },
+    "vm-0-9-ubuntu.tail21c236.ts.net:8443": {
+      "Handlers": {"/": {"Proxy": "http://127.0.0.1:3019"}}
+    }
+  }
+}
+
+listeners:
+LISTEN 127.0.0.1:3018
+LISTEN 127.0.0.1:3019
+LISTEN 127.0.0.1:8787
+No 0.0.0.0/[::] listener for 3018 or 3019.
+
+container environment assertions:
+DATA_DIR=/app/data
+GOLD_WORKSPACE_ENABLED=false
+AUTH_COOKIE_SECURE=true
+
+incremental provenance labels:
+org.tickflow.incremental.base-source-commit=d3808afb82f39ffc570f3b9bd07564ddf11a8bdf
+org.tickflow.incremental.base-dependency-sha256=c75772c690d88ac39ef5bdba539728d8cf9e980f2a2569be02a8b40574e91805
+
+health:
+{"status":"ok","version":"0.1.86","mode":"none"}
+
+SPA response header:
+HTTP/2 200
+cache-control: no-store, must-revalidate
+content-type: text/html; charset=utf-8
+
+auth state:
+GET /api/auth/status -> {"configured":false,"authenticated":false}
+GET /api/watchlist -> HTTP 403, code NOT_INITIALIZED
+
+No passwords, cookies, API keys, tokens, or review bodies are included in this evidence.

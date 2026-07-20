@@ -1,5 +1,5 @@
-Captured: 2026-07-21T00:42:00+08:00
-Source commit: 5b6495b
+Captured: 2026-07-21T00:51:01+08:00
+Source commit: e39aabf
 Image: tickflow-stock-panel-stage-a-app:latest (incremental build over verified dependency base)
 
 Tailscale Serve after deployment:
@@ -16,11 +16,17 @@ Container invariants:
 - DATA_DIR=/app/data
 - GOLD_WORKSPACE_ENABLED=false
 - AUTH_COOKIE_SECURE=true
+- GOLD_WORKSPACE_ENABLED is explicitly injected by Compose with a default of false
+- incremental base source: d3808afb82f39ffc570f3b9bd07564ddf11a8bdf
+- incremental dependency SHA-256: c75772c690d88ac39ef5bdba539728d8cf9e980f2a2569be02a8b40574e91805
+- rollback image: sha256:10e2bc0f8552ef1b24cf013a17e9d055c29858ba57a544ddaa7a4e1f6627bede
 - health: {"status":"ok","version":"0.1.86","mode":"none"}
 - manifest and Service Worker served from the new image
 
 Private URL validation:
 - https://vm-0-9-ubuntu.tail21c236.ts.net:8443/health returned HTTP 200
+- exact JSON mapping verification passed for 443/root -> 8787 and 8443/root -> 3019
+- human-readable Serve status marked both endpoints `tailnet only` and contained no Funnel/public marker
 - /watchlist returned the SPA with Cache-Control: no-store
 - unauthenticated /api/watchlist returned HTTP 403 NOT_INITIALIZED
 
