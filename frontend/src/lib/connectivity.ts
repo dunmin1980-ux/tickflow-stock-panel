@@ -18,6 +18,7 @@ let state: ConnectivityState = {
 const listeners = new Set<() => void>()
 const OFFLINE_ACCESS_KEY = 'tickflow-offline-access:v1'
 let offlineAccessGeneration = 0
+let offlineAccessState: 'unknown' | 'granted' | 'revoked' = 'unknown'
 
 function update(next: Partial<ConnectivityState>): void {
   state = { ...state, ...next }
@@ -50,6 +51,7 @@ function browserSessionStorage(): Storage | null {
 
 export const offlineSessionAccess = {
   grant() {
+    offlineAccessState = 'granted'
     try {
       browserSessionStorage()?.setItem(OFFLINE_ACCESS_KEY, 'granted')
     } catch {
@@ -58,6 +60,7 @@ export const offlineSessionAccess = {
   },
   revoke() {
     offlineAccessGeneration += 1
+    offlineAccessState = 'revoked'
     try {
       browserSessionStorage()?.removeItem(OFFLINE_ACCESS_KEY)
     } catch {
@@ -65,8 +68,12 @@ export const offlineSessionAccess = {
     }
   },
   isGranted() {
+    if (offlineAccessState === 'granted') return true
+    if (offlineAccessState === 'revoked') return false
     try {
-      return browserSessionStorage()?.getItem(OFFLINE_ACCESS_KEY) === 'granted'
+      const granted = browserSessionStorage()?.getItem(OFFLINE_ACCESS_KEY) === 'granted'
+      offlineAccessState = granted ? 'granted' : 'revoked'
+      return granted
     } catch {
       return false
     }

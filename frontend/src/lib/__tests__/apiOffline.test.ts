@@ -11,7 +11,10 @@ describe('offline API behavior', () => {
     await clearSnapshot('/api/watchlist')
   })
 
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
 
   it('falls back only for an allowlisted GET network error', async () => {
     await putSnapshot('/api/watchlist', { symbols: ['600489.SH'] }, 'r1')
@@ -144,5 +147,16 @@ describe('offline API behavior', () => {
     )
 
     await expect(request('/api/watchlist')).resolves.toEqual({ symbols: [] })
+  })
+
+  it('keeps access revoked when sessionStorage removal throws', () => {
+    offlineSessionAccess.grant()
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new DOMException('denied', 'SecurityError')
+    })
+
+    offlineSessionAccess.revoke()
+
+    expect(offlineSessionAccess.isGranted()).toBe(false)
   })
 })
