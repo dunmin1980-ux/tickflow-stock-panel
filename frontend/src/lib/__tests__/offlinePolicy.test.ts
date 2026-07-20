@@ -33,6 +33,11 @@ describe('offline policy', () => {
     expect(isOfflineCacheAllowed('/api/watchlist-malicious')).toBe(false)
   })
 
+  it('rejects absolute and scheme-relative cross-origin URLs', () => {
+    expect(isOfflineCacheAllowed('https://evil.example/api/watchlist')).toBe(false)
+    expect(isOfflineCacheAllowed('//evil.example/api/watchlist')).toBe(false)
+  })
+
   it('detects writes case-insensitively', () => {
     expect(['POST', 'put', 'Patch', 'DELETE'].every(isWriteMethod)).toBe(true)
     expect(isWriteMethod('GET')).toBe(false)

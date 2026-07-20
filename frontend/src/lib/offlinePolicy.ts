@@ -16,15 +16,24 @@ const PATH_PREFIXES = [
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
-export const normalizedApiPath = (source: string) =>
-  new URL(source, window.location.origin).pathname
+export function normalizedApiPath(source: string): string {
+  const url = new URL(source, window.location.origin)
+  if (url.origin !== window.location.origin) {
+    throw new TypeError('Offline snapshots require a same-origin API path')
+  }
+  return url.pathname
+}
 
 export function isOfflineCacheAllowed(source: string): boolean {
-  const path = normalizedApiPath(source)
-  return (
-    EXACT_PATHS.has(path) ||
-    PATH_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))
-  )
+  try {
+    const path = normalizedApiPath(source)
+    return (
+      EXACT_PATHS.has(path) ||
+      PATH_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))
+    )
+  } catch {
+    return false
+  }
 }
 
 export const isWriteMethod = (method = 'GET') => WRITE_METHODS.has(method.toUpperCase())

@@ -1,4 +1,4 @@
-import { del, get, set } from 'idb-keyval'
+import { del, get, keys, set } from 'idb-keyval'
 
 const SCHEMA_VERSION = 1
 const KEY_PREFIX = `tickflow-offline:v${SCHEMA_VERSION}:`
@@ -12,11 +12,20 @@ export interface OfflineSnapshot<T> {
 
 function normalizedSnapshotPath(source: string): string {
   const url = new URL(source, window.location.origin)
+  if (url.origin !== window.location.origin) {
+    throw new TypeError('Offline snapshots require a same-origin API path')
+  }
   url.searchParams.sort()
   return `${url.pathname}${url.search}`
 }
 
 const snapshotKey = (source: string) => `${KEY_PREFIX}${normalizedSnapshotPath(source)}`
+
+function isCanonicalIsoTimestamp(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  const parsed = new Date(value)
+  return !Number.isNaN(parsed.valueOf()) && parsed.toISOString() === value
+}
 
 export async function putSnapshot<T>(
   source: string,
@@ -39,8 +48,7 @@ export async function getSnapshot<T>(source: string): Promise<OfflineSnapshot<T>
 
   if (
     value.schemaVersion !== SCHEMA_VERSION ||
-    typeof value.fetchedAt !== 'string' ||
-    Number.isNaN(Date.parse(value.fetchedAt))
+    !isCanonicalIsoTimestamp(value.fetchedAt)
   ) {
     await del(key)
     return null
@@ -51,4 +59,13 @@ export async function getSnapshot<T>(source: string): Promise<OfflineSnapshot<T>
 
 export async function clearSnapshot(source: string): Promise<void> {
   await del(snapshotKey(source))
+}
+
+export async function clearAllSnapshots(): Promise<void> {
+  const storedKeys = await keys()
+  await Promise.all(
+    storedKeys
+      .filter((key): key is string => typeof key === 'string' && key.startsWith(KEY_PREFIX))
+      .map((key) => del(key)),
+  )
 }
