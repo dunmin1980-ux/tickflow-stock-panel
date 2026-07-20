@@ -21,6 +21,18 @@
 - 本地计算故障仅对受支持任务降级；参数错误、能力拒绝、429 和业务错误不降级。
 - `GOLD_WORKSPACE_ENABLED=false`，不修改 Gold Shadow、n8n、Telegram 或 OpenClaw。
 
+## Mandatory Security Corrections
+
+以下修正是后续任务的硬门，与任务步骤冲突时以本节为准：
+
+1. **Task 2/4/6/9 - 客户偏好脱敏：** `GET /api/settings/preferences` 的客户响应必须在服务端源头排除 Webhook URL/secret、bot id/secret 和所有含 `secret/token/key/password/cookie` 的字段，只能用 `has_*` 布尔值表示是否已配置。Mac 端偏好读取只走 workspace 脱敏 DTO；桌面代理明确拒绝敏感 settings/key/webhook 子路由。必须有响应全文泄漏测试。
+2. **Task 3/4 - 禁止旧写路由绕过 revision：** 当 `WORKSPACE_SYNC_ENABLED=true` 时，自选股、共享偏好、个股报告、市场复盘和回测摘要的所有 legacy mutation 必须要么带 `If-Match` 转发 `execute_command`，要么返回明确的迁移错误；不允许继续直写文件。测试覆盖每一个 legacy 共享写端点，并断言 gate 关闭时无写入、gate 开启时无无条件写。
+3. **Task 6 - 桌面代理默认拒绝：** 不使用宽泛 prefix 分类。以 HTTP method + 规范化 exact path 白名单决定本地执行，首版仅允许已实现和测试的 `/api/backtest/strategy/stream`、`/api/backtest/strategy/run`、`/api/screener/run`、`/api/client/*` 和 `/api/workspace/*`。其他 `/api/*` 要么代理云端，要么显式拒绝；不存在的 `/api/strategy`/`/api/signals` 不得出现在契约中。通过 FastAPI 已注册路由生成合同测试。
+4. **Task 7/8 - 完整性失败必须 fail closed：** 只有云端不可达、下载超时、worker 启动失败、原生库加载失败可转换为 `LocalComputeUnavailable` 并最多降级一次。manifest/task 不匹配、规范参数 digest 不匹配、checksum/size/path/symlink 失败、`X-Bundle-SHA256` 不匹配、`X-Data-As-Of` 与 manifest 不匹配或数据过期都是 `ComputeInputIntegrityError`，必须中止且不调用云端计算。
+5. **Task 6/9 - 客户持久缓存不含复盘正文：** bootstrap 和 Mac/PWA 持久缓存只保存报告脱敏元数据（id、symbol、title、created_at、data_as_of、verification/can_publish/trading_advice），不含 Markdown `content`。正文通过独立认证 GET 在线读取，`Cache-Control: private, no-store`，且不写 IndexedDB/Application Support。
+6. **Task 4/10 - Compose 真实传入 gate：** `docker-compose.yml` 必须增加 `WORKSPACE_SYNC_ENABLED: ${WORKSPACE_SYNC_ENABLED:-false}`。验收时检查运行容器 env、`/api/workspace/bootstrap` 和一次带 `If-Match` 的写入，不得只根据 Compose shell 环境宣称已启用。
+7. **Task 10 - 安全门禁不允许 grep 错误假通过：** 先断言所有待扫描产物存在；用测试专用唯一 canary 值注入每类云端密钥源，再扫描 PWA、DMG/App、Application Support 缓存和日志确认 canary 零命中。`grep` 本身错误必须使脚本失败。
+
 ---
 
 ## File Map
@@ -140,6 +152,7 @@ git commit -m "feat: add workspace revision primitives"
 - Create: `backend/app/workspace/registry.py`
 - Modify: `backend/app/services/watchlist.py`
 - Modify: `backend/app/services/preferences.py`
+- Modify: `backend/app/api/settings.py`
 - Modify: `backend/app/services/json_report_store.py`
 - Create: `backend/app/services/backtest_summaries.py`
 - Test: `backend/tests/workspace/test_commands.py`
@@ -190,6 +203,8 @@ CLIENT_PREFERENCE_KEYS = {
 
 `merge_client_preferences(updates)` 拒绝白名单外 key。Webhook、bot、system notification 和任何含 `secret/token/key/password/cookie` 的 key 不返回、不接受。
 
+`GET /api/settings/preferences` 也必须复用同一脱敏输出器，不再返回 Webhook URL、bot id 或 secret 原值；前端如需显示配置状态，仅使用 `has_feishu_webhook`、`has_wecom_bot` 等布尔值。测试必须对整个 JSON 文本扫描真实 canary 值，不只检查字段名。
+
 - [ ] **Step 5: 统一报告资源锁**
 
 `JsonReportStore` 构造函数新增 `resource_name: ResourceName`，使用 `resource_lock(resource_name)` 取代实例私锁。`stock_reports`、`market_recap_reports` 和新增 `backtest_summaries` 分别绑定对应资源。
@@ -202,8 +217,8 @@ CLIENT_PREFERENCE_KEYS = {
 LOADERS = {
     ResourceName.WATCHLIST: lambda: {"symbols": watchlist.list_symbols()},
     ResourceName.PREFERENCES: lambda: {"preferences": preferences.load_client_preferences()},
-    ResourceName.STOCK_REPORTS: lambda: {"reports": stock_reports.list_reports()},
-    ResourceName.MARKET_RECAPS: lambda: {"reports": market_recap_reports.list_reports()},
+    ResourceName.STOCK_REPORTS: lambda: {"reports": stock_reports.list_report_metadata()},
+    ResourceName.MARKET_RECAPS: lambda: {"reports": market_recap_reports.list_report_metadata()},
     ResourceName.BACKTEST_SUMMARIES: lambda: {"summaries": backtest_summaries.list_summaries()},
 }
 
@@ -233,7 +248,7 @@ def resource_mtime(name: ResourceName) -> datetime:
 
 ```bash
 uv run --project backend pytest backend/tests/workspace/test_commands.py -q
-git add backend/app/workspace/registry.py backend/app/services/watchlist.py backend/app/services/preferences.py backend/app/services/json_report_store.py backend/app/services/backtest_summaries.py backend/tests/workspace/test_commands.py
+git add backend/app/workspace/registry.py backend/app/services/watchlist.py backend/app/services/preferences.py backend/app/api/settings.py backend/app/services/json_report_store.py backend/app/services/backtest_summaries.py backend/tests/workspace/test_commands.py
 git commit -m "refactor: make shared workspace stores atomic"
 ```
 
@@ -302,6 +317,8 @@ git commit -m "feat: add conditional workspace commands"
 - Create: `backend/app/api/workspace.py`
 - Modify: `backend/app/main.py`
 - Modify: `backend/app/config.py`
+- Modify: `backend/app/api/watchlist.py`, `backend/app/api/settings.py`, `backend/app/api/stock_analysis.py`, `backend/app/api/market_recap.py`
+- Modify: `docker-compose.yml`
 - Test: `backend/tests/workspace/test_api.py`
 
 **Interfaces:**
@@ -352,17 +369,21 @@ Bootstrap 响应固定为：
 }
 ```
 
+`list_report_metadata()` 必须显式投影允许字段，不能通过“排除 content”的黑名单实现；单条正文另设认证 `GET`，返回 `Cache-Control: private, no-store`。
+
 `data_as_of` 从 `request.app.state.repo.get_enriched_latest()` 返回的缓存日期读取，无数据时为 null。资源 GET 设置 `ETag` 和 `Cache-Control: private, no-store`。命令成功返回新 snapshot 与 ETag。注册异常 handler 映射 428/412/409。
 
 - [ ] **Step 4: 增加 feature gate**
 
 `Settings` 增加 `workspace_sync_enabled: bool = False`。router 始终可读；写命令在 false 时返回 503 `WORKSPACE_SYNC_DISABLED`。云端在前端兼容版本部署后才设置 true。
 
+`docker-compose.yml` 明确传入 `WORKSPACE_SYNC_ENABLED: ${WORKSPACE_SYNC_ENABLED:-false}`。当 gate 为 true 时，legacy 共享资源写端点必须带 `If-Match` 委托 `execute_command`，或返回 `409 LEGACY_WORKSPACE_WRITE_DISABLED`；不得直写原 store。为每个 legacy mutation 加契约测试。
+
 - [ ] **Step 5: 运行 GREEN 并提交**
 
 ```bash
 uv run --project backend pytest backend/tests/workspace/test_api.py -q
-git add backend/app/api/workspace.py backend/app/main.py backend/app/config.py backend/tests/workspace/test_api.py
+git add backend/app/api/workspace.py backend/app/main.py backend/app/config.py backend/app/api/watchlist.py backend/app/api/settings.py backend/app/api/stock_analysis.py backend/app/api/market_recap.py backend/tests/workspace/test_api.py docker-compose.yml
 git commit -m "feat: add versioned workspace API"
 ```
 
@@ -474,25 +495,32 @@ class WorkspaceOfflineReadOnly(RuntimeError):
 
 - [ ] **Step 4: 增加桌面云端强制代理**
 
-`proxy.py` 定义精确路由策略：
+`proxy.py` 以 method + 规范化 exact path 定义默认拒绝策略：
 
 ```python
-CLOUD_REQUIRED_PREFIXES = (
-    "/api/capabilities", "/api/data", "/api/kline", "/api/watchlist",
-    "/api/financials", "/api/stock-analysis", "/api/market-recap",
-    "/api/overview", "/api/analysis", "/api/ext-data", "/api/indices",
-    "/api/settings", "/api/alerts", "/api/monitor-rules",
+LOCAL_EXACT = {
+    ("POST", "/api/backtest/strategy/run"),
+    ("POST", "/api/backtest/strategy/stream"),
+    ("POST", "/api/screener/run"),
+}
+LOCAL_PREFIXES = ("/api/client/", "/api/workspace/")
+SENSITIVE_DESKTOP_DENY = (
+    "/api/settings/tickflow-key", "/api/settings/tushare-token",
+    "/api/settings/ai-key", "/api/settings/preferences/feishu-webhook",
+    "/api/settings/preferences/wecom-bot",
 )
-LOCAL_PREFIXES = ("/api/client", "/api/workspace", "/api/screener", "/api/backtest", "/api/strategy", "/api/signals")
 
-def should_proxy(path: str) -> bool:
-    if path.startswith(LOCAL_PREFIXES): return False
-    return path.startswith(CLOUD_REQUIRED_PREFIXES)
+def route_target(method: str, path: str) -> Literal["local", "cloud", "deny"]:
+    # Normalize once, reject absolute URLs and encoded traversal first.
+    if path.startswith(SENSITIVE_DESKTOP_DENY): return "deny"
+    if (method.upper(), path) in LOCAL_EXACT or path.startswith(LOCAL_PREFIXES): return "local"
+    if path.startswith("/api/"): return "cloud"
+    return "deny"
 ```
 
 `DesktopCloudProxyMiddleware` 只在 `TICKFLOW_DESKTOP_CLIENT=1` 启用，使用 `RemoteClient` 原样转发 method、path、query、body 和必要内容类型；移除 hop-by-hop headers，远端 `Set-Cookie` 不回传本地浏览器。NDJSON/SSE 用 `StreamingResponse` 逐块转发。代理日志不得记录 body、Cookie 或 Authorization。
 
-测试断言 `/api/kline/daily`、`/api/stock-analysis/analyze` 和 `/api/settings` 走远端；`/api/backtest/strategy/run`、`/api/screener/run`、`/api/client/status` 和 `/api/workspace/bootstrap` 不走通用代理。
+测试断言 `/api/kline/daily`、`/api/stock-analysis/analyze` 和脱敏偏好读取走远端；敏感 settings 子路由被拒绝；只有明确支持的三个计算端点与 `/api/client/*`、`/api/workspace/*` 走本地。测试还必须枚举 FastAPI 已注册路由，防止未分类路由默认落到本地。
 
 - [ ] **Step 5: 运行 GREEN 并提交**
 
@@ -548,7 +576,7 @@ Screener 至少包含目标 `as_of` 的 enriched 和 instruments；回测包含�
 
 - [ ] **Step 3: 实现客户端安全安装**
 
-`prepare_compute_input(task, config)` 以 `sha256(task + canonical config + data_as_of)` 为缓存 key。解压前拒绝绝对路径、`..`、symlink、清单外文件、单包未压缩超过 2 GiB；逐文件校验 size/SHA-256，再用 `os.replace` 发布到 `Application Support/TickFlowStockPanel/compute_inputs/{cache_key}`。该目录只读供 worker 使用，不反向上传。
+`prepare_compute_input(task, config)` 以 `sha256(task + canonical config + data_as_of)` 为缓存 key。解压前拒绝绝对路径、`..`、symlink、清单外文件、单包未压缩超过 2 GiB；逐文件校验 size/SHA-256，并同时校验 manifest task、规范参数 digest、`X-Data-As-Of`、`X-Bundle-SHA256` 与 freshness 门槛，再用 `os.replace` 发布到 `Application Support/TickFlowStockPanel/compute_inputs/{cache_key}`。任一完整性失败抛 `ComputeInputIntegrityError` 并禁止降级。该目录只读供 worker 使用，不反向上传。
 
 - [ ] **Step 4: API 与 feature gate**
 
@@ -607,7 +635,7 @@ class LocalComputeUnavailable(RuntimeError):
 
 - [ ] **Step 3: 接入回测和筛选**
 
-本地执行前调用 `prepare_compute_input()`，把返回目录作为 worker task 的 `data_dir`；输入下载、校验或本地 repo 初始化失败统一转换为 `LocalComputeUnavailable`。本地 `/api/backtest/strategy/stream` worker 抛本地基础设施故障时，调用远端 `/api/backtest/strategy/run`，再向现有 SSE 发 `done`。`/api/screener/run` 同样路由。云端自身始终直接执行，不递归降级。
+本地执行前调用 `prepare_compute_input()`，把返回目录作为 worker task 的 `data_dir`。只有传输不可用、下载超时、worker 启动失败、原生库加载失败或本地 repo 初始化失败可转为 `LocalComputeUnavailable`；`ComputeInputIntegrityError`、数据过期、参数 digest 不匹配和业务校验错误必须原样抛出。本地 `/api/backtest/strategy/stream` worker 抛本地基础设施故障时，调用远端 `/api/backtest/strategy/run`，再向现有 SSE 发 `done`。`/api/screener/run` 同样路由。云端自身始终直接执行，不递归降级。
 
 - [ ] **Step 4: 写回回测摘要**
 
@@ -669,7 +697,7 @@ command: (resource, operation, payload, revision) => request(`/api/workspace/res
 
 - [ ] **Step 4: 接入现有页面**
 
-自选股 add/batch/remove/move/clear、个股报告 append/delete、市场复盘 append/delete、共享偏好 merge 改走 workspace commands。旧 API wrapper 保留一版兼容但页面不再调用。Backtest 手机只展示 `backtest_summaries`，复杂配置仍桌面优先。
+自选股 add/batch/remove/move/clear、个股报告 append/delete、市场复盘 append/delete、共享偏好 merge 改走 workspace commands。旧 API wrapper 只保留编译兼容：当 workspace gate 开启时，服务端必须要求 `If-Match` 并进入同一命令处理器，或返回迁移错误，绝不能绕过 revision。Backtest 手机只展示 `backtest_summaries`，复杂配置仍桌面优先。报告列表查询和 bootstrap 只包含脱敏元数据，Markdown 正文必须通过单条 `no-store` 读取获取且不进入 `offlineDb`、workspace cache 或日志。
 
 - [ ] **Step 5: SSE 与轮询**
 
@@ -708,13 +736,25 @@ Playwright 创建 mobile 与 desktop 两个 browser context，分别登录同一
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
-grep -R -a -E 'TICKFLOW_API_KEY[=]|TUSHARE_TOKEN[=]|DEEPSEEK_API_KEY[=]|tf_session[=]' frontend/dist backend/dist/TickFlowStockPanel.app && exit 1 || true
+test -d frontend/dist
+test -d backend/dist/TickFlowStockPanel.app
+test -n "${TICKFLOW_SECRET_CANARY:-}"
+for target in frontend/dist backend/dist/TickFlowStockPanel.app "$HOME/Library/Application Support/TickFlowStockPanel/cache"; do
+  test -e "$target"
+  if grep -R -a -F -- "$TICKFLOW_SECRET_CANARY" "$target"; then
+    echo "secret canary found in $target" >&2
+    exit 1
+  fi
+done
 ssh codex-vm '! ss -lnt | grep -Eq "(0.0.0.0|\[::\]):(3018|3019)[[:space:]]"'
 ssh codex-vm 'tailscale serve status | grep -F "proxy http://127.0.0.1:8787"'
 ssh codex-vm 'tailscale serve status | grep -F "proxy http://127.0.0.1:3019"'
 ssh codex-vm 'docker inspect TickFlow_Stock_Panel --format "{{range .Config.Env}}{{println .}}{{end}}" | grep -q "GOLD_WORKSPACE_ENABLED=false"'
+ssh codex-vm 'docker inspect TickFlow_Stock_Panel --format "{{range .Config.Env}}{{println .}}{{end}}" | grep -q "WORKSPACE_SYNC_ENABLED=true"'
 echo MULTICLIENT_SECURITY_OK
 ```
+
+安全测试在专用测试构建中把同一唯一 canary 分别放入 TickFlow/Tushare/DeepSeek/Webhook 密钥源，扫描上述产物、Application Support 缓存和桌面日志。产物或缓存目录缺失、`grep` 错误或 canary 命中都必须失败。
 
 - [ ] **Step 3: 全量自动化门禁**
 
@@ -734,7 +774,7 @@ pnpm --dir frontend exec playwright test e2e/multiclient.spec.ts
 ssh codex-vm 'cd /home/ubuntu/tickflow-stock-panel-stage-a && WORKSPACE_SYNC_ENABLED=true GOLD_WORKSPACE_ENABLED=false PORT=3019 docker compose up -d'
 ```
 
-Expected: `/api/workspace/bootstrap` 正常、命令带 If-Match 成功、旧客户端写接口仍可按 runbook 回滚。
+Expected: 运行容器 env 明确含 `WORKSPACE_SYNC_ENABLED=true`，`/api/workspace/bootstrap` 正常，命令带 If-Match 成功，旧客户端无条件写入被拒绝。若任一项不成立，立即以 `WORKSPACE_SYNC_ENABLED=false` recreate 容器。
 
 - [ ] **Step 5: 写 runbook 与结果**
 
