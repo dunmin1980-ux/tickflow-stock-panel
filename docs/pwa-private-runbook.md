@@ -56,8 +56,15 @@ ssh codex-vm 'tailscale serve status'
 ## 手机入网与安装
 
 1. iPhone 或 Android 安装 Tailscale，加入同一 tailnet。
-2. 用 Safari/Chrome 访问 `https://vm-0-9-ubuntu.tail21c236.ts.net:8443/`。
-3. 完成 TickFlow 访问密码登录，密码不保存到文档。
+2. 首次部署如返回 `NOT_INITIALIZED`，用 SSH 本地转发打开设置页，由用户自行输入访问密码：
+
+```bash
+ssh -N -L 13019:127.0.0.1:3019 codex-vm
+```
+
+然后在本机浏览器访问 `http://127.0.0.1:13019/login`。密码不发送到聊天，不写入 runbook 或 Git。
+
+3. 用 Safari/Chrome 访问 `https://vm-0-9-ubuntu.tail21c236.ts.net:8443/`，完成 TickFlow 登录。
 4. iOS：分享 -> 添加到主屏幕。Android：浏览器菜单 -> 安装应用。
 5. 验证自选股、个股分析、Review 在线读取、断网只读标识、离线禁写和恢复网络刷新。复盘正文不做持久离线缓存。
 
