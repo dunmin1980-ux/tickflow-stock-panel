@@ -10,22 +10,27 @@ id_with_symbol(id 是否带 symbol 后缀 —— 大盘复盘无 symbol)。
 
 存储文件: data/user_data/{filename} (数组, 按 created_at 降序), 保留最近 max_reports 条,
 超出自动裁剪最旧的。写入走临时文件 + os.replace 原子替换, 避免进程中断留下半截 JSON。
-读写同时可能来自请求线程与调度线程, 故加实例锁串行化写路径。
+读写同时可能来自请求线程与调度线程, 共享资源使用 workspace 锁,
+其他报告保留实例锁。
 """
 from __future__ import annotations
 
 import json
 import logging
 import os
+import tempfile
 import threading
 import time
 from pathlib import Path
+
+from app.workspace.locks import resource_lock
+from app.workspace.models import ResourceName
 
 logger = logging.getLogger(__name__)
 
 
 class JsonReportStore:
-    """一类 AI 报告的 JSON 存储 (原子写 + 实例锁)。"""
+    """一类 AI 报告的 JSON 存储 (原子写 + 可重入锁)。"""
 
     def __init__(
         self,
@@ -33,13 +38,15 @@ class JsonReportStore:
         max_reports: int,
         id_prefix: str,
         id_with_symbol: bool = True,
+        resource_name: ResourceName | None = None,
     ) -> None:
         self.filename = filename
         self.max_reports = max_reports
         self.id_prefix = id_prefix
         self.id_with_symbol = id_with_symbol
-        # 请求线程 + 调度线程可能并发写, 用实例锁串行化读-改-写
-        self._lock = threading.Lock()
+        self.resource_name = resource_name
+        # 共享 workspace 资源与 endpoint 使用同一把锁; 财务报告保留独立锁。
+        self._lock = resource_lock(resource_name) if resource_name else threading.RLock()
 
     def _path(self) -> Path:
         from app.config import settings
@@ -49,16 +56,17 @@ class JsonReportStore:
 
     def list_reports(self) -> list[dict]:
         """返回全部报告(按 created_at 降序)。"""
-        p = self._path()
-        if not p.exists():
+        with self._lock:
+            p = self._path()
+            if not p.exists():
+                return []
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(data, list):
+                    return sorted(data, key=lambda r: r.get("created_at", ""), reverse=True)
+            except Exception as e:
+                logger.warning("%s malformed: %s", self.filename, e)
             return []
-        try:
-            data = json.loads(p.read_text(encoding="utf-8"))
-            if isinstance(data, list):
-                return sorted(data, key=lambda r: r.get("created_at", ""), reverse=True)
-        except Exception as e:  # noqa: BLE001
-            logger.warning("%s malformed: %s", self.filename, e)
-        return []
 
     def _save_all(self, reports: list[dict]) -> None:
         """全量写入(裁剪到 max_reports, 原子替换)。"""
@@ -70,11 +78,31 @@ class JsonReportStore:
 
     def _atomic_write(self, reports: list[dict]) -> None:
         """先写临时文件再 os.replace 原子替换, 避免进程中断留下损坏的 JSON。"""
-        p = self._path()
-        text = json.dumps(reports, indent=2, ensure_ascii=False)
-        tmp = p.with_suffix(p.suffix + ".tmp")
-        tmp.write_text(text, encoding="utf-8")
-        os.replace(tmp, p)
+        path = self._path()
+        temp_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=path.parent,
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as handle:
+                temp_path = Path(handle.name)
+                json.dump(reports, handle, indent=2, ensure_ascii=False, allow_nan=False)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp_path, path)
+            temp_path = None
+            directory_fd = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+        finally:
+            if temp_path is not None:
+                temp_path.unlink(missing_ok=True)
 
     def _make_id(self, report: dict) -> str:
         base = f"{self.id_prefix}_{int(time.time() * 1000)}"

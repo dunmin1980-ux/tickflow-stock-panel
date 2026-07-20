@@ -5,8 +5,11 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+import os
+import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
+from threading import RLock
 
 import polars as pl
 
@@ -14,8 +17,16 @@ from app.config import settings
 from app.tickflow.capabilities import Cap, CapabilitySet
 from app.tickflow.client import get_client
 from app.tickflow.rate_limits import chunked, resolve_limit
+from app.workspace.locks import resource_lock
+from app.workspace.models import ResourceName
 
 logger = logging.getLogger(__name__)
+
+_SCHEMA = {"symbol": pl.Utf8, "added_at": pl.Utf8, "note": pl.Utf8}
+
+
+def _lock() -> RLock:
+    return resource_lock(ResourceName.WATCHLIST)
 
 
 def _path() -> Path:
@@ -25,69 +36,135 @@ def _path() -> Path:
 
 
 def list_symbols() -> list[dict]:
-    p = _path()
-    if not p.exists():
-        return []
-    df = pl.read_parquet(p)
-    if df.is_empty():
-        return []
-    return df.to_dicts()
+    with _lock():
+        p = _path()
+        if not p.exists():
+            return []
+        df = pl.read_parquet(p)
+        if df.is_empty():
+            return []
+        return df.to_dicts()
+
+
+def _empty_frame() -> pl.DataFrame:
+    return pl.DataFrame(schema=_SCHEMA)
+
+
+def _fsync_directory(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _atomic_write(df: pl.DataFrame) -> None:
+    """Durably replace the watchlist without exposing a partial parquet file."""
+    path = _path()
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temp_path = Path(handle.name)
+        df.write_parquet(temp_path)
+        with temp_path.open("rb") as handle:
+            os.fsync(handle.fileno())
+        os.replace(temp_path, path)
+        temp_path = None
+        _fsync_directory(path.parent)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
 
 
 def add(symbol: str, note: str = "") -> list[dict]:
-    p = _path()
-    if p.exists():
-        df = pl.read_parquet(p)
-        # 已存在则先移除，后面重新插入到最前面
-        if symbol in df["symbol"].to_list():
-            df = df.filter(pl.col("symbol") != symbol)
-    else:
-        df = pl.DataFrame(schema={"symbol": pl.Utf8, "added_at": pl.Utf8, "note": pl.Utf8})
+    with _lock():
+        path = _path()
+        if path.exists():
+            df = pl.read_parquet(path)
+            # 已存在则先移除，后面重新插入到最前面
+            if symbol in df["symbol"].to_list():
+                df = df.filter(pl.col("symbol") != symbol)
+        else:
+            df = _empty_frame()
 
-    new_row = pl.DataFrame({
-        "symbol": [symbol],
-        "added_at": [datetime.utcnow().isoformat(timespec="seconds")],
-        "note": [note],
-    })
-    out = pl.concat([new_row, df], how="diagonal_relaxed")
-    out.write_parquet(p)
-    return out.to_dicts()
+        new_row = pl.DataFrame({
+            "symbol": [symbol],
+            "added_at": [
+                datetime.now(UTC).replace(tzinfo=None).isoformat(timespec="seconds")
+            ],
+            "note": [note],
+        })
+        out = pl.concat([new_row, df], how="diagonal_relaxed")
+        _atomic_write(out)
+        return out.to_dicts()
 
 
 def remove(symbol: str) -> list[dict]:
-    p = _path()
-    if not p.exists():
-        return []
-    df = pl.read_parquet(p)
-    df = df.filter(pl.col("symbol") != symbol)
-    df.write_parquet(p)
-    return df.to_dicts()
+    with _lock():
+        path = _path()
+        if not path.exists():
+            return []
+        df = pl.read_parquet(path).filter(pl.col("symbol") != symbol)
+        _atomic_write(df)
+        return df.to_dicts()
 
 
 def move_to_top(symbol: str) -> list[dict]:
-    p = _path()
-    if not p.exists():
-        return []
-    df = pl.read_parquet(p)
-    if df.is_empty() or symbol not in df["symbol"].to_list():
-        return df.to_dicts()
-    target = df.filter(pl.col("symbol") == symbol)
-    rest = df.filter(pl.col("symbol") != symbol)
-    out = pl.concat([target, rest], how="diagonal_relaxed")
-    out.write_parquet(p)
-    return out.to_dicts()
+    with _lock():
+        path = _path()
+        if not path.exists():
+            return []
+        df = pl.read_parquet(path)
+        if df.is_empty() or symbol not in df["symbol"].to_list():
+            return df.to_dicts()
+        target = df.filter(pl.col("symbol") == symbol)
+        rest = df.filter(pl.col("symbol") != symbol)
+        out = pl.concat([target, rest], how="diagonal_relaxed")
+        _atomic_write(out)
+        return out.to_dicts()
 
 
 def clear() -> int:
     """清空自选列表。返回移除的数量。"""
-    p = _path()
-    if not p.exists():
-        return 0
-    df = pl.read_parquet(p)
-    count = df.height
-    if count > 0:
-        pl.DataFrame(schema={"symbol": pl.Utf8, "added_at": pl.Utf8, "note": pl.Utf8}).write_parquet(p)
-    return count
+    with _lock():
+        path = _path()
+        if not path.exists():
+            return 0
+        count = pl.read_parquet(path).height
+        if count > 0:
+            _atomic_write(_empty_frame())
+        return count
+
+
+def replace_all(rows: list[dict]) -> list[dict]:
+    """Validate and atomically replace all watchlist rows in caller order."""
+    normalized: list[dict[str, str]] = []
+    seen: set[str] = set()
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(timespec="seconds")
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("watchlist rows must be objects")
+        symbol = str(row.get("symbol") or "").strip().upper()
+        if not symbol:
+            raise ValueError("watchlist symbol must not be empty")
+        if symbol in seen:
+            raise ValueError(f"duplicate watchlist symbol: {symbol}")
+        seen.add(symbol)
+        normalized.append({
+            "symbol": symbol,
+            "added_at": str(row.get("added_at") or now),
+            "note": str(row.get("note") or ""),
+        })
+
+    frame = pl.DataFrame(normalized, schema=_SCHEMA) if normalized else _empty_frame()
+    with _lock():
+        _atomic_write(frame)
+        return frame.to_dicts()
 
 
 def fetch_quotes(symbols: list[str], capset: CapabilitySet, timeout_s: float = 8.0) -> list[dict]:

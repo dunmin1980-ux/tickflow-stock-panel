@@ -389,57 +389,9 @@ class CustomSourceIn(BaseModel):
 
 @router.get("/preferences")
 def get_preferences() -> dict:
-    """返回用户偏好设置。"""
+    """返回严格脱敏的客户端偏好设置。"""
     from app.services import preferences
-    return {
-        "realtime_quotes_enabled": preferences.get_realtime_quotes_enabled(),
-        "realtime_allowed": _realtime_allowed(),
-        "indices_nav_pinned": preferences.get_indices_nav_pinned(),
-        "minute_sync_enabled": preferences.get_minute_sync_enabled(),
-        "minute_sync_days": preferences.get_minute_sync_days(),
-        "minute_sync_segment_days": preferences.get_minute_sync_segment_days(),
-        "daily_data_provider": preferences.get_daily_data_provider(),
-        "adj_factor_provider": preferences.get_adj_factor_provider(),
-        "minute_data_provider": preferences.get_minute_data_provider(),
-        "realtime_data_provider": preferences.get_realtime_data_provider(),
-        "financial_data_provider": preferences.get_financial_provider(),
-        "realtime_watchlist_symbols": preferences.get_realtime_watchlist_symbols(),
-        **preferences.get_realtime_quote_scope(),
-        "pipeline_pull_a_share": preferences.get_pipeline_pull_a_share(),
-        "pipeline_pull_etf": preferences.get_pipeline_pull_etf(),
-        "pipeline_pull_index": preferences.get_pipeline_pull_index(),
-        "pipeline_index_symbols": preferences.get_pipeline_index_symbols(),
-        "pipeline_schedule": preferences.get_pipeline_schedule(),
-        "instruments_schedule": preferences.get_instruments_schedule(),
-        "enriched_batch_size": preferences.get_enriched_batch_size(),
-        "index_daily_batch_size": preferences.get_index_daily_batch_size(),
-        "watchlist_columns": preferences.get_watchlist_columns(),
-        "screener_result_columns": preferences.get_screener_result_columns(),
-        "sse_refresh_pages": preferences.get_sse_refresh_pages(),
-        "strategy_monitor_enabled": preferences.get_strategy_monitor_enabled(),
-        "strategy_monitor_ids": preferences.get_strategy_monitor_ids(),
-        "system_notify_enabled": preferences.get_system_notify_enabled(),
-        "feishu_webhook_url": preferences.get_feishu_webhook_url(),
-        "feishu_webhook_secret": preferences.get_feishu_webhook_secret(),
-        "wecom_webhook_url": preferences.get_wecom_webhook_url(),
-        "wecom_bot_id": preferences.get_wecom_bot_id(),
-        "wecom_bot_secret": preferences.get_wecom_bot_secret(),
-        "wecom_bot_enabled": preferences.get_wecom_bot_enabled(),
-        "webhook_enabled_default": preferences.get_webhook_enabled_default(),
-        "webhook_default_channels": preferences.get_webhook_default_channels(),
-        "sidebar_index_symbols": preferences.get_sidebar_index_symbols(),
-        "minute_intraday_refresh": preferences.get_minute_intraday_refresh(),
-        "minute_intraday_refresh_interval": preferences.get_minute_intraday_refresh_interval(),
-        "monitor_ext_fields": preferences.get_monitor_ext_fields(),
-        "nav_order": preferences.get_nav_order(),
-        "nav_hidden": preferences.get_nav_hidden(),
-        "screener_auto_run": preferences.get_screener_auto_run(),
-        "limit_ladder_monitor_enabled": preferences.get_limit_ladder_monitor_enabled(),
-        "depth_polling_interval": preferences.get_depth_polling_interval(),
-        "depth_finalize_time": preferences.get_depth_finalize_time(),
-        "review_schedule": preferences.get_review_schedule(),
-        "review_push_channels": preferences.get_review_push_channels(),
-    }
+    return preferences.load_client_preferences()
 
 
 @router.get("/data-sources")
@@ -1429,4 +1381,3 @@ def update_review_push(req: ReviewPushIn) -> dict:
     from app.services import preferences
     saved = preferences.set_review_push_channels(req.channels)
     return {"review_push_channels": saved}
-

@@ -5,11 +5,63 @@
 """
 from __future__ import annotations
 
+import copy
 import json
 import logging
+import os
+import tempfile
 from pathlib import Path
+from threading import RLock
+
+from app.workspace.locks import resource_lock
+from app.workspace.models import ResourceName
 
 logger = logging.getLogger(__name__)
+
+CLIENT_PREFERENCE_KEYS = frozenset({
+    "indices_nav_pinned",
+    "watchlist_columns",
+    "screener_result_columns",
+    "sidebar_index_symbols",
+    "nav_order",
+    "nav_hidden",
+    "screener_auto_run",
+    "daily_data_provider",
+    "adj_factor_provider",
+    "minute_data_provider",
+    "realtime_data_provider",
+    "financial_data_provider",
+})
+CLIENT_STATUS_KEYS = frozenset({
+    "has_feishu_webhook",
+    "has_wecom_webhook",
+    "has_wecom_bot",
+})
+CLIENT_RESPONSE_KEYS = CLIENT_PREFERENCE_KEYS | CLIENT_STATUS_KEYS
+
+_CLIENT_BOOL_KEYS = frozenset({"indices_nav_pinned", "screener_auto_run"})
+_CLIENT_LIST_KEYS = frozenset({
+    "watchlist_columns",
+    "screener_result_columns",
+    "sidebar_index_symbols",
+    "nav_order",
+    "nav_hidden",
+})
+_CLIENT_PROVIDER_KEYS = CLIENT_PREFERENCE_KEYS - _CLIENT_BOOL_KEYS - _CLIENT_LIST_KEYS
+_SENSITIVE_KEY_PARTS = (
+    "secret",
+    "token",
+    "key",
+    "password",
+    "cookie",
+    "webhook",
+    "bot",
+    "url",
+)
+
+
+def _lock() -> RLock:
+    return resource_lock(ResourceName.PREFERENCES)
 
 
 def _path() -> Path:
@@ -19,24 +71,116 @@ def _path() -> Path:
     return p
 
 
-def load() -> dict:
+def _load_unlocked() -> dict:
     p = _path()
     if p.exists():
         try:
-            return json.loads(p.read_text(encoding="utf-8"))
-        except Exception as e:  # noqa: BLE001
+            data = json.loads(p.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except Exception as e:
             logger.warning("preferences.json malformed: %s", e)
     return {}
 
 
+def load() -> dict:
+    with _lock():
+        return _load_unlocked()
+
+
+def _fsync_directory(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _atomic_write(data: dict) -> None:
+    path = _path()
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temp_path = Path(handle.name)
+            json.dump(data, handle, indent=2, ensure_ascii=False, allow_nan=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, path)
+        temp_path = None
+        _fsync_directory(path.parent)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
+
 def save(updates: dict) -> dict:
     """合并写入。返回新内容。"""
-    current = load()
-    current.update(updates)
-    _path().write_text(
-        json.dumps(current, indent=2, ensure_ascii=False), encoding="utf-8",
-    )
-    return current
+    if not isinstance(updates, dict):
+        raise ValueError("preference updates must be an object")
+    with _lock():
+        current = _load_unlocked()
+        current.update(updates)
+        _atomic_write(current)
+        return current
+
+
+def _is_sensitive_key(key: str) -> bool:
+    lowered = key.casefold()
+    return any(part in lowered for part in _SENSITIVE_KEY_PARTS)
+
+
+def _valid_client_value(key: str, value: object) -> bool:
+    if key in _CLIENT_BOOL_KEYS:
+        return isinstance(value, bool)
+    if key in _CLIENT_LIST_KEYS:
+        return (
+            isinstance(value, list)
+            and all(isinstance(item, str) and "://" not in item for item in value)
+        )
+    if key in _CLIENT_PROVIDER_KEYS:
+        return isinstance(value, str) and "://" not in value and len(value) <= 128
+    return False
+
+
+def load_client_preferences() -> dict:
+    """Return the strict, secret-free preference DTO used by remote clients."""
+    raw = load()
+    result = {
+        key: copy.deepcopy(raw[key])
+        for key in CLIENT_PREFERENCE_KEYS
+        if key in raw and not _is_sensitive_key(key) and _valid_client_value(key, raw[key])
+    }
+    result.update({
+        "has_feishu_webhook": bool(str(raw.get("feishu_webhook_url") or "").strip()),
+        "has_wecom_webhook": bool(str(raw.get("wecom_webhook_url") or "").strip()),
+        "has_wecom_bot": bool(
+            str(raw.get("wecom_bot_id") or "").strip()
+            and str(raw.get("wecom_bot_secret") or "").strip()
+        ),
+    })
+    return result
+
+
+def merge_client_preferences(updates: dict) -> dict:
+    """Atomically merge only client-safe preference fields."""
+    if not isinstance(updates, dict):
+        raise ValueError("client preference updates must be an object")
+    for key, value in updates.items():
+        if (
+            not isinstance(key, str)
+            or key not in CLIENT_PREFERENCE_KEYS
+            or _is_sensitive_key(key)
+            or not _valid_client_value(key, value)
+        ):
+            raise ValueError("client preference update contains an unsupported field")
+    save(copy.deepcopy(updates))
+    return load_client_preferences()
 
 
 def get_realtime_quotes_enabled() -> bool:
@@ -78,11 +222,7 @@ def set_realtime_watchlist_symbols(symbols: list[str]) -> list[str]:  # noqa: AR
 
 def set_realtime_quote_interval(interval: float) -> float:
     """保存行情轮询间隔（不在此做 min/max 校验，由调用方按档位限制）。"""
-    current = load()
-    current["realtime_quote_interval"] = interval
-    _path().write_text(
-        json.dumps(current, indent=2, ensure_ascii=False), encoding="utf-8",
-    )
+    save({"realtime_quote_interval": interval})
     return interval
 
 

@@ -23,17 +23,39 @@
 from __future__ import annotations
 
 from app.services.json_report_store import JsonReportStore
+from app.workspace.models import ResourceName
 
 MAX_REPORTS = 20
+_METADATA_FIELDS = (
+    "id",
+    "title",
+    "created_at",
+    "data_as_of",
+    "verification_status",
+    "can_publish",
+    "trading_advice",
+)
 
 _store = JsonReportStore(
-    "ai_market_recaps.json", MAX_REPORTS, id_prefix="mkr", id_with_symbol=False,
+    "ai_market_recaps.json",
+    MAX_REPORTS,
+    id_prefix="mkr",
+    id_with_symbol=False,
+    resource_name=ResourceName.MARKET_RECAPS,
 )
 
 
 def list_reports() -> list[dict]:
     """返回全部报告(按 created_at 降序)。"""
     return _store.list_reports()
+
+
+def list_report_metadata() -> list[dict]:
+    """Return the explicit sync-safe projection without report body fields."""
+    return [
+        {key: report[key] for key in _METADATA_FIELDS if key in report}
+        for report in _store.list_reports()
+    ]
 
 
 def save_report(report: dict) -> dict:
