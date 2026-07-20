@@ -1,8 +1,36 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
 import path from 'node:path';
 export default defineConfig({
-    plugins: [react()],
+    plugins: [
+        react(),
+        VitePWA({
+            registerType: 'autoUpdate',
+            includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+            manifest: {
+                name: 'TickFlow 股票面板',
+                short_name: 'TickFlow',
+                description: 'A 股日线研究工作台',
+                display: 'standalone',
+                start_url: '/watchlist',
+                scope: '/',
+                theme_color: '#18181b',
+                background_color: '#09090b',
+                icons: [
+                    { src: '/pwa-192.png', sizes: '192x192', type: 'image/png' },
+                    { src: '/pwa-512.png', sizes: '512x512', type: 'image/png' },
+                    { src: '/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+                ],
+            },
+            workbox: {
+                navigateFallback: '/index.html',
+                globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+                runtimeCaching: [],
+                cleanupOutdatedCaches: true,
+            },
+        }),
+    ],
     resolve: {
         alias: {
             '@': path.resolve(__dirname, './src'),
@@ -46,5 +74,9 @@ export default defineConfig({
                 },
             },
         },
+    },
+    test: {
+        environment: 'jsdom',
+        setupFiles: './src/test/setup.ts',
     },
 });
