@@ -27,6 +27,7 @@ services:
       - CODEX_DOCKER_HOST=host.docker.internal
       - AUTH_COOKIE_SECURE=true
       - GOLD_WORKSPACE_ENABLED=${GOLD_WORKSPACE_ENABLED:-false}
+      - WORKSPACE_SYNC_ENABLED=${WORKSPACE_SYNC_ENABLED:-false}
     volumes:
       - ./data:/app/data
       - ./tiers.yaml:/app/tiers.yaml:ro

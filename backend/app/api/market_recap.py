@@ -13,8 +13,8 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, ConfigDict
 
 from app.services import market_recap_reports
 from app.services.market_recap import recap_market_stream
@@ -53,11 +53,15 @@ async def analyze_market(request: Request, req: AnalyzeRequest):
     if req.as_of:
         try:
             as_of = date_cls.fromisoformat(req.as_of)
-        except ValueError:
-            raise HTTPException(400, f"as_of 格式应为 YYYY-MM-DD,收到: {req.as_of}")
+        except ValueError as exc:
+            raise HTTPException(
+                400, f"as_of 格式应为 YYYY-MM-DD,收到: {req.as_of}"
+            ) from exc
 
     async def stream_gen():
-        async for chunk in recap_market_stream(repo, quote_service, depth_service, as_of, req.focus):
+        async for chunk in recap_market_stream(
+            repo, quote_service, depth_service, as_of, req.focus
+        ):
             yield chunk + "\n"
 
     return StreamingResponse(
@@ -81,10 +85,61 @@ class SaveReportRequest(BaseModel):
     emotion_label: str = ""
 
 
+class MarketRecapBodyDTO(BaseModel):
+    """Explicit projection for one authenticated, online-only recap body."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    as_of: str | None = None
+    focus: str | None = None
+    title: str | None = None
+    content: str
+    summary: str | None = None
+    emotion_score: int | None = None
+    emotion_label: str | None = None
+    created_at: str | None = None
+    data_as_of: str | None = None
+    verification_status: str | None = None
+    can_publish: bool | None = None
+    trading_advice: bool | None = None
+
+
+class MarketRecapBodyResponseDTO(BaseModel):
+    report: MarketRecapBodyDTO
+
+
+_MARKET_BODY_FIELDS = tuple(MarketRecapBodyDTO.model_fields)
+
+
 @router.get("/reports")
 def list_reports(request: Request):
-    """获取全部历史复盘(按时间降序,后端已裁剪到上限)。"""
-    return {"reports": market_recap_reports.list_reports()}
+    """Return metadata only; recap bodies use the single-report no-store endpoint."""
+    return JSONResponse(
+        {"reports": market_recap_reports.list_report_metadata()},
+        headers={"Cache-Control": "private, no-store"},
+    )
+
+
+@router.get(
+    "/reports/{report_id}",
+    response_model=MarketRecapBodyResponseDTO,
+    response_model_exclude_none=True,
+)
+def get_report(request: Request, report_id: str):
+    """Read one body by exact ID without allowing persistent client caches."""
+    report = next(
+        (item for item in market_recap_reports.list_reports() if item.get("id") == report_id),
+        None,
+    )
+    if report is None:
+        raise HTTPException(status_code=404, detail="报告不存在")
+    projected = {field: report[field] for field in _MARKET_BODY_FIELDS if field in report}
+    body = MarketRecapBodyDTO.model_validate(projected)
+    return JSONResponse(
+        {"report": body.model_dump(exclude_none=True)},
+        headers={"Cache-Control": "private, no-store"},
+    )
 
 
 @router.post("/reports")

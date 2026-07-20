@@ -17,8 +17,8 @@ from datetime import date, timedelta
 
 import polars as pl
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, ConfigDict
 
 from app.indicators.levels import compute_levels, summarize_levels
 from app.services import stock_reports
@@ -190,10 +190,67 @@ class SaveReportRequest(BaseModel):
     levels: dict | None = None
 
 
+class StockReportBodyDTO(BaseModel):
+    """Explicit projection for one authenticated, online-only report body."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    symbol: str | None = None
+    name: str | None = None
+    focus: str | None = None
+    title: str | None = None
+    content: str
+    summary: str | None = None
+    close: float | None = None
+    levels: dict[str, object] | None = None
+    created_at: str | None = None
+    data_as_of: str | None = None
+    verification_status: str | None = None
+    can_publish: bool | None = None
+    trading_advice: bool | None = None
+    type: str | None = None
+    source_system: str | None = None
+    data_scope: str | None = None
+    needs_verification: list[str] | None = None
+    timeframe: str | None = None
+
+
+class StockReportBodyResponseDTO(BaseModel):
+    report: StockReportBodyDTO
+
+
+_STOCK_BODY_FIELDS = tuple(StockReportBodyDTO.model_fields)
+
+
 @router.get("/reports")
 def list_reports(request: Request):
-    """获取全部历史报告(按时间降序,后端已裁剪到上限)。"""
-    return {"reports": stock_reports.list_reports()}
+    """Return metadata only; report bodies use the single-report no-store endpoint."""
+    return JSONResponse(
+        {"reports": stock_reports.list_report_metadata()},
+        headers={"Cache-Control": "private, no-store"},
+    )
+
+
+@router.get(
+    "/reports/{report_id}",
+    response_model=StockReportBodyResponseDTO,
+    response_model_exclude_none=True,
+)
+def get_report(request: Request, report_id: str):
+    """Read one body by exact ID without allowing persistent client caches."""
+    report = next(
+        (item for item in stock_reports.list_reports() if item.get("id") == report_id),
+        None,
+    )
+    if report is None:
+        raise HTTPException(status_code=404, detail="报告不存在")
+    projected = {field: report[field] for field in _STOCK_BODY_FIELDS if field in report}
+    body = StockReportBodyDTO.model_validate(projected)
+    return JSONResponse(
+        {"report": body.model_dump(exclude_none=True)},
+        headers={"Cache-Control": "private, no-store"},
+    )
 
 
 @router.post("/reports")

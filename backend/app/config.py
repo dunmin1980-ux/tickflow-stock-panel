@@ -111,6 +111,9 @@ class Settings(BaseSettings):
     # Gold research workspace; fixed-symbol TickFlow Pro sampler, disabled by default.
     gold_workspace_enabled: bool = False
 
+    # Versioned workspace writes remain off until compatible private clients are deployed.
+    workspace_sync_enabled: bool = False
+
     # Auth — 首次启动时预置访问密码(明文, 仅用于初始化, 详见 services/auth.bootstrap_from_env)
     # 公网服务器部署时免去 SSH 端口转发设密码的麻烦。写入 auth.json(哈希)后即不再读取。
     auth_password: str = ""
@@ -124,7 +127,9 @@ class Settings(BaseSettings):
     tiers_yaml: Path = _RESOURCE_ROOT / "tiers.yaml" if _IS_FROZEN else _PROJECT_ROOT / "tiers.yaml"
 
     # 静态文件(前端 dist) — frozen: 资源目录的 static/; 非 frozen: frontend/dist
-    static_dir: Path = _RESOURCE_ROOT / "static" if _IS_FROZEN else (_PROJECT_ROOT / "frontend" / "dist")
+    static_dir: Path = (
+        _RESOURCE_ROOT / "static" if _IS_FROZEN else (_PROJECT_ROOT / "frontend" / "dist")
+    )
 
     @model_validator(mode="after")
     def _resolve_paths(self) -> Settings:

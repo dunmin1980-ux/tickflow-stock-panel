@@ -12,8 +12,35 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
-from app.api import analysis, auth as auth_api, backtest, data, ext_data, financials, indices, intraday, kline, market_recap, monitor_rules, alerts, overview, pipeline, rps, screener, settings as settings_api, signals, stock_analysis, strategy, watchlist
-from app.api import gold
+from app.api import (
+    alerts,
+    analysis,
+    backtest,
+    data,
+    ext_data,
+    financials,
+    gold,
+    indices,
+    intraday,
+    kline,
+    market_recap,
+    monitor_rules,
+    overview,
+    pipeline,
+    rps,
+    screener,
+    signals,
+    stock_analysis,
+    strategy,
+    watchlist,
+    workspace,
+)
+from app.api import (
+    auth as auth_api,
+)
+from app.api import (
+    settings as settings_api,
+)
 from app.api.routes import router as core_router
 from app.config import settings
 from app.jobs import daily_pipeline
@@ -29,6 +56,7 @@ from app.services.gold_shadow_store import GoldShadowStore
 from app.services.gold_tickflow import GoldTickFlowGateway
 from app.services.quote_service import QuoteService
 from app.tickflow import client as tf_client
+from app.tickflow.capabilities import CapabilityDenied
 from app.tickflow.policy import detect_capabilities
 from app.tickflow.repository import DataStore, KlineRepository
 
@@ -212,9 +240,9 @@ async def lifespan(app: FastAPI):
     app.state.financial_scheduler = financial_scheduler
 
     # 策略引擎
+    from app.services.screener import ScreenerService
     from app.strategy.engine import StrategyEngine
     from app.strategy.monitor import StrategyMonitorService
-    from app.services.screener import ScreenerService
 
     _screener_svc = ScreenerService(repo)
     _etf_screener_svc = ScreenerService(repo, asset_type="etf")
@@ -280,9 +308,9 @@ async def lifespan(app: FastAPI):
         _schedule_matrix_cache_prewarm()
 
     # 通用监控规则引擎: 启动时 reload 规则到内存态 (修复重启后告警失效)
-    from app.strategy.monitor import MonitorRuleEngine
-    from app.strategy import monitor_rules as mr_store
     from app.services import preferences
+    from app.strategy import monitor_rules as mr_store
+    from app.strategy.monitor import MonitorRuleEngine
     monitor_engine = MonitorRuleEngine()
     monitor_engine.set_strategy_engine(strategy_engine)
     monitor_engine.set_data_dir(store.data_dir)
@@ -342,6 +370,7 @@ app = FastAPI(
     description="A 股选股 + 回测面板 — TickFlow 适配",
     lifespan=lifespan,
 )
+workspace.register_exception_handlers(app)
 
 # ================================================================
 # 访问认证中间件
@@ -370,6 +399,8 @@ async def auth_middleware(request: Request, call_next):
     if not auth_service.is_configured():
         # 本机/内网 → 放行(服务器主人可访问, 并去 /login 设密码)
         if auth_api._is_local_network(auth_api._client_ip(request)):
+            if blocked := workspace.legacy_workspace_write_response(request):
+                return blocked
             return await call_next(request)
         # 公网 → 拒绝。不裸奔, 也不给公网设密码的机会(防抢占)
         return JSONResponse(
@@ -383,6 +414,8 @@ async def auth_middleware(request: Request, call_next):
     # 情况 3: 已设密码, 检查会话
     token = request.cookies.get(auth_api.COOKIE_NAME)
     if token and auth_service.is_valid_session(token):
+        if blocked := workspace.legacy_workspace_write_response(request):
+            return blocked
         return await call_next(request)
     # 未登录: 401(前端跳登录页)
     return JSONResponse(status_code=401, content={"detail": "未登录或会话已过期"})
@@ -412,6 +445,7 @@ app.include_router(signals.router)
 app.include_router(monitor_rules.router)
 app.include_router(alerts.router)
 app.include_router(rps.router)
+app.include_router(workspace.router)
 if os.environ.get("TICKFLOW_DESKTOP_CLIENT") == "1":
     from app.desktop_client.api import router as desktop_client_router
 
@@ -421,11 +455,6 @@ if os.environ.get("TICKFLOW_DESKTOP_CLIENT") == "1":
 # 能力门控异常 → 403(而非默认 500)
 # 业务代码用 capset.require(Cap.X) 断言能力,缺失时抛 CapabilityDenied;
 # 若不注册 handler 会冒泡成 500 Internal Server Error,对前端不友好且语义错误。
-from fastapi import Request
-from fastapi.responses import JSONResponse
-from app.tickflow.capabilities import CapabilityDenied
-
-
 @app.exception_handler(CapabilityDenied)
 async def capability_denied_handler(request: Request, exc: CapabilityDenied) -> JSONResponse:
     return JSONResponse(
