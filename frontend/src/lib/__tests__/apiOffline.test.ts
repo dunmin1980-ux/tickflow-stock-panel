@@ -103,4 +103,46 @@ describe('offline API behavior', () => {
     expect(offlineSessionAccess.isGranted()).toBe(true)
     expect(connectivityStore.getSnapshot().mode).toBe('online')
   })
+
+  it('does not let an in-flight read restore access after revocation', async () => {
+    let resolveFetch!: (response: Response) => void
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockReturnValue(
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve
+        }),
+      ),
+    )
+
+    const pending = request('/api/watchlist')
+    offlineSessionAccess.revoke()
+    resolveFetch(
+      new Response(JSON.stringify({ symbols: ['000403.SZ'] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await expect(pending).resolves.toEqual({ symbols: ['000403.SZ'] })
+    expect(offlineSessionAccess.isGranted()).toBe(false)
+    expect(await getSnapshot('/api/watchlist')).toBeNull()
+  })
+
+  it('does not fail a response when sessionStorage throws', async () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('denied', 'SecurityError')
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ symbols: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+
+    await expect(request('/api/watchlist')).resolves.toEqual({ symbols: [] })
+  })
 })

@@ -9,6 +9,13 @@ import { clearAllSnapshots, getSnapshot, putSnapshot } from './offlineDb'
 import { isOfflineCacheAllowed, isWriteMethod } from './offlinePolicy'
 
 const BASE = ''
+let offlinePersistenceQueue: Promise<void> = Promise.resolve()
+
+function enqueueOfflinePersistence(task: () => Promise<void>): Promise<void> {
+  const run = offlinePersistenceQueue.then(task, task)
+  offlinePersistenceQueue = run.catch(() => undefined)
+  return run
+}
 
 export class OfflineWriteError extends Error {
   constructor() {
@@ -35,8 +42,7 @@ async function apiErrorFromResponse(res: Response): Promise<Error> {
 
   const message = detail || `${res.status} ${res.statusText}`
   if (res.status === 401) {
-    offlineSessionAccess.revoke()
-    await clearAllSnapshots()
+    await resetOfflineAccess()
   } else {
     toast(message, 'error')
   }
@@ -45,11 +51,16 @@ async function apiErrorFromResponse(res: Response): Promise<Error> {
 
 async function resetOfflineAccess(): Promise<void> {
   offlineSessionAccess.revoke()
-  await clearAllSnapshots()
+  try {
+    await enqueueOfflinePersistence(clearAllSnapshots)
+  } catch {
+    // Revocation is authoritative even when best-effort browser storage cleanup fails.
+  }
 }
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const method = (init?.method ?? 'GET').toUpperCase()
+  const offlineGeneration = offlineSessionAccess.generation()
   if (isWriteMethod(method) && connectivityStore.getSnapshot().mode === 'offline-readonly') {
     throw new OfflineWriteError()
   }
@@ -89,11 +100,16 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const data = (await res.json()) as T
   if (method === 'GET' && isOfflineCacheAllowed(path)) {
     try {
-      await putSnapshot(path, data, res.headers.get('etag'))
+      await enqueueOfflinePersistence(async () => {
+        if (offlineSessionAccess.generation() !== offlineGeneration) return
+        await putSnapshot(path, data, res.headers.get('etag'))
+        if (offlineSessionAccess.generation() === offlineGeneration) {
+          offlineSessionAccess.grant()
+        }
+      })
     } catch {
       // Offline persistence is best-effort and must not break a successful online response.
     }
-    offlineSessionAccess.grant()
   }
   connectivityStore.markOnline()
   return data

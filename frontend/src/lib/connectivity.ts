@@ -17,6 +17,7 @@ let state: ConnectivityState = {
 
 const listeners = new Set<() => void>()
 const OFFLINE_ACCESS_KEY = 'tickflow-offline-access:v1'
+let offlineAccessGeneration = 0
 
 function update(next: Partial<ConnectivityState>): void {
   state = { ...state, ...next }
@@ -49,12 +50,26 @@ function browserSessionStorage(): Storage | null {
 
 export const offlineSessionAccess = {
   grant() {
-    browserSessionStorage()?.setItem(OFFLINE_ACCESS_KEY, 'granted')
+    try {
+      browserSessionStorage()?.setItem(OFFLINE_ACCESS_KEY, 'granted')
+    } catch {
+      // Storage can be disabled or full; online responses must continue to work.
+    }
   },
   revoke() {
-    browserSessionStorage()?.removeItem(OFFLINE_ACCESS_KEY)
+    offlineAccessGeneration += 1
+    try {
+      browserSessionStorage()?.removeItem(OFFLINE_ACCESS_KEY)
+    } catch {
+      // The in-memory generation still invalidates in-flight work in this page.
+    }
   },
   isGranted() {
-    return browserSessionStorage()?.getItem(OFFLINE_ACCESS_KEY) === 'granted'
+    try {
+      return browserSessionStorage()?.getItem(OFFLINE_ACCESS_KEY) === 'granted'
+    } catch {
+      return false
+    }
   },
+  generation: () => offlineAccessGeneration,
 }
