@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -411,6 +412,10 @@ app.include_router(signals.router)
 app.include_router(monitor_rules.router)
 app.include_router(alerts.router)
 app.include_router(rps.router)
+if os.environ.get("TICKFLOW_DESKTOP_CLIENT") == "1":
+    from app.desktop_client.api import router as desktop_client_router
+
+    app.include_router(desktop_client_router)
 
 
 # 能力门控异常 → 403(而非默认 500)
