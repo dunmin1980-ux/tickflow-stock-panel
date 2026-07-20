@@ -451,11 +451,6 @@ def test_command_maps_business_conflict_and_hides_invalid_payload_details(client
 LEGACY_SHARED_MUTATIONS = [
     ("POST", "/api/watchlist", {"json": {"symbol": "000403.SZ"}}),
     ("POST", "/api/watchlist/batch", {"json": {"symbols": ["000403.SZ"]}}),
-    (
-        "POST",
-        "/api/watchlist/import-image",
-        {"files": {"file": ("watchlist.png", b"fake-image", "image/png")}},
-    ),
     ("POST", "/api/watchlist/000403.SZ/top", {}),
     ("DELETE", "/api/watchlist/000403.SZ", {}),
     ("DELETE", "/api/watchlist", {}),
@@ -480,16 +475,10 @@ LEGACY_SHARED_MUTATIONS = [
     ),
     (
         "POST",
-        "/api/stock-analysis/analyze",
-        {"json": {"symbol": "000403.SZ"}},
-    ),
-    (
-        "POST",
         "/api/stock-analysis/reports",
         {"json": {"symbol": "000403.SZ", "content": "legacy"}},
     ),
     ("DELETE", "/api/stock-analysis/reports/sar_exact", {}),
-    ("POST", "/api/market-recap/analyze", {"json": {}}),
     (
         "POST",
         "/api/market-recap/reports",
@@ -516,6 +505,23 @@ def test_every_legacy_shared_mutation_is_blocked_before_side_effect_when_gate_en
         "code": "LEGACY_WORKSPACE_WRITE_DISABLED",
     }
     assert _tree_bytes(tmp_path) == before
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/watchlist/import-image",
+        "/api/stock-analysis/analyze",
+        "/api/market-recap/analyze",
+    ],
+)
+def test_gate_does_not_block_non_mutating_post_operations(monkeypatch, path):
+    from app.api.workspace import legacy_workspace_write_response
+
+    monkeypatch.setitem(settings.__dict__, "workspace_sync_enabled", True)
+    request = SimpleNamespace(method="POST", url=SimpleNamespace(path=path))
+
+    assert legacy_workspace_write_response(request) is None
 
 
 def test_gate_false_preserves_representative_legacy_writes(client, monkeypatch):

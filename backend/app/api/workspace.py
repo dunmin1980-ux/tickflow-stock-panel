@@ -373,7 +373,6 @@ _LEGACY_FIXED_MUTATIONS = frozenset(
     {
         ("POST", "/api/watchlist"),
         ("POST", "/api/watchlist/batch"),
-        ("POST", "/api/watchlist/import-image"),
         ("DELETE", "/api/watchlist"),
         ("PUT", "/api/settings/preferences/data-providers"),
         ("PUT", "/api/settings/preferences/nav-order"),
@@ -382,9 +381,7 @@ _LEGACY_FIXED_MUTATIONS = frozenset(
         ("PUT", "/api/settings/preferences/screener-result-columns"),
         ("PUT", "/api/settings/preferences/indices-nav-pinned"),
         ("PUT", "/api/settings/preferences/realtime-monitor"),
-        ("POST", "/api/stock-analysis/analyze"),
         ("POST", "/api/stock-analysis/reports"),
-        ("POST", "/api/market-recap/analyze"),
         ("POST", "/api/market-recap/reports"),
     }
 )
