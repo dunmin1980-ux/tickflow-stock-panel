@@ -121,7 +121,19 @@ The repeatable command is documented in `docs/gold-stage-a-runbook.md`. A future
 should regenerate or normalize the lock source instead of relying on this deployment
 workaround.
 
-## 10. Historical connection-failure note
+## 10. Upstream PR status
+
+- Fork branch is pushed through evidence commit `7a0622f`.
+- No upstream PR was created: local `gh` is not authenticated.
+- More importantly, intended stacked base `codex/gold-integrated-page-design`
+  (`3a17136`) is absent from both upstream and the fork as of this check.
+- The target was not changed to `main`, because that would silently expand the PR
+  from Stage A hardening to the full Gold-integrated feature set.
+
+Next decision: publish the intended base branch upstream, or explicitly approve a
+single full Gold PR against `main`.
+
+## 11. Historical connection-failure note
 
 
 Background agents ([Write Stage A audit docs](502952c7-03fd-4207-8266-b0c42a6af177), [Gold Stage A hardening](09ac5a42-9163-4a71-9dc6-e353dd36b1a4)) failed with connection errors; work continued in the parent session. No reset/discard was performed; WIP was preserved.
