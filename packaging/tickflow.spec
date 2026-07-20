@@ -45,6 +45,9 @@ hiddenimports = []
 
 for pkg in ("polars", "pyarrow", "duckdb", "fastexcel"):
     d, b, h = collect_all(pkg)
+    if pkg == "pyarrow":
+        d = [entry for entry in d if not entry[1].startswith("pyarrow/tests")]
+        h = [module for module in h if not module.startswith("pyarrow.tests")]
     datas += d
     binaries += b
     hiddenimports += h
@@ -65,6 +68,52 @@ hiddenimports += collect_submodules("polars")
 # ── pywebview 平台后端 (动态导入, PyInstaller 默认抓不到) ────────────
 hiddenimports += collect_submodules("webview")
 hiddenimports += collect_submodules("webview.platforms")
+hiddenimports += collect_submodules("app.desktop_client")
+
+# 冻结态验收入口只在验证脚本显式设置环境变量时执行。生成的
+# runtime hook 位于已忽略的 build/ 目录，不携带凭证、会话或用户数据。
+runtime_hooks = []
+if _IS_MACOS:
+    frozen_smoke_hook = ROOT / "backend" / "build" / "tickflow_frozen_import_smoke.py"
+    frozen_smoke_hook.parent.mkdir(parents=True, exist_ok=True)
+    frozen_smoke_hook.write_text(
+        """\
+import importlib
+import json
+import os
+import platform
+import sys
+from pathlib import Path
+
+if os.getenv("TICKFLOW_FROZEN_IMPORT_SMOKE") == "1":
+    modules = {}
+    for module_name in ("polars", "pyarrow", "duckdb", "webview"):
+        module = importlib.import_module(module_name)
+        modules[module_name] = str(getattr(module, "__version__", "imported"))
+
+    from app.config import settings
+
+    report_path = Path(os.environ["TICKFLOW_FROZEN_IMPORT_REPORT"])
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(
+        json.dumps(
+            {
+                "data_dir": str(settings.data_dir),
+                "executable": sys.executable,
+                "frozen": bool(getattr(sys, "frozen", False)),
+                "machine": platform.machine(),
+                "modules": modules,
+            },
+            ensure_ascii=True,
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+""",
+        encoding="utf-8",
+    )
+    runtime_hooks.append(str(frozen_smoke_hook))
 
 # ── 系统通知后端 (winotify/plyer 按平台动态导入) ─────────────────────
 if sys.platform == "win32":
@@ -142,13 +191,17 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=runtime_hooks,
     excludes=excludes,
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
     noarchive=False,
 )
+
+# hook-pyarrow 也会收集上游测试数据；这些 parquet/orc 样本不是运行时
+# 依赖，私有桌面包不应携带任何预制数据集。
+a.datas = [entry for entry in a.datas if not entry[0].startswith("pyarrow/tests/")]
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
@@ -165,7 +218,7 @@ exe = EXE(
     console=False,       # 桌面应用: 不显示控制台窗口 (_guard_streams 守护 stdout/stderr)
     disable_windowed_traceback=False,
     argv_emulation=False,
-    target_arch=None,
+    target_arch="x86_64" if _IS_MACOS else None,
     codesign_identity=None,
     entitlements_file=None,
     icon=APP_ICON,      # 应用图标 (与 favicon/logo 一致)
@@ -209,6 +262,10 @@ if _IS_MACOS:
             "CFBundleDisplayName": "TickFlow 股票面板",
             "CFBundleVersion": APP_VERSION,
             "NSHighResolutionCapable": True,
-            "LSMinimumSystemVersion": "10.13",
+            "LSMinimumSystemVersion": "10.15",
+            "NSAppTransportSecurity": {
+                "NSAllowsArbitraryLoads": False,
+                "NSAllowsLocalNetworking": True,
+            },
         },
     )
