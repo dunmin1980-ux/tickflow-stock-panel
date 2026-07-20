@@ -26,6 +26,7 @@ const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.S
 const Indices = lazy(() => import('./pages/Indices').then(m => ({ default: m.Indices })))
 const Dev = lazy(() => import('./pages/Dev').then(m => ({ default: m.Dev })))
 const GoldWorkspace = lazy(() => import('./pages/GoldWorkspace').then(m => ({ default: m.GoldWorkspace })))
+const ClientConnection = lazy(() => import('./pages/ClientConnection').then(m => ({ default: m.ClientConnection })))
 
 // 首次使用守卫 —— 未完成向导则重定向到 /onboarding
 // 只挂在根路由上;/onboarding 本身不被守卫,避免循环重定向。
@@ -85,6 +86,7 @@ export const router = createBrowserRouter([
       { path: 'indices', element: <Indices /> },
       { path: 'branding', element: <Branding /> },
       { path: 'settings', element: <Settings /> },
+      { path: 'client-connection', element: <ClientConnection /> },
       // 隐藏路由：开发者工具（不暴露在菜单，仅供调试）
       { path: 'dev', element: <Dev /> },
       // 旧路由兼容重定向

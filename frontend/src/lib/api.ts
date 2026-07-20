@@ -1125,9 +1125,50 @@ export type GoldObservationReviewRequest =
   | { kind: 'day'; market_date: string; run_id: string; complete_window_verified: boolean; note: string }
   | { kind: 'restart'; verified: boolean; note: string }
 
+// ===== Desktop cloud client =====
+export type ClientPreferredMode = 'hybrid' | 'cloud'
+
+export interface ClientConfig {
+  remote_base_url: string
+  preferred_mode: ClientPreferredMode
+}
+
+export interface ClientStatus {
+  configured: boolean
+  authenticated: boolean
+  reachable: boolean
+  mode: ClientPreferredMode
+  error_code: string | null
+}
+
+async function optionalClientStatus(): Promise<ClientStatus | null> {
+  const response = await fetch(`${BASE}/api/client/status`, {
+    credentials: 'same-origin',
+    cache: 'no-store',
+  })
+  if (response.status === 404) return null
+  if (!response.ok) throw await apiErrorFromResponse(response)
+  return response.json() as Promise<ClientStatus>
+}
+
 // ===== API surface =====
 export const api = {
   health: () => request<{ status: string; version: string; mode: string }>('/health'),
+
+  // ===== Desktop cloud client =====
+  clientConfigGet: () => request<ClientConfig>('/api/client/config'),
+  clientConfigSave: (config: ClientConfig) => request<ClientConfig>('/api/client/config', {
+    method: 'PUT',
+    body: JSON.stringify(config),
+  }),
+  clientStatus: optionalClientStatus,
+  clientLogin: (password: string) => request<{ authenticated: boolean }>('/api/client/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  }),
+  clientLogout: () => request<{ authenticated: boolean }>('/api/client/auth/logout', {
+    method: 'POST',
+  }),
 
   // ===== Gold research workspace =====
   goldStatus: () => request<GoldStatus>('/api/gold/status'),

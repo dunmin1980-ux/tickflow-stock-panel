@@ -47,6 +47,9 @@ import {
   Moon,
   X,
   WifiOff,
+  Cloud,
+  Laptop,
+  Network,
 } from 'lucide-react'
 import { Logo } from './Logo'
 import { api, type IndexQuote } from '@/lib/api'
@@ -55,10 +58,19 @@ import { toggleTheme, useTheme } from '@/lib/theme'
 import { setCurrentTotal as setAlertTotal, useUnreadAlerts } from '@/lib/monitorBadge'
 import { ConnectionBanner } from './ConnectionBanner'
 import { MobileNav } from './MobileNav'
+import { resolveClientBadge, type ClientBadgeTone } from '@/lib/clientMode'
+import type { ClientStatus } from '@/lib/api'
 
 // 品牌色 — 只用于 logo / brand 区域,不影响功能语义色
 const BRAND = '#8B5CF6'
 const TICKFLOW_REGISTER_URL = 'https://tickflow.org/auth/register?ref=V3KDKGXPEA'
+
+const CLIENT_BADGE_CLASS: Record<ClientBadgeTone, string> = {
+  neutral: 'border-border bg-elevated/60 text-secondary',
+  success: 'border-bull/30 bg-bull/10 text-bull',
+  info: 'border-accent/30 bg-accent/10 text-accent',
+  warning: 'border-warning/30 bg-warning/10 text-warning',
+}
 
 const CORE_INDEXES = [
   { symbol: '000001.SH', name: '上证指数' },
@@ -98,6 +110,40 @@ function ThemeToggle() {
     >
       {dark ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
     </button>
+  )
+}
+
+function DesktopClientStatusBar({ status }: { status: ClientStatus | null | undefined }) {
+  if (!status) return null
+  const badge = resolveClientBadge(status)
+  const Icon = status.configured && !status.reachable
+    ? WifiOff
+    : status.configured && status.authenticated && status.mode === 'cloud'
+      ? Cloud
+      : status.configured && status.authenticated
+        ? Network
+        : Laptop
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-label={`桌面客户端：${badge.label}`}
+      className="sticky top-0 z-30 flex h-9 items-center justify-end border-b border-border bg-base/90 px-3 backdrop-blur-md sm:px-5"
+    >
+      <NavLink
+        to="/client-connection"
+        className={cn(
+          'inline-flex h-7 items-center gap-1.5 rounded-btn border px-2.5 text-[11px] font-medium transition-colors hover:brightness-110',
+          CLIENT_BADGE_CLASS[badge.tone],
+        )}
+        title="云端连接设置"
+      >
+        <Icon className="h-3.5 w-3.5 shrink-0" />
+        <span>{badge.label}</span>
+        <Settings className="h-3 w-3 shrink-0 opacity-70" />
+      </NavLink>
+    </div>
   )
 }
 
@@ -299,6 +345,13 @@ export function Layout() {
     queryKey: QK.goldStatus,
     queryFn: api.goldStatus,
     staleTime: 60_000,
+  })
+  const { data: desktopClientStatus } = useQuery({
+    queryKey: ['desktop-client', 'status'],
+    queryFn: api.clientStatus,
+    retry: false,
+    staleTime: 15_000,
+    refetchInterval: query => query.state.data == null ? false : 15_000,
   })
 
   // 数据同步状态轮询: 有活跃 job 时「数据」菜单项显示转圈
@@ -679,6 +732,7 @@ export function Layout() {
         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
         className="h-full min-w-0 overflow-auto pb-[calc(4rem+env(safe-area-inset-bottom))] scrollbar-gutter-stable md:pb-0"
       >
+        <DesktopClientStatusBar status={desktopClientStatus} />
         <ConnectionBanner />
         {streamStatus === 'reconnecting' && (
           <div
