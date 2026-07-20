@@ -77,6 +77,7 @@ export function StockAnalysis() {
   return (
     <>
       <PageHeader
+        className="flex-wrap sm:flex-nowrap"
         title="个股分析"
         titleExtra={
           <span className="inline-flex items-center rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-400">
@@ -91,10 +92,10 @@ export function StockAnalysis() {
         }
       />
 
-      <div className="w-full px-8 py-6 space-y-6">
+      <div className="w-full min-w-0 space-y-6 px-3 py-4 sm:px-5 lg:px-8 lg:py-6">
         {/* 搜索栏 */}
-        <div className="flex items-center gap-3">
-          <div className="w-72">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="w-full sm:w-72">
             <StockFinancialSearch onSelect={onSelect} />
           </div>
           {symbol && (
@@ -132,7 +133,7 @@ export function StockAnalysis() {
         </div>
 
         {/* 主体:左侧当前个股看板 + 右侧常驻历史报告 */}
-        <div className="grid grid-cols-[1fr_288px] gap-6 items-start">
+        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_288px]">
           <div className="min-w-0">
             {!symbol ? (
               <EmptyState
@@ -249,7 +250,7 @@ function HistorySidebar() {
   const { reports, loaded } = useHistoryReports()
 
   return (
-    <aside className="self-start sticky top-0">
+    <aside className="self-start xl:sticky xl:top-0">
       <div className="rounded-card border border-border/60 bg-surface/40 overflow-hidden">
         <div className="px-3 py-2.5 border-b border-border/40 flex items-center gap-2">
           <HistoryIcon className="h-3.5 w-3.5 text-sky-400 shrink-0" />

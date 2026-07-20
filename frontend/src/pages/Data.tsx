@@ -534,10 +534,11 @@ export function Data() {
     <>
       <div ref={topRef} />
       <PageHeader
+        className="flex-wrap sm:flex-nowrap"
         title="数据"
         subtitle="本地数据画像 · 同步状态 · 历史记录"
         right={
-          <div className="flex items-center gap-3">
+          <div className="flex w-full items-center gap-3 overflow-x-auto pb-1 sm:w-auto sm:overflow-visible sm:pb-0">
             {!hasData && !isLoading && (
               <span className="text-xs text-accent animate-pulse">首次使用请点击右侧按钮同步数据</span>
             )}
@@ -613,7 +614,7 @@ export function Data() {
         }
       />
 
-      <div className="px-8 py-6 space-y-6 max-w-6xl">
+      <div className="max-w-6xl space-y-6 px-3 py-4 sm:px-5 lg:px-8 lg:py-6">
         {/* None 档提示 —— 非阻断: 无需 Key 也可获取历史日K, 仅实时行情等扩展能力受限 */}
         {isNoKey && (
           <div className="flex items-center gap-2 rounded-card border border-border bg-elevated/40 px-3 py-2 text-xs">

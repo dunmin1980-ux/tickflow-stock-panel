@@ -557,7 +557,9 @@ const StockCard = React.memo(function StockCard({
 export function Watchlist() {
   const qc = useQueryClient()
   const [viewMode, setViewMode] = useState<'table' | 'card'>(() => {
-    return (storage.watchlistView.get('table') as 'table' | 'card')
+    const isMobile = typeof window.matchMedia === 'function'
+      && window.matchMedia('(max-width: 767px)').matches
+    return storage.watchlistView.get(isMobile ? 'card' : 'table') as 'table' | 'card'
   })
   const [dailyKChartVisible, setDailyKChartVisible] = useState(() => {
     return storage.watchlistCandle.get(true)
@@ -940,8 +942,9 @@ export function Watchlist() {
   )
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full min-w-0 flex-col">
       <PageHeader
+        className="flex-wrap sm:flex-nowrap"
         title="自选股"
         titleExtra={
           <span className="inline-flex items-center gap-1.5">
@@ -975,7 +978,7 @@ export function Watchlist() {
           </span>
         }
         right={
-          <div className="flex items-center gap-2">
+          <div className="flex w-full items-center gap-2 overflow-x-auto pb-1 sm:w-auto sm:overflow-visible sm:pb-0">
             {/* 筛选 / 重置 / 搜索 */}
             <button
               onClick={() => setFilterOpen(v => !v)}
@@ -1125,8 +1128,8 @@ export function Watchlist() {
       )}
 
       {/* 可滚动列表区 — 占满剩余高度，内部独立滚动，表头 sticky 固定 */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-3">
+      <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <div className="min-w-0 px-3 py-3 sm:px-5">
           {/* 列表 */}
           {list.isLoading && <div className="text-sm text-muted">加载中…</div>}
           {list.isError && <div className="text-sm text-danger">读取自选失败</div>}
@@ -1350,7 +1353,7 @@ export function Watchlist() {
                 // 其余纯数据列 → 共享原语
                 return renderBuiltinDataCell(r, col)
               }}
-              className="rounded-card overflow-x-auto"
+              className="max-w-full rounded-card overflow-x-auto"
             />
           ) : !virtualizeCards ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">

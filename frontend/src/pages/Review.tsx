@@ -224,6 +224,7 @@ export function Review() {
   return (
     <>
       <PageHeader
+        className="flex-wrap sm:flex-nowrap"
         title="AI 复盘"
         titleExtra={<Sparkles className="h-4 w-4 text-accent" />}
         subtitle={`${displayDate}${data?.emotion ? ` · 情绪 ${data.emotion.label}` : ''}`}
@@ -318,7 +319,7 @@ export function Review() {
               </div>
 
               {/* ===== 报告 + 历史 双栏(报告为主体)===== */}
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_18rem]">
+              <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
                 <ReportPanel
                   phase={phase}
                   content={displayContent}
@@ -685,7 +686,7 @@ function ReportPanel({
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="overflow-hidden rounded-card border border-border bg-surface/80"
+      className="min-w-0 overflow-hidden rounded-card border border-border bg-surface/80"
     >
       <div className="flex items-center justify-between border-b border-border bg-gradient-to-r from-accent/5 to-transparent px-4 py-2.5">
         <div className="flex items-center gap-1.5">
@@ -705,7 +706,7 @@ function ReportPanel({
           </div>
         )}
       </div>
-      <div className="max-h-[calc(100vh-22rem)] overflow-y-auto px-5 py-4">
+      <div className="min-w-0 max-h-[calc(100vh-22rem)] overflow-y-auto px-3 py-4 sm:px-5">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16">
             <div className="relative">
@@ -718,7 +719,7 @@ function ReportPanel({
             <div className="text-xs text-secondary">分析指数结构 · 连板梯队 · 板块轮动 · 资金情绪</div>
           </div>
         ) : (
-          <div className="prose prose-invert max-w-none">
+          <div className="prose prose-invert min-w-0 max-w-none break-words [overflow-wrap:anywhere]">
             <MarkdownRenderer content={content} />
             {showCursor && (
               <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse rounded-sm bg-accent align-middle" />

@@ -53,6 +53,8 @@ import { api, type IndexQuote } from '@/lib/api'
 import { cn } from '@/lib/cn'
 import { toggleTheme, useTheme } from '@/lib/theme'
 import { setCurrentTotal as setAlertTotal, useUnreadAlerts } from '@/lib/monitorBadge'
+import { ConnectionBanner } from './ConnectionBanner'
+import { MobileNav } from './MobileNav'
 
 // 品牌色 — 只用于 logo / brand 区域,不影响功能语义色
 const BRAND = '#8B5CF6'
@@ -434,8 +436,8 @@ export function Layout() {
   }
 
   return (
-    <div className="h-screen grid grid-cols-[14rem_1fr] bg-base text-foreground overflow-hidden">
-      <aside className="border-r border-border bg-surface flex flex-col h-full min-h-0 overflow-hidden">
+    <div className="grid h-[100dvh] grid-cols-1 overflow-hidden bg-base text-foreground md:grid-cols-[14rem_minmax(0,1fr)]">
+      <aside className="hidden h-full min-h-0 flex-col overflow-hidden border-r border-border bg-surface md:flex">
         <div className="px-5 py-5 border-b border-border shrink-0">
           {/* Brand block — 原创 logo + 等宽 wordmark */}
           <div className="flex items-center gap-2.5">
@@ -675,13 +677,14 @@ export function Layout() {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-        className="h-full overflow-auto scrollbar-gutter-stable"
+        className="h-full min-w-0 overflow-auto pb-[calc(4rem+env(safe-area-inset-bottom))] scrollbar-gutter-stable md:pb-0"
       >
+        <ConnectionBanner />
         {streamStatus === 'reconnecting' && (
           <div
             role="status"
             aria-live="polite"
-            className="fixed bottom-4 left-1/2 z-[9998] flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 text-[11px] font-medium text-warning shadow-lg backdrop-blur-md"
+            className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-1/2 z-[9998] flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 text-[11px] font-medium text-warning shadow-lg backdrop-blur-md md:bottom-4"
           >
             <WifiOff className="h-3 w-3 shrink-0 animate-pulse" />
             与服务连接已断开 · 正在重连
@@ -697,6 +700,7 @@ export function Layout() {
           <Outlet />
         </Suspense>
       </motion.main>
+      <MobileNav />
       <ToastContainer />
       <AlertToastContainer />
       <AiAnalysisHost />

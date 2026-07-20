@@ -357,6 +357,7 @@ export function ConceptAnalysis() {
   return (
     <>
       <PageHeader
+        className="flex-wrap sm:flex-nowrap"
         title="概念分析"
         subtitle={`${marketQuery.data?.as_of ?? rowsQuery.data?.date ?? '最新'} · ${stats.length} 个概念 · ${totalSymbols} 只标的`}
         right={
@@ -384,7 +385,7 @@ export function ConceptAnalysis() {
         }
       />
 
-      <div className="min-h-full bg-[radial-gradient(circle_at_12%_0%,rgba(59,130,246,0.12),transparent_28%),radial-gradient(circle_at_85%_8%,rgba(244,63,94,0.08),transparent_28%)] px-6 py-5">
+      <div className="min-h-full min-w-0 bg-[radial-gradient(circle_at_12%_0%,rgba(59,130,246,0.12),transparent_28%),radial-gradient(circle_at_85%_8%,rgba(244,63,94,0.08),transparent_28%)] px-3 py-4 sm:px-5 lg:px-6 lg:py-5">
         <div className="mx-auto max-w-[1440px] space-y-5">
           <HeroPanel leading={leading[0]} falling={falling[0]} activeConcept={activeConcept} conceptBreadth={conceptBreadth} />
 
@@ -695,7 +696,7 @@ function ConceptFocus({ stat, onStockClick }: { stat: ConceptStat | null; onStoc
               {stat.avgTurnover != null && <span>均换手 {stat.avgTurnover.toFixed(2)}%</span>}
             </div>
           </div>
-          <div className="grid grid-cols-5 gap-2 lg:w-[520px]">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 lg:w-[520px]">
             <MiniStat label="均涨" value={stat.avgPct != null ? fmtPct(stat.avgPct) : '—'} cls={priceColorClass(stat.avgPct)} />
             <MiniStat label="中位" value={stat.medianPct != null ? fmtPct(stat.medianPct) : '—'} cls={priceColorClass(stat.medianPct)} />
             <MiniStat label="强势" value={`${stat.strongCount}`} cls="text-bull" />
@@ -710,8 +711,8 @@ function ConceptFocus({ stat, onStockClick }: { stat: ConceptStat | null; onStoc
         <ScoreExplain stock={topLeaders[0]} />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">
-        <table className="min-w-full text-left text-xs">
+      <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
+        <table className="min-w-[720px] text-left text-xs">
           <thead className="bg-elevated/60 text-[11px] text-muted">
             <tr>
               <th className="px-4 py-2 font-medium">排名</th>
