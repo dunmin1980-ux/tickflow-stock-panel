@@ -16,34 +16,30 @@
 ssh codex-vm 'tailscale serve status; ss -lntp | grep -E ":(3018|3019|8787)[[:space:]]"'
 ```
 
-2. 在云机旁路工作目录构建。仅从本地已验收提交生成无密钥源码包，不覆盖独立 Gold 目录。正常情况使用全量构建：
-
-```bash
-ssh codex-vm 'cd /home/ubuntu/tickflow-stock-panel-stage-a && \
-  GOLD_WORKSPACE_ENABLED=false PORT=3019 docker compose up -d --build'
-ssh codex-vm 'curl -fsS http://127.0.0.1:3019/health'
-```
-
-若 Docker Hub/PyPI 超时，可使用受控增量构建。基础镜像标签必须同时包含基线 Git 提交和依赖文件摘要，不得使用可变的 `latest`/`pwa-dependency-base` 标签：
+2. 在云机旁路工作目录创建回滚标签，并从当前干净提交做全量构建。锁文件中的版本和 SHA-256 保持不变；国内构建将绝对 wheel URL 按腾讯云、清华、官方源依次切换：
 
 ```bash
 ssh codex-vm 'set -euo pipefail
   cd /home/ubuntu/tickflow-stock-panel-stage-a
-  base_commit=$(git rev-parse backup/pwa-predeploy-20260720)
-  dep_sha=$( { git show "$base_commit:backend/pyproject.toml"; git show "$base_commit:backend/uv.lock"; } | sha256sum | cut -d" " -f1 )
-  current_dep_sha=$(cat backend/pyproject.toml backend/uv.lock | sha256sum | cut -d" " -f1)
-  test "$dep_sha" = "$current_dep_sha"
-  base_tag="tickflow-stock-panel-stage-a-app:pwa-base-${base_commit}-${dep_sha}"
-  docker tag tickflow-stock-panel-stage-a-app:pwa-dependency-base "$base_tag"
-  docker build -f deploy/Dockerfile.pwa-incremental \
-    --build-arg BASE_IMAGE="$base_tag" \
-    --build-arg BASE_SOURCE_COMMIT="$base_commit" \
-    --build-arg BASE_DEPENDENCY_SHA256="$dep_sha" \
-    -t tickflow-stock-panel-stage-a-app:latest .
+  test -z "$(git status --porcelain)"
+  source_commit=$(git rev-parse HEAD)
+  current_image=$(docker inspect TickFlow_Stock_Panel --format "{{.Image}}")
+  rollback_tag="tickflow-stock-panel-stage-a-app:rollback-$(date +%Y%m%d-%H%M%S)"
+  docker tag "$current_image" "$rollback_tag"
+  docker image inspect "$rollback_tag" --format "rollback={{.Id}}"
+  docker build \
+    --build-arg USE_CN_MIRROR=1 \
+    --build-arg PYPI_INDEX=https://mirrors.cloud.tencent.com/pypi/simple \
+    --build-arg PYPI_FALLBACK=https://pypi.tuna.tsinghua.edu.cn/simple \
+    --build-arg BACKEND_EXTRAS= \
+    -t "tickflow-stock-panel-stage-a-app:full-${source_commit}" .
+  docker tag "tickflow-stock-panel-stage-a-app:full-${source_commit}" \
+    tickflow-stock-panel-stage-a-app:latest
   GOLD_WORKSPACE_ENABLED=false PORT=3019 docker compose up -d --no-build --force-recreate'
+ssh codex-vm 'curl -fsS http://127.0.0.1:3019/health'
 ```
 
-依赖文件有任何差异时禁止使用增量镜像，必须回到全量构建。
+构建若无法通过 frozen lock 校验必须停止，不得改用非 frozen 解析，也不得复用来源不明的依赖基础镜像。
 
 3. 新增 8443 Serve。该命令不得使用 `reset`：
 
@@ -78,8 +74,8 @@ ssh -N -L 13019:127.0.0.1:3019 codex-vm
 ## 升级
 
 ```bash
-ssh codex-vm 'cd /home/ubuntu/tickflow-stock-panel-stage-a && \
-  GOLD_WORKSPACE_ENABLED=false PORT=3019 docker compose up -d --build'
+ssh codex-vm 'cd /home/ubuntu/tickflow-stock-panel-stage-a && git pull --ff-only'
+# 按“部署”第 2 步创建回滚标签并做全量构建
 ./scripts/verify_pwa_private_access.sh
 ```
 
@@ -88,13 +84,11 @@ ssh codex-vm 'cd /home/ubuntu/tickflow-stock-panel-stage-a && \
 ## 回滚
 
 ```bash
-ssh codex-vm 'tailscale serve --https=8443 off'
-ssh codex-vm 'tailscale serve --bg --https=443 http://127.0.0.1:8787'
-ssh codex-vm 'docker tag tickflow-stock-panel-stage-a-app:rollback-pre-pwa-20260720 \
+ssh codex-vm 'docker tag tickflow-stock-panel-stage-a-app:rollback-pwa-incremental-20260721 \
   tickflow-stock-panel-stage-a-app:latest && \
   cd /home/ubuntu/tickflow-stock-panel-stage-a && \
   GOLD_WORKSPACE_ENABLED=false PORT=3019 docker compose up -d --no-build --force-recreate'
 ssh codex-vm 'tailscale serve status'
 ```
 
-回滚后再确认 443 仍指向 8787，3019 仍只监听 `127.0.0.1`。停用旁路容器不得停止 `TickFlow_Gold_Shadow`。
+回滚只替换 3019 的应用镜像，不修改 443/8443 Serve。回滚后确认 443 仍指向 8787、8443 仍指向 3019，且 3019 只监听 `127.0.0.1`。不得停止 `TickFlow_Gold_Shadow`。

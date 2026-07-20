@@ -1,4 +1,6 @@
-Captured: 2026-07-21T00:51:01+08:00
+Captured: 2026-07-21T03:40:43+08:00
+Source commit: 7012e1c4fa1ddce30acd46292878adf4000b7b5e (clean)
+Full image: sha256:cb4068946c893fcc04b0f5093c194256dafe3b8f14be34b0036f42e7bad2b194
 
 tailscale serve status:
 https://vm-0-9-ubuntu.tail21c236.ts.net (tailnet only)
@@ -34,9 +36,12 @@ DATA_DIR=/app/data
 GOLD_WORKSPACE_ENABLED=false
 AUTH_COOKIE_SECURE=true
 
-incremental provenance labels:
-org.tickflow.incremental.base-source-commit=d3808afb82f39ffc570f3b9bd07564ddf11a8bdf
-org.tickflow.incremental.base-dependency-sha256=c75772c690d88ac39ef5bdba539728d8cf9e980f2a2569be02a8b40574e91805
+build provenance:
+- full Dockerfile build from the clean source commit above
+- backend dependencies installed with uv sync --frozen
+- locked package versions and SHA-256 retained while mirror hosts were selected
+- rollback PWA image sha256:e8ad1eddb2b39bd26638380ac7ead826263ee17b5effc9624a96c8911437daaa
+- rollback pre-PWA image sha256:10e2bc0f8552ef1b24cf013a17e9d055c29858ba57a544ddaa7a4e1f6627bede
 
 health:
 {"status":"ok","version":"0.1.86","mode":"none"}
