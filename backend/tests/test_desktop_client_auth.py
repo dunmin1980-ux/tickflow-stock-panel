@@ -97,7 +97,7 @@ def test_keychain_never_puts_token_in_command(monkeypatch: pytest.MonkeyPatch) -
     args, kwargs = calls[0]
     assert args[0] == "/usr/bin/security"
     assert "secret-token" not in args
-    assert kwargs["input"] == "secret-token"
+    assert kwargs["input"] == "secret-token\nsecret-token\n"
     assert kwargs["shell"] is False
 
 

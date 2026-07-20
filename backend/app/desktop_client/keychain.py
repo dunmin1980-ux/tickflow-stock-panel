@@ -43,7 +43,10 @@ class KeychainSessionStore:
                 "-U",
                 "-w",
             ],
-            input=token,
+            # With ``-w`` and no argv value, macOS security prompts for the
+            # password twice. Feed both prompts through stdin so the token
+            # never appears in the process list.
+            input=f"{token}\n{token}\n",
             text=True,
             capture_output=True,
             check=True,
