@@ -2,8 +2,6 @@ const EXACT_PATHS = new Set([
   '/api/watchlist',
   '/api/data/status',
   '/api/overview/market',
-  '/api/stock-analysis/reports',
-  '/api/market-recap/reports',
   '/api/backtest/summaries',
 ])
 

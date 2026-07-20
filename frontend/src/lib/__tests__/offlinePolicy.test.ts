@@ -8,8 +8,6 @@ describe('offline policy', () => {
     '/api/watchlist/enriched',
     '/api/kline/daily',
     '/api/stock-analysis/levels',
-    '/api/stock-analysis/reports',
-    '/api/market-recap/reports',
     '/api/data/status',
     '/api/overview/market',
     '/api/backtest/summaries',
@@ -23,6 +21,8 @@ describe('offline policy', () => {
     '/api/alerts/stream',
     '/api/watchlist/quotes',
     '/api/stock-analysis/analyze',
+    '/api/stock-analysis/reports',
+    '/api/market-recap/reports',
   ])('rejects %s', (path) => expect(isOfflineCacheAllowed(path)).toBe(false))
 
   it('ignores query strings when matching a read path', () => {

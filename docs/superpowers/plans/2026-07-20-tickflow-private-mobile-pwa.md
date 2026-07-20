@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - 手机首页为自选股，不增加营销页。
-- 只缓存静态资源、自选股快照、个股分析报告、复盘素材、概念/行业最近结果、数据状态和回测摘要。
+- 只缓存静态资源、自选股快照、个股技术快照、概念/行业最近结果、数据状态和回测摘要。个股/市场复盘正文只在线读取并使用 `no-store`；若后续需离线列表，只能新增不含正文的脱敏元数据 DTO。
 - 不缓存登录、Cookie、认证响应、密钥设置、Webhook、实时流、未脱敏错误或回测大明细。
 - 离线只读，所有新增、编辑、删除、生成、同步和计算提交入口必须被拒绝。
 - 不使用 Tailscale Funnel，不开放公网 3018/3019。
@@ -148,7 +148,7 @@ import { describe, expect, it } from 'vitest'
 import { isOfflineCacheAllowed, isWriteMethod } from '../offlinePolicy'
 
 describe('offline policy', () => {
-  it.each(['/api/watchlist', '/api/watchlist/enriched', '/api/kline/daily', '/api/stock-analysis/levels', '/api/stock-analysis/reports', '/api/market-recap/reports', '/api/data/status', '/api/overview/market', '/api/backtest/summaries'])('allows %s', p => expect(isOfflineCacheAllowed(p)).toBe(true))
+  it.each(['/api/watchlist', '/api/watchlist/enriched', '/api/kline/daily', '/api/stock-analysis/levels', '/api/data/status', '/api/overview/market', '/api/backtest/summaries'])('allows %s', p => expect(isOfflineCacheAllowed(p)).toBe(true))
   it.each(['/api/auth/status', '/api/auth/login', '/api/settings', '/api/settings/preferences/feishu-webhook', '/api/alerts/stream', '/api/watchlist/quotes', '/api/stock-analysis/analyze'])('rejects %s', p => expect(isOfflineCacheAllowed(p)).toBe(false))
   it('detects writes', () => expect(['POST', 'PUT', 'PATCH', 'DELETE'].every(isWriteMethod)).toBe(true))
 })
@@ -165,7 +165,7 @@ Expected: FAIL，模块不存在。
 - [ ] **Step 3: 实现白名单**
 
 ```ts
-const EXACT = new Set(['/api/watchlist', '/api/data/status', '/api/overview/market', '/api/stock-analysis/reports', '/api/market-recap/reports', '/api/backtest/summaries'])
+const EXACT = new Set(['/api/watchlist', '/api/data/status', '/api/overview/market', '/api/backtest/summaries'])
 const PREFIXES = ['/api/watchlist/enriched', '/api/kline/daily', '/api/stock-analysis/levels', '/api/analysis/']
 export const normalizedApiPath = (s: string) => new URL(s, window.location.origin).pathname
 export const isOfflineCacheAllowed = (s: string) => EXACT.has(normalizedApiPath(s)) || PREFIXES.some(p => normalizedApiPath(s).startsWith(p))
