@@ -9,8 +9,10 @@ services:
         BACKEND_EXTRAS: ${BACKEND_EXTRAS:-}
         CODEX_CLI_VERSION: ${CODEX_CLI_VERSION:-0.144.3}
     container_name: TickFlow_Stock_Panel
+    # Stage A: host bind loopback only — never publish 0.0.0.0:3018 / [::]:3018.
+    # Remote access must use Tailscale, SSH tunnel, or a controlled reverse proxy.
     ports:
-      - "${PORT:-3018}:3018"
+      - "127.0.0.1:${PORT:-3018}:3018"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file:

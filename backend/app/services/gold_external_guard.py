@@ -10,6 +10,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
+from app.services.gold_path_security import GoldPathSecurityError, open_gold_root_fd
+
 _ATTEMPTS_FILENAME = "external_send_attempts.jsonl"
 _CHANNEL_PATTERN = re.compile(r"[a-z][a-z0-9_.-]{0,63}")
 _LOCK = threading.Lock()
@@ -126,20 +128,10 @@ def _validated_attempt_rows(root: Path) -> list[dict[str, object]]:
 
 
 def _open_root(root: Path, *, create: bool) -> int:
-    flags = os.O_RDONLY | os.O_CLOEXEC
-    if hasattr(os, "O_DIRECTORY"):
-        flags |= os.O_DIRECTORY
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
     try:
-        descriptor = os.open(root, flags)
-    except FileNotFoundError:
-        if not create:
-            raise
-        root.mkdir(mode=0o700, parents=True, exist_ok=True)
-        descriptor = os.open(root, flags)
-    os.fchmod(descriptor, 0o700)
-    return descriptor
+        return open_gold_root_fd(Path(root), create=create)
+    except GoldPathSecurityError as exc:
+        raise OSError(str(exc)) from exc
 
 
 def _fsync_directory(descriptor: int) -> None:

@@ -13,6 +13,11 @@ from pathlib import Path
 from typing import Any
 
 from app.services.gold_legacy_schema import LEGACY_SIGNAL_VOCABULARY
+from app.services.gold_path_security import (
+    GoldPathSecurityError,
+    open_beneath,
+    open_gold_root_fd,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -546,42 +551,48 @@ class GoldShadowStore:
                 os.close(root_descriptor)
 
     def _ensure_root(self) -> None:
-        self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
-        os.chmod(self.root, 0o700)
+        # Validate/create via secure root open (rejects symlink roots/parents).
+        fd = self._open_root_descriptor(create=True)
+        os.close(fd)
 
     def _open_root_descriptor(self, *, create: bool) -> int:
-        flags = os.O_RDONLY | os.O_CLOEXEC
-        if hasattr(os, "O_DIRECTORY"):
-            flags |= os.O_DIRECTORY
-        if hasattr(os, "O_NOFOLLOW"):
-            flags |= os.O_NOFOLLOW
         try:
-            descriptor = os.open(self.root, flags)
+            return open_gold_root_fd(self.root, create=create)
         except FileNotFoundError:
-            if not create:
-                raise
-            self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
-            descriptor = os.open(self.root, flags)
-        os.fchmod(descriptor, 0o700)
-        return descriptor
+            raise
+        except GoldPathSecurityError as exc:
+            raise GoldShadowStorageReadError(str(exc)) from exc
+        except OSError as exc:
+            raise GoldShadowStorageReadError(f"unable to open gold root: {exc}") from exc
 
     def _append_jsonl_locked(self, filename: str, row: dict[str, Any]) -> None:
-        self._ensure_root()
-        path = self.root / filename
-        descriptor = os.open(path, os.O_APPEND | os.O_CREAT | os.O_RDWR, 0o600)
-        os.chmod(path, 0o600)
-        with os.fdopen(descriptor, "r+b") as handle:
-            handle.seek(0, os.SEEK_END)
-            if handle.tell() > 0:
-                handle.seek(-1, os.SEEK_END)
-                if handle.read(1) != b"\n":
-                    handle.write(b"\n")
-            handle.write(
-                (json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
-            )
-            handle.flush()
-            os.fsync(handle.fileno())
-        self._fsync_root_locked()
+        root_descriptor = self._open_root_descriptor(create=True)
+        try:
+            flags = os.O_APPEND | os.O_CREAT | os.O_RDWR
+            try:
+                descriptor = open_beneath(root_descriptor, filename, flags, 0o600)
+            except GoldPathSecurityError as exc:
+                raise GoldShadowStorageReadError(str(exc)) from exc
+            try:
+                os.fchmod(descriptor, 0o600)
+                with os.fdopen(descriptor, "r+b", closefd=False) as handle:
+                    handle.seek(0, os.SEEK_END)
+                    if handle.tell() > 0:
+                        handle.seek(-1, os.SEEK_END)
+                        if handle.read(1) != b"\n":
+                            handle.write(b"\n")
+                    handle.write(
+                        (
+                            json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
+                        ).encode("utf-8")
+                    )
+                    handle.flush()
+                    os.fsync(handle.fileno())
+            finally:
+                os.close(descriptor)
+            os.fsync(root_descriptor)
+        finally:
+            os.close(root_descriptor)
 
     def _read_jsonl_locked(
         self,

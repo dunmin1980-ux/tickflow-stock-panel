@@ -1,0 +1,23 @@
+{
+  "as_of": "2026-07-20T17:20:00+08:00",
+  "branch": "cursor/gold-stage-a-hardening-v0.1.86",
+  "base_commit": "3a171366055153a6a7329a3c094b3e4a507088d1",
+  "status": "STAGE_A_READY",
+  "checks": {
+    "compose_loopback_bind_yaml": true,
+    "compose_runtime_ss_verified": false,
+    "symlink_security_tests_passed": true,
+    "runtime_lock_tests_passed": true,
+    "rate_limit_circuit_tests_passed": true,
+    "sdk_http_budget_simulation_tests_passed": true,
+    "secret_scan_heuristic_clean": true,
+    "real_api_key_in_repo": false,
+    "gold_outbound_enabled": false,
+    "telegram_ownership_changed": false,
+    "legacy_gold_monitor_modified": false,
+    "claims_cross_container_rpm": false
+  },
+  "rate_limit_wording": "process-local Stage A throttle only; not cross-container account shared RPM",
+  "verify_script": "scripts/verify_gold_stage_a.sh",
+  "pytest_security_count_passed": 30
+}

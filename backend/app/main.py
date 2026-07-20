@@ -22,6 +22,7 @@ from app.services.gold_comparison_runs import GoldComparisonRunner
 from app.services.gold_external_guard import DisabledGoldNotifier
 from app.services.gold_legacy_import import GoldLegacyImporter
 from app.services.gold_observation import GoldObservationService
+from app.services.gold_runtime_lock import GoldRuntimeLock, GoldRuntimeLockError
 from app.services.gold_scheduler import GoldSampler, register_gold_sampler
 from app.services.gold_shadow import GoldShadowService
 from app.services.gold_shadow_store import GoldShadowStore
@@ -45,10 +46,20 @@ def _initialize_gold_runtime(app: FastAPI, store: DataStore) -> None:
     app.state.gold_comparison_runner = None
     app.state.gold_observation_service = None
     app.state.gold_sampler_registered = False
+    app.state.gold_runtime_lock = None
     if not settings.gold_workspace_enabled:
         return
 
     gold_store = GoldShadowStore(store.data_dir)
+    runtime_lock = GoldRuntimeLock(gold_store.root)
+    try:
+        runtime_lock.acquire()
+    except GoldRuntimeLockError as exc:
+        # Fail closed for Gold only — stock panel continues without Gold writer.
+        logger.error("Gold runtime lock unavailable; Gold disabled: %s", exc)
+        return
+    app.state.gold_runtime_lock = runtime_lock
+
     gold_calendar = GoldCalendarAuthority(gold_store)
     gold_notifier = DisabledGoldNotifier(gold_store.root)
     gold_gateway = GoldTickFlowGateway(
@@ -310,6 +321,9 @@ async def lifespan(app: FastAPI):
     wbot = getattr(app.state, "wecom_bot_service", None)
     if wbot:
         wbot.stop()
+    gold_lock = getattr(app.state, "gold_runtime_lock", None)
+    if gold_lock is not None:
+        gold_lock.release()
     logger.info("shutdown")
 
 

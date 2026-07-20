@@ -12,6 +12,7 @@ from app.market_time import cn_now
 from app.services.gold_calendar import GoldCalendarAuthority, GoldTradingCalendar
 from app.services.gold_errors import GoldDataError
 from app.services.gold_shadow_store import GoldShadowStorageReadError, GoldShadowStore
+from app.services.gold_tickflow_errors import RateLimitCircuit, classify_tickflow_exception
 from app.tickflow.capabilities import Cap, CapabilitySet
 from app.tickflow.client import get_paid_realtime_client
 from app.tickflow.rate_limits import resolve_limit, sleep_between_batches
@@ -28,22 +29,29 @@ class GoldTickFlowGateway:
         client_factory: Callable[[], Any | None] = get_paid_realtime_client,
         clock: Callable[[], datetime] = cn_now,
         calendar_authority: GoldCalendarAuthority | None = None,
+        rate_circuit: RateLimitCircuit | None = None,
     ) -> None:
         self.store = store
         self.capset_provider = capset_provider
         self.client_factory = client_factory
         self.clock = clock
         self.calendar_authority = calendar_authority or GoldCalendarAuthority(store)
+        self.rate_circuit = rate_circuit or RateLimitCircuit()
+        self._pace_index = 0
 
     def get_quote(self) -> dict[str, object]:
+        self._ensure_circuit_closed()
         client = self._paid_client(Cap.QUOTE_BATCH)
         try:
             self._pace(Cap.QUOTE_BATCH)
             rows = client.quotes.get(symbols=[GOLD_SYMBOL], as_dataframe=False) or []
         except GoldDataError:
             raise
-        except Exception:
-            raise GoldDataError("tickflow_request_failed") from None
+        except Exception as exc:
+            raise self._map_tickflow_exc(
+                exc, pipeline="gold_quote", capability=Cap.QUOTE_BATCH.value, symbol_count=1
+            ) from None
+        self.rate_circuit.note_success()
         if (
             not isinstance(rows, list)
             or len(rows) != 1
@@ -72,6 +80,7 @@ class GoldTickFlowGateway:
             if cached_date == expected_date:
                 return self._latest_closes(rows)
 
+        self._ensure_circuit_closed()
         client = self._paid_client(Cap.KLINE_DAILY_BATCH)
         try:
             self._pace(Cap.KLINE_DAILY_BATCH)
@@ -84,8 +93,14 @@ class GoldTickFlowGateway:
             )
         except GoldDataError:
             raise
-        except Exception:
-            raise GoldDataError("tickflow_request_failed") from None
+        except Exception as exc:
+            raise self._map_tickflow_exc(
+                exc,
+                pipeline="gold_daily_history",
+                capability=Cap.KLINE_DAILY_BATCH.value,
+                symbol_count=1,
+            ) from None
+        self.rate_circuit.note_success()
         rows = self._normalize_history_response(
             raw, expected_date, expected_previous_date
         )
@@ -122,14 +137,56 @@ class GoldTickFlowGateway:
         return client
 
     def _pace(self, cap: Cap) -> None:
+        """Stage A: every Gold TickFlow call goes through process-local limiter."""
         try:
             limit = resolve_limit(self.capset_provider(), cap)
         except Exception:
             raise GoldDataError("tickflow_capability_unavailable") from None
+        index = self._pace_index
+        self._pace_index += 1
         try:
-            sleep_between_batches(1, limit.rpm)
+            sleep_between_batches(index, limit.rpm)
         except Exception:
             raise GoldDataError("tickflow_request_failed") from None
+
+    def _ensure_circuit_closed(self) -> None:
+        if self.rate_circuit.tripped:
+            raise GoldDataError("tickflow_circuit_open")
+
+    def _map_tickflow_exc(
+        self,
+        exc: BaseException,
+        *,
+        pipeline: str,
+        capability: str,
+        symbol_count: int,
+    ) -> GoldDataError:
+        failure = classify_tickflow_exception(exc)
+        if failure.code == "tickflow_rate_limited":
+            event = self.rate_circuit.note_rate_limited(
+                pipeline=pipeline,
+                capability=capability,
+                symbol_count=symbol_count,
+                retry_after_seconds=failure.retry_after_seconds,
+                wait_seconds=None,
+                retries=0,
+            )
+            try:
+                self.store.write_health(
+                    last_success=None,
+                    consecutive_failures=self.rate_circuit.consecutive_429,
+                    last_error={
+                        "code": "tickflow_rate_limited",
+                        "pipeline": str(event.get("pipeline", "")),
+                        "capability": str(event.get("capability", "")),
+                    },
+                )
+            except Exception:
+                pass
+            if self.rate_circuit.tripped:
+                return GoldDataError("tickflow_circuit_open")
+            return GoldDataError("tickflow_rate_limited")
+        return GoldDataError(failure.code)
 
     def _validated_cache(
         self,

@@ -1,0 +1,31 @@
+=== HEAD ===
+3a171366055153a6a7329a3c094b3e4a507088d1
+## cursor/gold-stage-a-hardening-v0.1.86
+ M backend/app/main.py
+ M backend/app/services/gold_errors.py
+ M backend/app/services/gold_external_guard.py
+ M backend/app/services/gold_shadow_store.py
+ M backend/app/services/gold_tickflow.py
+ M docker-compose.yml
+?? backend/app/services/gold_path_security.py
+?? backend/app/services/gold_runtime_lock.py
+?? backend/app/services/gold_tickflow_errors.py
+?? backend/tests/test_gold_path_security.py
+?? backend/tests/test_gold_runtime_lock.py
+?? backend/tests/test_gold_sdk_http_budget.py
+?? backend/tests/test_gold_tickflow_errors.py
+?? docs/gold-stage-a-runbook.md
+?? docs/tickflow-request-path-audit.md
+?? docs/tickflow-sdk-http-budget.md
+?? reports/
+?? scripts/
+=== compose bind ===
+OK: docker-compose.yml loopback bind (compose binary skipped)
+=== security pytest ===
+..............................                                           [100%]
+30 passed in 6.31s
+=== secret scan (heuristic) ===
+OK: no obvious live secrets in tree
+=== docs present ===
+OK: Stage A docs present
+STAGE_A_READY
