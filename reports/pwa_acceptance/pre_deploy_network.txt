@@ -1,0 +1,18 @@
+Captured: 2026-07-20T23:50:13+08:00
+Host: codex-vm (VM-0-9-ubuntu)
+
+Tailscale Serve before deployment:
+- HTTPS 443 -> http://127.0.0.1:8787
+- HTTPS 8443 not configured
+
+Loopback listeners:
+- 127.0.0.1:3018 (TickFlow_Gold_Shadow)
+- 127.0.0.1:3019 (TickFlow_Stock_Panel sidecar)
+- 127.0.0.1:8787 (existing main service)
+- no wildcard listener for 3018 or 3019
+
+Containers:
+- TickFlow_Stock_Panel: 127.0.0.1:3019 -> container 3018, running
+- TickFlow_Gold_Shadow: 127.0.0.1:3018 -> container 3018, healthy
+
+Deployment invariant: preserve 443 -> 8787 and add an independent 8443 -> 3019 mapping.

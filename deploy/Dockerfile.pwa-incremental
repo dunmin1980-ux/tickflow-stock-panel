@@ -1,0 +1,14 @@
+# Reuse a previously verified runtime image only when backend dependency files are unchanged.
+ARG BASE_IMAGE=tickflow-stock-panel-stage-a-app:pwa-dependency-base
+
+FROM node:20-alpine AS frontend-builder
+WORKDIR /build
+RUN npm install -g pnpm@9
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY frontend/ ./
+RUN pnpm build
+
+FROM ${BASE_IMAGE} AS runtime
+COPY backend/app /app/app
+COPY --from=frontend-builder /build/dist /app/static
