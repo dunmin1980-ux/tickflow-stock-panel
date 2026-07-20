@@ -35,8 +35,10 @@ CLIENT_PREFERENCE_KEYS = frozenset({
 })
 CLIENT_STATUS_KEYS = frozenset({
     "has_feishu_webhook",
+    "has_feishu_credential_data",
     "has_wecom_webhook",
     "has_wecom_bot",
+    "has_wecom_bot_credential_data",
 })
 CLIENT_RESPONSE_KEYS = CLIENT_PREFERENCE_KEYS | CLIENT_STATUS_KEYS
 
@@ -68,6 +70,7 @@ _SENSITIVE_KEY_PARTS = (
 )
 _SECRET_KEY_PARTS = ("secret", "token", "key", "password", "cookie")
 _DROP_VALUE = object()
+_UNSET = object()
 
 
 def _lock() -> RLock:
@@ -353,6 +356,31 @@ def _valid_client_value(key: str, value: object) -> bool:
     return False
 
 
+def _credential_text(value: object) -> str:
+    return str(value or "").strip()
+
+
+def _feishu_credential_state(data: dict) -> dict[str, bool]:
+    has_url = bool(_credential_text(data.get("feishu_webhook_url")))
+    has_secret = bool(_credential_text(data.get("feishu_webhook_secret")))
+    return {
+        "has_feishu_webhook": has_url,
+        "has_feishu_credential_data": has_url or has_secret,
+    }
+
+
+def _wecom_bot_credential_state(data: dict) -> dict[str, bool]:
+    has_bot_id = bool(_credential_text(data.get("wecom_bot_id")))
+    has_secret = bool(_credential_text(data.get("wecom_bot_secret")))
+    return {
+        "has_wecom_bot": has_bot_id and has_secret,
+        "has_wecom_bot_credential_data": has_bot_id or has_secret,
+        "wecom_bot_enabled": bool(data.get("wecom_bot_enabled", False)),
+        "bot_id_configured": has_bot_id,
+        "secret_configured": has_secret,
+    }
+
+
 def load_client_preferences() -> dict:
     """Return the strict, secret-free preference DTO used by remote clients."""
     raw = load()
@@ -361,19 +389,20 @@ def load_client_preferences() -> dict:
         for key in CLIENT_PREFERENCE_KEYS
         if key in raw and not _is_sensitive_key(key) and _valid_client_value(key, raw[key])
     }
-    result.update({
-        "has_feishu_webhook": bool(str(raw.get("feishu_webhook_url") or "").strip()),
-        "has_wecom_webhook": bool(str(raw.get("wecom_webhook_url") or "").strip()),
-        "has_wecom_bot": bool(
-            str(raw.get("wecom_bot_id") or "").strip()
-            and str(raw.get("wecom_bot_secret") or "").strip()
-        ),
-    })
+    result.update(_feishu_credential_state(raw))
+    result["has_wecom_webhook"] = bool(
+        _credential_text(raw.get("wecom_webhook_url"))
+    )
+    bot_state = _wecom_bot_credential_state(raw)
+    result.update({key: bot_state[key] for key in CLIENT_STATUS_KEYS if key in bot_state})
     return result
 
 
 def load_safe_preferences() -> dict:
     """Return the legacy runtime preference contract without credential values."""
+    credential_snapshot = load()
+    feishu_state = _feishu_credential_state(credential_snapshot)
+    bot_state = _wecom_bot_credential_state(credential_snapshot)
     runtime = {
         "realtime_quotes_enabled": get_realtime_quotes_enabled(),
         "indices_nav_pinned": get_indices_nav_pinned(),
@@ -401,12 +430,13 @@ def load_safe_preferences() -> dict:
         "strategy_monitor_enabled": get_strategy_monitor_enabled(),
         "strategy_monitor_ids": get_strategy_monitor_ids(),
         "system_notify_enabled": get_system_notify_enabled(),
-        "has_feishu_webhook": bool(get_feishu_webhook_url().strip()),
+        **feishu_state,
         "has_wecom_webhook": bool(get_wecom_webhook_url().strip()),
-        "has_wecom_bot": bool(
-            get_wecom_bot_id().strip() and get_wecom_bot_secret().strip()
-        ),
-        "wecom_bot_enabled": get_wecom_bot_enabled(),
+        "has_wecom_bot": bot_state["has_wecom_bot"],
+        "has_wecom_bot_credential_data": bot_state[
+            "has_wecom_bot_credential_data"
+        ],
+        "wecom_bot_enabled": bot_state["wecom_bot_enabled"],
         "webhook_enabled_default": get_webhook_enabled_default(),
         "webhook_default_channels": get_webhook_default_channels(),
         "sidebar_index_symbols": get_sidebar_index_symbols(),
@@ -970,6 +1000,42 @@ def set_feishu_webhook_secret(secret: str) -> str:
     return get_feishu_webhook_secret()
 
 
+def patch_feishu_credentials(
+    *,
+    url: object = _UNSET,
+    secret: object = _UNSET,
+    clear: bool = False,
+) -> dict[str, bool]:
+    """Atomically patch or clear Feishu credentials under the preference lock."""
+    with _lock():
+        current = _load_unlocked()
+        if clear:
+            current.update({"feishu_webhook_url": "", "feishu_webhook_secret": ""})
+        else:
+            if url is _UNSET and secret is _UNSET:
+                raise ValueError("Feishu credential patch is empty")
+            final_url = (
+                _credential_text(current.get("feishu_webhook_url"))
+                if url is _UNSET
+                else _credential_text(url)
+            )
+            final_secret = (
+                _credential_text(current.get("feishu_webhook_secret"))
+                if secret is _UNSET
+                else _credential_text(secret)
+            )
+            if url is not _UNSET and not final_url:
+                raise ValueError("Feishu URL cannot be empty without clear")
+            if secret is not _UNSET and not final_url:
+                raise ValueError("Feishu secret requires a configured URL")
+            current.update({
+                "feishu_webhook_url": final_url,
+                "feishu_webhook_secret": final_secret,
+            })
+        _atomic_write(current)
+        return _feishu_credential_state(current)
+
+
 def get_wecom_webhook_url() -> str:
     """企业微信群推送 Webhook 地址 — 与飞书并列的第二推送通道。
 
@@ -1021,8 +1087,64 @@ def get_wecom_bot_enabled() -> bool:
 
 def set_wecom_bot_enabled(enabled: bool) -> bool:
     """保存智能机器人启用状态。"""
-    save({"wecom_bot_enabled": bool(enabled)})
-    return get_wecom_bot_enabled()
+    return set_wecom_bot_enabled_atomic(enabled)["wecom_bot_enabled"]
+
+
+def patch_wecom_bot_credentials(
+    *,
+    bot_id: object = _UNSET,
+    secret: object = _UNSET,
+    enabled: object = _UNSET,
+    clear: bool = False,
+) -> dict[str, bool]:
+    """Atomically patch Bot credentials and enabled state as one validated unit."""
+    with _lock():
+        current = _load_unlocked()
+        if clear:
+            current.update({
+                "wecom_bot_id": "",
+                "wecom_bot_secret": "",
+                "wecom_bot_enabled": False,
+            })
+        else:
+            if bot_id is _UNSET and secret is _UNSET and enabled is _UNSET:
+                raise ValueError("Bot credential patch is empty")
+            final_bot_id = (
+                _credential_text(current.get("wecom_bot_id"))
+                if bot_id is _UNSET
+                else _credential_text(bot_id)
+            )
+            final_secret = (
+                _credential_text(current.get("wecom_bot_secret"))
+                if secret is _UNSET
+                else _credential_text(secret)
+            )
+            if not (final_bot_id and final_secret):
+                raise ValueError("Bot credential patch must produce a complete pair")
+            final_enabled = (
+                bool(current.get("wecom_bot_enabled", False))
+                if enabled is _UNSET
+                else bool(enabled)
+            )
+            if final_enabled and not (final_bot_id and final_secret):
+                raise ValueError("Bot cannot be enabled without complete credentials")
+            current.update({
+                "wecom_bot_id": final_bot_id,
+                "wecom_bot_secret": final_secret,
+                "wecom_bot_enabled": final_enabled,
+            })
+        _atomic_write(current)
+        return _wecom_bot_credential_state(current)
+
+
+def set_wecom_bot_enabled_atomic(enabled: bool) -> dict[str, bool]:
+    """Atomically validate credentials and apply the requested Bot enabled state."""
+    with _lock():
+        current = _load_unlocked()
+        state = _wecom_bot_credential_state(current)
+        current["wecom_bot_enabled"] = bool(enabled and state["has_wecom_bot"])
+        _atomic_write(current)
+        return _wecom_bot_credential_state(current)
 
 
 

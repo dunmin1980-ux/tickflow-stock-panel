@@ -995,8 +995,10 @@ export interface Preferences {
   strategy_monitor_ids: string[]
   system_notify_enabled: boolean
   has_feishu_webhook?: boolean
+  has_feishu_credential_data?: boolean
   has_wecom_webhook?: boolean
   has_wecom_bot?: boolean
+  has_wecom_bot_credential_data?: boolean
   wecom_bot_enabled?: boolean
   webhook_enabled_default?: boolean
   webhook_default_channels?: string[]
@@ -1421,7 +1423,11 @@ export const api = {
       body: JSON.stringify({ enabled }),
     }),
   updateFeishuWebhook: (patch: FeishuCredentialPatch) =>
-    request<{ ok: boolean; has_feishu_webhook: boolean }>('/api/settings/preferences/feishu-webhook', {
+    request<{
+      ok: boolean
+      has_feishu_webhook: boolean
+      has_feishu_credential_data: boolean
+    }>('/api/settings/preferences/feishu-webhook', {
       method: 'PUT',
       body: JSON.stringify(patch),
     }),
@@ -1434,6 +1440,7 @@ export const api = {
     request<{
       ok: boolean
       has_wecom_bot: boolean
+      has_wecom_bot_credential_data: boolean
       wecom_bot_enabled: boolean
       wecom_bot_status: WecomBotStatus
     }>('/api/settings/preferences/wecom-bot', {
@@ -1441,7 +1448,12 @@ export const api = {
       body: JSON.stringify(patch),
     }),
   toggleWecomBot: (enabled: boolean) =>
-    request<{ wecom_bot_enabled: boolean; wecom_bot_status: WecomBotStatus }>('/api/settings/preferences/wecom-bot-toggle', {
+    request<{
+      has_wecom_bot: boolean
+      has_wecom_bot_credential_data: boolean
+      wecom_bot_enabled: boolean
+      wecom_bot_status: WecomBotStatus
+    }>('/api/settings/preferences/wecom-bot-toggle', {
       method: 'PUT',
       body: JSON.stringify({ enabled }),
     }),

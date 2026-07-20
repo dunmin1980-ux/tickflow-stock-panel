@@ -822,12 +822,11 @@ def update_feishu_webhook(req: FeishuWebhookPrefsIn) -> dict:
     if req.clear:
         if supplied & credential_fields:
             raise HTTPException(status_code=422, detail="清除操作不能同时包含凭证")
-        preferences.save({"feishu_webhook_url": "", "feishu_webhook_secret": ""})
-        return {"ok": True, "has_feishu_webhook": False}
+        return {"ok": True, **preferences.patch_feishu_credentials(clear=True)}
     if not supplied & credential_fields:
         raise HTTPException(status_code=422, detail="至少提供一个要更新的字段")
 
-    updates = {}
+    patch = {}
     if "url" in supplied:
         url = (req.url or "").strip()
         if not url:
@@ -838,16 +837,16 @@ def update_feishu_webhook(req: FeishuWebhookPrefsIn) -> dict:
                 detail="Webhook 地址非法, 需为飞书自定义机器人地址 "
                        "(https://open.feishu.cn/open-apis/bot/v2/hook/...)",
             )
-        updates["feishu_webhook_url"] = url
+        patch["url"] = url
     if "secret" in supplied:
         if req.secret is None:
             raise HTTPException(status_code=422, detail="签名密钥必须是字符串")
-        updates["feishu_webhook_secret"] = req.secret.strip()
-    preferences.save(updates)
-    return {
-        "ok": True,
-        "has_feishu_webhook": bool(preferences.get_feishu_webhook_url().strip()),
-    }
+        patch["secret"] = req.secret.strip()
+    try:
+        state = preferences.patch_feishu_credentials(**patch)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="飞书凭证更新后状态无效") from exc
+    return {"ok": True, **state}
 
 
 class WecomWebhookPrefsIn(BaseModel):
@@ -892,14 +891,14 @@ class WecomBotPrefsIn(BaseModel):
     clear: bool = False
 
 
-def _sanitized_wecom_bot_status(bot_svc, preferences) -> dict:
+def _sanitized_wecom_bot_status(bot_svc, credential_state: dict) -> dict:
     raw = bot_svc.status() if bot_svc else {}
     return {
-        "enabled": preferences.get_wecom_bot_enabled(),
+        "enabled": credential_state["wecom_bot_enabled"],
         "running": bool(raw.get("running", False)),
         "connected": bool(raw.get("connected", False)),
-        "bot_id_configured": bool(preferences.get_wecom_bot_id()),
-        "secret_configured": bool(preferences.get_wecom_bot_secret()),
+        "bot_id_configured": credential_state["bot_id_configured"],
+        "secret_configured": credential_state["secret_configured"],
         "last_error": "连接异常" if raw.get("last_error") else "",
     }
 
@@ -915,46 +914,42 @@ def update_wecom_bot(req: WecomBotPrefsIn, request: Request) -> dict:
     if req.clear:
         if supplied & patch_fields:
             raise HTTPException(status_code=422, detail="清除操作不能同时包含凭证或启用状态")
-        updates = {
-            "wecom_bot_id": "",
-            "wecom_bot_secret": "",
-            "wecom_bot_enabled": False,
-        }
+        patch = {"clear": True}
     else:
         if not supplied & patch_fields:
             raise HTTPException(status_code=422, detail="至少提供一个要更新的字段")
-        bot_id = preferences.get_wecom_bot_id()
-        secret = preferences.get_wecom_bot_secret()
+        patch = {}
         if "bot_id" in supplied:
             bot_id = (req.bot_id or "").strip()
             if not bot_id:
                 raise HTTPException(status_code=422, detail="清除机器人凭证请使用 clear")
+            patch["bot_id"] = bot_id
         if "secret" in supplied:
             secret = (req.secret or "").strip()
             if not secret:
                 raise HTTPException(status_code=422, detail="清除机器人凭证请使用 clear")
-        enabled = (
-            req.enabled
-            if "enabled" in supplied
-            else preferences.get_wecom_bot_enabled()
-        )
-        updates = {
-            "wecom_bot_id": bot_id,
-            "wecom_bot_secret": secret,
-            "wecom_bot_enabled": bool(enabled and bot_id and secret),
-        }
-    preferences.save(updates)
+            patch["secret"] = secret
+        if "enabled" in supplied:
+            patch["enabled"] = req.enabled
+    try:
+        credential_state = preferences.patch_wecom_bot_credentials(**patch)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="机器人凭证更新后状态无效") from exc
 
     bot_svc = getattr(request.app.state, "wecom_bot_service", None)
     if bot_svc:
         bot_svc.apply_credential_change()
     return {
         "ok": True,
-        "has_wecom_bot": bool(
-            preferences.get_wecom_bot_id() and preferences.get_wecom_bot_secret()
+        "has_wecom_bot": credential_state["has_wecom_bot"],
+        "has_wecom_bot_credential_data": credential_state[
+            "has_wecom_bot_credential_data"
+        ],
+        "wecom_bot_enabled": credential_state["wecom_bot_enabled"],
+        "wecom_bot_status": _sanitized_wecom_bot_status(
+            bot_svc,
+            credential_state,
         ),
-        "wecom_bot_enabled": preferences.get_wecom_bot_enabled(),
-        "wecom_bot_status": _sanitized_wecom_bot_status(bot_svc, preferences),
     }
 
 
@@ -970,17 +965,22 @@ def toggle_wecom_bot(req: WecomBotToggleIn, request: Request) -> dict:
     """
     from app.services import preferences
 
-    bot_id = preferences.get_wecom_bot_id()
-    secret = preferences.get_wecom_bot_secret()
-    enabled = req.enabled and bool(bot_id) and bool(secret)
-    preferences.set_wecom_bot_enabled(enabled)
+    credential_state = preferences.set_wecom_bot_enabled_atomic(req.enabled)
 
     bot_svc = getattr(request.app.state, "wecom_bot_service", None)
-    status: dict = {}
     if bot_svc:
         bot_svc.apply_credential_change()
-        status = bot_svc.status()
-    return {"wecom_bot_enabled": enabled, "wecom_bot_status": status}
+    return {
+        "has_wecom_bot": credential_state["has_wecom_bot"],
+        "has_wecom_bot_credential_data": credential_state[
+            "has_wecom_bot_credential_data"
+        ],
+        "wecom_bot_enabled": credential_state["wecom_bot_enabled"],
+        "wecom_bot_status": _sanitized_wecom_bot_status(
+            bot_svc,
+            credential_state,
+        ),
+    }
 
 
 class WebhookEnabledDefaultIn(BaseModel):

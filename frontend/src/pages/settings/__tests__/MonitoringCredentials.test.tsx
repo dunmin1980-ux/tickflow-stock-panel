@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const apiMocks = vi.hoisted(() => ({
   updateFeishuWebhook: vi.fn(),
@@ -15,6 +15,22 @@ const apiMocks = vi.hoisted(() => ({
   runLimitLadderFix: vi.fn(),
   watchlistList: vi.fn(),
 }))
+const preferenceState = vi.hoisted(() => ({
+  data: {
+    realtime_quotes_enabled: false,
+    has_feishu_webhook: true,
+    has_feishu_credential_data: true,
+    has_wecom_webhook: true,
+    has_wecom_bot: true,
+    has_wecom_bot_credential_data: true,
+    wecom_bot_enabled: false,
+    webhook_default_channels: [] as string[],
+    sidebar_index_symbols: [] as string[],
+    indices_nav_pinned: true,
+    sse_refresh_pages: {} as Record<string, boolean>,
+    realtime_watchlist_symbols: [] as string[],
+  },
+}))
 
 vi.mock('@/lib/api', () => ({ api: apiMocks }))
 vi.mock('@/lib/capability-labels', () => ({ tierRank: () => 1 }))
@@ -23,20 +39,7 @@ vi.mock('@/components/data/DepthConfigCard', () => ({
   DepthConfigContent: () => null,
 }))
 vi.mock('@/lib/useSharedQueries', () => ({
-  usePreferences: () => ({
-    data: {
-      realtime_quotes_enabled: false,
-      has_feishu_webhook: true,
-      has_wecom_webhook: true,
-      has_wecom_bot: true,
-      wecom_bot_enabled: false,
-      webhook_default_channels: [],
-      sidebar_index_symbols: [],
-      indices_nav_pinned: true,
-      sse_refresh_pages: {},
-      realtime_watchlist_symbols: [],
-    },
-  }),
+  usePreferences: () => ({ data: preferenceState.data }),
   useCapabilities: () => ({ data: { label: 'Pro', capabilities: {} } }),
   useQuoteStatus: () => ({ data: { running: false, paused: false } }),
   useQuoteInterval: () => ({ data: { interval: 6, min_interval: 6, max_interval: 60 } }),
@@ -60,6 +63,13 @@ function renderPanel() {
     </MemoryRouter>,
   )
 }
+
+beforeEach(() => {
+  preferenceState.data.has_feishu_webhook = true
+  preferenceState.data.has_feishu_credential_data = true
+  preferenceState.data.has_wecom_bot = true
+  preferenceState.data.has_wecom_bot_credential_data = true
+})
 
 afterEach(() => {
   vi.clearAllMocks()
@@ -165,5 +175,19 @@ describe('Monitoring credential controls', () => {
     fireEvent.click(screen.getByRole('button', { name: '清除飞书配置' }))
 
     expect(apiMocks.updateFeishuWebhook).not.toHaveBeenCalled()
+  })
+
+  it('shows clear controls for legacy partial credential data', () => {
+    preferenceState.data.has_feishu_webhook = false
+    preferenceState.data.has_feishu_credential_data = true
+    preferenceState.data.has_wecom_bot = false
+    preferenceState.data.has_wecom_bot_credential_data = true
+    renderPanel()
+
+    fireEvent.click(screen.getByText('飞书'))
+    expect(screen.getByRole('button', { name: '清除飞书配置' })).toBeVisible()
+
+    fireEvent.click(screen.getAllByText('企业微信')[1])
+    expect(screen.getByRole('button', { name: '清除智能机器人凭证' })).toBeVisible()
   })
 })

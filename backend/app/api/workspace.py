@@ -64,8 +64,10 @@ class ClientPreferencesDTO(_DTO):
     realtime_data_provider: str | None = None
     financial_data_provider: str | None = None
     has_feishu_webhook: bool
+    has_feishu_credential_data: bool
     has_wecom_webhook: bool
     has_wecom_bot: bool
+    has_wecom_bot_credential_data: bool
 
 
 class PreferencesDataDTO(_DTO):

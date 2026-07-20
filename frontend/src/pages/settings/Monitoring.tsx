@@ -76,6 +76,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
   const maxInterval = intervalData?.max_interval ?? 60
   const [intervalDraft, setIntervalDraft] = useState(interval)
   const feishuConfigured = prefs?.has_feishu_webhook ?? false
+  const feishuHasCredentialData = prefs?.has_feishu_credential_data ?? feishuConfigured
   const [feishuDraft, setFeishuDraft] = useState('')
   const [feishuSecretDraft, setFeishuSecretDraft] = useState('')
   const [feishuError, setFeishuError] = useState('')
@@ -85,6 +86,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
   const [wecomError, setWecomError] = useState('')
   // 企业微信智能机器人 (BotID + Secret, 长连接通道)
   const wecomBotConfigured = prefs?.has_wecom_bot ?? false
+  const wecomBotHasCredentialData = prefs?.has_wecom_bot_credential_data ?? wecomBotConfigured
   const wecomBotEnabled = prefs?.wecom_bot_enabled ?? false
   const [botIdDraft, setBotIdDraft] = useState('')
   const [botSecretDraft, setBotSecretDraft] = useState('')
@@ -610,7 +612,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                     >
                       {saveFeishuWebhook.isPending ? '保存中…' : '保存'}
                     </button>
-                    {feishuConfigured && (
+                    {feishuHasCredentialData && (
                       <button
                         type="button"
                         onClick={clearFeishu}
@@ -795,7 +797,7 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                     >
                       {saveWecomBot.isPending ? '保存中…' : '保存凭证'}
                     </button>
-                    {wecomBotConfigured && (
+                    {wecomBotHasCredentialData && (
                       <button
                         type="button"
                         onClick={clearBot}

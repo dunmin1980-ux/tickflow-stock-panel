@@ -236,8 +236,10 @@ def test_bootstrap_uses_explicit_contract_and_metadata_only_reports(client, tmp_
         "indices_nav_pinned": True,
         "nav_order": ["watchlist", "review"],
         "has_feishu_webhook": True,
+        "has_feishu_credential_data": True,
         "has_wecom_webhook": True,
         "has_wecom_bot": True,
+        "has_wecom_bot_credential_data": True,
     }
     assert body["resources"]["stock_reports"]["data"]["reports"] == [
         {
@@ -506,14 +508,23 @@ def test_notification_credential_writes_never_echo_credentials(client, monkeypat
                 "enabled": True,
             },
         ),
+        client.put(
+            "/api/settings/preferences/wecom-bot-toggle",
+            json={"enabled": False},
+        ),
     ]
 
     assert all(response.status_code == 200 for response in responses)
-    assert set(responses[0].json()) == {"ok", "has_feishu_webhook"}
+    assert set(responses[0].json()) == {
+        "ok",
+        "has_feishu_webhook",
+        "has_feishu_credential_data",
+    }
     assert set(responses[1].json()) == {"ok", "has_wecom_webhook"}
     assert set(responses[2].json()) == {
         "ok",
         "has_wecom_bot",
+        "has_wecom_bot_credential_data",
         "wecom_bot_enabled",
         "wecom_bot_status",
     }
@@ -524,6 +535,12 @@ def test_notification_credential_writes_never_echo_credentials(client, monkeypat
         "bot_id_configured",
         "secret_configured",
         "last_error",
+    }
+    assert set(responses[3].json()) == {
+        "has_wecom_bot",
+        "has_wecom_bot_credential_data",
+        "wecom_bot_enabled",
+        "wecom_bot_status",
     }
     full_text = "\n".join(response.text for response in responses)
     for canary in (
@@ -564,7 +581,11 @@ def test_feishu_credential_patch_and_clear_semantics(client):
         json={"clear": True},
     )
     assert clear_all.status_code == 200
-    assert clear_all.json() == {"ok": True, "has_feishu_webhook": False}
+    assert clear_all.json() == {
+        "ok": True,
+        "has_feishu_webhook": False,
+        "has_feishu_credential_data": False,
+    }
     assert preferences.get_feishu_webhook_url() == ""
     assert preferences.get_feishu_webhook_secret() == ""
 
@@ -629,11 +650,63 @@ def test_wecom_bot_patch_preserves_omitted_fields_and_clear_disables(client, mon
     )
     assert clear.status_code == 200
     assert clear.json()["has_wecom_bot"] is False
+    assert clear.json()["has_wecom_bot_credential_data"] is False
     assert clear.json()["wecom_bot_enabled"] is False
     assert preferences.get_wecom_bot_id() == ""
     assert preferences.get_wecom_bot_secret() == ""
     assert preferences.get_wecom_bot_enabled() is False
     assert service.apply_calls == 3
+
+
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        ("/api/settings/preferences/feishu-webhook", {"secret": "orphan-secret"}),
+        ("/api/settings/preferences/wecom-bot", {"bot_id": "orphan-bot-id"}),
+        ("/api/settings/preferences/wecom-bot", {"secret": "orphan-bot-secret"}),
+        ("/api/settings/preferences/wecom-bot", {"enabled": False}),
+    ],
+)
+def test_credential_patches_reject_new_incomplete_pairs_without_writes(
+    client, path, payload
+):
+    preferences.save({"nav_order": ["watchlist"]})
+
+    response = client.put(path, json=payload)
+
+    assert response.status_code == 422
+    assert preferences.load() == {"nav_order": ["watchlist"]}
+
+
+def test_legacy_partial_credential_flags_are_safe_and_clearable(client):
+    preferences.save({
+        "feishu_webhook_secret": "LEGACY_FEISHU_SECRET_CANARY",
+        "wecom_bot_id": "LEGACY_WECOM_BOT_ID_CANARY",
+        "wecom_bot_enabled": True,
+    })
+
+    status = client.get("/api/settings/preferences")
+    feishu_clear = client.put(
+        "/api/settings/preferences/feishu-webhook",
+        json={"clear": True},
+    )
+    bot_clear = client.put(
+        "/api/settings/preferences/wecom-bot",
+        json={"clear": True},
+    )
+
+    assert status.status_code == 200
+    assert status.json()["has_feishu_webhook"] is False
+    assert status.json()["has_feishu_credential_data"] is True
+    assert status.json()["has_wecom_bot"] is False
+    assert status.json()["has_wecom_bot_credential_data"] is True
+    assert "LEGACY_FEISHU_SECRET_CANARY" not in status.text
+    assert "LEGACY_WECOM_BOT_ID_CANARY" not in status.text
+    assert feishu_clear.json()["has_feishu_credential_data"] is False
+    assert bot_clear.json()["has_wecom_bot_credential_data"] is False
+    assert preferences.get_feishu_webhook_secret() == ""
+    assert preferences.get_wecom_bot_id() == ""
+    assert preferences.get_wecom_bot_enabled() is False
 
 
 @pytest.mark.parametrize(

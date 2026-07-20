@@ -4,7 +4,7 @@ import importlib
 import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
-from threading import Barrier
+from threading import Barrier, Event
 
 import polars as pl
 import pytest
@@ -257,8 +257,10 @@ def test_client_preferences_are_allowlisted_and_canaries_never_serialize(monkeyp
             _column_config(id="builtin:price", source={"type": "computed", "key": "price"}),
         ],
         "has_feishu_webhook": True,
+        "has_feishu_credential_data": True,
         "has_wecom_webhook": True,
         "has_wecom_bot": True,
+        "has_wecom_bot_credential_data": True,
     }
     assert all(value not in payload for value in canaries.values())
 
@@ -417,8 +419,10 @@ def test_safe_preferences_restore_runtime_getter_contract_and_redact(monkeypatch
         "strategy_monitor_ids",
         "system_notify_enabled",
         "has_feishu_webhook",
+        "has_feishu_credential_data",
         "has_wecom_webhook",
         "has_wecom_bot",
+        "has_wecom_bot_credential_data",
         "wecom_bot_enabled",
         "webhook_enabled_default",
         "webhook_default_channels",
@@ -462,9 +466,130 @@ def test_safe_preferences_restore_runtime_getter_contract_and_redact(monkeypatch
     assert "nested" not in response
     assert "rules" not in response
     assert response["has_feishu_webhook"] is True
+    assert response["has_feishu_credential_data"] is True
     assert response["has_wecom_webhook"] is True
     assert response["has_wecom_bot"] is True
+    assert response["has_wecom_bot_credential_data"] is True
     assert all(canary not in payload for canary in canaries.values())
+
+
+def test_atomic_credential_patches_reject_incomplete_final_states(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    preferences.save({"nav_order": ["watchlist"]})
+    before = preferences.load()
+    writes = []
+    monkeypatch.setattr(preferences, "_atomic_write", lambda data: writes.append(data))
+
+    with pytest.raises(ValueError, match="Feishu"):
+        preferences.patch_feishu_credentials(secret="orphan-secret")
+    with pytest.raises(ValueError, match="Bot"):
+        preferences.patch_wecom_bot_credentials(bot_id="orphan-bot-id")
+    with pytest.raises(ValueError, match="Bot"):
+        preferences.patch_wecom_bot_credentials(secret="orphan-bot-secret")
+    with pytest.raises(ValueError, match="Bot"):
+        preferences.patch_wecom_bot_credentials(enabled=False)
+
+    assert preferences.load() == before
+    assert writes == []
+
+
+def test_legacy_partial_credentials_have_boolean_clearability_and_can_be_removed(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    preferences.save({
+        "feishu_webhook_secret": "legacy-feishu-secret",
+        "wecom_bot_id": "legacy-bot-id",
+        "wecom_bot_enabled": True,
+    })
+
+    safe = preferences.load_safe_preferences()
+
+    assert safe["has_feishu_webhook"] is False
+    assert safe["has_feishu_credential_data"] is True
+    assert safe["has_wecom_bot"] is False
+    assert safe["has_wecom_bot_credential_data"] is True
+
+    feishu = preferences.patch_feishu_credentials(clear=True)
+    bot = preferences.patch_wecom_bot_credentials(clear=True)
+
+    assert feishu == {
+        "has_feishu_webhook": False,
+        "has_feishu_credential_data": False,
+    }
+    assert bot == {
+        "has_wecom_bot": False,
+        "has_wecom_bot_credential_data": False,
+        "wecom_bot_enabled": False,
+        "bot_id_configured": False,
+        "secret_configured": False,
+    }
+    assert preferences.get_feishu_webhook_secret() == ""
+    assert preferences.get_wecom_bot_id() == ""
+    assert preferences.get_wecom_bot_secret() == ""
+    assert preferences.get_wecom_bot_enabled() is False
+
+
+def test_partial_bot_patches_hold_one_lock_across_read_validate_write(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    preferences.save({
+        "wecom_bot_id": "old-bot-id",
+        "wecom_bot_secret": "old-bot-secret",
+        "wecom_bot_enabled": True,
+    })
+    original_write = preferences._atomic_write
+    first_write_entered = Event()
+    release_first_write = Event()
+
+    def controlled_write(data):
+        if data.get("wecom_bot_id") == "new-bot-id" and data.get(
+            "wecom_bot_secret"
+        ) == "old-bot-secret":
+            first_write_entered.set()
+            assert release_first_write.wait(timeout=2)
+        original_write(data)
+
+    monkeypatch.setattr(preferences, "_atomic_write", controlled_write)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        id_update = pool.submit(
+            preferences.patch_wecom_bot_credentials,
+            bot_id="new-bot-id",
+        )
+        assert first_write_entered.wait(timeout=2)
+        secret_update = pool.submit(
+            preferences.patch_wecom_bot_credentials,
+            secret="new-bot-secret",
+        )
+        assert not secret_update.done()
+        release_first_write.set()
+        id_update.result(timeout=2)
+        secret_update.result(timeout=2)
+
+    assert preferences.get_wecom_bot_id() == "new-bot-id"
+    assert preferences.get_wecom_bot_secret() == "new-bot-secret"
+    assert preferences.get_wecom_bot_enabled() is True
+
+
+def test_bot_toggle_validates_credentials_and_writes_under_one_lock(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    preferences.save({
+        "wecom_bot_id": "legacy-bot-id",
+        "wecom_bot_secret": "",
+        "wecom_bot_enabled": True,
+    })
+
+    state = preferences.set_wecom_bot_enabled_atomic(True)
+
+    assert state == {
+        "has_wecom_bot": False,
+        "has_wecom_bot_credential_data": True,
+        "wecom_bot_enabled": False,
+        "bot_id_configured": True,
+        "secret_configured": False,
+    }
+    assert preferences.get_wecom_bot_enabled() is False
 
 
 def test_column_config_objects_round_trip_through_preference_command(tmp_path, monkeypatch):

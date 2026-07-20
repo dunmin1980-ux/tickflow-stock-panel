@@ -21,8 +21,10 @@ describe('notification preference projection', () => {
       .join('\n')
 
     expect(source).toContain('has_feishu_webhook')
+    expect(source).toContain('has_feishu_credential_data')
     expect(source).toContain('has_wecom_webhook')
     expect(source).toContain('has_wecom_bot')
+    expect(source).toContain('has_wecom_bot_credential_data')
   })
 
   it('fetches market recap bodies before selecting history', () => {
