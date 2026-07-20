@@ -1,6 +1,7 @@
 import type {
   GoldGateStatus,
   GoldCandidateSignal,
+  GoldComparisonSummary,
   GoldHealth,
   GoldObservationGate,
   GoldShadowSnapshot,
@@ -29,6 +30,61 @@ const isStringOrNull = (value: unknown): value is string | null =>
 
 const isBooleanOrNull = (value: unknown): value is boolean | null =>
   typeof value === 'boolean' || value === null
+
+function normalizeGoldComparisonRow(value: unknown): GoldComparisonSummary | null {
+  if (!isRecord(value)
+    || typeof value.run_id !== 'string'
+    || typeof value.market_date !== 'string'
+    || typeof value.legacy_import_id !== 'string'
+    || typeof value.legacy_digest !== 'string'
+    || typeof value.shadow_digest !== 'string'
+    || !isNonNegativeInteger(value.legacy_sample_count)
+    || !isNonNegativeInteger(value.shadow_sample_count)
+    || !(value.supersedes_run_id === null || typeof value.supersedes_run_id === 'string')
+    || !isNonNegativeInteger(value.row_count)
+    || typeof value.rows_sha256 !== 'string'
+    || typeof value.summary_sha256 !== 'string') {
+    return null
+  }
+
+  const common = {
+    run_id: value.run_id,
+    market_date: value.market_date,
+    legacy_import_id: value.legacy_import_id,
+    legacy_digest: value.legacy_digest,
+    shadow_digest: value.shadow_digest,
+    legacy_sample_count: value.legacy_sample_count,
+    shadow_sample_count: value.shadow_sample_count,
+    supersedes_run_id: value.supersedes_run_id,
+    row_count: value.row_count,
+    rows_sha256: value.rows_sha256,
+    summary_sha256: value.summary_sha256,
+  }
+  if (value.schema_version === 1 && value.comparator_version === '1') {
+    return { ...common, schema_version: 1, comparator_version: '1' }
+  }
+  if (value.schema_version === 2
+    && value.comparator_version === '2'
+    && isNonNegativeInteger(value.legacy_excluded_out_of_session_count)
+    && isNonNegativeInteger(value.shadow_excluded_out_of_session_count)) {
+    return {
+      ...common,
+      schema_version: 2,
+      comparator_version: '2',
+      legacy_excluded_out_of_session_count: value.legacy_excluded_out_of_session_count,
+      shadow_excluded_out_of_session_count: value.shadow_excluded_out_of_session_count,
+    }
+  }
+  return null
+}
+
+export function normalizeGoldComparisonRows(value: unknown): GoldComparisonSummary[] {
+  if (!isRecord(value) || !Array.isArray(value.rows)) return []
+  return value.rows.flatMap(row => {
+    const normalized = normalizeGoldComparisonRow(row)
+    return normalized === null ? [] : [normalized]
+  })
+}
 
 function normalizeReviewState(recorded: unknown, verified: unknown) {
   if (!isBooleanOrNull(recorded)

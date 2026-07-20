@@ -12,11 +12,14 @@ import {
   api,
   type GoldCandidate,
   type GoldCandidateSignal,
-  type GoldComparisonSummary,
   type GoldImport,
   type GoldShadowSnapshot,
 } from '@/lib/api'
-import { normalizeGoldGate, normalizeGoldStatus } from '@/lib/gold'
+import {
+  normalizeGoldComparisonRows,
+  normalizeGoldGate,
+  normalizeGoldStatus,
+} from '@/lib/gold'
 import { QK } from '@/lib/queryKeys'
 
 const candidateSignals = new Set<GoldCandidateSignal>(['恐慌极端', '惯性衰竭', '均值回归', '贪婪态'])
@@ -74,23 +77,6 @@ function importRowsFrom(value: unknown): GoldImport[] {
     && isNonNegativeInteger(row.sample_count))
 }
 
-function comparisonRowsFrom(value: unknown): GoldComparisonSummary[] {
-  return rawRows(value).filter((row): row is GoldComparisonSummary => isRecord(row)
-    && row.schema_version === 1
-    && typeof row.run_id === 'string'
-    && typeof row.market_date === 'string'
-    && typeof row.legacy_import_id === 'string'
-    && typeof row.legacy_digest === 'string'
-    && typeof row.shadow_digest === 'string'
-    && row.comparator_version === '1'
-    && isNonNegativeInteger(row.legacy_sample_count)
-    && isNonNegativeInteger(row.shadow_sample_count)
-    && (row.supersedes_run_id === null || typeof row.supersedes_run_id === 'string')
-    && isNonNegativeInteger(row.row_count)
-    && typeof row.rows_sha256 === 'string'
-    && typeof row.summary_sha256 === 'string')
-}
-
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : '请求失败'
 }
@@ -139,7 +125,7 @@ export function GoldWorkspace() {
   const snapshots = snapshotRowsFrom(snapshotsQuery.data)
   const candidates = candidateRowsFrom(candidatesQuery.data)
   const imports = importRowsFrom(importsQuery.data)
-  const comparisons = comparisonRowsFrom(comparisonsQuery.data)
+  const comparisons = normalizeGoldComparisonRows(comparisonsQuery.data)
   const initialMarketDate = status?.latest_market_date
     ?? status?.latest?.market_date
     ?? comparisons[0]?.market_date

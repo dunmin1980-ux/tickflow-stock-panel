@@ -142,6 +142,65 @@ assert.equal(nextGoldMarketDate('2026-07-18', '2026-07-20', false), '2026-07-20'
 assert.equal(nextGoldMarketDate('2026-07-18', '2026-07-20', true), '2026-07-18')
 assert.equal(nextGoldMarketDate('2026-07-18', '', false), '2026-07-18')
 
+const { normalizeGoldComparisonRows } = await import('../src/lib/gold.ts')
+assert.equal(typeof normalizeGoldComparisonRows, 'function')
+
+const comparisonCommon = {
+  run_id: 'c'.repeat(64),
+  market_date: '2026-07-20',
+  legacy_import_id: 'd'.repeat(64),
+  legacy_digest: 'e'.repeat(64),
+  shadow_digest: 'f'.repeat(64),
+  legacy_sample_count: 4,
+  shadow_sample_count: 4,
+  supersedes_run_id: null,
+  row_count: 5,
+  rows_sha256: '1'.repeat(64),
+  summary_sha256: '2'.repeat(64),
+}
+const v1Comparison = {
+  ...comparisonCommon,
+  schema_version: 1,
+  comparator_version: '1',
+}
+const v2Comparison = {
+  ...comparisonCommon,
+  run_id: '3'.repeat(64),
+  schema_version: 2,
+  comparator_version: '2',
+  legacy_excluded_out_of_session_count: 0,
+  shadow_excluded_out_of_session_count: 1,
+}
+const normalizedComparisons = normalizeGoldComparisonRows({ rows: [v2Comparison, v1Comparison] })
+assert.deepEqual(normalizedComparisons, [v2Comparison, v1Comparison])
+assert.equal(normalizedComparisons[0]?.market_date, '2026-07-20')
+assert.equal(
+  (normalizedComparisons.find(row => !normalizedComparisons.some(
+    candidate => candidate.supersedes_run_id === row.run_id,
+  )) ?? normalizedComparisons[0])?.run_id,
+  v2Comparison.run_id,
+)
+
+for (const invalidComparison of [
+  { ...v1Comparison, comparator_version: '2' },
+  { ...v2Comparison, comparator_version: '1' },
+  (() => {
+    const { legacy_excluded_out_of_session_count, ...comparison } = v2Comparison
+    return comparison
+  })(),
+  (() => {
+    const { shadow_excluded_out_of_session_count, ...comparison } = v2Comparison
+    return comparison
+  })(),
+  { ...v2Comparison, legacy_excluded_out_of_session_count: -1 },
+  { ...v2Comparison, shadow_excluded_out_of_session_count: -1 },
+  { ...v2Comparison, legacy_excluded_out_of_session_count: 0.5 },
+  { ...v2Comparison, shadow_excluded_out_of_session_count: 0.5 },
+  { ...v1Comparison, row_count: 0.5 },
+]) {
+  assert.deepEqual(normalizeGoldComparisonRows({ rows: [invalidComparison] }), [])
+}
+
 const observationPanel = readFileSync(
   new URL('../src/components/gold/GoldObservationPanel.tsx', import.meta.url),
   'utf8',
