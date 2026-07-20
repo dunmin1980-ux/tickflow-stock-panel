@@ -45,6 +45,12 @@ REPORT_CANARIES = {
     "UNIQUE_MARKET_REPORT_UNKNOWN_FIELD_CANARY",
 }
 ALL_CANARIES = SECRET_CANARIES | REPORT_CANARIES
+FEISHU_PATCH_URL = (
+    "https://open.feishu.cn/open-apis/bot/v2/hook/UNIQUE_FEISHU_PATCH_URL_CANARY"
+)
+WECOM_PATCH_KEY = "UNIQUE_WECOM_WEBHOOK_KEY_CANARY_1234567890"
+WECOM_BOT_ID_PATCH = "UNIQUE_WECOM_BOT_ID_PATCH_CANARY"
+WECOM_BOT_SECRET_PATCH = "UNIQUE_WECOM_BOT_SECRET_PATCH_CANARY"
 
 
 class FakeRepo:
@@ -358,6 +364,26 @@ def test_full_bootstrap_resource_and_list_json_contains_no_secret_or_report_cana
         assert forbidden_key not in full_text
 
 
+def test_preferences_runtime_watchlist_uses_first_five_rows_without_stored_override(client):
+    symbols = [
+        "000001.SZ",
+        "000002.SZ",
+        "000003.SZ",
+        "000004.SZ",
+        "000005.SZ",
+        "000006.SZ",
+    ]
+    watchlist.replace_all([{"symbol": symbol} for symbol in symbols])
+    preferences.save({"nav_order": ["watchlist"]})
+    assert "realtime_watchlist_symbols" not in preferences.load()
+
+    response = client.get("/api/settings/preferences")
+
+    assert response.status_code == 200
+    assert response.json()["realtime_watchlist_symbols"] == symbols[:5]
+    assert "realtime_allowed" in response.json()
+
+
 def test_report_lists_are_metadata_only_and_bodies_require_exact_authenticated_get(
     client, tmp_path
 ):
@@ -438,6 +464,218 @@ def test_column_config_objects_round_trip_through_bootstrap_and_command(
     assert command.status_code == 200
     assert command.json()["data"]["preferences"]["watchlist_columns"] == watchlist_columns
     assert command.json()["data"]["preferences"]["screener_result_columns"] == screener_columns
+
+
+def test_notification_credential_writes_never_echo_credentials(client, monkeypatch):
+    class FakeBotService:
+        def apply_credential_change(self):
+            return None
+
+        def status(self):
+            return {
+                "enabled": True,
+                "running": True,
+                "connected": False,
+                "bot_id_configured": True,
+                "secret_configured": True,
+                "last_error": f"failed with {WECOM_BOT_SECRET_PATCH}",
+                "credential_debug": WECOM_BOT_ID_PATCH,
+            }
+
+    monkeypatch.setattr(
+        app.state,
+        "wecom_bot_service",
+        FakeBotService(),
+        raising=False,
+    )
+
+    responses = [
+        client.put(
+            "/api/settings/preferences/feishu-webhook",
+            json={"url": FEISHU_PATCH_URL, "secret": "UNIQUE_FEISHU_PATCH_SECRET"},
+        ),
+        client.put(
+            "/api/settings/preferences/wecom-webhook",
+            json={"url": WECOM_PATCH_KEY},
+        ),
+        client.put(
+            "/api/settings/preferences/wecom-bot",
+            json={
+                "bot_id": WECOM_BOT_ID_PATCH,
+                "secret": WECOM_BOT_SECRET_PATCH,
+                "enabled": True,
+            },
+        ),
+    ]
+
+    assert all(response.status_code == 200 for response in responses)
+    assert set(responses[0].json()) == {"ok", "has_feishu_webhook"}
+    assert set(responses[1].json()) == {"ok", "has_wecom_webhook"}
+    assert set(responses[2].json()) == {
+        "ok",
+        "has_wecom_bot",
+        "wecom_bot_enabled",
+        "wecom_bot_status",
+    }
+    assert set(responses[2].json()["wecom_bot_status"]) <= {
+        "enabled",
+        "running",
+        "connected",
+        "bot_id_configured",
+        "secret_configured",
+        "last_error",
+    }
+    full_text = "\n".join(response.text for response in responses)
+    for canary in (
+        FEISHU_PATCH_URL,
+        "UNIQUE_FEISHU_PATCH_SECRET",
+        WECOM_PATCH_KEY,
+        WECOM_BOT_ID_PATCH,
+        WECOM_BOT_SECRET_PATCH,
+    ):
+        assert canary not in full_text
+
+
+def test_feishu_credential_patch_and_clear_semantics(client):
+    old_url = "https://open.feishu.cn/open-apis/bot/v2/hook/old"
+    preferences.save({
+        "feishu_webhook_url": old_url,
+        "feishu_webhook_secret": "old-secret",
+    })
+
+    change_url = client.put(
+        "/api/settings/preferences/feishu-webhook",
+        json={"url": FEISHU_PATCH_URL},
+    )
+    assert change_url.status_code == 200
+    assert preferences.get_feishu_webhook_url() == FEISHU_PATCH_URL
+    assert preferences.get_feishu_webhook_secret() == "old-secret"
+
+    clear_secret = client.put(
+        "/api/settings/preferences/feishu-webhook",
+        json={"secret": ""},
+    )
+    assert clear_secret.status_code == 200
+    assert preferences.get_feishu_webhook_url() == FEISHU_PATCH_URL
+    assert preferences.get_feishu_webhook_secret() == ""
+
+    clear_all = client.put(
+        "/api/settings/preferences/feishu-webhook",
+        json={"clear": True},
+    )
+    assert clear_all.status_code == 200
+    assert clear_all.json() == {"ok": True, "has_feishu_webhook": False}
+    assert preferences.get_feishu_webhook_url() == ""
+    assert preferences.get_feishu_webhook_secret() == ""
+
+
+def test_wecom_webhook_requires_value_or_explicit_clear(client):
+    preferences.save({"wecom_webhook_url": "https://example.invalid/original"})
+
+    update = client.put(
+        "/api/settings/preferences/wecom-webhook",
+        json={"url": WECOM_PATCH_KEY},
+    )
+    assert update.status_code == 200
+    assert preferences.get_wecom_webhook_url().endswith(f"?key={WECOM_PATCH_KEY}")
+
+    clear = client.put(
+        "/api/settings/preferences/wecom-webhook",
+        json={"clear": True},
+    )
+    assert clear.status_code == 200
+    assert clear.json() == {"ok": True, "has_wecom_webhook": False}
+    assert preferences.get_wecom_webhook_url() == ""
+
+
+def test_wecom_bot_patch_preserves_omitted_fields_and_clear_disables(client, monkeypatch):
+    class FakeBotService:
+        apply_calls = 0
+
+        def apply_credential_change(self):
+            self.apply_calls += 1
+
+        def status(self):
+            return {"connected": False, "last_error": ""}
+
+    service = FakeBotService()
+    monkeypatch.setattr(app.state, "wecom_bot_service", service, raising=False)
+    preferences.save({
+        "wecom_bot_id": "old-bot-id",
+        "wecom_bot_secret": "old-bot-secret",
+        "wecom_bot_enabled": True,
+    })
+
+    change_id = client.put(
+        "/api/settings/preferences/wecom-bot",
+        json={"bot_id": WECOM_BOT_ID_PATCH},
+    )
+    assert change_id.status_code == 200
+    assert preferences.get_wecom_bot_id() == WECOM_BOT_ID_PATCH
+    assert preferences.get_wecom_bot_secret() == "old-bot-secret"
+    assert preferences.get_wecom_bot_enabled() is True
+
+    change_secret = client.put(
+        "/api/settings/preferences/wecom-bot",
+        json={"secret": WECOM_BOT_SECRET_PATCH},
+    )
+    assert change_secret.status_code == 200
+    assert preferences.get_wecom_bot_id() == WECOM_BOT_ID_PATCH
+    assert preferences.get_wecom_bot_secret() == WECOM_BOT_SECRET_PATCH
+
+    clear = client.put(
+        "/api/settings/preferences/wecom-bot",
+        json={"clear": True},
+    )
+    assert clear.status_code == 200
+    assert clear.json()["has_wecom_bot"] is False
+    assert clear.json()["wecom_bot_enabled"] is False
+    assert preferences.get_wecom_bot_id() == ""
+    assert preferences.get_wecom_bot_secret() == ""
+    assert preferences.get_wecom_bot_enabled() is False
+    assert service.apply_calls == 3
+
+
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        ("/api/settings/preferences/feishu-webhook", {}),
+        (
+            "/api/settings/preferences/feishu-webhook",
+            {"clear": True, "url": FEISHU_PATCH_URL},
+        ),
+        ("/api/settings/preferences/feishu-webhook", {"url": ""}),
+        ("/api/settings/preferences/wecom-webhook", {}),
+        (
+            "/api/settings/preferences/wecom-webhook",
+            {"clear": True, "url": WECOM_PATCH_KEY},
+        ),
+        ("/api/settings/preferences/wecom-webhook", {"url": ""}),
+        ("/api/settings/preferences/wecom-bot", {}),
+        (
+            "/api/settings/preferences/wecom-bot",
+            {"clear": True, "bot_id": WECOM_BOT_ID_PATCH},
+        ),
+        ("/api/settings/preferences/wecom-bot", {"bot_id": ""}),
+    ],
+)
+def test_notification_credential_noop_or_conflicting_patches_fail_before_write(
+    client, path, payload
+):
+    original = {
+        "feishu_webhook_url": "https://open.feishu.cn/open-apis/bot/v2/hook/original",
+        "feishu_webhook_secret": "original-feishu-secret",
+        "wecom_webhook_url": "https://example.invalid/original",
+        "wecom_bot_id": "original-bot-id",
+        "wecom_bot_secret": "original-bot-secret",
+        "wecom_bot_enabled": True,
+    }
+    preferences.save(original)
+
+    response = client.put(path, json=payload)
+
+    assert response.status_code == 422
+    assert preferences.load() == original
 
 
 @pytest.mark.parametrize(

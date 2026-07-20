@@ -11,7 +11,6 @@ import logging
 import math
 import os
 import tempfile
-from contextlib import suppress
 from pathlib import Path
 from threading import RLock
 
@@ -374,24 +373,67 @@ def load_client_preferences() -> dict:
 
 
 def load_safe_preferences() -> dict:
-    """Return all operational preferences with credentials removed recursively."""
-    raw = load()
-    safe = _safe_json_value(raw)
+    """Return the legacy runtime preference contract without credential values."""
+    runtime = {
+        "realtime_quotes_enabled": get_realtime_quotes_enabled(),
+        "indices_nav_pinned": get_indices_nav_pinned(),
+        "minute_sync_enabled": get_minute_sync_enabled(),
+        "minute_sync_days": get_minute_sync_days(),
+        "minute_sync_segment_days": get_minute_sync_segment_days(),
+        "daily_data_provider": get_daily_data_provider(),
+        "adj_factor_provider": get_adj_factor_provider(),
+        "minute_data_provider": get_minute_data_provider(),
+        "realtime_data_provider": get_realtime_data_provider(),
+        "financial_data_provider": get_financial_provider(),
+        "realtime_watchlist_symbols": get_realtime_watchlist_symbols(),
+        **get_realtime_quote_scope(),
+        "pipeline_pull_a_share": get_pipeline_pull_a_share(),
+        "pipeline_pull_etf": get_pipeline_pull_etf(),
+        "pipeline_pull_index": get_pipeline_pull_index(),
+        "pipeline_index_symbols": get_pipeline_index_symbols(),
+        "pipeline_schedule": get_pipeline_schedule(),
+        "instruments_schedule": get_instruments_schedule(),
+        "enriched_batch_size": get_enriched_batch_size(),
+        "index_daily_batch_size": get_index_daily_batch_size(),
+        "watchlist_columns": get_watchlist_columns(),
+        "screener_result_columns": get_screener_result_columns(),
+        "sse_refresh_pages": get_sse_refresh_pages(),
+        "strategy_monitor_enabled": get_strategy_monitor_enabled(),
+        "strategy_monitor_ids": get_strategy_monitor_ids(),
+        "system_notify_enabled": get_system_notify_enabled(),
+        "has_feishu_webhook": bool(get_feishu_webhook_url().strip()),
+        "has_wecom_webhook": bool(get_wecom_webhook_url().strip()),
+        "has_wecom_bot": bool(
+            get_wecom_bot_id().strip() and get_wecom_bot_secret().strip()
+        ),
+        "wecom_bot_enabled": get_wecom_bot_enabled(),
+        "webhook_enabled_default": get_webhook_enabled_default(),
+        "webhook_default_channels": get_webhook_default_channels(),
+        "sidebar_index_symbols": get_sidebar_index_symbols(),
+        "minute_intraday_refresh": get_minute_intraday_refresh(),
+        "minute_intraday_refresh_interval": get_minute_intraday_refresh_interval(),
+        "monitor_ext_fields": get_monitor_ext_fields(),
+        "nav_order": get_nav_order(),
+        "nav_hidden": get_nav_hidden(),
+        "screener_auto_run": get_screener_auto_run(),
+        "limit_ladder_monitor_enabled": get_limit_ladder_monitor_enabled(),
+        "depth_polling_interval": get_depth_polling_interval(),
+        "depth_finalize_time": get_depth_finalize_time(),
+        "review_schedule": get_review_schedule(),
+        "review_push_channels": get_review_push_channels(),
+    }
+    safe = _safe_json_value(runtime)
     result = safe if isinstance(safe, dict) else {}
     for key in _CLIENT_COLUMN_KEYS:
         result.pop(key, None)
-        if key not in raw:
+        value = runtime[key]
+        if value is None:
+            result[key] = None
             continue
-        with suppress(ValueError):
-            result[key] = _validated_column_configs(raw[key])
-    result.update({
-        "has_feishu_webhook": bool(str(raw.get("feishu_webhook_url") or "").strip()),
-        "has_wecom_webhook": bool(str(raw.get("wecom_webhook_url") or "").strip()),
-        "has_wecom_bot": bool(
-            str(raw.get("wecom_bot_id") or "").strip()
-            and str(raw.get("wecom_bot_secret") or "").strip()
-        ),
-    })
+        try:
+            result[key] = _validated_column_configs(value)
+        except ValueError:
+            result[key] = None
     return result
 
 

@@ -391,7 +391,10 @@ class CustomSourceIn(BaseModel):
 def get_preferences() -> dict:
     """返回脱敏的客户端运行偏好设置。"""
     from app.services import preferences
-    return preferences.load_safe_preferences()
+    return {
+        **preferences.load_safe_preferences(),
+        "realtime_allowed": _realtime_allowed(),
+    }
 
 
 @router.get("/data-sources")
@@ -803,92 +806,155 @@ def update_system_notify(req: SystemNotifyPrefsIn) -> dict:
 
 
 class FeishuWebhookPrefsIn(BaseModel):
-    url: str
-    secret: str = ""
+    url: str | None = None
+    secret: str | None = None
+    clear: bool = False
 
 
 @router.put("/preferences/feishu-webhook")
 def update_feishu_webhook(req: FeishuWebhookPrefsIn) -> dict:
-    """飞书 Webhook 地址 + 签名密钥 — 全局一处配置, 所有启用推送的监控规则共用。
-
-    - url: 传入空串表示清空配置; 非空则需为合法的飞书自定义机器人地址。
-    - secret: 机器人启用了「签名校验」时填密钥, 留空表示不验签。
-    """
+    """Patch or explicitly clear the shared Feishu webhook credentials."""
     from app.services import preferences
     from app.services import webhook_adapter
 
-    url = (req.url or "").strip()
-    if url and not webhook_adapter.is_valid_feishu_url(url):
-        raise HTTPException(
-            status_code=400,
-            detail="Webhook 地址非法, 需为飞书自定义机器人地址 "
-                   "(https://open.feishu.cn/open-apis/bot/v2/hook/...)",
-        )
-    saved_url = preferences.set_feishu_webhook_url(url)
-    saved_secret = preferences.set_feishu_webhook_secret((req.secret or "").strip())
-    return {"feishu_webhook_url": saved_url, "feishu_webhook_secret": saved_secret}
+    supplied = req.model_fields_set
+    credential_fields = {"url", "secret"}
+    if req.clear:
+        if supplied & credential_fields:
+            raise HTTPException(status_code=422, detail="清除操作不能同时包含凭证")
+        preferences.save({"feishu_webhook_url": "", "feishu_webhook_secret": ""})
+        return {"ok": True, "has_feishu_webhook": False}
+    if not supplied & credential_fields:
+        raise HTTPException(status_code=422, detail="至少提供一个要更新的字段")
+
+    updates = {}
+    if "url" in supplied:
+        url = (req.url or "").strip()
+        if not url:
+            raise HTTPException(status_code=422, detail="清除 Webhook 请使用 clear")
+        if not webhook_adapter.is_valid_feishu_url(url):
+            raise HTTPException(
+                status_code=400,
+                detail="Webhook 地址非法, 需为飞书自定义机器人地址 "
+                       "(https://open.feishu.cn/open-apis/bot/v2/hook/...)",
+            )
+        updates["feishu_webhook_url"] = url
+    if "secret" in supplied:
+        if req.secret is None:
+            raise HTTPException(status_code=422, detail="签名密钥必须是字符串")
+        updates["feishu_webhook_secret"] = req.secret.strip()
+    preferences.save(updates)
+    return {
+        "ok": True,
+        "has_feishu_webhook": bool(preferences.get_feishu_webhook_url().strip()),
+    }
 
 
 class WecomWebhookPrefsIn(BaseModel):
-    url: str
+    url: str | None = None
+    clear: bool = False
 
 
 @router.put("/preferences/wecom-webhook")
 def update_wecom_webhook(req: WecomWebhookPrefsIn) -> dict:
-    """企业微信群推送 Webhook 地址 — 与飞书并列的第二推送通道。
-
-    - url: 传入空串表示清空配置; 非空需为合法企业微信群推送 Webhook 地址, 或纯 key。
-    - 用户可只填 key (webhook/send?key=xxx 的 xxx 部分), 后端自动补全为完整 URL。
-    """
+    """Set or explicitly clear the WeCom group webhook."""
     from app.services import preferences
     from app.services import webhook_adapter
 
+    supplied = req.model_fields_set
+    if req.clear:
+        if "url" in supplied:
+            raise HTTPException(status_code=422, detail="清除操作不能同时包含凭证")
+        preferences.save({"wecom_webhook_url": ""})
+        return {"ok": True, "has_wecom_webhook": False}
+    if "url" not in supplied:
+        raise HTTPException(status_code=422, detail="必须提供 Webhook 地址或 clear")
+
     url = (req.url or "").strip()
-    if url and not webhook_adapter.is_valid_wecom_url(url):
+    if not url:
+        raise HTTPException(status_code=422, detail="清除 Webhook 请使用 clear")
+    if not webhook_adapter.is_valid_wecom_url(url):
         raise HTTPException(
             status_code=400,
             detail="Webhook 地址非法, 需为企业微信群推送 Webhook 地址 "
                    "(https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=... 或纯 key)",
         )
-    saved_url = preferences.set_wecom_webhook_url(url)
-    return {"wecom_webhook_url": saved_url}
+    from app.services.webhook_adapter import normalize_wecom_url
+
+    preferences.save({"wecom_webhook_url": normalize_wecom_url(url)})
+    return {"ok": True, "has_wecom_webhook": True}
 
 
 class WecomBotPrefsIn(BaseModel):
-    bot_id: str
-    secret: str
-    enabled: bool = True
+    bot_id: str | None = None
+    secret: str | None = None
+    enabled: bool | None = None
+    clear: bool = False
+
+
+def _sanitized_wecom_bot_status(bot_svc, preferences) -> dict:
+    raw = bot_svc.status() if bot_svc else {}
+    return {
+        "enabled": preferences.get_wecom_bot_enabled(),
+        "running": bool(raw.get("running", False)),
+        "connected": bool(raw.get("connected", False)),
+        "bot_id_configured": bool(preferences.get_wecom_bot_id()),
+        "secret_configured": bool(preferences.get_wecom_bot_secret()),
+        "last_error": "连接异常" if raw.get("last_error") else "",
+    }
 
 
 @router.put("/preferences/wecom-bot")
 def update_wecom_bot(req: WecomBotPrefsIn, request: Request) -> dict:
-    """企业微信智能机器人(BotID + Secret)配置 — 长连接通道。
-
-    保存凭证后立即重建连接(stop→start), 因每机器人仅允许 1 条长连接。
-    - bot_id/secret 均传空串表示清空配置并断开连接。
-    - enabled 控制是否启用长连接(凭证齐全时生效)。
-    """
+    """Patch or explicitly clear WeCom bot credentials without echoing them."""
     from app.services import preferences
 
-    bot_id = (req.bot_id or "").strip()
-    secret = (req.secret or "").strip()
-    preferences.set_wecom_bot_id(bot_id)
-    preferences.set_wecom_bot_secret(secret)
-    # 凭证不齐时强制关闭(避免 enabled=True 但连不上)
-    enabled = req.enabled and bool(bot_id) and bool(secret)
-    preferences.set_wecom_bot_enabled(enabled)
+    supplied = req.model_fields_set
+    credential_fields = {"bot_id", "secret"}
+    patch_fields = credential_fields | {"enabled"}
+    if req.clear:
+        if supplied & patch_fields:
+            raise HTTPException(status_code=422, detail="清除操作不能同时包含凭证或启用状态")
+        updates = {
+            "wecom_bot_id": "",
+            "wecom_bot_secret": "",
+            "wecom_bot_enabled": False,
+        }
+    else:
+        if not supplied & patch_fields:
+            raise HTTPException(status_code=422, detail="至少提供一个要更新的字段")
+        bot_id = preferences.get_wecom_bot_id()
+        secret = preferences.get_wecom_bot_secret()
+        if "bot_id" in supplied:
+            bot_id = (req.bot_id or "").strip()
+            if not bot_id:
+                raise HTTPException(status_code=422, detail="清除机器人凭证请使用 clear")
+        if "secret" in supplied:
+            secret = (req.secret or "").strip()
+            if not secret:
+                raise HTTPException(status_code=422, detail="清除机器人凭证请使用 clear")
+        enabled = (
+            req.enabled
+            if "enabled" in supplied
+            else preferences.get_wecom_bot_enabled()
+        )
+        updates = {
+            "wecom_bot_id": bot_id,
+            "wecom_bot_secret": secret,
+            "wecom_bot_enabled": bool(enabled and bot_id and secret),
+        }
+    preferences.save(updates)
 
-    # 立即应用: 重建连接
     bot_svc = getattr(request.app.state, "wecom_bot_service", None)
-    status: dict = {}
     if bot_svc:
         bot_svc.apply_credential_change()
-        status = bot_svc.status()
     return {
-        "wecom_bot_id": preferences.get_wecom_bot_id(),
-        "wecom_bot_secret": preferences.get_wecom_bot_secret(),
+        "ok": True,
+        "has_wecom_bot": bool(
+            preferences.get_wecom_bot_id() and preferences.get_wecom_bot_secret()
+        ),
         "wecom_bot_enabled": preferences.get_wecom_bot_enabled(),
-        "wecom_bot_status": status,
+        "wecom_bot_status": _sanitized_wecom_bot_status(bot_svc, preferences),
     }
 
 

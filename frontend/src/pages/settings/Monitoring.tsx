@@ -17,7 +17,12 @@ import {
   useCapabilities,
 } from '@/lib/useSharedQueries'
 import { useUpdateQuoteInterval, useToggleRealtimeQuotes } from '@/lib/useSharedMutations'
-import { api } from '@/lib/api'
+import {
+  api,
+  type FeishuCredentialPatch,
+  type WecomBotCredentialPatch,
+  type WecomWebhookCredentialPatch,
+} from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
 import { tierRank } from '@/lib/capability-labels'
 import { toast } from '@/components/Toast'
@@ -144,9 +149,11 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
   }, [qc, prefs])
 
   const saveFeishuWebhook = useMutation({
-    mutationFn: ({ url, secret }: { url: string; secret: string }) => api.updateFeishuWebhook(url, secret),
+    mutationFn: (patch: FeishuCredentialPatch) => api.updateFeishuWebhook(patch),
     onSuccess: () => {
       setFeishuError('')
+      setFeishuDraft('')
+      setFeishuSecretDraft('')
       toast('飞书 Webhook 已保存', 'success')
       qc.invalidateQueries({ queryKey: QK.preferences })
     },
@@ -160,13 +167,22 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
       setFeishuError('地址需以 ' + FEISHU_PREFIX + ' 开头')
       return
     }
-    saveFeishuWebhook.mutate({ url, secret })
+    const patch: FeishuCredentialPatch = {}
+    if (url) patch.url = url
+    if (secret) patch.secret = secret
+    if (Object.keys(patch).length > 0) saveFeishuWebhook.mutate(patch)
   }, [feishuDraft, feishuSecretDraft, saveFeishuWebhook])
+  const clearFeishu = useCallback(() => {
+    if (confirm('确定清除飞书 Webhook 地址和签名密钥?')) {
+      saveFeishuWebhook.mutate({ clear: true })
+    }
+  }, [saveFeishuWebhook])
 
   const saveWecomWebhook = useMutation({
-    mutationFn: (url: string) => api.updateWecomWebhook(url),
+    mutationFn: (patch: WecomWebhookCredentialPatch) => api.updateWecomWebhook(patch),
     onSuccess: () => {
       setWecomError('')
+      setWecomDraft('')
       toast('企业微信 Webhook 已保存', 'success')
       qc.invalidateQueries({ queryKey: QK.preferences })
     },
@@ -180,16 +196,22 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
       setWecomError('请输入完整 Webhook 地址或纯 key (至少 20 位)')
       return
     }
-    saveWecomWebhook.mutate(url)
+    if (url) saveWecomWebhook.mutate({ url })
   }, [wecomDraft, saveWecomWebhook])
+  const clearWecom = useCallback(() => {
+    if (confirm('确定清除企业微信 Webhook?')) {
+      saveWecomWebhook.mutate({ clear: true })
+    }
+  }, [saveWecomWebhook])
 
   // 智能机器人 (BotID + Secret) 保存 → 后端立即重建连接
   const saveWecomBot = useMutation({
-    mutationFn: ({ botId, secret }: { botId: string; secret: string }) =>
-      api.updateWecomBot(botId, secret, true),
+    mutationFn: (patch: WecomBotCredentialPatch) => api.updateWecomBot(patch),
     onSuccess: (data) => {
       setBotError('')
-      toast('智能机器人凭证已保存, 正在连接…', 'success')
+      setBotIdDraft('')
+      setBotSecretDraft('')
+      toast('智能机器人凭证已保存', 'success')
       setBotStatus({
         connected: data.wecom_bot_status?.connected ?? false,
         last_error: data.wecom_bot_status?.last_error ?? '',
@@ -199,8 +221,18 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
     onError: (err: any) => setBotError(String(err?.message ?? '保存失败')),
   })
   const submitBot = useCallback(() => {
-    saveWecomBot.mutate({ botId: botIdDraft.trim(), secret: botSecretDraft.trim() })
+    const patch: WecomBotCredentialPatch = {}
+    const botId = botIdDraft.trim()
+    const secret = botSecretDraft.trim()
+    if (botId) patch.bot_id = botId
+    if (secret) patch.secret = secret
+    if (Object.keys(patch).length > 0) saveWecomBot.mutate(patch)
   }, [botIdDraft, botSecretDraft, saveWecomBot])
+  const clearBot = useCallback(() => {
+    if (confirm('确定清除企业微信智能机器人凭证并停用连接?')) {
+      saveWecomBot.mutate({ clear: true })
+    }
+  }, [saveWecomBot])
 
   // 智能机器人长连接开关(不改动凭证): 开启→连接, 关闭→断开
   const toggleBotConnection = useMutation({
@@ -573,11 +605,21 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                   <div className="mt-2 flex items-center gap-2">
                     <button
                       onClick={submitFeishu}
-                      disabled={saveFeishuWebhook.isPending || !feishuDraft.trim()}
+                      disabled={saveFeishuWebhook.isPending || (!feishuDraft.trim() && !feishuSecretDraft.trim())}
                       className="px-3 py-1.5 rounded-btn bg-accent text-base text-xs font-medium disabled:opacity-50 cursor-pointer hover:bg-accent/90 transition-colors"
                     >
                       {saveFeishuWebhook.isPending ? '保存中…' : '保存'}
                     </button>
+                    {feishuConfigured && (
+                      <button
+                        type="button"
+                        onClick={clearFeishu}
+                        disabled={saveFeishuWebhook.isPending}
+                        className="px-2 py-1.5 text-xs text-danger hover:text-danger/80 disabled:opacity-50"
+                      >
+                        清除飞书配置
+                      </button>
+                    )}
                     {feishuConfigured && (
                       <span className="text-[10px] text-emerald-500">● 已配置</span>
                     )}
@@ -652,6 +694,16 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                     >
                       {saveWecomWebhook.isPending ? '保存中…' : '保存'}
                     </button>
+                    {wecomConfigured && (
+                      <button
+                        type="button"
+                        onClick={clearWecom}
+                        disabled={saveWecomWebhook.isPending}
+                        className="px-2 py-1.5 text-xs text-danger hover:text-danger/80 disabled:opacity-50"
+                      >
+                        清除企业微信 Webhook
+                      </button>
+                    )}
                     {wecomConfigured && (
                       <span className="text-[10px] text-emerald-500">● 已配置</span>
                     )}
@@ -738,11 +790,21 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                   <div className="mt-2 flex items-center gap-2">
                     <button
                       onClick={submitBot}
-                      disabled={saveWecomBot.isPending || !botIdDraft.trim() || !botSecretDraft.trim()}
+                      disabled={saveWecomBot.isPending || (!botIdDraft.trim() && !botSecretDraft.trim())}
                       className="px-3 py-1.5 rounded-btn bg-accent text-base text-xs font-medium disabled:opacity-50 cursor-pointer hover:bg-accent/90 transition-colors"
                     >
-                      {saveWecomBot.isPending ? '保存中…' : '保存并连接'}
+                      {saveWecomBot.isPending ? '保存中…' : '保存凭证'}
                     </button>
+                    {wecomBotConfigured && (
+                      <button
+                        type="button"
+                        onClick={clearBot}
+                        disabled={saveWecomBot.isPending}
+                        className="px-2 py-1.5 text-xs text-danger hover:text-danger/80 disabled:opacity-50"
+                      >
+                        清除智能机器人凭证
+                      </button>
+                    )}
                     {wecomBotConfigured && (
                       <span className="text-[10px] text-emerald-500">● 已配置</span>
                     )}

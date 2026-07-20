@@ -307,15 +307,17 @@ def test_settings_preferences_response_reuses_safe_client_projection(monkeypatch
         },
     )
 
+    monkeypatch.setattr(settings_api, "_realtime_allowed", lambda: True)
+
     response = settings_api.get_preferences()
     payload = json.dumps(response, ensure_ascii=False, sort_keys=True)
 
-    assert response == preferences.load_safe_preferences()
+    assert response == {**preferences.load_safe_preferences(), "realtime_allowed": True}
     assert all(canary not in payload for canary in canaries)
     assert not any("****" in str(value) for value in response.values())
 
 
-def test_safe_preferences_preserve_operational_values_and_redact_recursively(monkeypatch):
+def test_safe_preferences_restore_runtime_getter_contract_and_redact(monkeypatch):
     canaries = {
         "top_secret": "TOP_SECRET_CANARY",
         "nested_token": "NESTED_TOKEN_CANARY",
@@ -365,9 +367,74 @@ def test_safe_preferences_preserve_operational_values_and_redact_recursively(mon
         },
     )
 
+    monkeypatch.setattr(
+        "app.services.watchlist.list_symbols",
+        lambda: [
+            {"symbol": symbol}
+            for symbol in (
+                "000001.SZ",
+                "000002.SZ",
+                "000003.SZ",
+                "000004.SZ",
+                "000005.SZ",
+                "000006.SZ",
+            )
+        ],
+    )
+
     response = preferences.load_safe_preferences()
     payload = json.dumps(response, ensure_ascii=False, sort_keys=True)
 
+    assert set(response) == {
+        "realtime_quotes_enabled",
+        "indices_nav_pinned",
+        "minute_sync_enabled",
+        "minute_sync_days",
+        "minute_sync_segment_days",
+        "daily_data_provider",
+        "adj_factor_provider",
+        "minute_data_provider",
+        "realtime_data_provider",
+        "financial_data_provider",
+        "realtime_watchlist_symbols",
+        "realtime_pull_stock",
+        "realtime_pull_etf",
+        "realtime_pull_index",
+        "realtime_index_mode",
+        "realtime_index_symbols",
+        "pipeline_pull_a_share",
+        "pipeline_pull_etf",
+        "pipeline_pull_index",
+        "pipeline_index_symbols",
+        "pipeline_schedule",
+        "instruments_schedule",
+        "enriched_batch_size",
+        "index_daily_batch_size",
+        "watchlist_columns",
+        "screener_result_columns",
+        "sse_refresh_pages",
+        "strategy_monitor_enabled",
+        "strategy_monitor_ids",
+        "system_notify_enabled",
+        "has_feishu_webhook",
+        "has_wecom_webhook",
+        "has_wecom_bot",
+        "wecom_bot_enabled",
+        "webhook_enabled_default",
+        "webhook_default_channels",
+        "sidebar_index_symbols",
+        "minute_intraday_refresh",
+        "minute_intraday_refresh_interval",
+        "monitor_ext_fields",
+        "nav_order",
+        "nav_hidden",
+        "screener_auto_run",
+        "limit_ladder_monitor_enabled",
+        "depth_polling_interval",
+        "depth_finalize_time",
+        "review_schedule",
+        "review_push_channels",
+    }
     assert response["realtime_quotes_enabled"] is True
     assert response["minute_sync_days"] == 7
     assert response["pipeline_schedule"] == {"hour": 15, "minute": 10}
@@ -385,15 +452,15 @@ def test_safe_preferences_preserve_operational_values_and_redact_recursively(mon
             }
         )
     ]
-    assert response["nested"] == {
-        "enabled": True,
-        "webhook": {"enabled": True},
-        "bot": {"enabled": False},
-    }
-    assert response["rules"] == [
-        {"name": "keep", "enabled": True},
-        {"enabled": False},
+    assert response["realtime_watchlist_symbols"] == [
+        "000001.SZ",
+        "000002.SZ",
+        "000003.SZ",
+        "000004.SZ",
+        "000005.SZ",
     ]
+    assert "nested" not in response
+    assert "rules" not in response
     assert response["has_feishu_webhook"] is True
     assert response["has_wecom_webhook"] is True
     assert response["has_wecom_bot"] is True

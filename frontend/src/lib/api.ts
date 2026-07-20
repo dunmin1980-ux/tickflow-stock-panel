@@ -941,8 +941,27 @@ export interface WecomBotStatus {
   last_error: string
 }
 
+export interface FeishuCredentialPatch {
+  url?: string
+  secret?: string
+  clear?: boolean
+}
+
+export interface WecomWebhookCredentialPatch {
+  url?: string
+  clear?: boolean
+}
+
+export interface WecomBotCredentialPatch {
+  bot_id?: string
+  secret?: string
+  enabled?: boolean
+  clear?: boolean
+}
+
 export interface Preferences {
   realtime_quotes_enabled: boolean
+  realtime_allowed?: boolean
   indices_nav_pinned: boolean
   minute_sync_enabled: boolean
   minute_sync_days: number
@@ -1401,25 +1420,25 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ enabled }),
     }),
-  updateFeishuWebhook: (url: string, secret: string = '') =>
-    request<{ feishu_webhook_url: string; feishu_webhook_secret: string }>('/api/settings/preferences/feishu-webhook', {
+  updateFeishuWebhook: (patch: FeishuCredentialPatch) =>
+    request<{ ok: boolean; has_feishu_webhook: boolean }>('/api/settings/preferences/feishu-webhook', {
       method: 'PUT',
-      body: JSON.stringify({ url, secret }),
+      body: JSON.stringify(patch),
     }),
-  updateWecomWebhook: (url: string) =>
-    request<{ wecom_webhook_url: string }>('/api/settings/preferences/wecom-webhook', {
+  updateWecomWebhook: (patch: WecomWebhookCredentialPatch) =>
+    request<{ ok: boolean; has_wecom_webhook: boolean }>('/api/settings/preferences/wecom-webhook', {
       method: 'PUT',
-      body: JSON.stringify({ url }),
+      body: JSON.stringify(patch),
     }),
-  updateWecomBot: (botId: string, secret: string, enabled: boolean = true) =>
+  updateWecomBot: (patch: WecomBotCredentialPatch) =>
     request<{
-      wecom_bot_id: string
-      wecom_bot_secret: string
+      ok: boolean
+      has_wecom_bot: boolean
       wecom_bot_enabled: boolean
       wecom_bot_status: WecomBotStatus
     }>('/api/settings/preferences/wecom-bot', {
       method: 'PUT',
-      body: JSON.stringify({ bot_id: botId, secret, enabled }),
+      body: JSON.stringify(patch),
     }),
   toggleWecomBot: (enabled: boolean) =>
     request<{ wecom_bot_enabled: boolean; wecom_bot_status: WecomBotStatus }>('/api/settings/preferences/wecom-bot-toggle', {
