@@ -1,5 +1,5 @@
 {
-  "as_of": "2026-07-20T20:39:59+08:00",
+  "as_of": "2026-07-20T21:30:00+08:00",
   "branch": "cursor/gold-stage-a-hardening-v0.1.86",
   "base_commit": "3a171366055153a6a7329a3c094b3e4a507088d1",
   "hardening_commit": "19d49890e4838efd34d481bf7d7b75d3700b1558",
@@ -7,7 +7,7 @@
   "checks": {
     "compose_loopback_bind_yaml": true,
     "compose_loopback_resolved_config": true,
-    "compose_runtime_ss_verified": false,
+    "compose_runtime_ss_verified": true,
     "symlink_security_tests_passed": true,
     "atomic_temp_symlink_escape_rejected": true,
     "child_directory_symlink_escape_rejected": true,
@@ -29,6 +29,26 @@
   "pytest_full_backend_count_passed": 787,
   "frontend_gold_tests_passed": true,
   "frontend_production_build_passed": true,
-  "cloud_runtime_verified": false,
-  "pushed_after_hardening_review": false
+  "cloud_runtime_verified": true,
+  "cloud_gold_sampler_verified": false,
+  "pushed_after_hardening_review": true,
+  "cloud_runtime": {
+    "host": "codex-vm",
+    "source_commit": "d3808afb82f39ffc570f3b9bd07564ddf11a8bdf",
+    "bind_address": "127.0.0.1",
+    "host_port": 3019,
+    "container_port": 3018,
+    "health_http_ok": true,
+    "reported_version": "0.1.86",
+    "reported_mode": "none",
+    "public_probe_blocked": true,
+    "ssh_tunnel_health_verified": true,
+    "restart_health_verified": true,
+    "gold_workspace_enabled": false,
+    "external_send_count": 0,
+    "existing_shadow_preserved": true,
+    "existing_shadow_host_port": 3018,
+    "existing_shadow_healthy": true
+  },
+  "build_note": "Frozen uv.lock wheel URLs were rewritten only inside the cloud build to files.pythonhosted.org with locked hashes preserved; the checkout was restored after build."
 }

@@ -5,8 +5,9 @@
 - **Base commit:** `3a171366055153a6a7329a3c094b3e4a507088d1`
 - **Hardening tip:** `75e1ede`
 - **Independent review fix:** `19d4989`
+- **Validated source tip:** `d3808af`
 - **Workspace:** `tickflow-gold-stage-a-hardening-v0.1.86`
-- **Final status:** `STAGE_A_READY` (local verify script; see caveats)
+- **Final status:** `STAGE_A_READY` (local verifier + Gold-disabled Lighthouse sidecar runtime gate)
 
 ## 1. Baseline
 
@@ -15,7 +16,7 @@
 | Original package | v0.1.86 / `3a17136` / base `4315508` (PR #133) |
 | Hardening branch | `cursor/gold-stage-a-hardening-v0.1.86` |
 | Python test runner | current workspace `backend/.venv` |
-| Environment | macOS local; Docker Compose resolved config required |
+| Environment | macOS local verification + Tencent Lighthouse `codex-vm` runtime verification |
 
 ## 2. P0 completion
 
@@ -44,7 +45,19 @@ Broader independent regression:
 - Frontend `pnpm test:gold`: **passed**
 - Frontend production build: **passed** (`2687` modules)
 
-Not claimed in this eval: live `ss`/`lsof` on a running Tencent Lighthouse stack.
+Tencent Lighthouse sidecar verification at source tip `d3808af`:
+
+- app health: HTTP 200, version `0.1.86`, mode `none`
+- bind: `127.0.0.1:3019 -> container:3018`
+- public `3019` probe: blocked (timeout)
+- Gold status: `enabled=false`, `external_send_count=0`
+- restart recovery: health returned on the first one-second probe
+- existing `TickFlow_Gold_Shadow`: still healthy on `127.0.0.1:3018`; start time unchanged
+- runtime footprint sample: about `223 MiB` for the integrated panel
+
+The host port is intentionally `3019`, because the existing standalone Shadow owns
+`3018`. This verifies the integrated app runtime and loopback policy only; it does
+not enable or validate the integrated Gold sampler.
 
 ## 4. Security validation
 
@@ -54,6 +67,7 @@ See `reports/gold_stage_a_security_validation.json`.
 - Outside-root reads/writes: root, final-file, atomic-temp and child-directory symlink cases covered and rejected
 - Compose bind: resolved Compose JSON contains exactly one app target `3018` bound to `127.0.0.1`
 - Gold outbound / Telegram: unchanged zero-send Stage A policy (no ownership migration)
+- Lighthouse runtime: both `3018` and `3019` are loopback-only; integrated Gold remains disabled
 
 ## 5. Independent review correction
 
@@ -75,21 +89,39 @@ Commit `19d4989` closes those gaps and adds regression tests. The verifier now f
 STAGE_A_READY
 ```
 
-**Caveats before cloud enablement:**
+**Caveats before integrated Gold enablement:**
 
-1. Re-run verify on the Lighthouse host after `docker compose up` and confirm `127.0.0.1:3018` via `ss`/`lsof`.
-2. Keep `GOLD_WORKSPACE_ENABLED=false` until host bind + lock + holidays are confirmed.
-3. Do not run live Pro probe concurrently with Gold sampler.
-4. P1 (CI / version unify to 0.1.87 / frozen locks / credential redaction) still recommended before merge to upstream.
+1. Keep `GOLD_WORKSPACE_ENABLED=false` while the standalone Shadow owns the observation run.
+2. Before any migration, stop the standalone sampler first and confirm a single Gold writer.
+3. Prepare and validate the trading calendar before enabling the integrated sampler.
+4. Do not run live Pro probe concurrently with Gold sampler.
+5. P1 (CI / version unify to 0.1.87 / frozen locks / credential redaction) still recommended before merge to upstream.
 
-The local code state is ready for the separate Lighthouse runtime gate. The branch is not production-ready and the post-review commit has not been pushed.
+The source branch and post-review fixes are pushed to the fork. The Gold-disabled
+sidecar is running on the Lighthouse host, but the branch is not Stage B or
+production-ready.
 
-## 8. Lighthouse next step
+## 8. Lighthouse runtime status
 
 Host bind checklist: `docs/gold-stage-a-lighthouse-verify.md`  
-Until `ss`/`lsof` confirms loopback-only 3018 on the VM, keep `compose_runtime_ss_verified=false`.
+Runtime evidence: `reports/gold_stage_a_lighthouse_runtime_20260720.md`
 
-## 9. Historical connection-failure note
+`compose_runtime_ss_verified=true` applies to the Gold-disabled integrated sidecar
+on host port `3019`. `cloud_gold_sampler_verified=false` remains mandatory.
+
+## 9. Build mirror note
+
+The v0.1.86 `backend/uv.lock` stores direct Tsinghua wheel URLs, so changing only
+Docker `PYPI_INDEX` does not redirect frozen downloads. On `codex-vm`, those direct
+downloads were too slow. The deployment used a build-only URL substitution to the
+equivalent `files.pythonhosted.org/packages/` paths while preserving every locked
+hash, then restored `backend/uv.lock` automatically. No source change was committed.
+
+The repeatable command is documented in `docs/gold-stage-a-runbook.md`. A future P1
+should regenerate or normalize the lock source instead of relying on this deployment
+workaround.
+
+## 10. Historical connection-failure note
 
 
 Background agents ([Write Stage A audit docs](502952c7-03fd-4207-8266-b0c42a6af177), [Gold Stage A hardening](09ac5a42-9163-4a71-9dc6-e353dd36b1a4)) failed with connection errors; work continued in the parent session. No reset/discard was performed; WIP was preserved.
