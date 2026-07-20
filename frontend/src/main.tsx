@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
 import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-query'
 import { router } from './router'
+import { OfflineWriteError } from './lib/api'
+import { connectivityStore } from './lib/connectivity'
 import './index.css'
 
 // 全局认证拦截: 任何 query/mutation 收到 401 (未登录/会话过期) → 跳登录页。
@@ -35,12 +37,23 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 5_000,           // 5s 内复用,与 §4.2 Repository 不变量一致
       refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+      networkMode: 'always',
+      retry: (failureCount, error) =>
+        error instanceof OfflineWriteError ? false : failureCount < 3,
     },
     mutations: {
       onError: (err) => _redirectToLogin(err),
+      retry: false,
     },
   },
 })
+
+window.addEventListener('online', () => {
+  connectivityStore.markOnline()
+  void queryClient.invalidateQueries()
+})
+window.addEventListener('offline', () => connectivityStore.markOffline())
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

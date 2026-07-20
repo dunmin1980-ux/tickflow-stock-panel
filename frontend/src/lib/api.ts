@@ -4,36 +4,99 @@
 // Prod:同源(FastAPI 托管前端 dist)
 
 import { toast } from '@/components/Toast'
+import { connectivityStore, offlineSessionAccess } from './connectivity'
+import { clearAllSnapshots, getSnapshot, putSnapshot } from './offlineDb'
+import { isOfflineCacheAllowed, isWriteMethod } from './offlinePolicy'
 
 const BASE = ''
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const isFormData = init?.body instanceof FormData
-  const headers: Record<string, string> = {}
-  if (!isFormData) headers['Content-Type'] = 'application/json'
-  // 合并调用方传入的 headers (此前会被整体覆盖丢弃)
-  Object.assign(headers, init?.headers as Record<string, string> | undefined)
-  const res = await fetch(`${BASE}${path}`, { ...init, headers })
-  if (!res.ok) {
-    let detail = ''
-    try {
-      const j = JSON.parse(await res.text())
-      const raw = j.detail ?? j.message ?? ''
-      if (Array.isArray(raw)) {
-        // FastAPI 422 校验错误: [{type, loc, msg, input}, ...] → 取 msg 拼接
-        detail = raw.map((e: any) => e?.msg || String(e)).join('; ')
-      } else if (typeof raw === 'string') {
-        detail = raw
-      } else if (raw && typeof raw === 'object') {
-        detail = JSON.stringify(raw)
-      }
-    } catch { /* ignore */ }
-    const msg = detail || `${res.status} ${res.statusText}`
-    // 401 (未登录/会话过期) 不弹 toast — 由全局认证拦截器统一跳登录页, 避免刷屏
-    if (res.status !== 401) toast(msg, 'error')
-    throw new Error(msg)
+export class OfflineWriteError extends Error {
+  constructor() {
+    super('离线只读模式不允许修改数据')
+    this.name = 'OfflineWriteError'
   }
-  return res.json() as Promise<T>
+}
+
+async function apiErrorFromResponse(res: Response): Promise<Error> {
+  let detail = ''
+  try {
+    const body = await res.json()
+    const raw = body.detail ?? body.message ?? ''
+    detail = Array.isArray(raw)
+      ? raw.map((item: any) => item?.msg || String(item)).join('; ')
+      : typeof raw === 'string'
+        ? raw
+        : raw && typeof raw === 'object'
+          ? JSON.stringify(raw)
+          : ''
+  } catch {
+    detail = ''
+  }
+
+  const message = detail || `${res.status} ${res.statusText}`
+  if (res.status === 401) {
+    offlineSessionAccess.revoke()
+    await clearAllSnapshots()
+  } else {
+    toast(message, 'error')
+  }
+  return new Error(message)
+}
+
+async function resetOfflineAccess(): Promise<void> {
+  offlineSessionAccess.revoke()
+  await clearAllSnapshots()
+}
+
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? 'GET').toUpperCase()
+  if (isWriteMethod(method) && connectivityStore.getSnapshot().mode === 'offline-readonly') {
+    throw new OfflineWriteError()
+  }
+
+  const isFormData = init?.body instanceof FormData
+  const headers = new Headers(init?.headers)
+  if (!isFormData && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+
+  let res: Response
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers,
+      credentials: 'same-origin',
+      cache: path.startsWith('/api/') ? 'no-store' : init?.cache,
+    })
+  } catch (error) {
+    if (
+      method === 'GET' &&
+      isOfflineCacheAllowed(path) &&
+      offlineSessionAccess.isGranted() &&
+      error instanceof TypeError
+    ) {
+      const cached = await getSnapshot<T>(path)
+      if (cached) {
+        connectivityStore.markOffline(cached.fetchedAt)
+        return cached.data
+      }
+    }
+    throw error
+  }
+
+  if (!res.ok) {
+    throw await apiErrorFromResponse(res)
+  }
+
+  const data = (await res.json()) as T
+  if (method === 'GET' && isOfflineCacheAllowed(path)) {
+    try {
+      await putSnapshot(path, data, res.headers.get('etag'))
+    } catch {
+      // Offline persistence is best-effort and must not break a successful online response.
+    }
+    offlineSessionAccess.grant()
+  }
+  connectivityStore.markOnline()
+  return data
 }
 
 // ===== Capabilities =====
@@ -1071,25 +1134,40 @@ export const api = {
   }),
 
   // ===== Auth (访问认证) =====
-  authStatus: () =>
-    request<{ configured: boolean; authenticated: boolean }>('/api/auth/status'),
-  authSetup: (password: string) =>
-    request<{ ok: boolean }>('/api/auth/setup', {
+  authStatus: async () => {
+    const status = await request<{ configured: boolean; authenticated: boolean }>('/api/auth/status')
+    if (!status.authenticated) await resetOfflineAccess()
+    return status
+  },
+  authSetup: async (password: string) => {
+    await resetOfflineAccess()
+    return request<{ ok: boolean }>('/api/auth/setup', {
       method: 'POST',
       body: JSON.stringify({ password }),
-    }),
-  authLogin: (password: string) =>
-    request<{ ok: boolean }>('/api/auth/login', {
+    })
+  },
+  authLogin: async (password: string) => {
+    await resetOfflineAccess()
+    return request<{ ok: boolean }>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ password }),
-    }),
-  authLogout: () =>
-    request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
-  authChangePassword: (oldPassword: string, newPassword: string) =>
-    request<{ ok: boolean }>('/api/auth/change-password', {
+    })
+  },
+  authLogout: async () => {
+    try {
+      return await request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' })
+    } finally {
+      await resetOfflineAccess()
+    }
+  },
+  authChangePassword: async (oldPassword: string, newPassword: string) => {
+    const result = await request<{ ok: boolean }>('/api/auth/change-password', {
       method: 'POST',
       body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
-    }),
+    })
+    await resetOfflineAccess()
+    return result
+  },
 
   settings: () => request<SettingsState>('/api/settings'),
   saveTickflowKey: (api_key: string) =>
