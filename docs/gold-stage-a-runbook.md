@@ -13,10 +13,14 @@ Operate the **Gold-integrated** stock panel in Stage A observation with hard saf
 Verify:
 
 ```bash
-docker compose config | grep -A2 ports
-# expect: 127.0.0.1:…:3018
+cp .env.example .env   # only when a local .env does not already exist
+chmod 600 .env
+./scripts/verify_gold_stage_a.sh
+# expect: resolved Compose loopback check + 34 passed + STAGE_A_READY
 ss -lntp | grep 3018   # or: lsof -nP -iTCP:3018 -sTCP:LISTEN
 ```
+
+The verifier requires Docker Compose, a valid local `.env`, and the current workspace `backend/.venv`. It must return `STAGE_A_BLOCKED` rather than falling back to a raw YAML grep when Compose cannot be parsed.
 
 ## Feature flag
 
@@ -32,6 +36,7 @@ ss -lntp | grep 3018   # or: lsof -nP -iTCP:3018 -sTCP:LISTEN
 ## Storage safety
 
 - Gold roots reject symlink components (root / parents / dangling).
+- Top-level state, JSONL, atomic temporary files, `imports/`, and `comparison_runs/` use descriptor-relative I/O with no-follow checks.
 - Writes must stay under the configured Gold root; outside-root creates = 0.
 
 ## TickFlow usage

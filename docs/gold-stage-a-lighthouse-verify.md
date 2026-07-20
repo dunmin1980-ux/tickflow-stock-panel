@@ -1,6 +1,6 @@
 # 腾讯云轻量机：Gold Stage A 绑定验收清单
 
-本地 `./scripts/verify_gold_stage_a.sh` 已通过（文件级 loopback + 安全单测）。  
+本地 `./scripts/verify_gold_stage_a.sh` 已通过（解析后 loopback + 34 项安全单测）。
 **上云启用 Gold 前**必须完成本清单，把 `compose_runtime_ss_verified` 从 false 打成 true。
 
 ## 原则
@@ -17,7 +17,7 @@
 ```bash
 # 在轻量机上
 cd /path/to/tickflow-gold-stage-a-hardening-v0.1.86   # 或 git clone/fetch 本分支
-git rev-parse --short HEAD   # 期望含 75e1ede / 7b81966
+git rev-parse --short HEAD   # 必须包含 19d4989 或其后续提交
 cp -n .env.example .env && chmod 600 .env
 # 确认：
 grep GOLD_WORKSPACE_ENABLED .env    # 必须 false
@@ -31,8 +31,8 @@ grep -n '127.0.0.1' docker-compose.yml
 ## B. Compose 启动（Gold 关闭）
 
 ```bash
-docker compose config | grep -A3 ports
-# 必须出现: 127.0.0.1:…:3018
+./scripts/verify_gold_stage_a.sh
+# 必须出现: resolved compose config ... 127.0.0.1、34 passed、STAGE_A_READY
 
 docker compose up -d --build
 ```

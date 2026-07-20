@@ -1,32 +1,20 @@
-=== VERIFY 2026-07-20T09:20:17Z ===
-=== HEAD ===
-3a171366055153a6a7329a3c094b3e4a507088d1
-## cursor/gold-stage-a-hardening-v0.1.86
- M backend/app/main.py
- M backend/app/services/gold_errors.py
- M backend/app/services/gold_external_guard.py
- M backend/app/services/gold_shadow_store.py
- M backend/app/services/gold_tickflow.py
- M docker-compose.yml
-?? backend/app/services/gold_path_security.py
-?? backend/app/services/gold_runtime_lock.py
-?? backend/app/services/gold_tickflow_errors.py
-?? backend/tests/test_gold_path_security.py
-?? backend/tests/test_gold_runtime_lock.py
-?? backend/tests/test_gold_sdk_http_budget.py
-?? backend/tests/test_gold_tickflow_errors.py
-?? docs/gold-stage-a-runbook.md
-?? docs/tickflow-request-path-audit.md
-?? docs/tickflow-sdk-http-budget.md
-?? reports/
-?? scripts/
-=== compose bind ===
-OK: docker-compose.yml loopback bind (compose binary skipped)
-=== security pytest ===
-..............................                                           [100%]
-30 passed in 6.31s
-=== secret scan (heuristic) ===
-OK: no obvious live secrets in tree
-=== docs present ===
-OK: Stage A docs present
-STAGE_A_READY
+=== INDEPENDENT REVALIDATION 2026-07-20T20:39:59+08:00 ===
+HEAD=19d49890e4838efd34d481bf7d7b75d3700b1558
+
+Stage A verifier:
+- resolved Compose loopback bind: PASS
+- security suite: 34 passed
+- heuristic secret scan: PASS
+- result: STAGE_A_READY
+
+Broader regression:
+- Gold tests: 413 passed
+- Full backend: 787 passed, 9 warnings
+- Gold Ruff: All checks passed
+- Frontend Gold contract/routing tests: PASS
+- Frontend production build: PASS (2687 modules)
+
+Remaining external gate:
+- Tencent Lighthouse running-stack ss/lsof verification: NOT RUN
+- compose_runtime_ss_verified=false
+- Gold must remain disabled until host verification and calendar setup complete
