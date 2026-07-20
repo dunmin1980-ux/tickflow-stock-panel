@@ -3,7 +3,7 @@
 - **Date:** 2026-07-20 (Asia/Shanghai)
 - **Branch:** `cursor/gold-stage-a-hardening-v0.1.86`
 - **Base commit:** `3a171366055153a6a7329a3c094b3e4a507088d1`
-- **New tip:** (see git after commit)
+- **New tip:** `75e1ede`
 - **Workspace:** `tickflow-gold-stage-a-hardening-v0.1.86`
 - **Final status:** `STAGE_A_READY` (local verify script; see caveats)
 
