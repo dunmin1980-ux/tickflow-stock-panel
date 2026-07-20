@@ -1,5 +1,7 @@
 # Reuse a previously verified runtime image only when backend dependency files are unchanged.
 ARG BASE_IMAGE=tickflow-stock-panel-stage-a-app:pwa-dependency-base
+ARG BASE_SOURCE_COMMIT=unknown
+ARG BASE_DEPENDENCY_SHA256=unknown
 
 FROM node:20-alpine AS frontend-builder
 WORKDIR /build
@@ -10,5 +12,9 @@ COPY frontend/ ./
 RUN pnpm build
 
 FROM ${BASE_IMAGE} AS runtime
+ARG BASE_SOURCE_COMMIT
+ARG BASE_DEPENDENCY_SHA256
+LABEL org.tickflow.incremental.base-source-commit="${BASE_SOURCE_COMMIT}" \
+      org.tickflow.incremental.base-dependency-sha256="${BASE_DEPENDENCY_SHA256}"
 COPY backend/app /app/app
 COPY --from=frontend-builder /build/dist /app/static

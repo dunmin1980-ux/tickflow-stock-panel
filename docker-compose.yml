@@ -26,6 +26,7 @@ services:
       # 将主机 Codex Desktop 的 loopback local-access 端点映射到 Docker host gateway。
       - CODEX_DOCKER_HOST=host.docker.internal
       - AUTH_COOKIE_SECURE=true
+      - GOLD_WORKSPACE_ENABLED=${GOLD_WORKSPACE_ENABLED:-false}
     volumes:
       - ./data:/app/data
       - ./tiers.yaml:/app/tiers.yaml:ro

@@ -24,15 +24,22 @@ ssh codex-vm 'cd /home/ubuntu/tickflow-stock-panel-stage-a && \
 ssh codex-vm 'curl -fsS http://127.0.0.1:3019/health'
 ```
 
-若 Docker Hub/PyPI 超时，且已用 `git diff <base>..HEAD -- backend/pyproject.toml backend/uv.lock` 证明 Python 依赖文件零差异，可使用受控增量构建：
+若 Docker Hub/PyPI 超时，可使用受控增量构建。基础镜像标签必须同时包含基线 Git 提交和依赖文件摘要，不得使用可变的 `latest`/`pwa-dependency-base` 标签：
 
 ```bash
-ssh codex-vm 'docker tag tickflow-stock-panel-stage-a-app:latest \
-  tickflow-stock-panel-stage-a-app:pwa-dependency-base'
-ssh codex-vm 'cd /home/ubuntu/tickflow-stock-panel-stage-a && \
+ssh codex-vm 'set -euo pipefail
+  cd /home/ubuntu/tickflow-stock-panel-stage-a
+  base_commit=$(git rev-parse backup/pwa-predeploy-20260720)
+  dep_sha=$( { git show "$base_commit:backend/pyproject.toml"; git show "$base_commit:backend/uv.lock"; } | sha256sum | cut -d" " -f1 )
+  current_dep_sha=$(cat backend/pyproject.toml backend/uv.lock | sha256sum | cut -d" " -f1)
+  test "$dep_sha" = "$current_dep_sha"
+  base_tag="tickflow-stock-panel-stage-a-app:pwa-base-${base_commit}-${dep_sha}"
+  docker tag tickflow-stock-panel-stage-a-app:pwa-dependency-base "$base_tag"
   docker build -f deploy/Dockerfile.pwa-incremental \
-    --build-arg BASE_IMAGE=tickflow-stock-panel-stage-a-app:pwa-dependency-base \
-    -t tickflow-stock-panel-stage-a-app:latest . && \
+    --build-arg BASE_IMAGE="$base_tag" \
+    --build-arg BASE_SOURCE_COMMIT="$base_commit" \
+    --build-arg BASE_DEPENDENCY_SHA256="$dep_sha" \
+    -t tickflow-stock-panel-stage-a-app:latest .
   GOLD_WORKSPACE_ENABLED=false PORT=3019 docker compose up -d --no-build --force-recreate'
 ```
 
@@ -83,6 +90,10 @@ ssh codex-vm 'cd /home/ubuntu/tickflow-stock-panel-stage-a && \
 ```bash
 ssh codex-vm 'tailscale serve --https=8443 off'
 ssh codex-vm 'tailscale serve --bg --https=443 http://127.0.0.1:8787'
+ssh codex-vm 'docker tag tickflow-stock-panel-stage-a-app:rollback-pre-pwa-20260720 \
+  tickflow-stock-panel-stage-a-app:latest && \
+  cd /home/ubuntu/tickflow-stock-panel-stage-a && \
+  GOLD_WORKSPACE_ENABLED=false PORT=3019 docker compose up -d --no-build --force-recreate'
 ssh codex-vm 'tailscale serve status'
 ```
 
