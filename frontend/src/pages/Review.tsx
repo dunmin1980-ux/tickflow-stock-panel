@@ -15,7 +15,12 @@ import {
   Database, Wand2, Copy, Download, Clock, X, Check,
 } from 'lucide-react'
 
-import { api, type OverviewMarket, type AiReviewReport } from '@/lib/api'
+import {
+  api,
+  type OverviewMarket,
+  type AiReviewReport,
+  type AiReviewReportMetadata,
+} from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
 import { cn } from '@/lib/cn'
 import { fmtBigNum } from '@/lib/format'
@@ -85,7 +90,7 @@ export function Review() {
   })
 
   // 历史报告
-  const historyQuery = useQuery<{ reports: AiReviewReport[] }>({
+  const historyQuery = useQuery<{ reports: AiReviewReportMetadata[] }>({
     queryKey: QK.reviewReports,
     queryFn: () => api.reviewReportsList(),
   })
@@ -103,8 +108,8 @@ export function Review() {
   const [showSchedule, setShowSchedule] = useState(false)
   const prefs = usePreferences()
   const reviewSched = prefs.data?.review_schedule ?? { enabled: false, hour: 15, minute: 10 }
-  const feishuConfigured = !!(prefs.data?.feishu_webhook_url)
-  const wecomConfigured = !!(prefs.data?.wecom_webhook_url)
+  const feishuConfigured = prefs.data?.has_feishu_webhook ?? false
+  const wecomConfigured = prefs.data?.has_wecom_webhook ?? false
   // 推送渠道是独立的顶层偏好(多选), 与定时 / 实时行情无关, 常驻可单独设置
   // []=不推送, ['feishu']=飞书, ['wecom']=企业微信
   const reviewPushChannels = prefs.data?.review_push_channels ?? []
@@ -198,7 +203,7 @@ export function Review() {
   const downloadContent = useCallback(() => {
     const text = viewing?.content ?? content
     if (!text) return
-    const reportDate = viewing?.as_of ?? meta?.as_of ?? asOf ?? new Date().toISOString().slice(0, 10)
+    const reportDate = viewing?.as_of ?? viewing?.data_as_of ?? meta?.as_of ?? asOf ?? new Date().toISOString().slice(0, 10)
     const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -210,12 +215,15 @@ export function Review() {
 
   // 查看历史报告(不中断后台生成:仅临时把 viewing 覆盖到主区域,
   // 生成中的流仍在 store 里继续跑,点"生成中"项即可切回)
-  const viewReport = useCallback((r: AiReviewReport) => {
-    setViewing(r)
+  const viewReport = useCallback(async (r: AiReviewReportMetadata) => {
+    try {
+      const response = await api.reviewReportGet(r.id)
+      setViewing(response.report)
+    } catch { /* request() already reports the error */ }
   }, [])
 
   const isGenerating = phase === 'loading' || phase === 'streaming'
-  const displayDate = viewing?.as_of ?? meta?.as_of ?? marketQuery.data?.as_of ?? asOf ?? '最新'
+  const displayDate = viewing?.as_of ?? viewing?.data_as_of ?? meta?.as_of ?? marketQuery.data?.as_of ?? asOf ?? '最新'
   const data = marketQuery.data
   // 主区域显示的内容:viewing(查看历史)优先于 store 的生成 content,
   // 这样点历史报告不会覆盖后台生成中的流。
@@ -521,24 +529,6 @@ function indexShort(name?: string | null, symbol?: string): string {
   return INDEX_SHORT[name] ?? (name.replace(/指数|成指|A股|综指|50/g, '').slice(0, 2) || name.slice(0, 1))
 }
 
-// 批量替换文本中的指数全称为简称(用于历史列表 summary 显示,
-// 兼容存量旧报告 —— 它们存盘时 summary 还是全称)。
-const _INDEX_FULL_RE = /上证指数|深证成指|创业板指|科创综指|科创50/g
-function shortenIndexNames(text: string): string {
-  return text.replace(_INDEX_FULL_RE, (m) => INDEX_SHORT[m] ?? m)
-}
-
-// 从 summary 的指数段(如「上-2.26%、深-3.44%、创-4.07%、科-2.02%」)
-// 解析出 [{name, pctStr, pctNum}],供列表项按涨跌染色渲染。
-const _INDEX_PCT_RE = /([上深创科])([+-]?\d+\.\d+%)/g
-function parseIndexPcts(indexSegment: string): { name: string; pctStr: string; pctNum: number }[] {
-  const out: { name: string; pctStr: string; pctNum: number }[] = []
-  for (const m of indexSegment.matchAll(_INDEX_PCT_RE)) {
-    out.push({ name: m[1], pctStr: m[2], pctNum: parseFloat(m[2]) })
-  }
-  return out
-}
-
 function MarketSummaryBar({ data }: { data: OverviewMarket }) {
   const score = data.emotion?.score ?? null
   const emoColor = scoreColor(score)
@@ -738,11 +728,11 @@ function ReportPanel({
 function HistoryPanel({
   reports, loading, viewingId, generating, onView, onBackToGenerating, onDelete,
 }: {
-  reports: AiReviewReport[]
+  reports: AiReviewReportMetadata[]
   loading: boolean
   viewingId: string | null
   generating: boolean
-  onView: (r: AiReviewReport) => void
+  onView: (r: AiReviewReportMetadata) => void
   onBackToGenerating: () => void
   onDelete: (id: string) => void
 }) {
@@ -784,7 +774,6 @@ function HistoryPanel({
               </div>
             )}
             {reports.map((r) => {
-              const color = scoreColor(r.emotion_score)
               return (
                 <div
                   key={r.id}
@@ -794,32 +783,13 @@ function HistoryPanel({
                   )}
                   onClick={() => onView(r)}
                 >
-                  <div
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded font-mono text-[10px] font-bold tabular-nums"
-                    style={{ color, backgroundColor: `${color}1a` }}
-                  >
-                    {r.emotion_score ?? '—'}
+                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded bg-accent/10 text-accent">
+                    <BookOpenCheck className="h-3.5 w-3.5" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="truncate text-[11px] font-medium text-foreground">{r.emotion_label ?? '—'}</span>
-                      <span className="font-mono text-[10px] text-secondary">{r.as_of}</span>
-                    </div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                      {r.summary
-                        ? (() => {
-                            const pcts = parseIndexPcts(shortenIndexNames(r.summary).split('|')[0])
-                            if (pcts.length === 0) {
-                              return <span className="truncate text-[10px] text-secondary">{r.content.slice(0, 40)}</span>
-                            }
-                            return pcts.map((p) => (
-                              <span key={p.name} className="inline-flex items-center gap-0.5 text-[10px]">
-                                <span className="text-secondary">{p.name}</span>
-                                <span className={cn('font-mono font-medium tabular-nums', pctClass(p.pctNum))}>{p.pctStr}</span>
-                              </span>
-                            ))
-                          })()
-                        : <span className="truncate text-[10px] text-secondary">{r.content.slice(0, 40)}</span>}
+                      <span className="truncate text-[11px] font-medium text-foreground">{r.title ?? '市场复盘'}</span>
+                      <span className="font-mono text-[10px] text-secondary">{r.data_as_of ?? ''}</span>
                     </div>
                     {r.created_at && (
                       <div className="mt-0.5 font-mono text-[9px] text-muted">{fmtArchivedAt(r.created_at)}</div>

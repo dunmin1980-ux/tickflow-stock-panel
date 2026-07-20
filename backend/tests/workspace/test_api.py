@@ -159,6 +159,18 @@ def _tree_bytes(root: Path) -> dict[str, bytes]:
     }
 
 
+def _column_config(**updates) -> dict:
+    value = {
+        "id": "builtin:close",
+        "source": {"type": "builtin", "key": "close"},
+        "label": "收盘价",
+        "visible": True,
+        "align": "right",
+    }
+    value.update(updates)
+    return value
+
+
 def test_workspace_reads_require_authentication(unauthenticated_client):
     response = unauthenticated_client.get("/api/workspace/bootstrap")
 
@@ -373,6 +385,83 @@ def test_report_lists_are_metadata_only_and_bodies_require_exact_authenticated_g
     assert "sar_exact" not in missing.text
 
 
+def test_column_config_objects_round_trip_through_bootstrap_and_command(
+    client, monkeypatch
+):
+    watchlist_columns = [
+        _column_config(
+            candleConfig={"enabledWidth": 100, "enabledHeight": 80, "days": 20}
+        )
+    ]
+    screener_columns = [
+        _column_config(
+            id="ext:concepts:name",
+            source={
+                "type": "ext",
+                "configId": "concepts",
+                "fieldName": "name",
+                "fieldLabel": "概念",
+            },
+            label="概念",
+            visible=False,
+            align="left",
+            extDisplay={
+                "displayMode": "tag",
+                "maxTags": 3,
+                "hiddenIndices": [0, 2],
+            },
+        )
+    ]
+    preferences.save({"watchlist_columns": watchlist_columns})
+
+    bootstrap = client.get("/api/workspace/bootstrap")
+
+    assert bootstrap.status_code == 200
+    assert (
+        bootstrap.json()["resources"]["preferences"]["data"]["preferences"][
+            "watchlist_columns"
+        ]
+        == watchlist_columns
+    )
+
+    monkeypatch.setitem(settings.__dict__, "workspace_sync_enabled", True)
+    revision = bootstrap.json()["resources"]["preferences"]["revision"]
+    command = client.post(
+        "/api/workspace/resources/preferences/commands",
+        headers={"If-Match": f'"{revision}"'},
+        json={
+            "operation": "merge_safe",
+            "payload": {"screener_result_columns": screener_columns},
+        },
+    )
+
+    assert command.status_code == 200
+    assert command.json()["data"]["preferences"]["watchlist_columns"] == watchlist_columns
+    assert command.json()["data"]["preferences"]["screener_result_columns"] == screener_columns
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/settings/preferences/watchlist-columns",
+        "/api/settings/preferences/screener-result-columns",
+    ],
+)
+def test_legacy_column_endpoints_reject_sensitive_objects_without_writing(
+    client, path
+):
+    preferences.save({"nav_order": ["watchlist"]})
+
+    response = client.put(
+        path,
+        json={"columns": [_column_config(api_key="COLUMN_API_CANARY")]},
+    )
+
+    assert response.status_code == 422
+    assert "COLUMN_API_CANARY" not in response.text
+    assert preferences.load() == {"nav_order": ["watchlist"]}
+
+
 def test_workspace_command_is_disabled_by_default(client):
     revision = client.get("/api/workspace/resources/watchlist").json()["revision"]
 
@@ -511,6 +600,126 @@ def test_every_legacy_shared_mutation_is_blocked_before_side_effect_when_gate_en
         "code": "LEGACY_WORKSPACE_WRITE_DISABLED",
     }
     assert _tree_bytes(tmp_path) == before
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/settings/plugins/stocksdk/install",
+        "/api/settings/data-sources/custom-source",
+    ],
+)
+def test_provider_deletions_are_gated_before_delete_or_preference_write(
+    client, monkeypatch, path
+):
+    from app.data_providers import custom as custom_sources
+
+    monkeypatch.setitem(settings.__dict__, "workspace_sync_enabled", True)
+    monkeypatch.setattr(
+        custom_sources,
+        "uninstall_plugin",
+        lambda _name: pytest.fail("plugin delete must not run"),
+    )
+    monkeypatch.setattr(
+        custom_sources,
+        "delete_config",
+        lambda _name: pytest.fail("source delete must not run"),
+    )
+    monkeypatch.setattr(
+        preferences,
+        "save",
+        lambda _updates: pytest.fail("preference write must not run"),
+    )
+
+    response = client.delete(path)
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Legacy workspace write is disabled while versioned sync is enabled",
+        "code": "LEGACY_WORKSPACE_WRITE_DISABLED",
+    }
+
+
+def test_provider_deletions_keep_gate_off_behavior(client, monkeypatch, tmp_path):
+    from app.data_providers import custom as custom_sources
+
+    deleted: list[tuple[str, str]] = []
+    monkeypatch.setitem(settings.__dict__, "workspace_sync_enabled", False)
+    monkeypatch.setattr(custom_sources, "is_builtin", lambda name: name == "stocksdk")
+    monkeypatch.setattr(
+        custom_sources,
+        "uninstall_plugin",
+        lambda name: (deleted.append(("plugin", name)) or (True, "ok")),
+    )
+    monkeypatch.setattr(
+        custom_sources,
+        "delete_config",
+        lambda name: deleted.append(("source", name)),
+    )
+    monkeypatch.setattr(custom_sources, "load_all", lambda: None)
+    monkeypatch.setattr(custom_sources, "list_plugins", lambda: [])
+    monkeypatch.setattr(custom_sources, "list_sources", lambda: [])
+    monkeypatch.setattr(custom_sources, "errors", lambda: [])
+    monkeypatch.setattr(custom_sources, "data_sources_dir", lambda: tmp_path)
+    monkeypatch.setattr(preferences, "get_daily_data_provider", lambda: "tickflow")
+    monkeypatch.setattr(preferences, "get_minute_data_provider", lambda: "tickflow")
+    monkeypatch.setattr(preferences, "get_realtime_data_provider", lambda: "tickflow")
+    monkeypatch.setattr(preferences, "get_financial_provider", lambda: "tickflow")
+    monkeypatch.setattr(preferences, "get_adj_factor_provider", lambda: "same_as_daily")
+
+    plugin = client.delete("/api/settings/plugins/stocksdk/install")
+    source = client.delete("/api/settings/data-sources/custom-source")
+
+    assert plugin.status_code == 200
+    assert source.status_code == 200
+    assert deleted == [("plugin", "stocksdk"), ("source", "custom-source")]
+
+
+def test_realtime_monitor_allows_local_only_fields_when_workspace_gate_enabled(
+    client, monkeypatch
+):
+    monkeypatch.setitem(settings.__dict__, "workspace_sync_enabled", True)
+
+    response = client.put(
+        "/api/settings/preferences/realtime-monitor",
+        json={
+            "minute_intraday_refresh": True,
+            "minute_intraday_refresh_interval": 12,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["minute_intraday_refresh"] is True
+    assert response.json()["minute_intraday_refresh_interval"] == 12
+    assert preferences.load()["minute_intraday_refresh"] is True
+    assert preferences.load()["minute_intraday_refresh_interval"] == 12
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"sidebar_index_symbols": ["000001.SH"]},
+        {"screener_auto_run": False},
+        {"minute_intraday_refresh": True, "sidebar_index_symbols": ["000001.SH"]},
+    ],
+)
+def test_realtime_monitor_rejects_shared_or_mixed_fields_before_write(
+    client, monkeypatch, payload
+):
+    monkeypatch.setitem(settings.__dict__, "workspace_sync_enabled", True)
+    monkeypatch.setattr(
+        preferences,
+        "set_realtime_monitor_config",
+        lambda _cfg: pytest.fail("preference write must not run"),
+    )
+
+    response = client.put("/api/settings/preferences/realtime-monitor", json=payload)
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Legacy workspace write is disabled while versioned sync is enabled",
+        "code": "LEGACY_WORKSPACE_WRITE_DISABLED",
+    }
 
 
 @pytest.mark.parametrize(

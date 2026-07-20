@@ -1,5 +1,11 @@
 import { useSyncExternalStore } from 'react'
-import { api, type PriceLevel, type LevelType } from './api'
+import {
+  api,
+  type AiStockReport,
+  type AiStockReportMetadata,
+  type PriceLevel,
+  type LevelType,
+} from './api'
 
 /**
  * AI 个股分析 —— 全局任务/报告 store(与 aiReportStore 解耦、并行存在)。
@@ -38,17 +44,20 @@ export interface HistoryReport {
   symbol: string
   name: string
   focus: string
-  content: string
+  title?: string
+  content?: string
   summary?: string
   close?: number | null
   levels?: Record<LevelType, PriceLevel[]>
   created_at: string
+  data_as_of?: string
 }
 
 const MAX_ACTIVE = 3
 
 let activeTasks: ActiveTask[] = []
 let history: HistoryReport[] = []
+let selectedHistoryReport: HistoryReport | null = null
 let historyLoaded = false
 const listeners = new Set<() => void>()
 
@@ -66,17 +75,20 @@ function normalizeAiError(msg: string) {
 
 let _activeSnap: ActiveTask[] = []
 let _historySnap: HistoryReport[] = []
+let _selectedHistorySnap: HistoryReport | null = null
 interface DialogSnap { taskId: string | null; minimized: boolean }
 let _dialogSnap: DialogSnap = { taskId: activeDialogTaskId, minimized: dialogMinimized }
 
 function rebuildSnap() {
   _activeSnap = activeTasks
   _historySnap = history
+  _selectedHistorySnap = selectedHistoryReport
   _dialogSnap = { taskId: activeDialogTaskId, minimized: dialogMinimized }
 }
 
 function getActiveSnapshot() { return _activeSnap }
 function getHistorySnapshot() { return _historySnap }
+function getSelectedHistorySnapshot() { return _selectedHistorySnap }
 function getDialogSnapshot() { return _dialogSnap }
 
 function patchTask(id: string, patch: Partial<ActiveTask>) {
@@ -120,11 +132,14 @@ export function useDialogState() {
 export function useDialogTask(): { task: ActiveTask | HistoryReport | null; mode: 'active' | 'history' | null } {
   const ds = useDialogState()
   const active = useSyncExternalStore(subscribe, getActiveSnapshot, () => [])
-  const hist = useSyncExternalStore(subscribe, getHistorySnapshot, () => [])
+  const selectedHistory = useSyncExternalStore(subscribe, getSelectedHistorySnapshot, () => null)
   if (!ds.taskId) return { task: null, mode: null }
   if (ds.taskId.startsWith('history:')) {
     const rid = ds.taskId.slice('history:'.length)
-    return { task: hist.find(r => r.id === rid) ?? null, mode: 'history' }
+    return {
+      task: selectedHistory?.id === rid ? selectedHistory : null,
+      mode: 'history',
+    }
   }
   return { task: active.find(t => t.id === ds.taskId) ?? null, mode: 'active' }
 }
@@ -134,11 +149,25 @@ export function useDialogTask(): { task: ActiveTask | HistoryReport | null; mode
 export async function loadHistory(): Promise<void> {
   try {
     const res = await api.stockAnalysisReportsList()
-    history = res.reports ?? []
+    history = (res.reports ?? []).map(toHistoryMetadata)
     historyLoaded = true
     rebuildSnap()
     emit()
   } catch { /* 静默 */ }
+}
+
+function toHistoryMetadata(
+  report: AiStockReportMetadata & Partial<Pick<AiStockReport, 'name' | 'focus'>>,
+): HistoryReport {
+  return {
+    id: report.id,
+    symbol: report.symbol,
+    name: report.name ?? report.title ?? report.symbol,
+    focus: report.focus ?? '',
+    title: report.title,
+    created_at: report.created_at,
+    data_as_of: report.data_as_of,
+  }
 }
 
 export async function findLatestHistoryReport(symbol: string): Promise<HistoryReport | null> {
@@ -224,7 +253,7 @@ async function runStream(id: string, symbol: string, _name: string, focus: strin
         })
         if (res.report) {
           patchTask(id, { savedReportId: res.report.id })
-          history = [res.report, ...history.filter(r => r.id !== res.report.id)]
+          history = [toHistoryMetadata(res.report), ...history.filter(r => r.id !== res.report.id)]
           historyLoaded = true
           rebuildSnap()
           emit()
@@ -247,7 +276,7 @@ export function minimizeDialog() {
   dialogMinimized = true; rebuildSnap(); emit()
 }
 export function closeDialog() {
-  activeDialogTaskId = null; dialogMinimized = false; rebuildSnap(); emit()
+  activeDialogTaskId = null; dialogMinimized = false; selectedHistoryReport = null; rebuildSnap(); emit()
 }
 export function restoreDialog(taskId: string) {
   const t = activeTasks.find(x => x.id === taskId)
@@ -263,10 +292,18 @@ export async function deleteReport(reportId: string): Promise<void> {
   try {
     await api.stockAnalysisReportDelete(reportId)
     history = history.filter(r => r.id !== reportId)
+    if (selectedHistoryReport?.id === reportId) selectedHistoryReport = null
     rebuildSnap()
     emit()
   } catch { /* 静默 */ }
 }
-export function openHistoryReport(reportId: string) {
-  activeDialogTaskId = `history:${reportId}`; dialogMinimized = false; rebuildSnap(); emit()
+export async function openHistoryReport(reportId: string): Promise<void> {
+  try {
+    const response = await api.stockAnalysisReportGet(reportId)
+    selectedHistoryReport = response.report
+    activeDialogTaskId = `history:${reportId}`
+    dialogMinimized = false
+    rebuildSnap()
+    emit()
+  } catch { /* request() already reports the error */ }
 }

@@ -389,9 +389,9 @@ class CustomSourceIn(BaseModel):
 
 @router.get("/preferences")
 def get_preferences() -> dict:
-    """返回严格脱敏的客户端偏好设置。"""
+    """返回脱敏的客户端运行偏好设置。"""
     from app.services import preferences
-    return preferences.load_client_preferences()
+    return preferences.load_safe_preferences()
 
 
 @router.get("/data-sources")
@@ -578,7 +578,10 @@ def update_watchlist_columns(req: dict) -> dict:
     """保存自选列表列配置。"""
     from app.services import preferences
     columns = req.get("columns", [])
-    saved = preferences.set_watchlist_columns(columns)
+    try:
+        saved = preferences.set_watchlist_columns(columns)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="列配置格式无效") from exc
     return {"columns": saved}
 
 
@@ -595,7 +598,10 @@ def update_screener_result_columns(req: dict) -> dict:
     """保存策略结果列表列配置。"""
     from app.services import preferences
     columns = req.get("columns", [])
-    saved = preferences.set_screener_result_columns(columns)
+    try:
+        saved = preferences.set_screener_result_columns(columns)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="列配置格式无效") from exc
     return {"columns": saved}
 
 
@@ -718,6 +724,11 @@ def update_realtime_monitor_config(req: RealtimeMonitorConfigIn, request: Reques
     from app.services import preferences
 
     cfg = req.model_dump(exclude_none=True)
+    if {"sidebar_index_symbols", "screener_auto_run"} & cfg.keys():
+        from app.api.workspace import shared_preference_legacy_write_response
+
+        if blocked := shared_preference_legacy_write_response():
+            return blocked
     result = preferences.set_realtime_monitor_config(cfg)
 
     # 策略监控开关/池变化 → 同步迁移为 type=strategy 规则 + reload 引擎

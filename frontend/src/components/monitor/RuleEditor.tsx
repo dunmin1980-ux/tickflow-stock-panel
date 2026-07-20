@@ -59,8 +59,8 @@ export function RuleEditor({ rule, preset, simple, onClose, onSaved }: Props) {
   const qc = useQueryClient()
   const options = useQuery({ queryKey: QK.monitorRuleOptions, queryFn: api.monitorRuleOptions })
   const { data: prefs } = usePreferences()
-  const feishuConfigured = !!(prefs?.feishu_webhook_url)
-  const wecomConfigured = !!(prefs?.wecom_webhook_url)
+  const feishuConfigured = prefs?.has_feishu_webhook ?? false
+  const wecomConfigured = prefs?.has_wecom_webhook ?? false
   const [editing] = useState(!!rule)
   // 新建规则: 预填全局「默认推送渠道」(多选数组), preset 显式指定时以 preset 为准。
   // 编辑规则: 完全沿用规则自身配置, 不受默认值影响。

@@ -8,8 +8,10 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import math
 import os
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 from threading import RLock
 
@@ -40,14 +42,21 @@ CLIENT_STATUS_KEYS = frozenset({
 CLIENT_RESPONSE_KEYS = CLIENT_PREFERENCE_KEYS | CLIENT_STATUS_KEYS
 
 _CLIENT_BOOL_KEYS = frozenset({"indices_nav_pinned", "screener_auto_run"})
-_CLIENT_LIST_KEYS = frozenset({
+_CLIENT_COLUMN_KEYS = frozenset({
     "watchlist_columns",
     "screener_result_columns",
+})
+_CLIENT_STRING_LIST_KEYS = frozenset({
     "sidebar_index_symbols",
     "nav_order",
     "nav_hidden",
 })
-_CLIENT_PROVIDER_KEYS = CLIENT_PREFERENCE_KEYS - _CLIENT_BOOL_KEYS - _CLIENT_LIST_KEYS
+_CLIENT_PROVIDER_KEYS = (
+    CLIENT_PREFERENCE_KEYS
+    - _CLIENT_BOOL_KEYS
+    - _CLIENT_COLUMN_KEYS
+    - _CLIENT_STRING_LIST_KEYS
+)
 _SENSITIVE_KEY_PARTS = (
     "secret",
     "token",
@@ -58,6 +67,8 @@ _SENSITIVE_KEY_PARTS = (
     "bot",
     "url",
 )
+_SECRET_KEY_PARTS = ("secret", "token", "key", "password", "cookie")
+_DROP_VALUE = object()
 
 
 def _lock() -> RLock:
@@ -135,10 +146,205 @@ def _is_sensitive_key(key: str) -> bool:
     return any(part in lowered for part in _SENSITIVE_KEY_PARTS)
 
 
+def _is_sensitive_path(key: str, parents: tuple[str, ...] = ()) -> bool:
+    lowered = key.casefold()
+    if any(part in lowered for part in _SECRET_KEY_PARTS):
+        return True
+    path = (*parents, lowered)
+    if "url" in lowered and any("webhook" in part for part in path):
+        return True
+    return (lowered == "id" or "bot_id" in lowered or "botid" in lowered) and any(
+        "bot" in part for part in path
+    )
+
+
+def _safe_json_value(value: object, parents: tuple[str, ...] = ()) -> object:
+    if value is None or isinstance(value, (str, bool, int)):
+        return copy.deepcopy(value)
+    if isinstance(value, float):
+        return value if math.isfinite(value) else _DROP_VALUE
+    if isinstance(value, list):
+        result = []
+        for item in value:
+            safe_item = _safe_json_value(item, parents)
+            if safe_item is not _DROP_VALUE:
+                result.append(safe_item)
+        return result
+    if isinstance(value, dict):
+        result = {}
+        for key, item in value.items():
+            if not isinstance(key, str) or _is_sensitive_path(key, parents):
+                continue
+            safe_item = _safe_json_value(item, (*parents, key.casefold()))
+            if safe_item is not _DROP_VALUE:
+                result[key] = safe_item
+        return result
+    return _DROP_VALUE
+
+
+def _validate_object_fields(
+    value: object,
+    *,
+    required: frozenset[str],
+    allowed: frozenset[str],
+) -> dict:
+    if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
+        raise ValueError("column configuration must contain JSON objects")
+    keys = frozenset(value)
+    if not required <= keys or not keys <= allowed:
+        raise ValueError("column configuration contains unsupported fields")
+    return value
+
+
+def _validate_string(value: object) -> None:
+    if not isinstance(value, str):
+        raise ValueError("column configuration string field is invalid")
+
+
+def _validate_number(value: object) -> None:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+    ):
+        raise ValueError("column configuration number field is invalid")
+
+
+def _validate_column_source(value: object) -> None:
+    source = _validate_object_fields(
+        value,
+        required=frozenset({"type"}),
+        allowed=frozenset({"type", "key", "configId", "fieldName", "fieldLabel"}),
+    )
+    source_type = source["type"]
+    _validate_string(source_type)
+    if source_type in {"builtin", "computed"}:
+        if frozenset(source) != {"type", "key"}:
+            raise ValueError("builtin/computed column source is invalid")
+        _validate_string(source["key"])
+        return
+    if source_type == "ext":
+        required = {"type", "configId", "fieldName"}
+        if not required <= source.keys() or not source.keys() <= required | {"fieldLabel"}:
+            raise ValueError("extension column source is invalid")
+        _validate_string(source["configId"])
+        _validate_string(source["fieldName"])
+        if "fieldLabel" in source:
+            _validate_string(source["fieldLabel"])
+        return
+    raise ValueError("column source type is invalid")
+
+
+def _validate_ext_display(value: object) -> None:
+    display = _validate_object_fields(
+        value,
+        required=frozenset({"displayMode"}),
+        allowed=frozenset({
+            "displayMode",
+            "separator",
+            "maxWidth",
+            "maxTags",
+            "hiddenIndices",
+            "tagLayout",
+        }),
+    )
+    _validate_string(display["displayMode"])
+    if display["displayMode"] not in {"tag", "text"}:
+        raise ValueError("column display mode is invalid")
+    for key in ("separator", "maxWidth"):
+        if key in display:
+            _validate_string(display[key])
+    if "maxTags" in display:
+        _validate_number(display["maxTags"])
+    if "hiddenIndices" in display:
+        indices = display["hiddenIndices"]
+        if not isinstance(indices, list):
+            raise ValueError("column hidden indices are invalid")
+        for index in indices:
+            _validate_number(index)
+    if "tagLayout" in display:
+        _validate_string(display["tagLayout"])
+        if display["tagLayout"] not in {"horizontal", "vertical"}:
+            raise ValueError("column tag layout is invalid")
+
+
+def _validate_numeric_config(value: object, allowed: frozenset[str]) -> None:
+    config = _validate_object_fields(value, required=frozenset(), allowed=allowed)
+    for item in config.values():
+        _validate_number(item)
+
+
+def _validate_column_config(value: object) -> None:
+    column = _validate_object_fields(
+        value,
+        required=frozenset({"id", "source", "label", "visible"}),
+        allowed=frozenset({
+            "id",
+            "source",
+            "label",
+            "visible",
+            "pinned",
+            "align",
+            "extDisplay",
+            "candleConfig",
+            "intradayConfig",
+            "standalone",
+        }),
+    )
+    _validate_string(column["id"])
+    _validate_column_source(column["source"])
+    _validate_string(column["label"])
+    if not isinstance(column["visible"], bool):
+        raise ValueError("column visibility is invalid")
+    for key in ("pinned", "standalone"):
+        if key in column and not isinstance(column[key], bool):
+            raise ValueError("column boolean field is invalid")
+    if "align" in column:
+        _validate_string(column["align"])
+        if column["align"] not in {"left", "center", "right"}:
+            raise ValueError("column alignment is invalid")
+    if "extDisplay" in column:
+        _validate_ext_display(column["extDisplay"])
+    if "candleConfig" in column:
+        _validate_numeric_config(
+            column["candleConfig"],
+            frozenset({
+                "enabledWidth",
+                "enabledHeight",
+                "disabledWidth",
+                "disabledHeight",
+                "days",
+            }),
+        )
+    if "intradayConfig" in column:
+        _validate_numeric_config(
+            column["intradayConfig"],
+            frozenset({"width", "height"}),
+        )
+
+
+def _validated_column_configs(value: object) -> list[dict]:
+    if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+        raise ValueError("column configuration must be an array of objects")
+    for item in value:
+        _validate_column_config(item)
+    return copy.deepcopy(value)
+
+
+def _valid_column_configs(value: object) -> bool:
+    try:
+        _validated_column_configs(value)
+    except ValueError:
+        return False
+    return True
+
+
 def _valid_client_value(key: str, value: object) -> bool:
     if key in _CLIENT_BOOL_KEYS:
         return isinstance(value, bool)
-    if key in _CLIENT_LIST_KEYS:
+    if key in _CLIENT_COLUMN_KEYS:
+        return _valid_column_configs(value)
+    if key in _CLIENT_STRING_LIST_KEYS:
         return (
             isinstance(value, list)
             and all(isinstance(item, str) and "://" not in item for item in value)
@@ -156,6 +362,28 @@ def load_client_preferences() -> dict:
         for key in CLIENT_PREFERENCE_KEYS
         if key in raw and not _is_sensitive_key(key) and _valid_client_value(key, raw[key])
     }
+    result.update({
+        "has_feishu_webhook": bool(str(raw.get("feishu_webhook_url") or "").strip()),
+        "has_wecom_webhook": bool(str(raw.get("wecom_webhook_url") or "").strip()),
+        "has_wecom_bot": bool(
+            str(raw.get("wecom_bot_id") or "").strip()
+            and str(raw.get("wecom_bot_secret") or "").strip()
+        ),
+    })
+    return result
+
+
+def load_safe_preferences() -> dict:
+    """Return all operational preferences with credentials removed recursively."""
+    raw = load()
+    safe = _safe_json_value(raw)
+    result = safe if isinstance(safe, dict) else {}
+    for key in _CLIENT_COLUMN_KEYS:
+        result.pop(key, None)
+        if key not in raw:
+            continue
+        with suppress(ValueError):
+            result[key] = _validated_column_configs(raw[key])
     result.update({
         "has_feishu_webhook": bool(str(raw.get("feishu_webhook_url") or "").strip()),
         "has_wecom_webhook": bool(str(raw.get("wecom_webhook_url") or "").strip()),
@@ -889,8 +1117,9 @@ def get_watchlist_columns() -> list[dict] | None:
 
 def set_watchlist_columns(columns: list[dict]) -> list[dict]:
     """保存自选列表列配置。"""
-    save({"watchlist_columns": columns})
-    return columns
+    validated = _validated_column_configs(columns)
+    save({"watchlist_columns": validated})
+    return validated
 
 
 def get_screener_result_columns() -> list[dict] | None:
@@ -900,8 +1129,9 @@ def get_screener_result_columns() -> list[dict] | None:
 
 def set_screener_result_columns(columns: list[dict]) -> list[dict]:
     """保存策略结果列表列配置。"""
-    save({"screener_result_columns": columns})
-    return columns
+    validated = _validated_column_configs(columns)
+    save({"screener_result_columns": validated})
+    return validated
 
 
 # ===== 首次使用引导 =====

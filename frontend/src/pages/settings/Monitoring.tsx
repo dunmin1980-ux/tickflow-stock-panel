@@ -70,21 +70,19 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
   const minInterval = intervalData?.min_interval ?? 6
   const maxInterval = intervalData?.max_interval ?? 60
   const [intervalDraft, setIntervalDraft] = useState(interval)
-  const feishuWebhookUrl = prefs?.feishu_webhook_url ?? ''
-  const feishuWebhookSecret = prefs?.feishu_webhook_secret ?? ''
-  const [feishuDraft, setFeishuDraft] = useState(feishuWebhookUrl)
-  const [feishuSecretDraft, setFeishuSecretDraft] = useState(feishuWebhookSecret)
+  const feishuConfigured = prefs?.has_feishu_webhook ?? false
+  const [feishuDraft, setFeishuDraft] = useState('')
+  const [feishuSecretDraft, setFeishuSecretDraft] = useState('')
   const [feishuError, setFeishuError] = useState('')
   // 企业微信 webhook
-  const wecomWebhookUrl = prefs?.wecom_webhook_url ?? ''
-  const [wecomDraft, setWecomDraft] = useState(wecomWebhookUrl)
+  const wecomConfigured = prefs?.has_wecom_webhook ?? false
+  const [wecomDraft, setWecomDraft] = useState('')
   const [wecomError, setWecomError] = useState('')
   // 企业微信智能机器人 (BotID + Secret, 长连接通道)
-  const wecomBotId = prefs?.wecom_bot_id ?? ''
-  const wecomBotSecret = prefs?.wecom_bot_secret ?? ''
+  const wecomBotConfigured = prefs?.has_wecom_bot ?? false
   const wecomBotEnabled = prefs?.wecom_bot_enabled ?? false
-  const [botIdDraft, setBotIdDraft] = useState(wecomBotId)
-  const [botSecretDraft, setBotSecretDraft] = useState(wecomBotSecret)
+  const [botIdDraft, setBotIdDraft] = useState('')
+  const [botSecretDraft, setBotSecretDraft] = useState('')
   const [botError, setBotError] = useState('')
   const [botStatus, setBotStatus] = useState<{connected: boolean; last_error: string} | null>(null)
   // 飞书渠道配置区展开态 (推送通知卡片内)
@@ -93,17 +91,6 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
   const [wecomOpen, setWecomOpen] = useState(false)
   // 智能机器人配置区展开态
   const [botOpen, setBotOpen] = useState(false)
-  useEffect(() => {
-    setFeishuDraft(feishuWebhookUrl)
-    setFeishuSecretDraft(feishuWebhookSecret)
-  }, [feishuWebhookUrl, feishuWebhookSecret])
-  useEffect(() => {
-    setWecomDraft(wecomWebhookUrl)
-  }, [wecomWebhookUrl])
-  useEffect(() => {
-    setBotIdDraft(wecomBotId)
-    setBotSecretDraft(wecomBotSecret)
-  }, [wecomBotId, wecomBotSecret])
   const watchlistSymbols = prefs?.realtime_watchlist_symbols ?? []
   const watchlist = useQuery({
     queryKey: QK.watchlist,
@@ -549,8 +536,8 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                 {webhookDefaultChannels.includes('feishu') && (
                   <span className="rounded bg-accent/15 px-1 py-px text-[9px] text-accent">默认</span>
                 )}
-                <span className={`ml-auto text-[9px] ${feishuWebhookUrl ? 'text-emerald-500' : 'text-warning'}`}>
-                  {feishuWebhookUrl ? '已配置' : '未配置'}
+                <span className={`ml-auto text-[9px] ${feishuConfigured ? 'text-emerald-500' : 'text-warning'}`}>
+                  {feishuConfigured ? '已配置' : '未配置'}
                 </span>
                 <ChevronDown className={`h-3 w-3 text-muted transition-transform ${channelOpen ? 'rotate-180' : ''}`} />
               </div>
@@ -586,12 +573,12 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                   <div className="mt-2 flex items-center gap-2">
                     <button
                       onClick={submitFeishu}
-                      disabled={saveFeishuWebhook.isPending || (feishuDraft.trim() === feishuWebhookUrl && feishuSecretDraft.trim() === feishuWebhookSecret)}
+                      disabled={saveFeishuWebhook.isPending || !feishuDraft.trim()}
                       className="px-3 py-1.5 rounded-btn bg-accent text-base text-xs font-medium disabled:opacity-50 cursor-pointer hover:bg-accent/90 transition-colors"
                     >
                       {saveFeishuWebhook.isPending ? '保存中…' : '保存'}
                     </button>
-                    {feishuWebhookUrl && (
+                    {feishuConfigured && (
                       <span className="text-[10px] text-emerald-500">● 已配置</span>
                     )}
                   </div>
@@ -635,8 +622,8 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                 {webhookDefaultChannels.includes('wecom') && (
                   <span className="rounded bg-accent/15 px-1 py-px text-[9px] text-accent">默认</span>
                 )}
-                <span className={`ml-auto text-[9px] ${wecomWebhookUrl ? 'text-emerald-500' : 'text-warning'}`}>
-                  {wecomWebhookUrl ? '已配置' : '未配置'}
+                <span className={`ml-auto text-[9px] ${wecomConfigured ? 'text-emerald-500' : 'text-warning'}`}>
+                  {wecomConfigured ? '已配置' : '未配置'}
                 </span>
                 <ChevronDown className={`h-3 w-3 text-muted transition-transform ${wecomOpen ? 'rotate-180' : ''}`} />
               </div>
@@ -660,12 +647,12 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                   <div className="mt-2 flex items-center gap-2">
                     <button
                       onClick={submitWecom}
-                      disabled={saveWecomWebhook.isPending || wecomDraft.trim() === wecomWebhookUrl}
+                      disabled={saveWecomWebhook.isPending || !wecomDraft.trim()}
                       className="px-3 py-1.5 rounded-btn bg-accent text-base text-xs font-medium disabled:opacity-50 cursor-pointer hover:bg-accent/90 transition-colors"
                     >
                       {saveWecomWebhook.isPending ? '保存中…' : '保存'}
                     </button>
-                    {wecomWebhookUrl && (
+                    {wecomConfigured && (
                       <span className="text-[10px] text-emerald-500">● 已配置</span>
                     )}
                   </div>
@@ -701,14 +688,14 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                   checked={wecomBotEnabled}
                   onChange={e => { e.stopPropagation(); toggleBotConnection.mutate(e.target.checked) }}
                   onClick={e => e.stopPropagation()}
-                  disabled={!wecomBotId || toggleBotConnection.isPending}
+                  disabled={!wecomBotConfigured || toggleBotConnection.isPending}
                   title="开启后建立长连接保活, 关闭则断开"
                   className="h-3 w-3 accent-accent cursor-pointer disabled:opacity-40"
                 />
                 <span className="text-[11px] font-medium text-foreground">企业微信</span>
                 <span className="text-[9px] text-muted">智能机器人</span>
-                <span className={`ml-auto text-[9px] ${wecomBotId ? (botStatus?.connected ? 'text-emerald-500' : 'text-warning') : 'text-muted'}`}>
-                  {wecomBotId ? (botStatus?.connected ? '已连接' : (wecomBotEnabled ? '连接中' : '已配置')) : '未配置'}
+                <span className={`ml-auto text-[9px] ${wecomBotConfigured ? (botStatus?.connected ? 'text-emerald-500' : 'text-warning') : 'text-muted'}`}>
+                  {wecomBotConfigured ? (botStatus?.connected ? '已连接' : (wecomBotEnabled ? '连接中' : '已配置')) : '未配置'}
                 </span>
                 <ChevronDown className={`h-3 w-3 text-muted transition-transform ${botOpen ? 'rotate-180' : ''}`} />
               </div>
@@ -751,12 +738,12 @@ export function SettingsMonitoringPanel({ highlight }: { highlight?: string } = 
                   <div className="mt-2 flex items-center gap-2">
                     <button
                       onClick={submitBot}
-                      disabled={saveWecomBot.isPending || (botIdDraft.trim() === wecomBotId && botSecretDraft.trim() === wecomBotSecret)}
+                      disabled={saveWecomBot.isPending || !botIdDraft.trim() || !botSecretDraft.trim()}
                       className="px-3 py-1.5 rounded-btn bg-accent text-base text-xs font-medium disabled:opacity-50 cursor-pointer hover:bg-accent/90 transition-colors"
                     >
                       {saveWecomBot.isPending ? '保存中…' : '保存并连接'}
                     </button>
-                    {wecomBotId && (
+                    {wecomBotConfigured && (
                       <span className="text-[10px] text-emerald-500">● 已配置</span>
                     )}
                   </div>

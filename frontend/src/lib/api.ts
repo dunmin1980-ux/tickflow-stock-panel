@@ -250,16 +250,24 @@ export interface StockLevels {
   series?: LevelSeries
 }
 
-export interface AiStockReport {
+export interface AiStockReportMetadata {
   id: string
   symbol: string
+  title?: string
+  created_at: string
+  data_as_of?: string
+  verification_status?: string
+  can_publish?: boolean
+  trading_advice?: boolean
+}
+
+export interface AiStockReport extends AiStockReportMetadata {
   name: string
   focus: string
   content: string
   summary?: string
   close?: number | null
   levels?: Record<LevelType, PriceLevel[]>
-  created_at: string
 }
 
 // ===== Kline =====
@@ -457,15 +465,23 @@ export interface RpsRotationData {
 }
 
 // ===== 大盘复盘 =====
-export interface AiReviewReport {
+export interface AiReviewReportMetadata {
   id: string
-  as_of: string
+  title?: string
+  created_at: string
+  data_as_of?: string
+  verification_status?: string
+  can_publish?: boolean
+  trading_advice?: boolean
+}
+
+export interface AiReviewReport extends AiReviewReportMetadata {
+  as_of?: string
   focus?: string
   content: string
   summary?: string
   emotion_score?: number | null
   emotion_label?: string
-  created_at: string
 }
 
 // ===== Strategy Engine =====
@@ -959,11 +975,9 @@ export interface Preferences {
   strategy_monitor_enabled: boolean
   strategy_monitor_ids: string[]
   system_notify_enabled: boolean
-  feishu_webhook_url?: string
-  feishu_webhook_secret?: string
-  wecom_webhook_url?: string
-  wecom_bot_id?: string
-  wecom_bot_secret?: string
+  has_feishu_webhook?: boolean
+  has_wecom_webhook?: boolean
+  has_wecom_bot?: boolean
   wecom_bot_enabled?: boolean
   webhook_enabled_default?: boolean
   webhook_default_channels?: string[]
@@ -2053,7 +2067,10 @@ export const api = {
     request<StockLevels>(`/api/stock-analysis/levels?symbol=${encodeURIComponent(symbol)}&days=${days}`),
 
   stockAnalysisReportsList: () =>
-    request<{ reports: AiStockReport[] }>('/api/stock-analysis/reports'),
+    request<{ reports: AiStockReportMetadata[] }>('/api/stock-analysis/reports'),
+
+  stockAnalysisReportGet: (reportId: string) =>
+    request<{ report: AiStockReport }>(`/api/stock-analysis/reports/${encodeURIComponent(reportId)}`),
 
   stockAnalysisReportSave: (r: {
     symbol: string; name?: string; focus?: string; content: string
@@ -2116,7 +2133,10 @@ export const api = {
 
   // ===== 大盘复盘 =====
   reviewReportsList: () =>
-    request<{ reports: AiReviewReport[] }>('/api/market-recap/reports'),
+    request<{ reports: AiReviewReportMetadata[] }>('/api/market-recap/reports'),
+
+  reviewReportGet: (reportId: string) =>
+    request<{ report: AiReviewReport }>(`/api/market-recap/reports/${encodeURIComponent(reportId)}`),
 
   reviewReportSave: (r: {
     as_of: string; focus?: string; content: string

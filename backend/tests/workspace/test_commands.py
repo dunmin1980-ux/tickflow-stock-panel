@@ -123,6 +123,18 @@ def _market_recap_payload(**updates) -> dict:
     return value
 
 
+def _column_config(**updates) -> dict:
+    value = {
+        "id": "builtin:close",
+        "source": {"type": "builtin", "key": "close"},
+        "label": "收盘价",
+        "visible": True,
+        "align": "right",
+    }
+    value.update(updates)
+    return value
+
+
 def test_watchlist_replace_normalizes_unique_symbols_and_preserves_order(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "data_dir", tmp_path)
 
@@ -226,7 +238,10 @@ def test_client_preferences_are_allowlisted_and_canaries_never_serialize(monkeyp
         "load",
         lambda: {
             "nav_order": ["watchlist"],
-            "watchlist_columns": ["symbol", "price"],
+            "watchlist_columns": [
+                _column_config(id="builtin:symbol", source={"type": "builtin", "key": "symbol"}),
+                _column_config(id="builtin:price", source={"type": "computed", "key": "price"}),
+            ],
             "realtime_quotes_enabled": True,
             **canaries,
         },
@@ -237,7 +252,10 @@ def test_client_preferences_are_allowlisted_and_canaries_never_serialize(monkeyp
 
     assert client == {
         "nav_order": ["watchlist"],
-        "watchlist_columns": ["symbol", "price"],
+        "watchlist_columns": [
+            _column_config(id="builtin:symbol", source={"type": "builtin", "key": "symbol"}),
+            _column_config(id="builtin:price", source={"type": "computed", "key": "price"}),
+        ],
         "has_feishu_webhook": True,
         "has_wecom_webhook": True,
         "has_wecom_bot": True,
@@ -292,10 +310,181 @@ def test_settings_preferences_response_reuses_safe_client_projection(monkeypatch
     response = settings_api.get_preferences()
     payload = json.dumps(response, ensure_ascii=False, sort_keys=True)
 
-    assert response == preferences.load_client_preferences()
-    assert set(response) <= preferences.CLIENT_RESPONSE_KEYS
+    assert response == preferences.load_safe_preferences()
     assert all(canary not in payload for canary in canaries)
     assert not any("****" in str(value) for value in response.values())
+
+
+def test_safe_preferences_preserve_operational_values_and_redact_recursively(monkeypatch):
+    canaries = {
+        "top_secret": "TOP_SECRET_CANARY",
+        "nested_token": "NESTED_TOKEN_CANARY",
+        "webhook_url": "WEBHOOK_URL_CANARY",
+        "bot_id": "BOT_ID_CANARY",
+        "list_password": "LIST_PASSWORD_CANARY",
+    }
+    monkeypatch.setattr(
+        preferences,
+        "load",
+        lambda: {
+            "realtime_quotes_enabled": True,
+            "minute_sync_days": 7,
+            "pipeline_schedule": {"hour": 15, "minute": 10},
+            "review_push_channels": ["feishu", "wecom"],
+            "webhook_enabled_default": True,
+            "wecom_bot_enabled": False,
+            "watchlist_columns": [
+                _column_config(
+                    candleConfig={
+                        "enabledWidth": 100,
+                        "enabledHeight": 80,
+                        "disabledWidth": 40,
+                        "disabledHeight": 40,
+                        "days": 12,
+                    }
+                )
+            ],
+            "api_secret": canaries["top_secret"],
+            "nested": {
+                "enabled": True,
+                "access_token": canaries["nested_token"],
+                "webhook": {
+                    "url": canaries["webhook_url"],
+                    "enabled": True,
+                },
+                "bot": {"id": canaries["bot_id"], "enabled": False},
+            },
+            "rules": [
+                {"name": "keep", "enabled": True},
+                {"password": canaries["list_password"], "enabled": False},
+            ],
+            "feishu_webhook_url": "configured",
+            "wecom_webhook_url": "configured",
+            "wecom_bot_id": "configured",
+            "wecom_bot_secret": "configured",
+        },
+    )
+
+    response = preferences.load_safe_preferences()
+    payload = json.dumps(response, ensure_ascii=False, sort_keys=True)
+
+    assert response["realtime_quotes_enabled"] is True
+    assert response["minute_sync_days"] == 7
+    assert response["pipeline_schedule"] == {"hour": 15, "minute": 10}
+    assert response["review_push_channels"] == ["feishu", "wecom"]
+    assert response["webhook_enabled_default"] is True
+    assert response["wecom_bot_enabled"] is False
+    assert response["watchlist_columns"] == [
+        _column_config(
+            candleConfig={
+                "enabledWidth": 100,
+                "enabledHeight": 80,
+                "disabledWidth": 40,
+                "disabledHeight": 40,
+                "days": 12,
+            }
+        )
+    ]
+    assert response["nested"] == {
+        "enabled": True,
+        "webhook": {"enabled": True},
+        "bot": {"enabled": False},
+    }
+    assert response["rules"] == [
+        {"name": "keep", "enabled": True},
+        {"enabled": False},
+    ]
+    assert response["has_feishu_webhook"] is True
+    assert response["has_wecom_webhook"] is True
+    assert response["has_wecom_bot"] is True
+    assert all(canary not in payload for canary in canaries.values())
+
+
+def test_column_config_objects_round_trip_through_preference_command(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    watchlist_columns = [
+        _column_config(
+            candleConfig={"enabledWidth": 100, "enabledHeight": 80, "days": 20}
+        )
+    ]
+    screener_columns = [
+        _column_config(
+            id="ext:concepts:name",
+            source={
+                "type": "ext",
+                "configId": "concepts",
+                "fieldName": "name",
+                "fieldLabel": "概念",
+            },
+            label="概念",
+            visible=False,
+            align="left",
+            extDisplay={
+                "displayMode": "tag",
+                "separator": ",",
+                "maxWidth": "200px",
+                "maxTags": 3,
+                "hiddenIndices": [0, 2],
+                "tagLayout": "horizontal",
+            },
+        )
+    ]
+    first = snapshot_resource(ResourceName.PREFERENCES)
+
+    result = execute_command(
+        ResourceName.PREFERENCES,
+        "merge_safe",
+        {
+            "watchlist_columns": watchlist_columns,
+            "screener_result_columns": screener_columns,
+        },
+        first.revision,
+    )
+
+    assert result.data["preferences"]["watchlist_columns"] == watchlist_columns
+    assert result.data["preferences"]["screener_result_columns"] == screener_columns
+    assert preferences.load()["watchlist_columns"] == watchlist_columns
+    assert preferences.load()["screener_result_columns"] == screener_columns
+
+
+@pytest.mark.parametrize(
+    "columns",
+    [
+        ["symbol"],
+        [_column_config(nested=object())],
+        [_column_config(candleConfig={"days": float("nan")})],
+        [_column_config(api_key="COLUMN_KEY_CANARY")],
+        [_column_config(secret="COLUMN_SECRET_CANARY")],
+        [_column_config(token="COLUMN_TOKEN_CANARY")],
+        [_column_config(password="COLUMN_PASSWORD_CANARY")],
+        [_column_config(cookie="COLUMN_COOKIE_CANARY")],
+        [_column_config(source={"type": "builtin", "key": {"nested": "invalid"}})],
+    ],
+)
+def test_column_config_validation_rejects_malformed_non_json_or_sensitive_payloads(
+    tmp_path, monkeypatch, columns
+):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    preferences.save({"nav_order": ["watchlist"]})
+
+    with pytest.raises(ValueError):
+        preferences.merge_client_preferences({"watchlist_columns": columns})
+
+    assert preferences.load() == {"nav_order": ["watchlist"]}
+
+
+@pytest.mark.parametrize(
+    "setter",
+    [preferences.set_watchlist_columns, preferences.set_screener_result_columns],
+)
+def test_column_config_setters_apply_service_validation(tmp_path, monkeypatch, setter):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    preferences.save({"nav_order": ["watchlist"]})
+
+    with pytest.raises(ValueError):
+        setter([_column_config(api_key="COLUMN_SETTER_CANARY")])
+
+    assert preferences.load() == {"nav_order": ["watchlist"]}
 
 
 def test_shared_report_stores_use_resource_locks_and_financial_store_remains_compatible(

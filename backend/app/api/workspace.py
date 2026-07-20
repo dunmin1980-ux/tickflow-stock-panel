@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, StrictStr, ValidationError
+from pydantic import BaseModel, ConfigDict, JsonValue, StrictStr, ValidationError
 from sse_starlette.event import ServerSentEvent
 from sse_starlette.sse import EventSourceResponse
 
@@ -52,8 +52,8 @@ class WatchlistDataDTO(_DTO):
 
 class ClientPreferencesDTO(_DTO):
     indices_nav_pinned: bool | None = None
-    watchlist_columns: list[str] | None = None
-    screener_result_columns: list[str] | None = None
+    watchlist_columns: list[dict[str, JsonValue]] | None = None
+    screener_result_columns: list[dict[str, JsonValue]] | None = None
     sidebar_index_symbols: list[str] | None = None
     nav_order: list[str] | None = None
     nav_hidden: list[str] | None = None
@@ -420,7 +420,6 @@ _LEGACY_FIXED_MUTATIONS = frozenset(
         ("PUT", "/api/settings/preferences/watchlist-columns"),
         ("PUT", "/api/settings/preferences/screener-result-columns"),
         ("PUT", "/api/settings/preferences/indices-nav-pinned"),
-        ("PUT", "/api/settings/preferences/realtime-monitor"),
         ("POST", "/api/stock-analysis/reports"),
         ("POST", "/api/market-recap/reports"),
     }
@@ -430,7 +429,24 @@ _LEGACY_DYNAMIC_MUTATIONS = (
     ("DELETE", re.compile(r"/api/watchlist/[^/]+")),
     ("DELETE", re.compile(r"/api/stock-analysis/reports/[^/]+")),
     ("DELETE", re.compile(r"/api/market-recap/reports/[^/]+")),
+    ("DELETE", re.compile(r"/api/settings/plugins/[^/]+/install")),
+    ("DELETE", re.compile(r"/api/settings/data-sources/[^/]+")),
 )
+
+
+def _legacy_workspace_write_conflict_response() -> JSONResponse:
+    return _command_error(
+        "LEGACY_WORKSPACE_WRITE_DISABLED",
+        "Legacy workspace write is disabled while versioned sync is enabled",
+        409,
+    )
+
+
+def shared_preference_legacy_write_response() -> JSONResponse | None:
+    """Block a legacy request that includes a shared preference field."""
+    if not settings.workspace_sync_enabled:
+        return None
+    return _legacy_workspace_write_conflict_response()
 
 
 def legacy_workspace_write_response(request: Request) -> JSONResponse | None:
@@ -444,8 +460,4 @@ def legacy_workspace_write_response(request: Request) -> JSONResponse | None:
     )
     if not blocked:
         return None
-    return _command_error(
-        "LEGACY_WORKSPACE_WRITE_DISABLED",
-        "Legacy workspace write is disabled while versioned sync is enabled",
-        409,
-    )
+    return _legacy_workspace_write_conflict_response()

@@ -22,7 +22,9 @@ describe('offline policy', () => {
     '/api/watchlist/quotes',
     '/api/stock-analysis/analyze',
     '/api/stock-analysis/reports',
+    '/api/stock-analysis/reports/sar_exact',
     '/api/market-recap/reports',
+    '/api/market-recap/reports/mkr_exact',
   ])('rejects %s', (path) => expect(isOfflineCacheAllowed(path)).toBe(false))
 
   it('ignores query strings when matching a read path', () => {
