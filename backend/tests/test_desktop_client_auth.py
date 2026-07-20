@@ -238,6 +238,35 @@ def test_status_probe_uses_only_auth_status_and_scoped_cookie() -> None:
     assert seen_requests[0].headers["cookie"] == "tf_session=session-token"
 
 
+def test_remote_stream_keeps_authenticated_response_open_for_incremental_reads() -> None:
+    seen_requests: list[httpx.Request] = []
+
+    class Sessions:
+        def load(self, base_url: str) -> str:
+            return "session-token"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_requests.append(request)
+        return httpx.Response(
+            200,
+            content=b"data: one\n\ndata: two\n\n",
+            headers={"content-type": "text/event-stream"},
+        )
+
+    remote = RemoteClient(
+        "https://vm.tail.ts.net:8443",
+        sessions=Sessions(),
+        transport=httpx.MockTransport(handler),
+    )
+
+    with remote.stream("GET", "/api/workspace/events", headers={"Accept": "text/event-stream"}) as response:
+        assert b"".join(response.iter_bytes()) == b"data: one\n\ndata: two\n\n"
+
+    assert len(seen_requests) == 1
+    assert seen_requests[0].headers["cookie"] == "tf_session=session-token"
+    assert seen_requests[0].headers["accept"] == "text/event-stream"
+
+
 def _client_api_app() -> FastAPI:
     app = FastAPI()
     app.include_router(client_api.router)

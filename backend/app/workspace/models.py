@@ -18,6 +18,7 @@ class ResourceSnapshot(BaseModel):
     revision: str
     updated_at: datetime
     data: dict[str, Any]
+    offline_readonly: bool = False
 
 
 class WorkspacePreconditionRequired(RuntimeError):  # noqa: N818 - public contract

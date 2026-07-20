@@ -44,6 +44,7 @@ from app.api import (
 )
 from app.api.routes import router as core_router
 from app.config import settings
+from app.desktop_client.proxy import install_desktop_proxy
 from app.jobs import daily_pipeline
 from app.services.gold_calendar import GoldCalendarAuthority
 from app.services.gold_comparison_runs import GoldComparisonRunner
@@ -67,6 +68,27 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+def _desktop_remote_client():
+    from app.desktop_client.config import load_client_config
+    from app.desktop_client.remote import RemoteClient
+    from app.desktop_client.workspace_adapter import WorkspaceOfflineReadOnly
+
+    config = load_client_config(settings.data_dir)
+    if config is None:
+        raise WorkspaceOfflineReadOnly("cloud workspace is not configured")
+    return RemoteClient(config.remote_base_url)
+
+
+def _initialize_desktop_workspace(app: FastAPI) -> None:
+    if os.environ.get("TICKFLOW_DESKTOP_CLIENT") != "1":
+        return
+    from app.desktop_client.cache import WorkspaceCache
+    from app.desktop_client.workspace_adapter import CloudWorkspaceAdapter
+
+    cache = WorkspaceCache(settings.data_dir / "cache" / "workspace")
+    app.state.workspace_adapter = CloudWorkspaceAdapter(_desktop_remote_client, cache)
 
 
 class ImmutableAssetStaticFiles(StaticFiles):
@@ -148,6 +170,7 @@ async def lifespan(app: FastAPI):
     repo = KlineRepository(store)
     app.state.datastore = store
     app.state.repo = repo
+    _initialize_desktop_workspace(app)
     # 在接受回测请求前固定 managed generation，避免首批并发 worker 各自创建版本。
     if settings.backtest_matrix_disk_cache_enabled:
         repo.get_matrix_data_generation("stock")
@@ -457,6 +480,8 @@ if os.environ.get("TICKFLOW_DESKTOP_CLIENT") == "1":
     from app.desktop_client.api import router as desktop_client_router
 
     app.include_router(desktop_client_router)
+
+install_desktop_proxy(app, remote_factory=_desktop_remote_client)
 
 
 # 能力门控异常 → 403(而非默认 500)

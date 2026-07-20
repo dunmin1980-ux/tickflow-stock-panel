@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any, Protocol
 from urllib.parse import unquote, urlsplit
 
@@ -161,6 +163,41 @@ class RemoteClient:
             **kwargs,
         )
         return response
+
+    @contextmanager
+    def stream(self, method: str, path: str, **kwargs: Any) -> Iterator[httpx.Response]:
+        token = self.sessions.load(self.base_url)
+        if not token:
+            raise RemoteAuthRequiredError("cloud login required")
+        if any(key in kwargs for key in ("auth", "cookies", "follow_redirects")):
+            raise ValueError("caller-provided remote credentials or redirects are not allowed")
+        headers = _validated_headers(dict(kwargs.pop("headers", {})))
+        headers["Cookie"] = f"tf_session={token}"
+        normalized_path = _validated_api_path(path)
+        normalized_method = method.upper()
+        if not normalized_method.isalpha():
+            raise ValueError("remote HTTP method is invalid")
+
+        started = time.monotonic()
+        with httpx.Client(
+            base_url=self.base_url,
+            timeout=30,
+            follow_redirects=False,
+            transport=self._transport,
+        ) as client, client.stream(
+            normalized_method,
+            normalized_path,
+            headers=headers,
+            **kwargs,
+        ) as response:
+            logger.info(
+                "desktop cloud stream method=%s path=%s status=%d elapsed_ms=%d",
+                normalized_method,
+                urlsplit(normalized_path).path,
+                response.status_code,
+                int((time.monotonic() - started) * 1000),
+            )
+            yield response
 
     def logout(self) -> None:
         token = self.sessions.load(self.base_url)

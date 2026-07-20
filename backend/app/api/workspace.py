@@ -134,6 +134,7 @@ class ResourceSnapshotDTO(_DTO, Generic[ResourceDataT]):
     revision: str
     updated_at: datetime
     data: ResourceDataT
+    offline_readonly: bool | None = None
 
 
 class ResourceResponseDTO(ResourceSnapshotDTO[ResourceDataDTO]):
@@ -166,6 +167,7 @@ class WorkspaceBootstrapDTO(_DTO):
     mode: str
     capabilities: CapabilitiesDTO
     resources: WorkspaceResourcesDTO
+    offline_readonly: bool | None = None
 
 
 class WorkspaceRevisionsDTO(_DTO):
@@ -196,6 +198,8 @@ def _snapshot_dto(snapshot: ResourceSnapshot, *, include_resource: bool) -> dict
     }
     if include_resource:
         payload["resource"] = snapshot.resource
+    if snapshot.offline_readonly:
+        payload["offline_readonly"] = True
     return payload
 
 
@@ -242,12 +246,21 @@ def _all_snapshots() -> dict[ResourceName, ResourceSnapshot]:
     return {resource: snapshot_resource(resource) for resource in ResourceName}
 
 
+def _adapter(request: Request):
+    return getattr(request.app.state, "workspace_adapter", None)
+
+
 @router.get(
     "/bootstrap",
     response_model=WorkspaceBootstrapDTO,
     response_model_exclude_none=True,
 )
 def bootstrap(request: Request) -> JSONResponse:
+    if adapter := _adapter(request):
+        payload = WorkspaceBootstrapDTO.model_validate(adapter.bootstrap())
+        serialized = payload.model_dump(exclude_none=True)
+        serialized["data_as_of"] = payload.data_as_of
+        return _private_json(serialized)
     snapshots = _all_snapshots()
     resources = WorkspaceResourcesDTO(
         watchlist=_snapshot_dto(snapshots[ResourceName.WATCHLIST], include_resource=False),
@@ -277,8 +290,9 @@ def bootstrap(request: Request) -> JSONResponse:
     response_model=ResourceResponseDTO,
     response_model_exclude_none=True,
 )
-def get_resource(name: ResourceName) -> JSONResponse:
-    snapshot = snapshot_resource(name)
+def get_resource(name: ResourceName, request: Request) -> JSONResponse:
+    adapter = _adapter(request)
+    snapshot = adapter.get(name) if adapter else snapshot_resource(name)
     payload = ResourceResponseDTO.model_validate(_snapshot_dto(snapshot, include_resource=True))
     return _private_json(
         payload.model_dump(exclude_none=True),
@@ -287,10 +301,15 @@ def get_resource(name: ResourceName) -> JSONResponse:
 
 
 @router.get("/revisions", response_model=WorkspaceRevisionsDTO)
-def revisions() -> JSONResponse:
+def revisions(request: Request) -> JSONResponse:
+    adapter = _adapter(request)
     payload = WorkspaceRevisionsDTO(
         server_time=datetime.now(_SHANGHAI),
-        resources={resource: snapshot_resource(resource).revision for resource in ResourceName},
+        resources=(
+            adapter.revisions()
+            if adapter
+            else {resource: snapshot_resource(resource).revision for resource in ResourceName}
+        ),
     )
     return _private_json(payload.model_dump())
 
@@ -301,6 +320,27 @@ def _heartbeat() -> ServerSentEvent:
 
 @router.get("/events")
 async def events(request: Request) -> EventSourceResponse:
+    adapter = _adapter(request)
+    if adapter:
+        def remote_event_stream():
+            for event in adapter.stream_events():
+                yield ServerSentEvent(
+                    id=event.get("id"),
+                    event=event.get("type"),
+                    data=json.dumps(
+                        event,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ),
+                )
+
+        return EventSourceResponse(
+            remote_event_stream(),
+            headers={"Cache-Control": _PRIVATE_NO_STORE, "X-Accel-Buffering": "no"},
+            ping=20,
+            ping_message_factory=_heartbeat,
+        )
+
     hub: WorkspaceEventHub = request.app.state.workspace_event_hub
 
     async def event_stream():
@@ -338,7 +378,8 @@ def _command_error(code: str, detail: str, status_code: int) -> JSONResponse:
     response_model_exclude_none=True,
 )
 async def command(name: ResourceName, request: Request) -> JSONResponse:
-    if not settings.workspace_sync_enabled:
+    adapter = _adapter(request)
+    if adapter is None and not settings.workspace_sync_enabled:
         return _command_error(
             "WORKSPACE_SYNC_DISABLED",
             "Versioned workspace writes are disabled",
@@ -356,11 +397,20 @@ async def command(name: ResourceName, request: Request) -> JSONResponse:
     try:
         raw = await request.json()
         command_dto = WorkspaceCommandDTO.model_validate(raw)
-        snapshot = execute_command(
-            name,
-            command_dto.operation,
-            command_dto.payload,
-            expected_revision,
+        snapshot = (
+            adapter.command(
+                name,
+                command_dto.operation,
+                command_dto.payload,
+                expected_revision,
+            )
+            if adapter
+            else execute_command(
+                name,
+                command_dto.operation,
+                command_dto.payload,
+                expected_revision,
+            )
         )
     except (TypeError, ValueError, ValidationError):
         return _command_error(
@@ -369,7 +419,8 @@ async def command(name: ResourceName, request: Request) -> JSONResponse:
             422,
         )
 
-    request.app.state.workspace_event_hub.publish(snapshot)
+    if adapter is None:
+        request.app.state.workspace_event_hub.publish(snapshot)
     payload = ResourceResponseDTO.model_validate(_snapshot_dto(snapshot, include_resource=True))
     return _private_json(
         payload.model_dump(exclude_none=True),
@@ -378,6 +429,18 @@ async def command(name: ResourceName, request: Request) -> JSONResponse:
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    from app.desktop_client.workspace_adapter import WorkspaceOfflineReadOnly
+
+    @app.exception_handler(WorkspaceOfflineReadOnly)
+    async def offline_read_only_handler(
+        _request: Request, _exc: WorkspaceOfflineReadOnly
+    ) -> JSONResponse:
+        return _command_error(
+            "WORKSPACE_OFFLINE_READ_ONLY",
+            "Cloud workspace is offline and read-only",
+            503,
+        )
+
     @app.exception_handler(WorkspacePreconditionRequired)
     async def precondition_required_handler(
         _request: Request, _exc: WorkspacePreconditionRequired
