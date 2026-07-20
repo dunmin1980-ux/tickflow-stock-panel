@@ -70,6 +70,12 @@ STAGE_A_READY
 3. Do not run live Pro probe concurrently with Gold sampler.
 4. P1 (CI / version unify to 0.1.87 / frozen locks / credential redaction) still recommended before merge to upstream.
 
-## 7. Connection-failure note
+## 7. Lighthouse next step
+
+Host bind checklist: `docs/gold-stage-a-lighthouse-verify.md`  
+Until `ss`/`lsof` confirms loopback-only 3018 on the VM, keep `compose_runtime_ss_verified=false`.
+
+## 8. Connection-failure note
+
 
 Background agents ([Write Stage A audit docs](502952c7-03fd-4207-8266-b0c42a6af177), [Gold Stage A hardening](09ac5a42-9163-4a71-9dc6-e353dd36b1a4)) failed with connection errors; work continued in the parent session. No reset/discard was performed; WIP was preserved.
