@@ -1,0 +1,6 @@
+platform=14.8.5
+machine=x86_64
+python=Python 3.12.13
+pyinstaller=6.16.0
+app=/Users/macbookpro/Documents/TradingView 量化/tickflow-multiclient-app/backend/dist/TickFlowStockPanel.app
+dmg=/Users/macbookpro/Documents/TradingView 量化/tickflow-multiclient-app/dist/TickFlowStockPanel-intel-x86_64.dmg

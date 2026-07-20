@@ -1,0 +1,56 @@
+INFO:     Started server process [37609]
+INFO:     Waiting for application startup.
+2026-07-21 02:32:01,301 [INFO] app.main: TickFlow Stock Panel v0.1.86 starting (mode=none)
+2026-07-21 02:32:01,327 [INFO] app.tickflow.repository: cache refresh start (background=True)
+2026-07-21 02:32:01,327 [INFO] app.tickflow.repository: cache refresh step start: instruments
+2026-07-21 02:32:01,329 [WARNING] app.tickflow.repository: instruments 缓存刷新失败: failed to retrieve first file schema (parquet): expanded paths were empty (path expansion input: 'paths: [PlRefPath { inner: "/var/folders/ln/hd9n0j9910s4htp7296nwqbw0000gn/T/tickflow-intel-smoke.IsWe9J/Library/Application Support/TickFlowStockPanel/instruments/**/*.parquet" }]', glob: true). Hint: passing a schema can allow this scan to succeed with an empty DataFrame.
+2026-07-21 02:32:01,330 [INFO] app.tickflow.repository: cache refresh step done: instruments (0.00s)
+2026-07-21 02:32:01,330 [INFO] app.tickflow.repository: cache refresh step start: index instruments
+2026-07-21 02:32:01,330 [INFO] app.tickflow.repository: cache refresh step done: index instruments (0.00s)
+2026-07-21 02:32:01,330 [INFO] app.tickflow.repository: cache refresh step start: ETF instruments
+2026-07-21 02:32:01,331 [INFO] app.tickflow.repository: cache refresh step done: ETF instruments (0.00s)
+2026-07-21 02:32:01,331 [INFO] app.tickflow.repository: cache refresh: enriched 推后台线程预热
+2026-07-21 02:32:01,331 [INFO] app.tickflow.repository: enriched warmup thread started
+2026-07-21 02:32:01,331 [INFO] app.tickflow.repository: cache refresh done (0.00s)
+2026-07-21 02:32:01,331 [INFO] app.tickflow.repository: enriched refresh start
+2026-07-21 02:32:01,332 [INFO] app.tickflow.repository: enriched refresh step start: latest date
+2026-07-21 02:32:01,341 [INFO] app.tickflow.repository: enriched refresh step done: latest date=None (0.01s)
+2026-07-21 02:32:01,341 [INFO] app.tickflow.repository: enriched refresh skipped: no latest date (0.01s)
+2026-07-21 02:32:01,341 [INFO] app.tickflow.repository: enriched warmup thread done (0.0s)
+2026-07-21 02:32:01,349 [INFO] app.main: ready; 2 capabilities active
+2026-07-21 02:32:01,350 [INFO] app.main: custom data sources loaded: 0
+2026-07-21 02:32:01,350 [INFO] app.services.quote_service: 实时行情未启动:当前档位(none)无实时行情权限
+2026-07-21 02:32:01,351 [INFO] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-07-21 02:32:01,351 [INFO] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-07-21 02:32:01,352 [INFO] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-07-21 02:32:01,354 [INFO] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-07-21 02:32:01,354 [INFO] apscheduler.scheduler: Added job "start_scheduler.<locals>.<lambda>" to job store "default"
+2026-07-21 02:32:01,355 [INFO] apscheduler.scheduler: Added job "start_scheduler.<locals>.<lambda>" to job store "default"
+2026-07-21 02:32:01,355 [INFO] apscheduler.scheduler: Added job "start_scheduler.<locals>._depth_finalize" to job store "default"
+2026-07-21 02:32:01,355 [INFO] apscheduler.scheduler: Added job "start_scheduler.<locals>._reprobe_capabilities" to job store "default"
+2026-07-21 02:32:01,355 [INFO] apscheduler.scheduler: Scheduler started
+2026-07-21 02:32:01,355 [INFO] app.jobs.daily_pipeline: scheduler started; instruments@09:10, pipeline@15:30, depth@15:02 mon-fri
+2026-07-21 02:32:01,355 [INFO] app.services.depth_service: depth sealed: 无 DEPTH5_BATCH 能力, 跳过启动补跑
+2026-07-21 02:32:01,356 [INFO] app.services.ext_presets: 内置扩展表 ext_gn_ths 配置已就绪 (待用户手动获取数据)
+2026-07-21 02:32:01,357 [INFO] app.services.ext_presets: 内置扩展表 ext_hy_ths 配置已就绪 (待用户手动获取数据)
+2026-07-21 02:32:01,357 [INFO] app.services.ext_pull: PullScheduler started
+2026-07-21 02:32:01,358 [INFO] app.services.financial_sync: FinancialScheduler skipped: no FINANCIAL capability
+2026-07-21 02:32:01,535 [INFO] app.main: strategy engine loaded: 18 strategies
+2026-07-21 02:32:01,535 [INFO] app.strategy.monitor: MonitorRuleEngine: 装载 0 条规则
+2026-07-21 02:32:01,535 [INFO] app.main: monitor engine loaded: 0 rules
+2026-07-21 02:32:01,536 [INFO] app.services.ext_pull: PullScheduler: scheduled ext_gn_ths (every 1440 min)
+2026-07-21 02:32:01,536 [INFO] app.services.ext_pull: PullScheduler: scheduled ext_hy_ths (every 1440 min)
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:62662 (Press CTRL+C to quit)
+2026-07-21 02:32:01,622 [INFO] __main__: 桌面版后端监听 127.0.0.1:62662
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-07-21 02:32:01,811 [INFO] app.services.ext_pull: PullScheduler stopped
+2026-07-21 02:32:01,811 [INFO] app.services.financial_sync: FinancialScheduler stopped
+2026-07-21 02:32:01,812 [INFO] app.services.quote_service: 行情服务已停止
+2026-07-21 02:32:01,812 [INFO] app.services.depth_service: depth sealed 盘中轮询已停止
+2026-07-21 02:32:01,812 [INFO] app.services.wecom_bot_service: 智能机器人长连接服务已停止
+2026-07-21 02:32:01,812 [INFO] app.main: shutdown
+2026-07-21 02:32:01,813 [INFO] apscheduler.scheduler: Scheduler has been shut down
+INFO:     Application shutdown complete.
+INFO:     Finished server process [37609]

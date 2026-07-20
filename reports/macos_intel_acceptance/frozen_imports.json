@@ -1,0 +1,12 @@
+{
+  "data_dir": "/var/folders/ln/hd9n0j9910s4htp7296nwqbw0000gn/T/tickflow-intel-smoke.IsWe9J/Library/Application Support/TickFlowStockPanel",
+  "executable": "/Users/macbookpro/Documents/TradingView \u91cf\u5316/tickflow-multiclient-app/backend/dist/TickFlowStockPanel.app/Contents/MacOS/TickFlowStockPanel",
+  "frozen": true,
+  "machine": "x86_64",
+  "modules": {
+    "duckdb": "1.5.3",
+    "polars": "1.40.1",
+    "pyarrow": "24.0.0",
+    "webview": "imported"
+  }
+}

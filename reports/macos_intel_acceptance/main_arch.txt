@@ -1,0 +1,1 @@
+/Users/macbookpro/Documents/TradingView 量化/tickflow-multiclient-app/backend/dist/TickFlowStockPanel.app/Contents/MacOS/TickFlowStockPanel: x86_64

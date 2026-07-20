@@ -1,0 +1,2 @@
+before ca270a638e182f35b32d9a897118d4eb6c90dfc84f060313456afb45202a1c45  /Users/macbookpro/Documents/TradingView 量化/tickflow-multiclient-app/packaging/icon.icns
+after  ca270a638e182f35b32d9a897118d4eb6c90dfc84f060313456afb45202a1c45  /Users/macbookpro/Documents/TradingView 量化/tickflow-multiclient-app/packaging/icon.icns
