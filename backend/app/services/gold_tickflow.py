@@ -5,6 +5,7 @@ import hashlib
 import json
 import math
 from collections.abc import Callable
+from contextlib import suppress
 from datetime import date, datetime
 from typing import Any
 
@@ -37,7 +38,7 @@ class GoldTickFlowGateway:
         self.clock = clock
         self.calendar_authority = calendar_authority or GoldCalendarAuthority(store)
         self.rate_circuit = rate_circuit or RateLimitCircuit()
-        self._pace_index = 0
+        self._pace_index = 1
 
     def get_quote(self) -> dict[str, object]:
         self._ensure_circuit_closed()
@@ -171,7 +172,7 @@ class GoldTickFlowGateway:
                 wait_seconds=None,
                 retries=0,
             )
-            try:
+            with suppress(Exception):
                 self.store.write_health(
                     last_success=None,
                     consecutive_failures=self.rate_circuit.consecutive_429,
@@ -181,8 +182,6 @@ class GoldTickFlowGateway:
                         "capability": str(event.get("capability", "")),
                     },
                 )
-            except Exception:
-                pass
             if self.rate_circuit.tripped:
                 return GoldDataError("tickflow_circuit_open")
             return GoldDataError("tickflow_rate_limited")

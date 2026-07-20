@@ -4,6 +4,7 @@ from __future__ import annotations
 import atexit
 import os
 import sys
+from contextlib import suppress
 from pathlib import Path
 from types import TracebackType
 
@@ -78,15 +79,11 @@ class GoldRuntimeLock:
                     fcntl.flock(fd, fcntl.LOCK_UN)
             except OSError:
                 pass
-            try:
+            with suppress(OSError):
                 os.close(fd)
-            except OSError:
-                pass
         if root_fd is not None:
-            try:
+            with suppress(OSError):
                 os.close(root_fd)
-            except OSError:
-                pass
 
     def __enter__(self) -> GoldRuntimeLock:
         self.acquire()

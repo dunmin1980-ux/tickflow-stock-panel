@@ -385,10 +385,10 @@ def test_legacy_repair_data_write_interruption_is_atomic_and_retryable(tmp_path,
 
     real_replace = store_module.os.replace
 
-    def fail_data_replace(source, target):
-        if target == import_path:
+    def fail_data_replace(source, target, *args, **kwargs):
+        if target == import_path.name:
             raise OSError("injected repair data failure")
-        return real_replace(source, target)
+        return real_replace(source, target, *args, **kwargs)
 
     monkeypatch.setattr(store_module.os, "replace", fail_data_replace)
 
@@ -572,10 +572,10 @@ def test_data_commit_failure_leaves_no_index_or_partial_import(tmp_path, monkeyp
 
     original_replace = store_module.os.replace
 
-    def fail_data_replace(source, target):
-        if target == store.root / "imports" / f"{digest}.jsonl":
+    def fail_data_replace(source, target, *args, **kwargs):
+        if target == f"{digest}.jsonl":
             raise OSError("injected data commit failure")
-        return original_replace(source, target)
+        return original_replace(source, target, *args, **kwargs)
 
     monkeypatch.setattr(store_module.os, "replace", fail_data_replace)
 

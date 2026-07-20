@@ -8,11 +8,20 @@ from __future__ import annotations
 
 import os
 import stat
+from contextlib import suppress
 from pathlib import Path
 
 
 class GoldPathSecurityError(OSError):
     """Raised when a Gold storage path is unsafe (symlink / escape)."""
+
+
+def _relative_parts(relative: str) -> tuple[str, ...]:
+    path = Path(relative)
+    parts = path.parts
+    if path.is_absolute() or not parts or any(part in {"", ".", ".."} for part in parts):
+        raise GoldPathSecurityError(f"illegal relative path: {relative}")
+    return parts
 
 
 def _lstat(path: Path) -> os.stat_result:
@@ -66,21 +75,18 @@ def open_gold_root_fd(root: Path, *, create: bool) -> int:
     Returns a directory file descriptor. Caller must ``os.close``.
     """
     root = Path(root)
-    assert_no_symlink_components(root if root.exists() else root.parent)
+    assert_no_symlink_components(root)
 
     if not root.exists():
         if not create:
             raise FileNotFoundError(os.fspath(root))
         # Create parents then leaf after symlink checks; refuse symlink leaf.
         parent = root.parent
-        assert_no_symlink_components(parent if parent.exists() else parent)
+        assert_no_symlink_components(parent)
         parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         assert_no_symlink_components(parent)
-        try:
+        with suppress(FileExistsError):
             root.mkdir(mode=0o700, exist_ok=False)
-        except FileExistsError:
-            # Lost race or leftover — re-validate as a real directory.
-            pass
         assert_no_symlink_components(root)
     else:
         assert_no_symlink_components(root)
@@ -121,10 +127,72 @@ def open_beneath(
     flags: int,
     mode: int = 0o600,
 ) -> int:
-    """``openat`` relative to a trusted gold root fd; never follow final symlink."""
-    if relative.startswith("/") or ".." in Path(relative).parts:
-        raise GoldPathSecurityError(f"illegal relative path: {relative}")
+    """Open a file below a trusted root without following any path symlink."""
+    parts = _relative_parts(relative)
+    parent_fd = (
+        os.dup(root_fd)
+        if len(parts) == 1
+        else open_directory_beneath(root_fd, "/".join(parts[:-1]), create=False)
+    )
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
     flags |= getattr(os, "O_CLOEXEC", 0)
-    return os.open(relative, flags, mode, dir_fd=root_fd)
+    try:
+        try:
+            return os.open(parts[-1], flags, mode, dir_fd=parent_fd)
+        except OSError as exc:
+            try:
+                target = os.stat(parts[-1], dir_fd=parent_fd, follow_symlinks=False)
+            except OSError:
+                raise exc from None
+            if stat.S_ISLNK(target.st_mode):
+                raise GoldPathSecurityError(
+                    f"symlink component rejected: {relative}"
+                ) from exc
+            raise
+    finally:
+        os.close(parent_fd)
+
+
+def open_directory_beneath(
+    root_fd: int,
+    relative: str,
+    *,
+    create: bool,
+    mode: int = 0o700,
+) -> int:
+    """Open or create a directory chain below ``root_fd`` without symlinks."""
+    parts = _relative_parts(relative)
+    current_fd = os.dup(root_fd)
+    try:
+        for part in parts:
+            try:
+                target = os.stat(part, dir_fd=current_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                if not create:
+                    raise
+                with suppress(FileExistsError):
+                    os.mkdir(part, mode, dir_fd=current_fd)
+                target = os.stat(part, dir_fd=current_fd, follow_symlinks=False)
+            if stat.S_ISLNK(target.st_mode):
+                raise GoldPathSecurityError(
+                    f"symlink component rejected: {relative}"
+                )
+            if not stat.S_ISDIR(target.st_mode):
+                raise GoldPathSecurityError(
+                    f"directory component rejected: {relative}"
+                )
+
+            flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+            if hasattr(os, "O_DIRECTORY"):
+                flags |= os.O_DIRECTORY
+            if hasattr(os, "O_NOFOLLOW"):
+                flags |= os.O_NOFOLLOW
+            next_fd = os.open(part, flags, dir_fd=current_fd)
+            os.fchmod(next_fd, mode)
+            os.close(current_fd)
+            current_fd = next_fd
+        return current_fd
+    except Exception:
+        os.close(current_fd)
+        raise

@@ -330,10 +330,10 @@ def test_interrupted_run_data_write_leaves_no_committed_metadata_or_temp_file(tm
 
     original_replace = store_module.os.replace
 
-    def fail_data_replace(source, target):
-        if target.parent.name == "comparison_runs":
+    def fail_data_replace(source, target, *args, **kwargs):
+        if target not in {"comparison_index.jsonl", "import_index.jsonl"}:
             raise OSError("injected run data write failure")
-        return original_replace(source, target)
+        return original_replace(source, target, *args, **kwargs)
 
     monkeypatch.setattr(store_module.os, "replace", fail_data_replace)
 

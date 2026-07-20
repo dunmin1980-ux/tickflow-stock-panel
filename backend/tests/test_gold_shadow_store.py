@@ -1,9 +1,9 @@
 import json
 import logging
 import math
+import os
 import stat
 from datetime import date
-from pathlib import Path
 
 import pytest
 
@@ -324,16 +324,16 @@ def test_candidate_state_write_replaces_temp_file(tmp_path, monkeypatch):
     replaced = []
     original_replace = __import__("os").replace
 
-    def record_replace(source, target):
+    def record_replace(source, target, *args, **kwargs):
         replaced.append((source, target))
-        return original_replace(source, target)
+        return original_replace(source, target, *args, **kwargs)
 
     monkeypatch.setattr("app.services.gold_shadow_store.os.replace", record_replace)
 
     assert store.register_candidate("恐慌极端", "600489.SH", "2026-07-16") is True
 
     assert replaced
-    assert replaced[-1][1].name == "candidate_state.json"
+    assert replaced[-1][1] == "candidate_state.json"
     assert not (tmp_path / "user_data/gold_shadow/candidate_state.json.tmp").exists()
 
 
@@ -406,14 +406,16 @@ def test_append_snapshot_preserves_file_when_snapshot_read_fails(tmp_path, monke
     path.parent.mkdir(parents=True)
     original = b'{"observed_at":"2026-07-16T15:00:00+08:00"}\n'
     path.write_bytes(original)
-    original_open = Path.open
+    from app.services import gold_shadow_store as store_module
 
-    def fail_text_open(self, *args, **kwargs):
-        if self == path and kwargs.get("encoding") == "utf-8":
+    original_open = store_module.open_beneath
+
+    def fail_text_open(root_fd, filename, flags, mode=0o600):
+        if filename == "snapshots.jsonl" and flags == os.O_RDONLY:
             raise OSError("injected snapshot read failure")
-        return original_open(self, *args, **kwargs)
+        return original_open(root_fd, filename, flags, mode)
 
-    monkeypatch.setattr(Path, "open", fail_text_open)
+    monkeypatch.setattr(store_module, "open_beneath", fail_text_open)
 
     with pytest.raises(GoldShadowStorageReadError, match=r"snapshots\.jsonl"):
         store.append_snapshot(snapshot())

@@ -1,6 +1,7 @@
 """Gold Stage A path security: fail-closed symlink / escape tests."""
 from __future__ import annotations
 
+from contextlib import suppress
 from pathlib import Path
 
 import pytest
@@ -166,7 +167,7 @@ def test_concurrent_writes_stay_inside(tmp_path: Path) -> None:
                 consecutive_failures=i,
                 last_error={"code": "concurrent", "n": i},
             )
-        except BaseException as exc:  # noqa: BLE001
+        except BaseException as exc:
             errors.append(exc)
 
     threads = [threading.Thread(target=_worker, args=(i,)) for i in range(8)]
@@ -176,3 +177,63 @@ def test_concurrent_writes_stay_inside(tmp_path: Path) -> None:
         t.join()
     assert not errors
     assert _count_files(outside) == before
+
+
+def test_atomic_state_temp_symlink_cannot_overwrite_outside(tmp_path: Path) -> None:
+    store = GoldShadowStore(tmp_path)
+    store._ensure_root()
+    outside = tmp_path / "outside-health.txt"
+    outside.write_text("ORIGINAL", encoding="utf-8")
+    (store.root / ".health.json.tmp").symlink_to(outside)
+
+    with suppress(GoldShadowStorageReadError, GoldPathSecurityError, OSError):
+        store.write_health(
+            last_success=None,
+            consecutive_failures=1,
+            last_error={"code": "probe"},
+        )
+
+    assert outside.read_text(encoding="utf-8") == "ORIGINAL"
+    assert not (store.root / "health.json").is_symlink()
+
+
+def test_snapshot_symlink_is_rejected_instead_of_reading_outside(tmp_path: Path) -> None:
+    store = GoldShadowStore(tmp_path)
+    store._ensure_root()
+    outside = tmp_path / "outside-snapshots.jsonl"
+    outside.write_text(
+        '{"schema_version":1,"observed_at":"2026-07-16T15:00:00+08:00",'
+        '"market_date":"2026-07-16","symbol":"600489.SH",'
+        '"quote_source":"tickflow","quote_ts":1784195101000,"price":19.99,'
+        '"previous_close":20.12,"legacy_reference_60":22.87,"native_ema60":22.74,'
+        '"P":-12.59,"V":-0.13,"A":-0.93,"state":"恐慌",'
+        '"candidate_signals":[],"new_candidate_signals":[]}\n',
+        encoding="utf-8",
+    )
+    (store.root / "snapshots.jsonl").symlink_to(outside)
+
+    with pytest.raises((GoldShadowStorageReadError, GoldPathSecurityError, OSError)):
+        store.list_snapshots()
+
+
+@pytest.mark.parametrize(
+    ("directory", "writer"),
+    [
+        ("imports", "_write_import_rows_locked"),
+        ("comparison_runs", "_write_comparison_run_rows_locked"),
+    ],
+)
+def test_child_directory_symlink_cannot_escape(
+    tmp_path: Path, directory: str, writer: str
+) -> None:
+    store = GoldShadowStore(tmp_path)
+    store._ensure_root()
+    outside = tmp_path / f"outside-{directory}"
+    outside.mkdir()
+    (store.root / directory).symlink_to(outside, target_is_directory=True)
+
+    digest = "a" * 64
+    with pytest.raises((GoldShadowStorageReadError, GoldPathSecurityError, OSError)):
+        getattr(store, writer)(digest, [])
+
+    assert list(outside.iterdir()) == []

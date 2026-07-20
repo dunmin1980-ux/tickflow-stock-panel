@@ -6,13 +6,12 @@ from types import SimpleNamespace
 import pytest
 
 from app.services.gold_errors import GoldDataError
-from app.services.gold_tickflow import GOLD_SYMBOL, GoldTickFlowGateway
+from app.services.gold_tickflow import GOLD_SYMBOL
 from app.services.gold_tickflow_errors import RateLimitCircuit, classify_tickflow_exception
-from app.tickflow.capabilities import Cap, CapabilityLimits, CapabilitySet
-from tests.test_gold_tickflow import FakeKlines, FakeQuotes, calendar_for, make_gateway
+from tests.test_gold_tickflow import FakeKlines, calendar_for, make_gateway
 
 
-class _HttpExc(Exception):
+class _HttpError(Exception):
     def __init__(self, status: int, retry_after: str | None = None) -> None:
         super().__init__(f"HTTP {status}")
         self.status_code = status
@@ -23,11 +22,11 @@ class _HttpExc(Exception):
 
 
 def test_classify_status_codes() -> None:
-    assert classify_tickflow_exception(_HttpExc(429)).code == "tickflow_rate_limited"
-    assert classify_tickflow_exception(_HttpExc(429, "1.5")).retry_after_seconds == 1.5
-    assert classify_tickflow_exception(_HttpExc(401)).code == "tickflow_auth_failed"
-    assert classify_tickflow_exception(_HttpExc(403)).code == "tickflow_auth_failed"
-    assert classify_tickflow_exception(_HttpExc(500)).code == "tickflow_request_failed"
+    assert classify_tickflow_exception(_HttpError(429)).code == "tickflow_rate_limited"
+    assert classify_tickflow_exception(_HttpError(429, "1.5")).retry_after_seconds == 1.5
+    assert classify_tickflow_exception(_HttpError(401)).code == "tickflow_auth_failed"
+    assert classify_tickflow_exception(_HttpError(403)).code == "tickflow_auth_failed"
+    assert classify_tickflow_exception(_HttpError(500)).code == "tickflow_request_failed"
 
 
 def test_classify_network_timeout() -> None:
@@ -60,7 +59,7 @@ def test_circuit_halts_then_trips() -> None:
 def test_gateway_maps_429_and_opens_circuit(tmp_path) -> None:
     class BoomQuotes:
         def get(self, **kwargs):
-            raise _HttpExc(429, "2")
+            raise _HttpError(429, "2")
 
     client = SimpleNamespace(quotes=BoomQuotes(), klines=FakeKlines())
     calendar_for(tmp_path)
@@ -80,7 +79,7 @@ def test_gateway_maps_429_and_opens_circuit(tmp_path) -> None:
 def test_gateway_maps_401(tmp_path) -> None:
     class BoomQuotes:
         def get(self, **kwargs):
-            raise _HttpExc(401)
+            raise _HttpError(401)
 
     client = SimpleNamespace(quotes=BoomQuotes(), klines=FakeKlines())
     with pytest.raises(GoldDataError) as exc:
@@ -96,7 +95,7 @@ def test_gateway_success_resets_circuit_counter(tmp_path) -> None:
         def get(self, **kwargs):
             self.n += 1
             if self.n == 1:
-                raise _HttpExc(429)
+                raise _HttpError(429)
             return [
                 {
                     "symbol": GOLD_SYMBOL,

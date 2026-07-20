@@ -136,7 +136,7 @@ def test_stage_a_gold_single_symbol_is_one_sdk_paced_call(monkeypatch) -> None:
     out = gw.get_quote()
     assert out["symbol"] == GOLD_SYMBOL
     assert len(transport.http_posts) == 1
-    assert paces == [0]
+    assert paces == [1]
 
 
 def test_first_batch_burst_still_documented() -> None:

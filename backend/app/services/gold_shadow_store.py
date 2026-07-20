@@ -6,8 +6,10 @@ import json
 import logging
 import math
 import os
+import secrets
 import string
 import threading
+from contextlib import suppress
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -16,6 +18,7 @@ from app.services.gold_legacy_schema import LEGACY_SIGNAL_VOCABULARY
 from app.services.gold_path_security import (
     GoldPathSecurityError,
     open_beneath,
+    open_directory_beneath,
     open_gold_root_fd,
 )
 
@@ -601,12 +604,19 @@ class GoldShadowStore:
         raise_on_failure: bool = False,
         reject_malformed: bool = False,
     ) -> list[dict[str, Any]]:
-        path = self.root / filename
-        if not path.exists():
+        try:
+            root_descriptor = self._open_root_descriptor(create=False)
+        except FileNotFoundError:
             return []
         rows: list[dict[str, Any]] = []
         try:
-            with path.open(encoding="utf-8") as handle:
+            try:
+                descriptor = open_beneath(root_descriptor, filename, os.O_RDONLY)
+            except FileNotFoundError:
+                return []
+            except GoldPathSecurityError as exc:
+                raise GoldShadowStorageReadError(f"unable to read {filename}") from exc
+            with os.fdopen(descriptor, encoding="utf-8") as handle:
                 for line_number, line in enumerate(handle, start=1):
                     text = line.strip()
                     if not text:
@@ -628,6 +638,8 @@ class GoldShadowStore:
             logger.warning("gold_shadow_store read %s failed: %s", filename, exc)
             if raise_on_failure:
                 raise GoldShadowStorageReadError(f"unable to read {filename}") from exc
+        finally:
+            os.close(root_descriptor)
         return rows
 
     def _prune_snapshots_locked(
@@ -685,10 +697,10 @@ class GoldShadowStore:
     def _read_import_rows_locked(self, metadata: dict[str, Any]) -> list[dict[str, Any]]:
         import_id = metadata["import_id"]
         filename = f"imports/{import_id}.jsonl"
-        if not (self.root / filename).is_file():
-            raise GoldShadowStorageReadError(f"unable to read import {import_id}")
         try:
             rows = self._read_jsonl_locked(filename, raise_on_failure=True, reject_malformed=True)
+            if not rows:
+                raise GoldShadowStorageReadError(f"unable to read import {import_id}")
             for row in rows:
                 self._validate_import_row(row)
             if len(rows) != metadata["sample_count"]:
@@ -1018,10 +1030,12 @@ class GoldShadowStore:
     def _read_comparison_run_rows_locked(self, metadata: dict[str, Any]) -> list[dict[str, Any]]:
         run_id = metadata["run_id"]
         filename = f"comparison_runs/{run_id}.jsonl"
-        if not (self.root / filename).is_file():
-            raise GoldShadowStorageReadError(f"unable to read comparison run {run_id}")
         try:
             rows = self._read_jsonl_locked(filename, raise_on_failure=True, reject_malformed=True)
+            if not rows:
+                raise GoldShadowStorageReadError(
+                    f"unable to read comparison run {run_id}"
+                )
             self._validate_comparison_run_rows(rows, metadata)
         except (GoldShadowStorageReadError, ValueError) as exc:
             raise GoldShadowStorageReadError(f"unable to read comparison run {run_id}") from exc
@@ -1049,105 +1063,122 @@ class GoldShadowStore:
         return digest.hexdigest()
 
     def _write_comparison_run_rows_locked(self, run_id: str, rows: list[dict[str, Any]]) -> None:
-        self._ensure_root()
-        runs = self.root / "comparison_runs"
-        runs.mkdir(mode=0o700, exist_ok=True)
-        os.chmod(runs, 0o700)
-        self._fsync_root_locked()
-        path = runs / f"{run_id}.jsonl"
-        temporary = runs / f".{run_id}.jsonl.tmp"
-        descriptor = os.open(temporary, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o600)
-        os.chmod(temporary, 0o600)
+        root_descriptor = self._open_root_descriptor(create=True)
         try:
-            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-                for row in rows:
-                    handle.write(
-                        json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
-                    )
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(temporary, path)
-            os.chmod(path, 0o600)
-            self._fsync_directory_locked(runs)
+            runs_descriptor = open_directory_beneath(
+                root_descriptor, "comparison_runs", create=True
+            )
+            try:
+                self._atomic_replace_bytes_at_locked(
+                    runs_descriptor,
+                    f"{run_id}.jsonl",
+                    self._jsonl_bytes(rows),
+                )
+            finally:
+                os.close(runs_descriptor)
+        except GoldPathSecurityError as exc:
+            raise GoldShadowStorageReadError("unsafe comparison_runs directory") from exc
         finally:
-            temporary.unlink(missing_ok=True)
+            os.close(root_descriptor)
 
     def _read_json_state_locked(self, filename: str, *, raise_on_failure: bool = False) -> Any:
-        path = self.root / filename
-        if not path.exists():
+        try:
+            root_descriptor = self._open_root_descriptor(create=False)
+        except FileNotFoundError:
             return None
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            try:
+                descriptor = open_beneath(root_descriptor, filename, os.O_RDONLY)
+            except FileNotFoundError:
+                return None
+            except GoldPathSecurityError as exc:
+                raise GoldShadowStorageReadError(f"unable to read {filename}") from exc
+            with os.fdopen(descriptor, encoding="utf-8") as handle:
+                return json.load(handle)
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             logger.warning("gold_shadow_store read %s failed: %s", filename, exc)
             if raise_on_failure:
                 raise GoldShadowStorageReadError(f"unable to read {filename}") from exc
             return None
+        finally:
+            os.close(root_descriptor)
 
     def _write_json_state_locked(self, filename: str, value: Any) -> None:
-        self._ensure_root()
-        path = self.root / filename
-        temporary = path.with_name(f".{path.name}.tmp")
-        with temporary.open("w", encoding="utf-8") as handle:
-            json.dump(value, handle, ensure_ascii=False, separators=(",", ":"))
-            handle.write("\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-        os.chmod(path, 0o600)
-        self._fsync_root_locked()
+        payload = (
+            json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n"
+        ).encode("utf-8")
+        root_descriptor = self._open_root_descriptor(create=True)
+        try:
+            self._atomic_replace_bytes_at_locked(root_descriptor, filename, payload)
+        finally:
+            os.close(root_descriptor)
 
     def _replace_jsonl_locked(self, filename: str, rows: list[dict[str, Any]]) -> None:
-        self._ensure_root()
-        path = self.root / filename
-        temporary = path.with_name(f".{path.name}.tmp")
-        descriptor = os.open(temporary, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o600)
-        os.chmod(temporary, 0o600)
+        root_descriptor = self._open_root_descriptor(create=True)
         try:
-            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-                for row in rows:
-                    handle.write(
-                        json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
-                    )
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(temporary, path)
-            os.chmod(path, 0o600)
-            self._fsync_root_locked()
+            self._atomic_replace_bytes_at_locked(
+                root_descriptor, filename, self._jsonl_bytes(rows)
+            )
         finally:
-            temporary.unlink(missing_ok=True)
+            os.close(root_descriptor)
 
     def _write_import_rows_locked(self, digest: str, rows: list[dict[str, Any]]) -> None:
-        self._ensure_root()
-        imports = self.root / "imports"
-        imports.mkdir(mode=0o700, exist_ok=True)
-        os.chmod(imports, 0o700)
-        self._fsync_root_locked()
-        path = imports / f"{digest}.jsonl"
-        temporary = imports / f".{digest}.jsonl.tmp"
-        descriptor = os.open(temporary, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o600)
-        os.chmod(temporary, 0o600)
+        root_descriptor = self._open_root_descriptor(create=True)
         try:
-            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-                for row in rows:
-                    handle.write(
-                        json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
-                    )
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(temporary, path)
-            os.chmod(path, 0o600)
-            self._fsync_directory_locked(imports)
+            imports_descriptor = open_directory_beneath(
+                root_descriptor, "imports", create=True
+            )
+            try:
+                self._atomic_replace_bytes_at_locked(
+                    imports_descriptor,
+                    f"{digest}.jsonl",
+                    self._jsonl_bytes(rows),
+                )
+            finally:
+                os.close(imports_descriptor)
+        except GoldPathSecurityError as exc:
+            raise GoldShadowStorageReadError("unsafe imports directory") from exc
         finally:
-            temporary.unlink(missing_ok=True)
-
-    def _fsync_root_locked(self) -> None:
-        self._fsync_directory_locked(self.root)
+            os.close(root_descriptor)
 
     @staticmethod
-    def _fsync_directory_locked(path: Path) -> None:
-        descriptor = os.open(path, os.O_RDONLY)
+    def _jsonl_bytes(rows: list[dict[str, Any]]) -> bytes:
+        return b"".join(
+            (
+                json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
+            ).encode("utf-8")
+            for row in rows
+        )
+
+    @staticmethod
+    def _atomic_replace_bytes_at_locked(
+        directory_descriptor: int, filename: str, payload: bytes
+    ) -> None:
+        temporary = f".{filename}.{secrets.token_hex(12)}.tmp"
+        descriptor: int | None = None
         try:
+            descriptor = open_beneath(
+                directory_descriptor,
+                temporary,
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                0o600,
+            )
+            os.fchmod(descriptor, 0o600)
+            view = memoryview(payload)
+            while view:
+                view = view[os.write(descriptor, view) :]
             os.fsync(descriptor)
-        finally:
             os.close(descriptor)
+            descriptor = None
+            os.replace(
+                temporary,
+                filename,
+                src_dir_fd=directory_descriptor,
+                dst_dir_fd=directory_descriptor,
+            )
+            os.fsync(directory_descriptor)
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+            with suppress(FileNotFoundError):
+                os.unlink(temporary, dir_fd=directory_descriptor)
