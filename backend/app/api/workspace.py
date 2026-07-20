@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import date, datetime
 from typing import Any, Generic, TypeVar
@@ -11,11 +12,14 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, StrictStr, ValidationError
+from sse_starlette.event import ServerSentEvent
+from sse_starlette.sse import EventSourceResponse
 
 from app.config import settings
 from app.tickflow.capabilities import CapabilitySet
 from app.tickflow.policy import tier_label
 from app.workspace.commands import execute_command
+from app.workspace.events import WorkspaceEventHub
 from app.workspace.models import (
     ResourceName,
     ResourceSnapshot,
@@ -163,7 +167,8 @@ class WorkspaceBootstrapDTO(_DTO):
 
 
 class WorkspaceRevisionsDTO(_DTO):
-    revisions: dict[ResourceName, str]
+    server_time: datetime
+    resources: dict[ResourceName, str]
 
 
 class WorkspaceCommandDTO(_DTO):
@@ -282,9 +287,43 @@ def get_resource(name: ResourceName) -> JSONResponse:
 @router.get("/revisions", response_model=WorkspaceRevisionsDTO)
 def revisions() -> JSONResponse:
     payload = WorkspaceRevisionsDTO(
-        revisions={resource: snapshot_resource(resource).revision for resource in ResourceName}
+        server_time=datetime.now(_SHANGHAI),
+        resources={resource: snapshot_resource(resource).revision for resource in ResourceName},
     )
     return _private_json(payload.model_dump())
+
+
+def _heartbeat() -> ServerSentEvent:
+    return ServerSentEvent(comment="heartbeat")
+
+
+@router.get("/events")
+async def events(request: Request) -> EventSourceResponse:
+    hub: WorkspaceEventHub = request.app.state.workspace_event_hub
+
+    async def event_stream():
+        async with hub.subscribe() as queue:
+            while True:
+                event = await queue.get()
+                yield ServerSentEvent(
+                    id=event.id,
+                    event=event.type,
+                    data=json.dumps(
+                        event.model_dump(mode="json", exclude_none=True),
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ),
+                )
+
+    return EventSourceResponse(
+        event_stream(),
+        headers={
+            "Cache-Control": _PRIVATE_NO_STORE,
+            "X-Accel-Buffering": "no",
+        },
+        ping=20,
+        ping_message_factory=_heartbeat,
+    )
 
 
 def _command_error(code: str, detail: str, status_code: int) -> JSONResponse:
@@ -328,6 +367,7 @@ async def command(name: ResourceName, request: Request) -> JSONResponse:
             422,
         )
 
+    request.app.state.workspace_event_hub.publish(snapshot)
     payload = ResourceResponseDTO.model_validate(_snapshot_dto(snapshot, include_resource=True))
     return _private_json(
         payload.model_dump(exclude_none=True),

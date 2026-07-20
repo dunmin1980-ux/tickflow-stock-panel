@@ -289,14 +289,20 @@ def test_revisions_returns_all_resources_without_data(client):
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == "private, no-store"
-    assert set(response.json()["revisions"]) == {
+    body = response.json()
+    assert set(body) == {"server_time", "resources"}
+    assert datetime.fromisoformat(body["server_time"]).tzinfo is not None
+    assert set(body["resources"]) == {
         "watchlist",
         "preferences",
         "stock_reports",
         "market_recaps",
         "backtest_summaries",
     }
-    assert "data" not in response.json()
+    assert all(
+        isinstance(revision, str) and len(revision) == 64 for revision in body["resources"].values()
+    )
+    assert "data" not in body
 
 
 def test_full_bootstrap_resource_and_list_json_contains_no_secret_or_report_canary(

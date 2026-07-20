@@ -1,6 +1,7 @@
 """FastAPI 入口。"""
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import threading
@@ -59,6 +60,7 @@ from app.tickflow import client as tf_client
 from app.tickflow.capabilities import CapabilityDenied
 from app.tickflow.policy import detect_capabilities
 from app.tickflow.repository import DataStore, KlineRepository
+from app.workspace.events import WorkspaceEventHub
 
 logging.basicConfig(
     level=settings.log_level,
@@ -339,29 +341,33 @@ async def lifespan(app: FastAPI):
         logger.warning("monitor engine load failed: %s", e)
     app.state.monitor_engine = monitor_engine
 
-    yield
-
-    if app.state.scheduler:
-        app.state.scheduler.shutdown(wait=False)
-    ps = getattr(app.state, "pull_scheduler", None)
-    if ps:
-        ps.stop()
-    fsc = getattr(app.state, "financial_scheduler", None)
-    if fsc:
-        fsc.stop()
-    qs = getattr(app.state, "quote_service", None)
-    if qs:
-        qs.stop()
-    dsvc = getattr(app.state, "depth_service", None)
-    if dsvc:
-        dsvc.stop_polling()
-    wbot = getattr(app.state, "wecom_bot_service", None)
-    if wbot:
-        wbot.stop()
-    gold_lock = getattr(app.state, "gold_runtime_lock", None)
-    if gold_lock is not None:
-        gold_lock.release()
-    logger.info("shutdown")
+    event_hub: WorkspaceEventHub = app.state.workspace_event_hub
+    event_hub.bind(asyncio.get_running_loop())
+    try:
+        yield
+    finally:
+        event_hub.unbind()
+        if app.state.scheduler:
+            app.state.scheduler.shutdown(wait=False)
+        ps = getattr(app.state, "pull_scheduler", None)
+        if ps:
+            ps.stop()
+        fsc = getattr(app.state, "financial_scheduler", None)
+        if fsc:
+            fsc.stop()
+        qs = getattr(app.state, "quote_service", None)
+        if qs:
+            qs.stop()
+        dsvc = getattr(app.state, "depth_service", None)
+        if dsvc:
+            dsvc.stop_polling()
+        wbot = getattr(app.state, "wecom_bot_service", None)
+        if wbot:
+            wbot.stop()
+        gold_lock = getattr(app.state, "gold_runtime_lock", None)
+        if gold_lock is not None:
+            gold_lock.release()
+        logger.info("shutdown")
 
 
 app = FastAPI(
@@ -370,6 +376,7 @@ app = FastAPI(
     description="A 股选股 + 回测面板 — TickFlow 适配",
     lifespan=lifespan,
 )
+app.state.workspace_event_hub = WorkspaceEventHub()
 workspace.register_exception_handlers(app)
 
 # ================================================================
