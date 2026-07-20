@@ -25,8 +25,12 @@ ssh codex-vm 'set -euo pipefail
   source_commit=$(git rev-parse HEAD)
   current_image=$(docker inspect TickFlow_Stock_Panel --format "{{.Image}}")
   rollback_tag="tickflow-stock-panel-stage-a-app:rollback-$(date +%Y%m%d-%H%M%S)"
+  rollback_state="$HOME/.local/state/tickflow-stock-panel-stage-a/last-rollback-image"
   docker tag "$current_image" "$rollback_tag"
   docker image inspect "$rollback_tag" --format "rollback={{.Id}}"
+  install -d -m 700 "$(dirname "$rollback_state")"
+  printf "%s\n" "$rollback_tag" > "$rollback_state"
+  chmod 600 "$rollback_state"
   docker build \
     --build-arg USE_CN_MIRROR=1 \
     --build-arg PYPI_INDEX=https://mirrors.cloud.tencent.com/pypi/simple \
@@ -84,8 +88,15 @@ ssh codex-vm 'cd /home/ubuntu/tickflow-stock-panel-stage-a && git pull --ff-only
 ## 回滚
 
 ```bash
-ssh codex-vm 'docker tag tickflow-stock-panel-stage-a-app:rollback-pwa-incremental-20260721 \
-  tickflow-stock-panel-stage-a-app:latest && \
+ssh codex-vm 'set -euo pipefail
+  rollback_state="$HOME/.local/state/tickflow-stock-panel-stage-a/last-rollback-image"
+  rollback_tag=$(cat "$rollback_state")
+  case "$rollback_tag" in
+    tickflow-stock-panel-stage-a-app:rollback-*) ;;
+    *) echo "invalid rollback tag" >&2; exit 1 ;;
+  esac
+  docker image inspect "$rollback_tag" >/dev/null
+  docker tag "$rollback_tag" tickflow-stock-panel-stage-a-app:latest
   cd /home/ubuntu/tickflow-stock-panel-stage-a && \
   GOLD_WORKSPACE_ENABLED=false PORT=3019 docker compose up -d --no-build --force-recreate'
 ssh codex-vm 'tailscale serve status'

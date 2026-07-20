@@ -26,7 +26,7 @@ RUN if [ "$USE_CN_MIRROR" = "1" ]; then npm config set registry "$NPM_REGISTRY";
 # 让 pnpm 走镜像源安装依赖
 RUN if [ "$USE_CN_MIRROR" = "1" ]; then pnpm config set registry "$NPM_REGISTRY"; fi
 COPY frontend/package.json frontend/pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile || pnpm install
+RUN pnpm install --frozen-lockfile
 COPY frontend/ ./
 RUN pnpm build
 
@@ -44,7 +44,7 @@ RUN if [ "$USE_CN_MIRROR" = "1" ]; then npm config set registry "$NPM_REGISTRY";
 COPY backend/app/plugins/stocksdk/package.json backend/app/plugins/stocksdk/package-lock.json ./
 # INCLUDE_STOCKSDK=1 时安装依赖;=0 时仅建空目录,使最终镜像不含 stock-sdk 依赖
 RUN if [ "$INCLUDE_STOCKSDK" = "1" ]; then \
-      (npm ci || npm install); \
+      npm ci; \
     else \
       mkdir -p /build/node_modules; \
     fi
