@@ -156,6 +156,18 @@ class BacktestSummaryStore:
             self._atomic_write(summaries[-MAX_SUMMARIES:])
         return copy.deepcopy(validated)
 
+    def delete(self, summary_id: str) -> bool:
+        if not isinstance(summary_id, str) or not summary_id.strip():
+            raise ValueError("backtest summary id must be a non-empty string")
+        identifier = summary_id.strip()
+        with self._lock:
+            summaries = self._read_unlocked()
+            retained = [summary for summary in summaries if summary["id"] != identifier]
+            if len(retained) == len(summaries):
+                return False
+            self._atomic_write(retained)
+            return True
+
 
 _store = BacktestSummaryStore()
 
@@ -166,3 +178,7 @@ def list_summaries() -> list[dict]:
 
 def append(summary: dict) -> dict:
     return _store.append(summary)
+
+
+def delete(summary_id: str) -> bool:
+    return _store.delete(summary_id)

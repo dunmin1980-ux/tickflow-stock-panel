@@ -2,16 +2,32 @@ from __future__ import annotations
 
 import importlib
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from threading import Barrier
 
 import polars as pl
 import pytest
 
 from app.api import settings as settings_api
 from app.config import settings
-from app.services import ai_reports, market_recap_reports, preferences, stock_reports, watchlist
+from app.services import (
+    ai_reports,
+    backtest_summaries,
+    market_recap_reports,
+    preferences,
+    stock_reports,
+    watchlist,
+)
+from app.workspace.commands import execute_command
 from app.workspace.locks import resource_lock
-from app.workspace.models import ResourceName
+from app.workspace.models import (
+    ResourceName,
+    WorkspaceCommandConflict,
+    WorkspacePreconditionRequired,
+    WorkspaceRevisionConflict,
+)
+from app.workspace.registry import snapshot_resource
 
 
 def _temp_files(path) -> list:
@@ -30,6 +46,78 @@ def _summary(**updates) -> dict:
         "data_as_of": "2026-07-20",
         "engine": "tickflow",
         "execution_target": "local",
+    }
+    value.update(updates)
+    return value
+
+
+_REQUIRED_VERIFICATION = [
+    "latest_close",
+    "key_levels",
+    "technical_indicators",
+    "financial_data_availability",
+    "material_news",
+    "corporate_actions",
+]
+
+
+def _stock_content(**updates) -> str:
+    frontmatter = {
+        "type": "stock-analysis",
+        "source_system": "tickflow-stock-panel",
+        "data_scope": "watchlist-sample",
+        "can_publish": False,
+        "trading_advice": False,
+        "verification_status": "pending",
+        "needs_verification": _REQUIRED_VERIFICATION,
+        "timeframe": "1d",
+    }
+    frontmatter.update(updates)
+    verification = "\n".join(f"  - {item}" for item in frontmatter.pop("needs_verification"))
+    scalar_lines = "\n".join(
+        f"{key}: {str(value).lower() if isinstance(value, bool) else value}"
+        for key, value in frontmatter.items()
+    )
+    return f"---\n{scalar_lines}\nneeds_verification:\n{verification}\n---\n# 个股日线复盘\n"
+
+
+def _stock_report_payload(**updates) -> dict:
+    value = {
+        "symbol": "000403.SZ",
+        "name": "派林生物",
+        "focus": "",
+        "title": "派林生物日线复盘",
+        "content": _stock_content(),
+        "summary": "仅供人工复核",
+        "close": 23.45,
+        "levels": {"support": 22.8, "resistance": 24.1},
+        "data_as_of": "2026-07-20",
+        "type": "stock-analysis",
+        "source_system": "tickflow-stock-panel",
+        "data_scope": "watchlist-sample",
+        "can_publish": False,
+        "trading_advice": False,
+        "verification_status": "pending",
+        "needs_verification": list(_REQUIRED_VERIFICATION),
+        "timeframe": "1d",
+    }
+    value.update(updates)
+    return value
+
+
+def _market_recap_payload(**updates) -> dict:
+    value = {
+        "as_of": "2026-07-20",
+        "focus": "",
+        "content": "# 自选样本复盘\n",
+        "summary": "仅限样本, 不代表全市场",
+        "emotion_score": 50,
+        "emotion_label": "中性",
+        "title": "自选样本收盘复盘",
+        "data_as_of": "2026-07-20",
+        "verification_status": "pending",
+        "can_publish": False,
+        "trading_advice": False,
     }
     value.update(updates)
     return value
@@ -359,3 +447,364 @@ def test_registry_projects_report_metadata_without_content(tmp_path, monkeypatch
         ],
     }
     assert "REGISTRY_CONTENT_CANARY" not in json.dumps(data, ensure_ascii=False)
+
+
+def test_command_requires_revision_before_snapshot(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+
+    with pytest.raises(WorkspacePreconditionRequired):
+        execute_command(
+            ResourceName.WATCHLIST,
+            "add",
+            {"symbol": "000403.SZ", "note": ""},
+            None,
+        )
+
+    assert watchlist.list_symbols() == []
+
+
+@pytest.mark.parametrize(
+    "revision",
+    ["", "A" * 64, "a" * 63, "a" * 65, "g" * 64, 123],
+)
+def test_command_rejects_malformed_revision_without_snapshot(monkeypatch, revision):
+    commands = importlib.import_module("app.workspace.commands")
+
+    def unexpected_snapshot(_resource):
+        raise AssertionError("snapshot must not be read for malformed revision")
+
+    monkeypatch.setattr(commands, "snapshot_resource", unexpected_snapshot)
+
+    expected = WorkspacePreconditionRequired if revision == "" else ValueError
+    with pytest.raises(expected):
+        execute_command(ResourceName.WATCHLIST, "clear", {}, revision)
+
+
+def test_command_rejects_unknown_resource_as_input_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+
+    with pytest.raises(ValueError, match="unknown workspace resource"):
+        execute_command("not-a-resource", "clear", {}, "a" * 64)
+
+
+def test_stale_revision_does_not_overwrite(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    first = snapshot_resource(ResourceName.WATCHLIST)
+
+    execute_command(
+        ResourceName.WATCHLIST,
+        "add",
+        {"symbol": "000403.SZ", "note": ""},
+        first.revision,
+    )
+
+    with pytest.raises(WorkspaceRevisionConflict) as exc_info:
+        execute_command(
+            ResourceName.WATCHLIST,
+            "add",
+            {"symbol": "600489.SH", "note": ""},
+            first.revision,
+        )
+
+    assert exc_info.value.resource is ResourceName.WATCHLIST
+    assert exc_info.value.current_revision == snapshot_resource(ResourceName.WATCHLIST).revision
+    assert [item["symbol"] for item in watchlist.list_symbols()] == ["000403.SZ"]
+
+
+def test_unknown_operation_is_business_conflict_and_does_not_write(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    first = snapshot_resource(ResourceName.WATCHLIST)
+
+    with pytest.raises(WorkspaceCommandConflict, match="unsupported operation"):
+        execute_command(ResourceName.WATCHLIST, "replace", {}, first.revision)
+
+    assert snapshot_resource(ResourceName.WATCHLIST).revision == first.revision
+    assert not (tmp_path / "user_data" / "watchlist.parquet").exists()
+
+
+def test_watchlist_batch_add_normalizes_deduplicates_and_preserves_requested_order(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    watchlist.replace_all(
+        [
+            {"symbol": "300059.SZ", "note": "existing"},
+            {"symbol": "600489.SH", "note": "old"},
+        ]
+    )
+    first = snapshot_resource(ResourceName.WATCHLIST)
+    payload = {
+        "symbols": [" 000403.sz ", "600489.sh", "000403.SZ", " 300750.sz"],
+        "note": "sample",
+    }
+    original = json.loads(json.dumps(payload))
+
+    result = execute_command(ResourceName.WATCHLIST, "batch_add", payload, first.revision)
+
+    rows = result.data["symbols"]
+    assert [row["symbol"] for row in rows] == [
+        "000403.SZ",
+        "600489.SH",
+        "300750.SZ",
+        "300059.SZ",
+    ]
+    assert [row["note"] for row in rows[:3]] == ["sample"] * 3
+    assert rows[3]["note"] == "existing"
+    assert payload == original
+    assert watchlist.list_symbols() == rows
+
+
+def test_watchlist_supported_operations_use_fixed_payload_schemas(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    current = snapshot_resource(ResourceName.WATCHLIST)
+    current = execute_command(
+        ResourceName.WATCHLIST,
+        "add",
+        {"symbol": "000403.sz", "note": "first"},
+        current.revision,
+    )
+    current = execute_command(
+        ResourceName.WATCHLIST,
+        "add",
+        {"symbol": "600489.sh", "note": "second"},
+        current.revision,
+    )
+    current = execute_command(
+        ResourceName.WATCHLIST,
+        "move_to_top",
+        {"symbol": "000403.sz"},
+        current.revision,
+    )
+    assert [row["symbol"] for row in current.data["symbols"]] == [
+        "000403.SZ",
+        "600489.SH",
+    ]
+
+    current = execute_command(
+        ResourceName.WATCHLIST,
+        "remove",
+        {"symbol": "600489.sh"},
+        current.revision,
+    )
+    assert [row["symbol"] for row in current.data["symbols"]] == ["000403.SZ"]
+
+    with pytest.raises(ValueError):
+        execute_command(
+            ResourceName.WATCHLIST,
+            "clear",
+            {"unexpected": True},
+            current.revision,
+        )
+    assert watchlist.list_symbols()
+
+    current = execute_command(ResourceName.WATCHLIST, "clear", {}, current.revision)
+    assert current.data == {"symbols": []}
+
+
+def test_preference_command_allows_only_safe_merge_and_does_not_mutate_payload(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    first = snapshot_resource(ResourceName.PREFERENCES)
+    payload = {"nav_order": ["watchlist", "review"], "indices_nav_pinned": False}
+    original = json.loads(json.dumps(payload))
+
+    result = execute_command(
+        ResourceName.PREFERENCES,
+        "merge_safe",
+        payload,
+        first.revision,
+    )
+
+    assert result.data["preferences"]["nav_order"] == ["watchlist", "review"]
+    assert payload == original
+    current_revision = result.revision
+    with pytest.raises(ValueError):
+        execute_command(
+            ResourceName.PREFERENCES,
+            "merge_safe",
+            {"feishu_webhook_url": "https://example.invalid/CANARY"},
+            current_revision,
+        )
+    assert snapshot_resource(ResourceName.PREFERENCES).revision == current_revision
+
+
+def test_stock_report_append_validates_frontmatter_and_keeps_body_out_of_snapshot(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    first = snapshot_resource(ResourceName.STOCK_REPORTS)
+    payload = _stock_report_payload()
+    original = json.loads(json.dumps(payload, ensure_ascii=False))
+
+    result = execute_command(ResourceName.STOCK_REPORTS, "append", payload, first.revision)
+
+    saved = stock_reports.list_reports()[0]
+    assert saved["content"] == payload["content"]
+    assert saved["data_scope"] == "watchlist-sample"
+    assert saved["can_publish"] is False
+    assert saved["trading_advice"] is False
+    assert saved["verification_status"] == "pending"
+    assert payload == original
+    assert payload["content"] not in json.dumps(result.data, ensure_ascii=False)
+    assert "content" not in result.data["reports"][0]
+
+
+@pytest.mark.parametrize(
+    ("payload_update", "frontmatter_update"),
+    [
+        ({"can_publish": True}, {}),
+        ({"trading_advice": True}, {}),
+        ({"verification_status": "verified"}, {}),
+        ({"data_scope": "full-market"}, {}),
+        ({"source_system": "other"}, {}),
+        ({"timeframe": "30m"}, {}),
+        ({"needs_verification": _REQUIRED_VERIFICATION[:-1]}, {}),
+        ({}, {"can_publish": True}),
+        ({}, {"trading_advice": True}),
+        ({}, {"verification_status": "verified"}),
+        ({}, {"data_scope": "full-market"}),
+        ({}, {"source_system": "other"}),
+        ({}, {"timeframe": "30m"}),
+        ({}, {"needs_verification": _REQUIRED_VERIFICATION[:-1]}),
+    ],
+)
+def test_stock_report_rejects_unsafe_or_inconsistent_safety_fields_without_write(
+    tmp_path, monkeypatch, payload_update, frontmatter_update
+):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    first = snapshot_resource(ResourceName.STOCK_REPORTS)
+    payload = _stock_report_payload(**payload_update)
+    if frontmatter_update:
+        payload["content"] = _stock_content(**frontmatter_update)
+
+    with pytest.raises(ValueError):
+        execute_command(ResourceName.STOCK_REPORTS, "append", payload, first.revision)
+
+    assert stock_reports.list_reports() == []
+    assert snapshot_resource(ResourceName.STOCK_REPORTS).revision == first.revision
+
+
+def test_report_append_payloads_forbid_unknown_fields(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+
+    stock_revision = snapshot_resource(ResourceName.STOCK_REPORTS).revision
+    with pytest.raises(ValueError):
+        execute_command(
+            ResourceName.STOCK_REPORTS,
+            "append",
+            _stock_report_payload(webhook="CANARY"),
+            stock_revision,
+        )
+
+    market_revision = snapshot_resource(ResourceName.MARKET_RECAPS).revision
+    with pytest.raises(ValueError):
+        execute_command(
+            ResourceName.MARKET_RECAPS,
+            "append",
+            _market_recap_payload(body="CANARY"),
+            market_revision,
+        )
+
+    assert stock_reports.list_reports() == []
+    assert market_recap_reports.list_reports() == []
+
+
+def test_market_recap_append_keeps_content_out_of_workspace_summary(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    first = snapshot_resource(ResourceName.MARKET_RECAPS)
+    payload = _market_recap_payload(content="MARKET_BODY_CANARY")
+
+    result = execute_command(ResourceName.MARKET_RECAPS, "append", payload, first.revision)
+
+    assert market_recap_reports.list_reports()[0]["content"] == "MARKET_BODY_CANARY"
+    serialized = json.dumps(result.data, ensure_ascii=False)
+    assert "MARKET_BODY_CANARY" not in serialized
+    assert "content" not in result.data["reports"][0]
+
+
+def test_backtest_commands_use_exact_summary_schema_and_atomic_delete(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    first = snapshot_resource(ResourceName.BACKTEST_SUMMARIES)
+    appended = execute_command(
+        ResourceName.BACKTEST_SUMMARIES,
+        "append",
+        _summary(),
+        first.revision,
+    )
+    assert appended.data == {"summaries": [_summary()]}
+
+    with pytest.raises(ValueError):
+        execute_command(
+            ResourceName.BACKTEST_SUMMARIES,
+            "append",
+            _summary(content="# markdown"),
+            appended.revision,
+        )
+    assert backtest_summaries.list_summaries() == [_summary()]
+
+    deleted = execute_command(
+        ResourceName.BACKTEST_SUMMARIES,
+        "delete",
+        {"id": "bt_001"},
+        appended.revision,
+    )
+    assert deleted.data == {"summaries": []}
+
+
+@pytest.mark.parametrize(
+    ("resource", "payload"),
+    [
+        (ResourceName.STOCK_REPORTS, _stock_report_payload()),
+        (ResourceName.MARKET_RECAPS, _market_recap_payload()),
+        (ResourceName.BACKTEST_SUMMARIES, _summary()),
+    ],
+)
+def test_report_delete_requires_nonempty_existing_id(tmp_path, monkeypatch, resource, payload):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    first = snapshot_resource(resource)
+
+    with pytest.raises(ValueError):
+        execute_command(resource, "delete", {"id": "  "}, first.revision)
+    with pytest.raises(WorkspaceCommandConflict, match="not found"):
+        execute_command(resource, "delete", {"id": "missing"}, first.revision)
+
+    appended = execute_command(resource, "append", payload, first.revision)
+    saved_id = (
+        appended.data["summaries"][0]["id"]
+        if resource is ResourceName.BACKTEST_SUMMARIES
+        else appended.data["reports"][0]["id"]
+    )
+    deleted = execute_command(resource, "delete", {"id": saved_id}, appended.revision)
+    collection = "summaries" if resource is ResourceName.BACKTEST_SUMMARIES else "reports"
+    assert deleted.data[collection] == []
+
+
+def test_two_writers_on_same_revision_yield_one_success_and_one_revision_conflict(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    initial = snapshot_resource(ResourceName.WATCHLIST)
+    barrier = Barrier(2)
+
+    def write(symbol: str):
+        barrier.wait(timeout=5)
+        try:
+            return execute_command(
+                ResourceName.WATCHLIST,
+                "add",
+                {"symbol": symbol, "note": ""},
+                initial.revision,
+            )
+        except WorkspaceRevisionConflict as exc:
+            return exc
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(write, ["000403.SZ", "600489.SH"]))
+
+    successes = [result for result in results if not isinstance(result, Exception)]
+    conflicts = [result for result in results if isinstance(result, WorkspaceRevisionConflict)]
+    assert len(successes) == 1
+    assert len(conflicts) == 1
+    assert len(watchlist.list_symbols()) == 1
+    assert conflicts[0].current_revision == successes[0].revision

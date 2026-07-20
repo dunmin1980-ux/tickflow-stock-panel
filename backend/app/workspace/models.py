@@ -29,3 +29,13 @@ class WorkspaceRevisionConflict(RuntimeError):  # noqa: N818 - public contract
         super().__init__(f"stale revision for {resource}")
         self.resource = resource
         self.current_revision = current_revision
+
+
+class WorkspaceCommandConflict(RuntimeError):  # noqa: N818 - public contract
+    """A valid conditional command that conflicts with workspace business state."""
+
+    def __init__(self, resource: ResourceName, operation: str, reason: str) -> None:
+        super().__init__(f"{resource.value}.{operation}: {reason}")
+        self.resource = resource
+        self.operation = operation
+        self.reason = reason
