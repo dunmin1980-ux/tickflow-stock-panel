@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import secrets
@@ -11,6 +12,20 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictFloat,
+    StrictInt,
+    StrictStr,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
+
+from app.services import preferences as preference_service
 from app.workspace.models import ResourceName, ResourceSnapshot
 from app.workspace.revision import revision_for
 
@@ -24,94 +39,208 @@ _ENVELOPE_FIELDS = {
     "checksum",
     "data",
 }
-_WATCHLIST_FIELDS = {"symbol", "added_at", "note"}
-_PREFERENCE_FIELDS = {
-    "indices_nav_pinned",
-    "watchlist_columns",
-    "screener_result_columns",
-    "sidebar_index_symbols",
-    "nav_order",
-    "nav_hidden",
-    "screener_auto_run",
-    "daily_data_provider",
-    "adj_factor_provider",
-    "minute_data_provider",
-    "realtime_data_provider",
-    "financial_data_provider",
+_DIGEST = re.compile(r"[0-9a-f]{64}")
+_SENSITIVE_KEY_PARTS = (
+    "secret",
+    "token",
+    "key",
+    "password",
+    "cookie",
+    "webhook",
+    "content",
+    "markdown",
+    "credential",
+    "url",
+)
+_SAFE_STATUS_KEYS = {
     "has_feishu_webhook",
     "has_feishu_credential_data",
     "has_wecom_webhook",
     "has_wecom_bot",
     "has_wecom_bot_credential_data",
 }
-_STOCK_REPORT_FIELDS = {
-    "id",
-    "symbol",
-    "title",
-    "created_at",
-    "data_as_of",
-    "verification_status",
-    "can_publish",
-    "trading_advice",
+
+
+class _SafeDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
+
+
+class _WatchlistRow(_SafeDTO):
+    symbol: StrictStr
+    added_at: StrictStr | None = None
+    note: StrictStr | None = None
+
+
+class _WatchlistData(_SafeDTO):
+    symbols: list[_WatchlistRow]
+
+
+class _ClientPreferences(_SafeDTO):
+    indices_nav_pinned: StrictBool | None = None
+    watchlist_columns: list[dict[str, Any]] | None = None
+    screener_result_columns: list[dict[str, Any]] | None = None
+    sidebar_index_symbols: list[StrictStr] | None = None
+    nav_order: list[StrictStr] | None = None
+    nav_hidden: list[StrictStr] | None = None
+    screener_auto_run: StrictBool | None = None
+    daily_data_provider: StrictStr | None = None
+    adj_factor_provider: StrictStr | None = None
+    minute_data_provider: StrictStr | None = None
+    realtime_data_provider: StrictStr | None = None
+    financial_data_provider: StrictStr | None = None
+    has_feishu_webhook: StrictBool
+    has_feishu_credential_data: StrictBool
+    has_wecom_webhook: StrictBool
+    has_wecom_bot: StrictBool
+    has_wecom_bot_credential_data: StrictBool
+
+    @field_validator("watchlist_columns", "screener_result_columns")
+    @classmethod
+    def validate_columns(cls, value: object) -> object:
+        if value is None:
+            return value
+        return preference_service._validated_column_configs(value)
+
+    @field_validator("sidebar_index_symbols", "nav_order", "nav_hidden")
+    @classmethod
+    def validate_string_lists(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None and any("://" in item for item in value):
+            raise ValueError("preference list contains a URL")
+        return value
+
+    @field_validator(
+        "daily_data_provider",
+        "adj_factor_provider",
+        "minute_data_provider",
+        "realtime_data_provider",
+        "financial_data_provider",
+    )
+    @classmethod
+    def validate_provider(cls, value: str | None) -> str | None:
+        if value is not None and ("://" in value or len(value) > 128):
+            raise ValueError("preference provider is invalid")
+        return value
+
+
+class _PreferencesData(_SafeDTO):
+    preferences: _ClientPreferences
+
+
+class _StockReportMetadata(_SafeDTO):
+    id: StrictStr
+    symbol: StrictStr | None = None
+    title: StrictStr | None = None
+    created_at: StrictStr | None = None
+    data_as_of: StrictStr | None = None
+    verification_status: StrictStr | None = None
+    can_publish: StrictBool | None = None
+    trading_advice: StrictBool | None = None
+
+
+class _StockReportsData(_SafeDTO):
+    reports: list[_StockReportMetadata]
+
+
+class _MarketRecapMetadata(_SafeDTO):
+    id: StrictStr
+    title: StrictStr | None = None
+    created_at: StrictStr | None = None
+    data_as_of: StrictStr | None = None
+    verification_status: StrictStr | None = None
+    can_publish: StrictBool | None = None
+    trading_advice: StrictBool | None = None
+
+
+class _MarketRecapsData(_SafeDTO):
+    reports: list[_MarketRecapMetadata]
+
+
+class _BacktestSummary(_SafeDTO):
+    id: StrictStr
+    task: StrictStr
+    strategy_id: StrictStr
+    parameters_digest: StrictStr
+    stats: dict[StrictStr, StrictInt | StrictFloat]
+    started_at: StrictStr
+    finished_at: StrictStr
+    data_as_of: StrictStr
+    engine: StrictStr
+    execution_target: StrictStr
+
+    @model_validator(mode="after")
+    def validate_bounded_summary(self) -> _BacktestSummary:
+        string_values = (
+            self.id,
+            self.task,
+            self.strategy_id,
+            self.parameters_digest,
+            self.started_at,
+            self.finished_at,
+            self.data_as_of,
+            self.engine,
+            self.execution_target,
+        )
+        if any(not value.strip() for value in string_values):
+            raise ValueError("backtest summary strings must not be empty")
+        if _DIGEST.fullmatch(self.parameters_digest) is None:
+            raise ValueError("backtest summary digest is invalid")
+        for value in self.stats.values():
+            if isinstance(value, bool) or not math.isfinite(value):
+                raise ValueError("backtest summary stats must be finite numbers")
+        encoded = json.dumps(
+            self.stats,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+        if len(encoded) > 16 * 1024:
+            raise ValueError("backtest summary stats are too large")
+        return self
+
+
+class _BacktestSummariesData(_SafeDTO):
+    summaries: list[_BacktestSummary] = Field(max_length=100)
+
+
+_DATA_MODELS: dict[ResourceName, type[_SafeDTO]] = {
+    ResourceName.WATCHLIST: _WatchlistData,
+    ResourceName.PREFERENCES: _PreferencesData,
+    ResourceName.STOCK_REPORTS: _StockReportsData,
+    ResourceName.MARKET_RECAPS: _MarketRecapsData,
+    ResourceName.BACKTEST_SUMMARIES: _BacktestSummariesData,
 }
-_MARKET_RECAP_FIELDS = _STOCK_REPORT_FIELDS - {"symbol"}
-_BACKTEST_SUMMARY_FIELDS = {
-    "id",
-    "task",
-    "strategy_id",
-    "parameters_digest",
-    "stats",
-    "started_at",
-    "finished_at",
-    "data_as_of",
-    "engine",
-    "execution_target",
-}
 
 
-def _object(value: Any, *, fields: set[str], required: set[str]) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) - fields or not required <= set(value):
-        raise ValueError("cache data is not a safe workspace DTO")
-    return value
+def _is_sensitive_key(key: str, parents: tuple[str, ...]) -> bool:
+    lowered = key.casefold()
+    if parents == ("preferences",) and lowered in _SAFE_STATUS_KEYS:
+        return False
+    if lowered == "key" and parents and parents[-1] == "source":
+        return False
+    if lowered in {"bot_id", "botid"} or lowered.endswith("_bot_id"):
+        return True
+    return any(part in lowered for part in _SENSITIVE_KEY_PARTS)
 
 
-def _objects(value: Any, *, fields: set[str], required: set[str]) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        raise ValueError("cache data is not a safe workspace DTO")
-    return [_object(item, fields=fields, required=required) for item in value]
+def _reject_sensitive_keys(value: Any, parents: tuple[str, ...] = ()) -> None:
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            if not isinstance(key, str) or _is_sensitive_key(key, parents):
+                raise ValueError("cache data is not a safe workspace DTO")
+            _reject_sensitive_keys(nested, (*parents, key.casefold()))
+    elif isinstance(value, list):
+        for nested in value:
+            _reject_sensitive_keys(nested, parents)
 
 
 def _validate_safe_data(resource: ResourceName, data: Any) -> dict[str, Any]:
-    if not isinstance(data, dict):
-        raise ValueError("cache data is not a safe workspace DTO")
-
-    if resource is ResourceName.WATCHLIST:
-        root = _object(data, fields={"symbols"}, required={"symbols"})
-        rows = _objects(root["symbols"], fields=_WATCHLIST_FIELDS, required={"symbol"})
-        if any(not isinstance(row["symbol"], str) for row in rows):
-            raise ValueError("cache data is not a safe workspace DTO")
-    elif resource is ResourceName.PREFERENCES:
-        root = _object(data, fields={"preferences"}, required={"preferences"})
-        _object(root["preferences"], fields=_PREFERENCE_FIELDS, required=set())
-    elif resource is ResourceName.STOCK_REPORTS:
-        root = _object(data, fields={"reports"}, required={"reports"})
-        _objects(root["reports"], fields=_STOCK_REPORT_FIELDS, required={"id"})
-    elif resource is ResourceName.MARKET_RECAPS:
-        root = _object(data, fields={"reports"}, required={"reports"})
-        _objects(root["reports"], fields=_MARKET_RECAP_FIELDS, required={"id"})
-    elif resource is ResourceName.BACKTEST_SUMMARIES:
-        root = _object(data, fields={"summaries"}, required={"summaries"})
-        _objects(
-            root["summaries"],
-            fields=_BACKTEST_SUMMARY_FIELDS,
-            required=_BACKTEST_SUMMARY_FIELDS,
-        )
-    else:  # pragma: no cover - exhaustive guard for future enum additions
-        raise ValueError("cache data is not a safe workspace DTO")
-
     try:
-        return json.loads(json.dumps(data, ensure_ascii=False, allow_nan=False))
-    except (TypeError, ValueError) as exc:
+        _reject_sensitive_keys(data)
+        validated = _DATA_MODELS[resource].model_validate(data)
+        payload = validated.model_dump(mode="json", exclude_unset=True)
+        return json.loads(json.dumps(payload, ensure_ascii=False, allow_nan=False))
+    except (KeyError, TypeError, ValueError, ValidationError) as exc:
         raise ValueError("cache data is not a safe workspace DTO") from exc
 
 
@@ -132,25 +261,26 @@ class WorkspaceCache:
 
     def _quarantine(self, resource: ResourceName, path: Path) -> None:
         quarantine = self.root / "quarantine"
-        quarantine.mkdir(parents=True, exist_ok=True)
-        with suppress(OSError):
-            os.chmod(quarantine, 0o700)
-        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
-        target = quarantine / f"{stamp}-{resource.value}.json"
-        temp = quarantine / f".{target.name}.{os.getpid()}.{secrets.token_hex(6)}.tmp"
-        record = json.dumps(
-            {
-                "schema_version": _SCHEMA_VERSION,
-                "resource": resource.value,
-                "quarantined_at": datetime.now(UTC).isoformat(),
-                "reason": "invalid_cache",
-            },
-            ensure_ascii=True,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
+        temp: Path | None = None
         fd: int | None = None
         try:
+            quarantine.mkdir(parents=True, exist_ok=True)
+            with suppress(OSError):
+                os.chmod(quarantine, 0o700)
+            stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+            target = quarantine / f"{stamp}-{resource.value}.json"
+            temp = quarantine / f".{target.name}.{os.getpid()}.{secrets.token_hex(6)}.tmp"
+            record = json.dumps(
+                {
+                    "schema_version": _SCHEMA_VERSION,
+                    "resource": resource.value,
+                    "quarantined_at": datetime.now(UTC).isoformat(),
+                    "reason": "invalid_cache",
+                },
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
             fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 fd = None
@@ -162,11 +292,21 @@ class WorkspaceCache:
             pass
         finally:
             if fd is not None:
-                os.close(fd)
-            with suppress(OSError):
-                temp.unlink(missing_ok=True)
+                with suppress(OSError):
+                    os.close(fd)
+            if temp is not None:
+                with suppress(OSError):
+                    temp.unlink(missing_ok=True)
             with suppress(OSError):
                 path.unlink()
+
+    def validate(self, snapshot: ResourceSnapshot) -> ResourceSnapshot:
+        resource = ResourceName(snapshot.resource)
+        data = _validate_safe_data(resource, snapshot.data)
+        checksum = revision_for(data)
+        if _REVISION.fullmatch(snapshot.revision) is None or snapshot.revision != checksum:
+            raise ValueError("cache snapshot revision is invalid")
+        return snapshot.model_copy(deep=True, update={"data": data})
 
     def get(self, resource: ResourceName) -> ResourceSnapshot | None:
         resource = ResourceName(resource)
@@ -203,11 +343,10 @@ class WorkspaceCache:
             return None
 
     def put(self, snapshot: ResourceSnapshot) -> None:
+        snapshot = self.validate(snapshot)
         resource = ResourceName(snapshot.resource)
-        data = _validate_safe_data(resource, snapshot.data)
+        data = snapshot.data
         checksum = revision_for(data)
-        if _REVISION.fullmatch(snapshot.revision) is None or snapshot.revision != checksum:
-            raise ValueError("cache snapshot revision is invalid")
         envelope = {
             "schema_version": _SCHEMA_VERSION,
             "resource": resource.value,

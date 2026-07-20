@@ -145,7 +145,11 @@ def _response_headers(response: httpx.Response) -> dict[str, str]:
         for token in response.headers.get("connection", "").split(",")
         if token.strip()
     }
-    forbidden = _HOP_BY_HOP_HEADERS | connection_tokens | {"set-cookie", "content-length"}
+    forbidden = _HOP_BY_HOP_HEADERS | connection_tokens | {
+        "set-cookie",
+        "content-length",
+        "content-encoding",
+    }
     return {
         name: value
         for name, value in response.headers.multi_items()

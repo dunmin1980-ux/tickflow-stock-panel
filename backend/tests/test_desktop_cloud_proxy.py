@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import logging
 import re
 from collections.abc import Iterator
@@ -300,6 +301,54 @@ def test_streaming_cloud_responses_are_forwarded_chunk_by_chunk(content_type: st
     assert proxied.headers["content-type"].startswith(content_type)
     assert "set-cookie" not in proxied.headers
     assert stream.iterated == 2
+
+
+def test_proxy_removes_gzip_encoding_after_buffered_httpx_decode() -> None:
+    decoded = b'{"decoded":true}'
+    remote = RemoteStub(
+        httpx.Response(
+            200,
+            content=gzip.compress(decoded),
+            headers={
+                "content-type": "application/json",
+                "content-encoding": "gzip",
+                "content-length": "999",
+            },
+            request=httpx.Request("GET", "https://cloud.example/api/kline/daily"),
+        )
+    )
+
+    with TestClient(_proxy_app(remote)) as client:
+        response = client.get("/api/kline/daily")
+
+    assert response.content == decoded
+    assert "content-encoding" not in response.headers
+
+
+def test_proxy_removes_gzip_encoding_after_streaming_httpx_decode() -> None:
+    decoded = b"data: one\n\ndata: two\n\n"
+    stream = ChunkStream([gzip.compress(decoded)])
+    remote = RemoteStub(
+        httpx.Response(
+            200,
+            stream=stream,
+            headers={
+                "content-type": "text/event-stream",
+                "content-encoding": "gzip",
+                "transfer-encoding": "chunked",
+            },
+            request=httpx.Request(
+                "GET", "https://cloud.example/api/stock-analysis/analyze"
+            ),
+        )
+    )
+
+    with TestClient(_proxy_app(remote)) as client:
+        response = client.post("/api/stock-analysis/analyze", json={"symbol": "000403.SZ"})
+
+    assert response.content == decoded
+    assert "content-encoding" not in response.headers
+    assert "transfer-encoding" not in response.headers
 
 
 def test_proxy_prefers_remote_stream_context_and_closes_it_after_delivery() -> None:

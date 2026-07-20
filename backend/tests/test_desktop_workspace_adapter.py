@@ -97,6 +97,11 @@ def _snapshot(resource: ResourceName) -> ResourceSnapshot:
     )
 
 
+def _refresh_revision(snapshot: ResourceSnapshot) -> ResourceSnapshot:
+    snapshot.revision = revision_for(snapshot.data)
+    return snapshot
+
+
 def _resource_payload(resource: ResourceName, *, include_resource: bool = True) -> dict:
     snapshot = _snapshot(resource)
     payload = snapshot.model_dump(mode="json")
@@ -193,6 +198,16 @@ def test_unsafe_corrupt_cache_is_quarantined_without_rejected_payload(tmp_path: 
     assert "QUARANTINED_CREDENTIAL_CANARY" not in persisted
 
 
+def test_quarantine_setup_failure_still_deletes_rejected_source(tmp_path: Path) -> None:
+    cache = WorkspaceCache(tmp_path)
+    source = cache.path(ResourceName.WATCHLIST)
+    source.write_text('{"checksum":"REJECTED_SOURCE_CANARY"}', encoding="utf-8")
+    (tmp_path / "quarantine").write_text("blocks-directory-creation", encoding="utf-8")
+
+    assert cache.get(ResourceName.WATCHLIST) is None
+    assert not source.exists()
+
+
 def test_cache_round_trip_uses_integrity_envelope_and_owner_only_file(tmp_path: Path) -> None:
     cache = WorkspaceCache(tmp_path)
     snapshot = _snapshot(ResourceName.WATCHLIST)
@@ -252,6 +267,138 @@ def test_cache_rejects_report_bodies_and_credential_fields(
         for path in tmp_path.rglob("*")
         if path.is_file()
     )
+
+
+@pytest.mark.parametrize(
+    ("resource", "mutate"),
+    [
+        (
+            ResourceName.PREFERENCES,
+            lambda data: data["preferences"].update({"has_feishu_webhook": "true"}),
+        ),
+        (
+            ResourceName.PREFERENCES,
+            lambda data: data["preferences"].update({"nav_order": ["watchlist", 7]}),
+        ),
+        (
+            ResourceName.PREFERENCES,
+            lambda data: data["preferences"].update({"daily_data_provider": 7}),
+        ),
+        (
+            ResourceName.PREFERENCES,
+            lambda data: data["preferences"].update(
+                {
+                    "watchlist_columns": [
+                        {
+                            "id": "builtin:close",
+                            "source": {"type": "builtin", "key": "close"},
+                            "label": "Close",
+                            "visible": "yes",
+                        }
+                    ]
+                }
+            ),
+        ),
+        (
+            ResourceName.PREFERENCES,
+            lambda data: data["preferences"].update(
+                {
+                    "watchlist_columns": [
+                        {
+                            "id": "builtin:close",
+                            "source": {"type": "builtin", "key": "close"},
+                            "label": "Close",
+                            "visible": True,
+                            "candleConfig": {
+                                "days": 20,
+                                "credential": {"api_key": "NESTED_PREFERENCE_CANARY"},
+                            },
+                        }
+                    ]
+                }
+            ),
+        ),
+        (
+            ResourceName.STOCK_REPORTS,
+            lambda data: data["reports"][0].update(
+                {"title": {"content": "NESTED_REPORT_CONTENT_CANARY"}}
+            ),
+        ),
+        (
+            ResourceName.MARKET_RECAPS,
+            lambda data: data["reports"][0].update({"can_publish": "false"}),
+        ),
+        (
+            ResourceName.BACKTEST_SUMMARIES,
+            lambda data: data["summaries"][0].update(
+                {"stats": {"return": {"api_key": "NESTED_STATS_KEY_CANARY"}}}
+            ),
+        ),
+        (
+            ResourceName.BACKTEST_SUMMARIES,
+            lambda data: data["summaries"][0].update({"stats": {"return": "1.25"}}),
+        ),
+        (
+            ResourceName.BACKTEST_SUMMARIES,
+            lambda data: data["summaries"][0].update({"stats": {"return": True}}),
+        ),
+        (
+            ResourceName.WATCHLIST,
+            lambda data: data["symbols"][0].update(
+                {"note": {"content": "NESTED_WATCHLIST_CONTENT_CANARY"}}
+            ),
+        ),
+    ],
+)
+def test_cache_strictly_validates_every_nested_dto_value(
+    tmp_path: Path,
+    resource: ResourceName,
+    mutate,
+) -> None:
+    snapshot = _snapshot(resource)
+    mutate(snapshot.data)
+    _refresh_revision(snapshot)
+    cache = WorkspaceCache(tmp_path)
+
+    with pytest.raises(ValueError, match="safe workspace DTO"):
+        cache.put(snapshot)
+
+    assert not cache.path(resource).exists()
+
+
+def test_cache_preserves_schema_valid_column_source_key(tmp_path: Path) -> None:
+    snapshot = _snapshot(ResourceName.PREFERENCES)
+    snapshot.data["preferences"]["watchlist_columns"] = [
+        {
+            "id": "builtin:close",
+            "source": {"type": "builtin", "key": "close"},
+            "label": "Close",
+            "visible": True,
+            "align": "right",
+        }
+    ]
+    _refresh_revision(snapshot)
+    cache = WorkspaceCache(tmp_path)
+
+    cache.put(snapshot)
+
+    restored = cache.get(ResourceName.PREFERENCES)
+    assert restored is not None
+    assert restored.data["preferences"]["watchlist_columns"][0]["source"]["key"] == "close"
+
+
+def test_malformed_bootstrap_publishes_no_partial_cache_files(tmp_path: Path) -> None:
+    payload = _bootstrap_payload()
+    summary = payload["resources"]["backtest_summaries"]
+    summary["data"]["summaries"][0]["stats"] = {"return": "not-a-number"}
+    summary["revision"] = revision_for(summary["data"])
+    remote = RemoteStub([_response("GET", "/api/workspace/bootstrap", payload)])
+    adapter = CloudWorkspaceAdapter(remote, WorkspaceCache(tmp_path))
+
+    with pytest.raises(ValueError, match="safe workspace DTO"):
+        adapter.bootstrap()
+
+    assert not list(tmp_path.glob("*.json"))
 
 
 def test_online_get_caches_only_validated_resource_snapshot(tmp_path: Path) -> None:

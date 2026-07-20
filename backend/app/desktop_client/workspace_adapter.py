@@ -105,6 +105,7 @@ class CloudWorkspaceAdapter:
         snapshots = [
             self._snapshot(resource, resources.get(resource.value, {})) for resource in ResourceName
         ]
+        snapshots = [self.cache.validate(snapshot) for snapshot in snapshots]
         for snapshot in snapshots:
             self.cache.put(snapshot)
         return payload
