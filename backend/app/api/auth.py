@@ -23,6 +23,7 @@ from threading import Lock
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
+from app.config import settings
 from app.services import auth
 
 logger = logging.getLogger(__name__)
@@ -189,7 +190,7 @@ def login(req: LoginIn, request: Request, response: Response) -> dict:
         httponly=True,
         samesite="lax",
         path="/",
-        secure=False,  # 自托管可能无 HTTPS, 不强制 secure(建议反代加 HTTPS)
+        secure=settings.auth_cookie_secure,
     )
     return {"ok": True, "authenticated": True}
 
@@ -200,7 +201,12 @@ def logout(request: Request, response: Response) -> dict:
     token = request.cookies.get(COOKIE_NAME)
     if token:
         auth.revoke_session(token)
-    response.delete_cookie(key=COOKIE_NAME, path="/")
+    response.delete_cookie(
+        key=COOKIE_NAME,
+        secure=settings.auth_cookie_secure,
+        samesite="lax",
+        path="/",
+    )
     return {"ok": True}
 
 

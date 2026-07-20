@@ -7,7 +7,6 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -37,6 +36,15 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+class ImmutableAssetStaticFiles(StaticFiles):
+    """Serve Vite-hashed build assets with an immutable cache policy."""
+
+    def file_response(self, full_path, stat_result, scope, status_code=200):
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
 
 
 def _initialize_gold_runtime(app: FastAPI, store: DataStore) -> None:
@@ -334,18 +342,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS: 允许局域网访问 (自托管场景, 放开所有来源)
-# 注: allow_credentials=True 与 allow_origins=['*'] 不能共存 (浏览器规范),
-# 本项目认证走 header (API Key), 不依赖 cookie, 故关闭 credentials 换取通配来源。
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
 # ================================================================
 # 访问认证中间件
 # ================================================================
@@ -436,7 +432,21 @@ async def capability_denied_handler(request: Request, exc: CapabilityDenied) -> 
 _static = Path(settings.static_dir)
 if _static.exists():
     if (_static / "assets").exists():
-        app.mount("/assets", StaticFiles(directory=_static / "assets"), name="assets")
+        app.mount("/assets", ImmutableAssetStaticFiles(directory=_static / "assets"), name="assets")
+
+    @app.get("/manifest.webmanifest", include_in_schema=False)
+    def webmanifest():
+        return FileResponse(
+            _static / "manifest.webmanifest",
+            headers={"Cache-Control": "no-cache"},
+        )
+
+    @app.get("/sw.js", include_in_schema=False)
+    def service_worker():
+        return FileResponse(
+            _static / "sw.js",
+            headers={"Cache-Control": "no-cache"},
+        )
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa_fallback(full_path: str):  # noqa: ARG001
