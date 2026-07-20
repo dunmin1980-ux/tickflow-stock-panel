@@ -16,18 +16,16 @@
 from __future__ import annotations
 
 import logging
-import socket
+import os
 import sys
-import threading
-import time
 import traceback
-from pathlib import Path
+from contextlib import suppress
+
+from app.desktop_runtime import DesktopServer
 
 logger = logging.getLogger(__name__)
 
 _APP_NAME = "TickFlow 股票面板"
-_BASE_PORT = 3018
-_PORT_PROBE_RANGE = 50  # 从 3018 起最多试 50 个端口
 
 
 def _ensure_data_dir_writable() -> None:
@@ -44,7 +42,7 @@ def _ensure_data_dir_writable() -> None:
         probe = data_root / ".write_probe"
         probe.write_text("ok", encoding="utf-8")
         probe.unlink(missing_ok=True)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.error("数据目录不可写, 桌面版无法运行: %s (%s)", data_root, e)
         raise
 
@@ -58,22 +56,27 @@ def _acquire_single_instance() -> bool:
     from app.config import settings
 
     lock_path = settings.data_dir / ".desktop.lock"
-    if lock_path.exists():
-        # 软检测: 写入进程 PID, 若该 PID 已不存在则视为残留锁, 允许接管
+    while True:
         try:
-            pid_str = lock_path.read_text(encoding="utf-8").strip()
-            pid = int(pid_str) if pid_str.isdigit() else None
-        except Exception:  # noqa: BLE001
-            pid = None
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            try:
+                pid_str = lock_path.read_text(encoding="utf-8").strip()
+                pid = int(pid_str) if pid_str.isdigit() else None
+            except Exception:
+                pid = None
 
-        if pid is not None and _pid_alive(pid):
-            logger.warning("检测到已有实例运行 (PID %d), 本进程退出", pid)
-            return False
-        # 残留锁: 清理后继续
-        logger.info("清理残留单实例锁 (PID %s 已不存在)", pid)
+            if pid is not None and _pid_alive(pid):
+                logger.warning("检测到已有实例运行 (PID %d), 本进程退出", pid)
+                return False
+            logger.info("清理残留单实例锁 (PID %s 已不存在)", pid)
+            with suppress(FileNotFoundError):
+                lock_path.unlink()
+            continue
 
-    lock_path.write_text(str(_current_pid()), encoding="utf-8")
-    return True
+        with os.fdopen(fd, "w", encoding="utf-8") as lock_file:
+            lock_file.write(str(_current_pid()))
+        return True
 
 
 def _release_single_instance() -> None:
@@ -81,8 +84,10 @@ def _release_single_instance() -> None:
 
     lock_path = settings.data_dir / ".desktop.lock"
     try:
-        lock_path.unlink(missing_ok=True)
-    except Exception:  # noqa: BLE001
+        owner = lock_path.read_text(encoding="utf-8").strip()
+        if owner == str(_current_pid()):
+            lock_path.unlink(missing_ok=True)
+    except Exception:
         pass
 
 
@@ -100,8 +105,6 @@ def _guard_streams() -> None:
     修法: console=False 下把 stdout/stderr 换成丢弃写入的空对象 (devnull),
     让 logging / reconfigure / 任何 print 都安全落地。console=True 不动 (有真控制台)。
     """
-    import os
-
     class _NullStream:
         """丢弃所有写入的空流 (替代 None 的 stdout/stderr)。"""
         def write(self, _s): return 0
@@ -143,7 +146,7 @@ def _setup_logging() -> None:
             logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
         )
         logging.getLogger().addHandler(handler)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         # 日志落盘失败不阻断启动 (开发模式 data_dir 可能不可写)
         logger.warning("日志文件初始化失败, 仅输出到 stderr: %s", e)
 
@@ -162,7 +165,7 @@ def _show_crash(title: str, text: str) -> None:
             import ctypes
 
             ctypes.windll.user32.MessageBoxW(0, text, title, 0x10)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.error("弹框失败 (已写日志文件): %s", e)
     else:
         logger.error("%s: %s", title, text)
@@ -193,85 +196,11 @@ def _current_pid() -> int:
     return os.getpid()
 
 
-def _find_free_port(start: int, count: int = _PORT_PROBE_RANGE) -> int:
-    """从 start 起找第一个可用端口。全部被占则返回 start (交给 uvicorn 报错)。"""
-    for port in range(start, start + count):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            try:
-                s.bind(("127.0.0.1", port))
-                return port
-            except OSError:
-                continue
-    return start
-
-
-def _run_uvmicorn(port: int, ready_event: threading.Event) -> None:
-    """后台线程: 启动 uvicorn 服务。ready_event 在线程退出时置位 (通知主线程)。"""
-    import uvicorn
-
-    try:
-        # 延迟 import app, 确保配置层已就绪 (frozen 检测在 config.py 导入时完成)
-        # 放进 try: app.main 模块导入 (含 app.api.* 一长串 import) 若失败,
-        # 异常必须落到 except 记录, 否则主线程只看到「后端超时」而查无 traceback。
-        from app.main import app
-    except Exception:
-        logger.exception("后端模块导入失败 (app.main 或其依赖)")
-        ready_event.set()
-        return
-
-    config = uvicorn.Config(
-        app,
-        host="127.0.0.1",  # 仅本机, 不暴露外网 (桌面版无需远程访问)
-        port=port,
-        log_level="info",
-        access_log=False,    # 桌面版不需要访问日志
-        loop="auto",
-    )
-    server = uvicorn.Server(config)
-
-    # 线程结束时通知主线程 (无论正常退出还是异常)
-    def _signal_done(*exc):
-        ready_event.set()
-    server.config.callback_notify = None  # 不用 notify 机制
-
-    try:
-        server.run()
-    except Exception:
-        # server.run() 内部跑 lifespan 启动链, 任一步抛异常都会冒到这里。
-        # 不捕获则线程静默死亡, 主线程 _wait_for_server 傻等满 60s 后报「超时」,
-        # 真正的崩溃原因 (如某个原生库加载失败 / 缺 hidden import) 永远看不到。
-        logger.exception("uvicorn 后端启动/运行失败")
-    finally:
-        ready_event.set()
-
-
-def _wait_for_server(port: int, timeout: float = 60.0) -> bool:
-    """轮询 health 接口直到后端就绪或超时。
-
-    比 monkey-patch uvicorn 内部方法更健壮, 不依赖版本内部实现。
-    """
-    import urllib.request
-    import urllib.error
-
-    url = f"http://127.0.0.1:{port}/health"
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        try:
-            with urllib.request.urlopen(url, timeout=2) as r:
-                if r.status == 200:
-                    return True
-        except (urllib.error.URLError, ConnectionError, OSError):
-            pass
-        time.sleep(0.5)
-    return False
-
-
 def _open_window(url: str) -> None:
     """主线程: 用 pywebview 打开桌面窗口。"""
     import webview  # type: ignore[import-not-found]
 
-    window = webview.create_window(
+    webview.create_window(
         _APP_NAME,
         url,
         width=1440,
@@ -307,25 +236,23 @@ def main() -> int:
     if not _acquire_single_instance():
         return 0
 
+    server: DesktopServer | None = None
+    server_started = False
     try:
-        port = _find_free_port(_BASE_PORT)
-        logger.info("桌面版后端将监听 127.0.0.1:%d", port)
+        os.environ.setdefault("TICKFLOW_DESKTOP_CLIENT", "1")
+        server = DesktopServer(port=0)
+        server.start()
+        server_started = True
 
-        # 后台线程起 uvicorn
-        ready = threading.Event()
-        server_thread = threading.Thread(
-            target=_run_uvmicorn, args=(port, ready), daemon=True,
-            name="uvicorn",
-        )
-        server_thread.start()
-
-        # 轮询 health 接口等后端就绪 (含 lifespan 初始化, 最多 60s)
-        if not _wait_for_server(port, timeout=60.0):
+        if not server.wait_ready(60):
             logger.error("后端启动超时, 桌面版退出")
-            _release_single_instance()
             return 1
 
-        url = f"http://127.0.0.1:{port}"
+        logger.info("桌面版后端监听 127.0.0.1:%d", server.bound_port)
+        if os.getenv("TICKFLOW_DESKTOP_SMOKE") == "1":
+            return 0
+
+        url = f"http://127.0.0.1:{server.bound_port}"
         logger.info("打开桌面窗口: %s", url)
         _open_window(url)
 
@@ -342,6 +269,11 @@ def main() -> int:
         _show_crash("TickFlow 启动失败", traceback.format_exc())
         return 1
     finally:
+        if server_started and server is not None:
+            try:
+                server.stop(10)
+            except Exception:
+                logger.exception("桌面版后端停止失败")
         _release_single_instance()
 
 
