@@ -111,17 +111,37 @@ RUN if [ "$USE_CN_MIRROR" = "1" ]; then \
 # Backend deps
 COPY README.md /README.md
 COPY backend/pyproject.toml backend/uv.lock* ./
-# uv 原生支持同时挂多个 index(主源 + 备用源),会自动在两源中查找,
-# 比逐个重试更稳健 —— 任一源缺包时另一源补位。
+# uv.lock 会记录解析时的绝对 wheel URL；仅设置 UV_DEFAULT_INDEX 无法覆盖
+# 已锁定的下载主机。国内构建按主源、备用源、官方源依次重写 URL，版本和
+# SHA-256 仍由同一份 frozen lock 校验。任何源失败都不得退化为重新解析依赖。
 RUN export UV_HTTP_TIMEOUT="$UV_HTTP_TIMEOUT"; \
-    if [ "$USE_CN_MIRROR" = "1" ]; then \
-      export UV_DEFAULT_INDEX="$PYPI_INDEX" UV_EXTRA_INDEX_URL="$PYPI_FALLBACK"; \
-    fi; \
+    set -eu; \
     set -- --no-dev; \
     for extra in $BACKEND_EXTRAS; do \
       set -- "$@" --extra "$extra"; \
     done; \
-    uv sync --frozen "$@" || uv sync "$@"
+    if [ "$USE_CN_MIRROR" = "1" ] && [ -f uv.lock ]; then \
+      cp uv.lock /tmp/uv.lock.source; \
+      rewrite_lock() { \
+        mirror_base="${1%/simple}"; \
+        sed \
+          -e "s#https://pypi.tuna.tsinghua.edu.cn#${mirror_base}#g" \
+          -e "s#https://pypi.org#${mirror_base}#g" \
+          -e "s#https://files.pythonhosted.org#${mirror_base}#g" \
+          /tmp/uv.lock.source > uv.lock; \
+      }; \
+      rewrite_lock "$PYPI_INDEX"; \
+      uv sync --frozen "$@" || { \
+        rewrite_lock "$PYPI_FALLBACK"; \
+        uv sync --frozen "$@"; \
+      } || { \
+        rewrite_lock "https://pypi.org/simple"; \
+        uv sync --frozen "$@"; \
+      }; \
+      rm /tmp/uv.lock.source; \
+    else \
+      uv sync --frozen "$@"; \
+    fi
 
 # Backend code
 # 注意:Docker 里 WORKDIR=/app, 而 config.py 的 _PROJECT_ROOT 是按开发布局
