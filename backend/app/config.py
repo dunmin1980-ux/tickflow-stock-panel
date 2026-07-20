@@ -4,6 +4,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from platformdirs import user_data_path
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -11,7 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # PyInstaller 打包后: __file__ 指向临时解压目录 _MEIPASS, 不能作为路径基准。
 # 此时:
 #   - 只读资源 (tiers.yaml / 前端 dist) 放在 _MEIPASS 内
-#   - 可写用户数据 (data_dir) 放在可执行文件旁的用户目录
+#   - 可写用户数据 (data_dir) 放在平台指定的持久化目录
 # 非 frozen 模式 (开发/Docker): 保持原有 __file__ 推导, 行为完全不变。
 _IS_FROZEN = getattr(sys, "frozen", False)
 
@@ -21,9 +22,10 @@ def _user_data_root() -> Path:
 
     定位策略 (按优先级):
       1. 环境变量 DATA_DIR (pydantic-settings 自动注入到 settings.data_dir, 不在此处理)
-      2. 打包桌面版: exe 同级的 data/ 子目录 (<安装目录>/data/)
-         —— 与程序同处一个总目录 (用户选择的安装目录), 视觉直观, 便于备份/迁移。
-      3. 非 frozen (开发模式): 项目根 data/
+      2. macOS 打包版: ~/Library/Application Support/TickFlowStockPanel
+         —— 避免升级时将可写数据放在 .app 包内。
+      3. 其他打包平台: 可执行文件同级的 data/ 子目录。
+      4. 非 frozen (开发模式): 项目根 data/
 
     为什么不用 platformdirs 默认 (%LOCALAPPDATA%) 作为主路径:
       - 落在 C 盘系统目录, 用户不易察觉, 占系统盘空间
@@ -35,8 +37,14 @@ def _user_data_root() -> Path:
         (注意: 卸载时需在 .iss 中豁免 data/, 见 packaging/tickflow.iss 的 [UninstallDelete]。)
     旧版本数据迁移: 见 DataStore._migrate_legacy_data_dir(), 老用户首次启动自动搬迁。
     """
-    # 打包桌面版: exe 同级的 data/ 子目录 (与程序同一总目录, 覆盖安装不丢数据)
     if _IS_FROZEN:
+        # macOS 升级会替换 .app 包，可写数据必须位于 Application Support。
+        if sys.platform == "darwin":
+            return Path(
+                user_data_path("TickFlowStockPanel", appauthor=False, ensure_exists=False)
+            )
+
+        # Windows 保持原有可执行文件同级 data/ 的兼容行为。
         exe_dir = Path(sys.executable).resolve().parent
         return exe_dir / "data"
 
@@ -108,8 +116,8 @@ class Settings(BaseSettings):
     auth_password: str = ""
     auth_cookie_secure: bool = False
 
-    # Data — frozen: exe 同级 data/ 子目录; 非 frozen: 项目根 data/
-    # (均可被环境变量 DATA_DIR 覆盖, pydantic-settings 自动注入)
+    # Data — frozen macOS: Application Support; 其他 frozen: exe 同级 data/;
+    # 非 frozen: 项目根 data/ (均可被环境变量 DATA_DIR 覆盖)。
     data_dir: Path = _user_data_root()
 
     # tiers.yaml 路径 — frozen: 资源目录内; 非 frozen: 项目根目录
