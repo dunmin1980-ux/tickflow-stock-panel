@@ -177,3 +177,17 @@ commit:
   preferences endpoint in the current desktop gateway contract.
 - Physical-device recovery and real two-client SSE propagation remain Task 10
   acceptance items.
+
+## Review Follow-up 3
+
+Desktop preference recovery now handles the real gateway outage contract:
+`/api/client/status` may return HTTP 200 with `reachable: false`. In that state
+the client skips the cloud-only complete-preferences request and overlays the
+sanitized workspace projection from offline storage onto the last known
+complete preferences (or safe defaults). A connection failure after an
+initially reachable status follows the same fallback; HTTP errors, including
+401, are not swallowed and retain the revocation path.
+
+A focused regression proves that the unreachable desktop status does not call
+`/api/settings/preferences` and that cached shared preferences remain readable
+in offline-readonly mode.

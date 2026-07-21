@@ -114,6 +114,43 @@ describe('desktop workspace preference projection', () => {
     expect(preferences.minute_sync_days).toBeGreaterThan(0)
   })
 
+  it('uses the cached workspace projection when the desktop gateway reports cloud unreachable', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse({
+      resource: 'preferences',
+      revision: REVISION,
+      updated_at: '2026-07-21T09:00:00+08:00',
+      data: { preferences: { nav_hidden: ['/review'], screener_auto_run: false } },
+    }, 200, { ETag: `"${REVISION}"` })))
+    await workspaceApi.get('preferences')
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input)
+      if (path === '/api/client/status') {
+        return jsonResponse({
+          configured: true,
+          authenticated: false,
+          reachable: false,
+          mode: 'hybrid',
+          error_code: 'UNREACHABLE',
+        })
+      }
+      if (path === '/api/workspace/resources/preferences') {
+        throw new TypeError('Failed to fetch')
+      }
+      throw new Error(`Unexpected request: ${path}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const preferences = await api.preferences()
+
+    expect(preferences.nav_hidden).toEqual(['/review'])
+    expect(preferences.screener_auto_run).toBe(false)
+    expect(fetchMock.mock.calls.map(call => String(call[0]))).toEqual([
+      '/api/client/status',
+      '/api/workspace/resources/preferences',
+    ])
+  })
+
   it('refreshes monitor, minute, review, and realtime runtime fields after a mutation refetch', async () => {
     let runtimeRead = 0
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

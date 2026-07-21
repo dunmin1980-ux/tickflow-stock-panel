@@ -1439,11 +1439,7 @@ export const api = {
     request<{ ok: boolean }>('/api/settings/ai', { method: 'DELETE' }),
 
   preferences: async () => {
-    let desktopStatus: ClientStatus | null
-    try {
-      desktopStatus = await optionalClientStatus()
-    } catch (error) {
-      if (!(error instanceof TypeError)) throw error
+    const preferencesFromWorkspace = async () => {
       const snapshot = await workspaceApi.get('preferences')
       lastCompletePreferences = mergeSharedPreferences(
         lastCompletePreferences,
@@ -1451,8 +1447,22 @@ export const api = {
       )
       return structuredClone(lastCompletePreferences)
     }
+    let desktopStatus: ClientStatus | null
+    try {
+      desktopStatus = await optionalClientStatus()
+    } catch (error) {
+      if (!(error instanceof TypeError)) throw error
+      return preferencesFromWorkspace()
+    }
     if (desktopStatus !== null) {
-      const full = await request<unknown>('/api/settings/preferences')
+      if (!desktopStatus.reachable) return preferencesFromWorkspace()
+      let full: unknown
+      try {
+        full = await request<unknown>('/api/settings/preferences')
+      } catch (error) {
+        if (!(error instanceof TypeError)) throw error
+        return preferencesFromWorkspace()
+      }
       const complete = mergeCompletePreferences(DEFAULT_PREFERENCES, full)
       const snapshot = await workspaceApi.get('preferences')
       lastCompletePreferences = mergeSharedPreferences(
