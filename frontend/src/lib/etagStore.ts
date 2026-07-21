@@ -6,8 +6,9 @@ export type WorkspaceResourceName =
   | 'backtest_summaries'
 
 const revisions = new Map<WorkspaceResourceName, string>()
+const conflictedResources = new Set<WorkspaceResourceName>()
 
-function normalizeRevision(value: string | null | undefined): string | undefined {
+export function parseRevision(value: string | null | undefined): string | undefined {
   if (!value) return undefined
   const unquoted = value.trim().replace(/^"|"$/g, '')
   return /^[0-9a-f]{64}$/.test(unquoted) ? unquoted : undefined
@@ -19,7 +20,7 @@ export const etagStore = {
   },
 
   set(resource: WorkspaceResourceName, value: string | null | undefined): string | undefined {
-    const revision = normalizeRevision(value)
+    const revision = parseRevision(value)
     if (revision) revisions.set(resource, revision)
     return revision
   },
@@ -31,13 +32,30 @@ export const etagStore = {
   },
 
   clear(resource?: WorkspaceResourceName): void {
-    if (resource) revisions.delete(resource)
-    else revisions.clear()
+    if (resource) {
+      revisions.delete(resource)
+      conflictedResources.delete(resource)
+    } else {
+      revisions.clear()
+      conflictedResources.clear()
+    }
+  },
+
+  markConflicted(resource: WorkspaceResourceName): void {
+    conflictedResources.add(resource)
+  },
+
+  isConflicted(resource: WorkspaceResourceName): boolean {
+    return conflictedResources.has(resource)
+  },
+
+  clearConflict(resource: WorkspaceResourceName): void {
+    conflictedResources.delete(resource)
   },
 }
 
 export function quoteRevision(revision: string): string {
-  const normalized = normalizeRevision(revision)
+  const normalized = parseRevision(revision)
   if (!normalized) throw new TypeError('Workspace revision must be a 64-character digest')
   return `"${normalized}"`
 }

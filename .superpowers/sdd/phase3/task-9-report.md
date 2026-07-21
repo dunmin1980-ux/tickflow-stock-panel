@@ -52,3 +52,70 @@ executables; no package or lockfile changes are included.
 - Real two-client conflict and SSE propagation are covered by Task 10 E2E.
 - Report Markdown remains online-only and is intentionally unavailable from the
   offline read cache.
+
+## Review Follow-up
+
+All seven Task 9 review findings were addressed in the follow-up commit:
+
+1. SSE `onopen` now reconciles revisions before restoring online state or
+   stopping the 30-second poll. A failed reconciliation keeps offline-readonly
+   state, polling, and the bounded 1/2/5/10/30-second reconnect sequence.
+2. Bootstrap and per-resource metadata for watchlist, backtest summaries,
+   stock reports, market recaps, and shared preferences are persisted through
+   `offlineDb`. Explicit projectors remove report bodies, unknown fields, and
+   credential-like preference data before persistence. Report Markdown remains
+   online-only and `no-store`.
+3. Desktop preferences now merge the typed shared DTO over a complete safe
+   runtime/default object. The partial workspace DTO is no longer asserted as
+   a complete `Preferences` response.
+4. Workspace mutation preflight checks both browser connectivity and
+   `workspaceStatus.offlineReadonly`, so a reachable Mac gateway cannot write
+   while its cloud workspace is disconnected.
+5. HTTP 412 marks a per-resource conflict gate without promoting the response
+   ETag to writable state. Repeated commands fail before `fetch`; only a
+   successful online resource GET or bootstrap clears the gate.
+6. Native `disabled` plus `aria-disabled` states now cover Screener single and
+   batch watchlist writes, watchlist/screener column settings, shared data-source
+   selection, shared menu order/visibility, Stock Analysis regeneration, and
+   the existing Watchlist/Review report mutations.
+7. Watchlist batch-add and clear counts are calculated from pre/post resource
+   snapshots, including duplicate requests and already-present symbols.
+
+### Follow-up Verification
+
+- `./node_modules/.bin/vitest run`: 18 files, 85 tests passed.
+- `./node_modules/.bin/tsc -b`: passed.
+- `./node_modules/.bin/vite build`: passed; PWA service worker generated with
+  69 precache entries. Vite retained the existing large-chunk warning.
+- `git diff --check`: passed.
+- Direct ESLint execution was attempted, but this dependency tree has no
+  `frontend/node_modules/.bin/eslint` executable. No wrapper, install, or
+  lockfile change was used to mask that missing tool.
+
+### Follow-up Files
+
+- `frontend/src/lib/etagStore.ts`
+- `frontend/src/lib/workspace.ts`
+- `frontend/src/lib/useWorkspaceEvents.ts`
+- `frontend/src/lib/api.ts`
+- `frontend/src/components/screener/ScreenerTable.tsx`
+- `frontend/src/pages/Screener.tsx`
+- `frontend/src/pages/Watchlist.tsx`
+- `frontend/src/pages/StockAnalysis.tsx`
+- `frontend/src/pages/Review.tsx`
+- `frontend/src/pages/settings/DataSourceEditor.tsx`
+- `frontend/src/pages/settings/DataSources.tsx`
+- `frontend/src/pages/settings/MenuSettings.tsx`
+- `frontend/src/lib/__tests__/workspaceConflict.test.ts`
+- `frontend/src/lib/__tests__/useWorkspaceEvents.test.ts`
+- `frontend/src/lib/__tests__/workspaceOfflineCache.test.ts`
+- `frontend/src/lib/__tests__/workspacePreferences.test.ts`
+- `frontend/src/lib/__tests__/workspaceWatchlistCounts.test.ts`
+- `frontend/src/lib/__tests__/workspaceMutationUi.test.tsx`
+
+### Remaining Caveats
+
+- Full app termination can revoke the browser-session offline-access grant even
+  though sanitized IndexedDB snapshots remain; this is intentional session
+  isolation, not a persistent-login mechanism.
+- Physical-device and real two-client SSE/conflict acceptance remain Task 10.

@@ -312,6 +312,7 @@ function StockSearchBox({
                     type="button"
                     onClick={e => { e.stopPropagation(); onAdd(r.symbol) }}
                     disabled={inWatchlist || mutationsDisabled}
+                    aria-disabled={inWatchlist || mutationsDisabled}
                     className={`shrink-0 p-1 rounded transition-colors ${
                       inWatchlist
                         ? 'text-accent bg-accent/10 cursor-default'
@@ -442,6 +443,7 @@ const StockCard = React.memo(function StockCard({
             <button
               onClick={() => onConfirmRemove(r.symbol)}
               disabled={mutationsDisabled}
+              aria-disabled={mutationsDisabled}
               className="px-1.5 py-0.5 rounded text-[10px] text-danger bg-danger/10 hover:bg-danger/20 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
             >
               确认
@@ -454,6 +456,7 @@ const StockCard = React.memo(function StockCard({
           <button
             onClick={e => { e.stopPropagation(); onRequestRemove(r.symbol) }}
             disabled={mutationsDisabled}
+            aria-disabled={mutationsDisabled}
             className="opacity-0 group-hover:opacity-100 text-muted hover:text-danger transition-all duration-150 p-0.5 rounded hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="移除"
             title={mutationsDisabled ? '离线只读，暂不能修改自选股' : '移除'}
@@ -590,10 +593,19 @@ export function Watchlist() {
     loadColumnConfig().then(setColumns)
   }, [])
 
+  useEffect(() => {
+    if (!mutationsDisabled) return
+    setCustomizerOpen(false)
+    setImportOpen(false)
+    setConfirmClear(false)
+    setConfirmRemove(null)
+  }, [mutationsDisabled])
+
   const handleColumnsChange = useCallback((next: ColumnConfig[]) => {
+    if (mutationsDisabled) return
     setColumns(next)
     saveColumnConfig(next)
-  }, [])
+  }, [mutationsDisabled])
 
   const candleColumn = useMemo(() =>
     columns.find(c => c.source.type === 'builtin' && c.source.key === 'candle' && c.visible),
@@ -1021,6 +1033,7 @@ export function Watchlist() {
             <button
               onClick={() => setImportOpen(true)}
               disabled={mutationsDisabled}
+              aria-disabled={mutationsDisabled}
               className="inline-flex items-center justify-center h-8 w-8 rounded-btn bg-elevated hover:bg-elevated/80 text-secondary hover:text-foreground transition-colors duration-150 ease-smooth disabled:cursor-not-allowed disabled:opacity-40"
               title={mutationsDisabled ? '离线只读，暂不能导入自选股' : '从截图导入自选'}
             >
@@ -1039,8 +1052,10 @@ export function Watchlist() {
             {/* 自定义列 / 刷新 */}
             <button
               onClick={() => setCustomizerOpen(true)}
-              className="inline-flex items-center justify-center h-8 w-8 rounded-btn bg-elevated hover:bg-elevated/80 text-secondary hover:text-foreground transition-colors duration-150 ease-smooth"
-              title="自定义列"
+              disabled={mutationsDisabled}
+              aria-disabled={mutationsDisabled}
+              className="inline-flex items-center justify-center h-8 w-8 rounded-btn bg-elevated hover:bg-elevated/80 text-secondary hover:text-foreground transition-colors duration-150 ease-smooth disabled:cursor-not-allowed disabled:opacity-40"
+              title={mutationsDisabled ? '离线只读，暂不能修改列配置' : '自定义列'}
             >
               <Settings2 className="h-4 w-4" />
             </button>
@@ -1058,6 +1073,7 @@ export function Watchlist() {
                 <button
                   onClick={() => setConfirmClear(true)}
                   disabled={mutationsDisabled}
+                  aria-disabled={mutationsDisabled}
                   className="inline-flex items-center justify-center h-8 w-8 rounded-btn bg-danger/10 text-danger hover:bg-danger/20 transition-colors duration-150 ease-smooth disabled:cursor-not-allowed disabled:opacity-40"
                   title={mutationsDisabled ? '离线只读，暂不能修改自选股' : '清空自选'}
                 >
@@ -1267,6 +1283,7 @@ export function Watchlist() {
                               <button
                                 onClick={() => { remove.mutate(r.symbol); setConfirmRemove(null) }}
                                 disabled={mutationsDisabled}
+                                aria-disabled={mutationsDisabled}
                                 className="px-1.5 py-0.5 rounded text-[10px] text-danger bg-danger/10 hover:bg-danger/20 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                               >
                                 确认
@@ -1283,6 +1300,7 @@ export function Watchlist() {
                               <button
                                 onClick={() => setConfirmRemove(r.symbol)}
                                 disabled={mutationsDisabled}
+                                aria-disabled={mutationsDisabled}
                                 className="p-0.5 text-muted hover:text-danger transition-colors duration-150 ease-smooth disabled:cursor-not-allowed disabled:opacity-40"
                                 aria-label="移除"
                                 title="移除"
@@ -1292,6 +1310,7 @@ export function Watchlist() {
                               <button
                                 onClick={() => moveToTop.mutate(r.symbol)}
                                 disabled={mutationsDisabled || moveToTop.isPending || allSymbols[0] === r.symbol}
+                                aria-disabled={mutationsDisabled || moveToTop.isPending || allSymbols[0] === r.symbol}
                                 className="p-0.5 text-muted hover:text-accent transition-colors duration-150 ease-smooth disabled:opacity-30 disabled:hover:text-muted"
                                 aria-label="移到顶部"
                                 title="移到顶部"
@@ -1434,6 +1453,7 @@ export function Watchlist() {
                 <button
                   onClick={() => clearAll.mutate()}
                   disabled={mutationsDisabled || clearAll.isPending}
+                  aria-disabled={mutationsDisabled || clearAll.isPending}
                   className="px-3 py-1.5 rounded-btn bg-danger/15 text-danger hover:bg-danger/25 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {clearAll.isPending ? '清除中...' : '确认清空'}
@@ -1448,7 +1468,7 @@ export function Watchlist() {
       <ColumnCustomizer
         columns={columns}
         onChange={handleColumnsChange}
-        open={customizerOpen}
+        open={customizerOpen && !mutationsDisabled}
         onClose={() => setCustomizerOpen(false)}
       />
 

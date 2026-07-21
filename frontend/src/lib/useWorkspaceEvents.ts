@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react'
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 
 import { QK } from './queryKeys'
+import { connectivityStore } from './connectivity'
 import { etagStore, type WorkspaceResourceName } from './etagStore'
 import {
   WORKSPACE_CONFLICT_EVENT,
@@ -87,51 +88,60 @@ export function useWorkspaceEvents(): void {
       })
     }
 
-    const connect = () => {
+    const disconnectAndRetry = (failedSource: EventSource) => {
+      if (disposed || source !== failedSource) return
+      failedSource.close()
+      source = null
+      opened = false
+      connectivityStore.markOffline()
+      workspaceStatusStore.markOffline()
+      startPolling()
+      const delay = RECONNECT_DELAYS[Math.min(failureCount, RECONNECT_DELAYS.length - 1)]
+      failureCount += 1
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      reconnectTimer = setTimeout(connect, delay)
+    }
+
+    function connect() {
       if (disposed) return
       reconnectTimer = null
       source?.close()
       opened = false
       startPolling()
-      source = new EventSource('/api/workspace/events')
+      const currentSource = new EventSource('/api/workspace/events')
+      source = currentSource
 
-      source.onopen = () => {
+      currentSource.onopen = () => {
         if (disposed) return
-        opened = true
-        failureCount = 0
-        stopPolling()
+        void reconcileRevisions(queryClient).then(() => {
+          if (disposed || source !== currentSource) return
+          opened = true
+          failureCount = 0
+          const syncedAt = new Date().toISOString()
+          connectivityStore.markOnline(syncedAt)
+          workspaceStatusStore.markOnline(syncedAt)
+          stopPolling()
+        }).catch(() => disconnectAndRetry(currentSource))
       }
 
-      source.addEventListener('resource_changed', event => {
+      currentSource.addEventListener('resource_changed', event => {
         try {
           const payload = JSON.parse((event as MessageEvent).data) as {
             resource?: WorkspaceResourceName
             revision?: string
           }
           if (!payload.resource || !RESOURCE_QUERY_KEYS[payload.resource]) return
-          etagStore.set(payload.resource, payload.revision)
           invalidateResource(queryClient, payload.resource)
         } catch {
           void reconcileRevisions(queryClient)
         }
       })
 
-      source.addEventListener('resync_required', () => {
+      currentSource.addEventListener('resync_required', () => {
         void reconcileRevisions(queryClient).catch(() => workspaceStatusStore.markOffline())
       })
 
-      source.onerror = () => {
-        if (disposed) return
-        source?.close()
-        source = null
-        opened = false
-        workspaceStatusStore.markOffline()
-        startPolling()
-        const delay = RECONNECT_DELAYS[Math.min(failureCount, RECONNECT_DELAYS.length - 1)]
-        failureCount += 1
-        if (reconnectTimer) clearTimeout(reconnectTimer)
-        reconnectTimer = setTimeout(connect, delay)
-      }
+      currentSource.onerror = () => disconnectAndRetry(currentSource)
     }
 
     const onOnline = () => {

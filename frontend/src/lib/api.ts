@@ -8,10 +8,13 @@ import { connectivityStore, offlineSessionAccess } from './connectivity'
 import { clearAllSnapshots, getSnapshot, putSnapshot } from './offlineDb'
 import { isOfflineCacheAllowed, isWriteMethod } from './offlinePolicy'
 import {
+  assertWorkspaceWritable,
+  projectSharedPreferences,
   workspaceApi,
   workspaceCommand,
   workspaceDataAsOf,
   type ReportMetadata,
+  type SharedClientPreferences,
 } from './workspace'
 
 const BASE = ''
@@ -57,6 +60,7 @@ async function apiErrorFromResponse(res: Response): Promise<Error> {
 
 async function resetOfflineAccess(): Promise<void> {
   offlineSessionAccess.revoke()
+  lastCompletePreferences = structuredClone(DEFAULT_PREFERENCES)
   try {
     await enqueueOfflinePersistence(clearAllSnapshots)
   } catch {
@@ -1075,6 +1079,98 @@ export interface MonitorExtFieldItem {
   /** 隐藏的位置 (0-based), 如 [0] 表示隐藏第一个 */
   hiddenIndices?: number[]
 }
+
+const DEFAULT_PREFERENCES: Preferences = {
+  realtime_quotes_enabled: false,
+  indices_nav_pinned: true,
+  minute_sync_enabled: false,
+  minute_sync_days: 5,
+  minute_sync_segment_days: 20,
+  daily_data_provider: 'tickflow',
+  adj_factor_provider: 'same_as_daily',
+  minute_data_provider: 'tickflow',
+  realtime_data_provider: 'tickflow',
+  financial_data_provider: 'tickflow',
+  realtime_watchlist_symbols: [],
+  realtime_pull_stock: true,
+  realtime_pull_etf: false,
+  realtime_pull_index: true,
+  realtime_index_mode: 'core',
+  realtime_index_symbols: [],
+  pipeline_pull_a_share: true,
+  pipeline_pull_etf: false,
+  pipeline_pull_index: true,
+  pipeline_index_symbols: '',
+  pipeline_schedule: { hour: 15, minute: 30 },
+  instruments_schedule: { hour: 9, minute: 10 },
+  enriched_batch_size: 1000,
+  index_daily_batch_size: 100,
+  limit_ladder_monitor_enabled: false,
+  depth_polling_interval: 10,
+  depth_finalize_time: { hour: 15, minute: 2 },
+  review_schedule: { enabled: false, hour: 15, minute: 10 },
+  review_push_channels: [],
+  sse_refresh_pages: {},
+  strategy_monitor_enabled: false,
+  strategy_monitor_ids: [],
+  system_notify_enabled: false,
+  has_feishu_webhook: false,
+  has_feishu_credential_data: false,
+  has_wecom_webhook: false,
+  has_wecom_bot: false,
+  has_wecom_bot_credential_data: false,
+  wecom_bot_enabled: false,
+  webhook_enabled_default: false,
+  webhook_default_channels: [],
+  sidebar_index_symbols: [],
+  nav_order: [],
+  nav_hidden: [],
+  screener_auto_run: true,
+  minute_intraday_refresh: false,
+  minute_intraday_refresh_interval: 60,
+  monitor_ext_fields: { concept: null, industry: null },
+}
+
+let lastCompletePreferences: Preferences = structuredClone(DEFAULT_PREFERENCES)
+
+function mergeCompletePreferences(base: Preferences, value: unknown): Preferences {
+  const source = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+  const result = structuredClone(base) as unknown as Record<keyof Preferences, unknown>
+  for (const key of Object.keys(DEFAULT_PREFERENCES) as Array<keyof Preferences>) {
+    const incoming = source[key]
+    const fallback = DEFAULT_PREFERENCES[key]
+    if (incoming === undefined) continue
+    if (typeof fallback === 'boolean' && typeof incoming === 'boolean') result[key] = incoming
+    else if (typeof fallback === 'number' && typeof incoming === 'number' && Number.isFinite(incoming)) result[key] = incoming
+    else if (typeof fallback === 'string' && typeof incoming === 'string') result[key] = incoming
+    else if (Array.isArray(fallback) && Array.isArray(incoming)) result[key] = structuredClone(incoming)
+    else if (fallback && typeof fallback === 'object' && incoming && typeof incoming === 'object' && !Array.isArray(incoming)) {
+      result[key] = { ...(fallback as object), ...(incoming as object) }
+    }
+  }
+  return result as unknown as Preferences
+}
+
+function mergeSharedPreferences(
+  base: Preferences,
+  sharedValue: SharedClientPreferences,
+): Preferences {
+  const shared = projectSharedPreferences(sharedValue)
+  const updates: Partial<Preferences> = {}
+  for (const key of [
+    'indices_nav_pinned', 'screener_auto_run', 'daily_data_provider',
+    'adj_factor_provider', 'minute_data_provider', 'realtime_data_provider',
+    'financial_data_provider', 'has_feishu_webhook', 'has_feishu_credential_data',
+    'has_wecom_webhook', 'has_wecom_bot', 'has_wecom_bot_credential_data',
+    'sidebar_index_symbols', 'nav_order', 'nav_hidden',
+  ] as const) {
+    const value = shared[key]
+    if (value !== undefined) Object.assign(updates, { [key]: value })
+  }
+  return { ...base, ...updates }
+}
 export interface StrategyAlertEvent {
   source: 'strategy' | 'depth'
   type: string
@@ -1343,12 +1439,29 @@ export const api = {
     request<{ ok: boolean }>('/api/settings/ai', { method: 'DELETE' }),
 
   preferences: async () => {
-    const desktopStatus = await optionalClientStatus()
+    let desktopStatus: ClientStatus | null
+    try {
+      desktopStatus = await optionalClientStatus()
+    } catch (error) {
+      if (!(error instanceof TypeError)) throw error
+      const snapshot = await workspaceApi.get('preferences')
+      lastCompletePreferences = mergeSharedPreferences(
+        lastCompletePreferences,
+        snapshot.data.preferences,
+      )
+      return structuredClone(lastCompletePreferences)
+    }
     if (desktopStatus !== null) {
       const snapshot = await workspaceApi.get('preferences')
-      return snapshot.data.preferences as unknown as Preferences
+      lastCompletePreferences = mergeSharedPreferences(
+        lastCompletePreferences,
+        snapshot.data.preferences,
+      )
+      return structuredClone(lastCompletePreferences)
     }
-    return request<Preferences>('/api/settings/preferences')
+    const full = await request<unknown>('/api/settings/preferences')
+    lastCompletePreferences = mergeCompletePreferences(DEFAULT_PREFERENCES, full)
+    return structuredClone(lastCompletePreferences)
   },
   dataSources: () => request<DataSourcesResponse>('/api/settings/data-sources'),
   dataSource: (name: string) => request<CustomSourceConfig>(`/api/settings/data-sources/${encodeURIComponent(name)}`),
@@ -1737,8 +1850,17 @@ export const api = {
   watchlistAdd: async (symbol: string, note = '') =>
     (await workspaceCommand('watchlist', 'add', { symbol, note })).data,
   watchlistBatchAdd: async (symbols: string[], note = '') => {
-    const snapshot = await workspaceCommand('watchlist', 'batch_add', { symbols, note })
-    return { ...snapshot.data, added: symbols.length }
+    assertWorkspaceWritable('watchlist')
+    const before = await workspaceApi.get('watchlist')
+    const snapshot = await workspaceApi.command(
+      'watchlist',
+      'batch_add',
+      { symbols, note },
+      before.revision,
+    )
+    const prior = new Set(before.data.symbols.map(item => item.symbol))
+    const added = new Set(snapshot.data.symbols.map(item => item.symbol).filter(symbol => !prior.has(symbol))).size
+    return { ...snapshot.data, added }
   },
   watchlistOcrStatus: () =>
     request<{ provider: string; available: boolean }>('/api/watchlist/ocr-status'),
@@ -1755,8 +1877,12 @@ export const api = {
   watchlistMoveToTop: async (symbol: string) =>
     (await workspaceCommand('watchlist', 'move_to_top', { symbol })).data,
   watchlistClear: async () => {
-    const snapshot = await workspaceCommand('watchlist', 'clear', {})
-    return { removed: 0, symbols: snapshot.data.symbols }
+    assertWorkspaceWritable('watchlist')
+    const before = await workspaceApi.get('watchlist')
+    const snapshot = await workspaceApi.command('watchlist', 'clear', {}, before.revision)
+    const remaining = new Set(snapshot.data.symbols.map(item => item.symbol))
+    const removed = new Set(before.data.symbols.map(item => item.symbol).filter(symbol => !remaining.has(symbol))).size
+    return { removed, symbols: snapshot.data.symbols }
   },
   watchlistQuotes: () => request<{ quotes: Quote[] }>('/api/watchlist/quotes'),
   watchlistEnriched: (extColumns?: string) =>

@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { connectivityStore } from '../connectivity'
 import { etagStore } from '../etagStore'
-import { WorkspaceApiError, WorkspaceOfflineError, workspaceApi } from '../workspace'
+import {
+  WorkspaceApiError,
+  WorkspaceOfflineError,
+  workspaceApi,
+  workspaceStatusStore,
+} from '../workspace'
 
 const REVISION = 'a'.repeat(64)
 const NEXT_REVISION = 'b'.repeat(64)
@@ -18,6 +23,7 @@ describe('workspace conditional writes', () => {
   beforeEach(() => {
     etagStore.clear()
     connectivityStore.markOnline('2026-07-21T09:00:00.000Z')
+    workspaceStatusStore.markOnline('2026-07-21T09:00:00.000Z')
   })
 
   afterEach(() => {
@@ -26,7 +32,8 @@ describe('workspace conditional writes', () => {
     connectivityStore.markOnline()
   })
 
-  it('does not retry a stale write and records the server revision', async () => {
+  it('does not retry a stale write or promote the server revision to writable state', async () => {
+    etagStore.set('watchlist', REVISION)
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(
       { code: 'WORKSPACE_REVISION_CONFLICT', detail: 'Workspace revision is stale' },
       412,
@@ -43,7 +50,47 @@ describe('workspace conditional writes', () => {
     })
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(etagStore.get('watchlist')).toBe(NEXT_REVISION)
+    expect(etagStore.get('watchlist')).toBe(REVISION)
+    expect(etagStore.isConflicted('watchlist')).toBe(true)
+
+    await expect(
+      workspaceApi.command('watchlist', 'add', { symbol: '300059.SZ' }, REVISION),
+    ).rejects.toMatchObject({ status: 412, code: 'WORKSPACE_CONFLICT_PENDING' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears a conflict only after a successful resource refresh', async () => {
+    etagStore.set('watchlist', REVISION)
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(
+        { code: 'WORKSPACE_REVISION_CONFLICT' },
+        412,
+        { ETag: `"${NEXT_REVISION}"` },
+      ))
+      .mockResolvedValueOnce(jsonResponse({
+        resource: 'watchlist',
+        revision: NEXT_REVISION,
+        updated_at: '2026-07-21T09:01:00+08:00',
+        data: { symbols: [] },
+      }, 200, { ETag: `"${NEXT_REVISION}"` }))
+      .mockResolvedValueOnce(jsonResponse({
+        resource: 'watchlist',
+        revision: NEXT_REVISION,
+        updated_at: '2026-07-21T09:02:00+08:00',
+        data: { symbols: [{ symbol: '000403.SZ' }] },
+      }, 200, { ETag: `"${NEXT_REVISION}"` }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      workspaceApi.command('watchlist', 'add', { symbol: '000403.SZ' }, REVISION),
+    ).rejects.toMatchObject({ status: 412 })
+    expect(etagStore.isConflicted('watchlist')).toBe(true)
+
+    await workspaceApi.get('watchlist')
+    expect(etagStore.isConflicted('watchlist')).toBe(false)
+
+    await workspaceApi.command('watchlist', 'add', { symbol: '000403.SZ' }, NEXT_REVISION)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
   it.each([
@@ -61,6 +108,18 @@ describe('workspace conditional writes', () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     connectivityStore.markOffline()
+
+    await expect(
+      workspaceApi.command('watchlist', 'add', { symbol: '000403.SZ' }, REVISION),
+    ).rejects.toBeInstanceOf(WorkspaceOfflineError)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks writes when the local gateway is online but the cloud workspace is offline', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    connectivityStore.markOnline()
+    workspaceStatusStore.markOffline()
 
     await expect(
       workspaceApi.command('watchlist', 'add', { symbol: '000403.SZ' }, REVISION),
@@ -115,6 +174,9 @@ describe('workspace conditional writes', () => {
 
     expect(etagStore.get('watchlist')).toBe(REVISION)
     expect(etagStore.get('preferences')).toBe(NEXT_REVISION)
-    expect(storageWrite).not.toHaveBeenCalled()
+    expect(storageWrite).not.toHaveBeenCalledWith(
+      expect.any(String),
+      expect.stringContaining(REVISION),
+    )
   })
 })

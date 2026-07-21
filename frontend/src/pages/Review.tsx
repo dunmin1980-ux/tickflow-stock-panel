@@ -264,6 +264,7 @@ export function Review() {
             <button
               onClick={generate}
               disabled={isGenerating || mutationsDisabled}
+              aria-disabled={isGenerating || mutationsDisabled}
               title={mutationsDisabled ? '离线只读，暂不能生成并保存复盘' : undefined}
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-btn px-3.5 py-1.5 text-xs font-medium transition-all',
@@ -625,6 +626,7 @@ function ReportPanel({
         <button
           onClick={onRegenerate}
           disabled={mutationsDisabled}
+          aria-disabled={mutationsDisabled}
           title={mutationsDisabled ? '离线只读，暂不能重新生成复盘' : undefined}
           className="mt-1 inline-flex items-center gap-1.5 rounded-btn bg-accent/15 px-3 py-1.5 text-xs text-accent transition-colors hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-40"
         >
@@ -810,6 +812,7 @@ function HistoryPanel({
                   <button
                     onClick={(e) => { e.stopPropagation(); onDelete(r.id) }}
                     disabled={mutationsDisabled}
+                    aria-disabled={mutationsDisabled}
                     className="shrink-0 p-1 text-muted opacity-0 transition-all hover:text-bear group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
                     title={mutationsDisabled ? '离线只读，暂不能删除复盘' : '删除'}
                   >

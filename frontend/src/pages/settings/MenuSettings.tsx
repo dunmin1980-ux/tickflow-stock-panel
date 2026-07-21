@@ -22,6 +22,7 @@ import { Link } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
 import { usePreferences } from '@/lib/useSharedQueries'
+import { useWorkspaceStatus } from '@/lib/useWorkspaceEvents'
 
 interface NavEntry {
   id: string
@@ -48,12 +49,15 @@ const BUILTIN_PAGES: NavEntry[] = [
 
 // ── Sortable row ──
 
-function SortableItem({ entry, hidden, onToggleHidden, badgeEnabled, onToggleBadge }: {
+function SortableItem({
+  entry, hidden, onToggleHidden, badgeEnabled, onToggleBadge, workspaceMutationsDisabled,
+}: {
   entry: NavEntry
   hidden: boolean
   onToggleHidden: (id: string) => void
   badgeEnabled?: boolean
   onToggleBadge?: (id: string) => void
+  workspaceMutationsDisabled: boolean
 }) {
   const {
     attributes,
@@ -62,7 +66,7 @@ function SortableItem({ entry, hidden, onToggleHidden, badgeEnabled, onToggleBad
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: entry.id })
+  } = useSortable({ id: entry.id, disabled: workspaceMutationsDisabled })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -82,7 +86,9 @@ function SortableItem({ entry, hidden, onToggleHidden, badgeEnabled, onToggleBad
       <div
         {...attributes}
         {...listeners}
-        className="cursor-grab active:cursor-grabbing text-muted hover:text-foreground transition-colors"
+        aria-disabled={workspaceMutationsDisabled}
+        title={workspaceMutationsDisabled ? '离线只读，暂不能调整云端菜单顺序' : '拖动调整顺序'}
+        className={`${workspaceMutationsDisabled ? 'cursor-not-allowed opacity-40' : 'cursor-grab active:cursor-grabbing'} text-muted hover:text-foreground transition-colors`}
       >
         <GripVertical className="h-4 w-4" />
       </div>
@@ -105,12 +111,14 @@ function SortableItem({ entry, hidden, onToggleHidden, badgeEnabled, onToggleBad
       <div className="flex justify-center">
         <button
           onClick={() => onToggleHidden(entry.id)}
-          className={`rounded p-1 transition-colors ${
+          disabled={workspaceMutationsDisabled}
+          aria-disabled={workspaceMutationsDisabled}
+          className={`rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
             hidden
               ? 'text-muted hover:text-accent hover:bg-accent/10'
               : 'text-accent hover:bg-accent/10'
           }`}
-          title={hidden ? '显示' : '隐藏'}
+          title={workspaceMutationsDisabled ? '离线只读，暂不能修改菜单显示' : hidden ? '显示' : '隐藏'}
         >
           {hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         </button>
@@ -158,6 +166,8 @@ function SortableItem({ entry, hidden, onToggleHidden, badgeEnabled, onToggleBad
 
 export function SettingsMenuSettingsPanel() {
   const qc = useQueryClient()
+  const workspaceStatus = useWorkspaceStatus()
+  const workspaceMutationsDisabled = workspaceStatus.offlineReadonly
   const { data: prefs } = usePreferences()
   const menus = useQuery({ queryKey: QK.analysisMenus, queryFn: api.analysisMenus })
 
@@ -230,6 +240,7 @@ export function SettingsMenuSettingsPanel() {
   )
 
   const handleDragEnd = (event: DragEndEvent) => {
+    if (workspaceMutationsDisabled) return
     const { active, over } = event
     if (!over || active.id === over.id) return
 
@@ -242,6 +253,7 @@ export function SettingsMenuSettingsPanel() {
   }
 
   const toggleHidden = (id: string) => {
+    if (workspaceMutationsDisabled) return
     const next = new Set(hiddenSet)
     if (next.has(id)) next.delete(id)
     else next.add(id)
@@ -261,6 +273,11 @@ export function SettingsMenuSettingsPanel() {
 
   return (
     <div className="max-w-5xl space-y-6">
+      {workspaceMutationsDisabled && (
+        <p role="status" className="text-xs text-warning">
+          离线只读，菜单可查看，但暂不能调整云端共享顺序或显示状态。
+        </p>
+      )}
       <section className="rounded-2xl border border-border bg-surface p-6 bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.12),transparent_38%)]">
         <div className="text-[11px] uppercase tracking-[0.2em] text-accent/80">菜单设置</div>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">调整左侧菜单顺序</h2>
@@ -296,6 +313,7 @@ export function SettingsMenuSettingsPanel() {
                 onToggleHidden={toggleHidden}
                 badgeEnabled={entry.id === '/monitor' ? badgeEnabled : undefined}
                 onToggleBadge={entry.id === '/monitor' ? toggleBadge : undefined}
+                workspaceMutationsDisabled={workspaceMutationsDisabled}
               />
             ))}
           </SortableContext>

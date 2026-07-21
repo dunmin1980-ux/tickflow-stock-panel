@@ -24,6 +24,7 @@ import { StrategyStoreDialog } from '@/components/screener/StrategyStoreDialog'
 import { ListColumnCustomizer } from '@/components/ListColumnCustomizer'
 import { useTableSort } from '@/components/stock-table/useTableSort'
 import { resolveCandleConfig } from '@/lib/list-columns'
+import { useWorkspaceStatus } from '@/lib/useWorkspaceEvents'
 import {
   SCREENER_BUILTIN_COLUMNS,
   SCREENER_COLUMN_GROUPS,
@@ -34,6 +35,8 @@ import {
 } from '@/lib/screener-columns'
 
 export function Screener() {
+  const workspaceStatus = useWorkspaceStatus()
+  const mutationsDisabled = workspaceStatus.offlineReadonly
   const [assetType, setAssetType] = useState<'stock' | 'etf'>('stock')
   const [activeStrategy, setActiveStrategy] = useState<string | null>(null)
   const [result, setResult] = useState<ScreenerResult | null>(null)
@@ -86,10 +89,15 @@ export function Screener() {
     loadScreenerColumnConfig().then(setColumns)
   }, [])
 
+  useEffect(() => {
+    if (mutationsDisabled) setCustomizerOpen(false)
+  }, [mutationsDisabled])
+
   const handleColumnsChange = useCallback((next: ColumnConfig[]) => {
+    if (mutationsDisabled) return
     setColumns(next)
     saveScreenerColumnConfig(next)
-  }, [])
+  }, [mutationsDisabled])
 
   const extColumnsParam = useMemo(() => buildExtColumnsParam(columns), [columns])
 
@@ -558,7 +566,7 @@ export function Screener() {
   }
 
   const handleBatchAdd = () => {
-    if (!displayRows.length) return
+    if (mutationsDisabled || !displayRows.length) return
     const symbols = displayRows.map((r: any) => r.symbol)
     batchAdd.mutate(symbols, {
       onSuccess: (data) => {
@@ -797,7 +805,9 @@ export function Screener() {
                   {displayRows.length > 0 && (
                     <button
                       onClick={handleBatchAdd}
-                      disabled={batchAdd.isPending}
+                      disabled={mutationsDisabled || batchAdd.isPending}
+                      aria-disabled={mutationsDisabled || batchAdd.isPending}
+                      title={mutationsDisabled ? '离线只读，暂不能批量修改自选股' : undefined}
                       className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-btn
                         border border-accent/40 bg-accent/10 text-accent text-xs font-medium
                         hover:bg-accent/20 disabled:opacity-50 transition-colors duration-150 cursor-pointer"
@@ -808,8 +818,11 @@ export function Screener() {
                   )}
                   <button
                     onClick={() => setCustomizerOpen(true)}
-                    title="列表配置"
+                    disabled={mutationsDisabled}
+                    aria-disabled={mutationsDisabled}
+                    title={mutationsDisabled ? '离线只读，暂不能修改列配置' : '列表配置'}
                     className={`inline-flex items-center justify-center h-7 w-7 rounded-btn border text-xs font-medium transition-colors cursor-pointer
+                      disabled:cursor-not-allowed disabled:opacity-40
                       ${customizerOpen
                         ? 'border-accent/50 bg-accent/10 text-accent'
                         : 'border-border bg-surface text-secondary hover:text-accent hover:border-accent/50'
@@ -875,8 +888,11 @@ export function Screener() {
                     activeStrategy={activeStrategy}
                     watchlistSet={watchlistSet}
                     onPreview={(symbol, name) => { setPreviewSymbol(symbol); setPreviewName(name) }}
-                    onToggleWatchlist={(symbol, inList) => toggleWatchlist.mutate({ symbol, inList })}
+                    onToggleWatchlist={(symbol, inList) => {
+                      if (!mutationsDisabled) toggleWatchlist.mutate({ symbol, inList })
+                    }}
                     watchlistPending={toggleWatchlist.isPending}
+                    workspaceMutationsDisabled={mutationsDisabled}
                     klineData={klineData}
                     dailyKChartVisible={dailyKChartVisible}
                     onToggleDailyKChart={toggleDailyKChart}
@@ -912,7 +928,7 @@ export function Screener() {
         columns={columns}
         groups={SCREENER_COLUMN_GROUPS}
         onChange={handleColumnsChange}
-        open={customizerOpen}
+        open={customizerOpen && !mutationsDisabled}
         onClose={() => setCustomizerOpen(false)}
         title="自定义策略结果列"
         builtinSectionLabel="策略内置列"

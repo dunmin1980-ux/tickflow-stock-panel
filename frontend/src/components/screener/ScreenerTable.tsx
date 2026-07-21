@@ -32,6 +32,7 @@ interface ScreenerTableProps {
   onPreview: (symbol: string, name: string) => void
   onToggleWatchlist: (symbol: string, inList: boolean) => void
   watchlistPending: boolean
+  workspaceMutationsDisabled?: boolean
   /** symbol → 日k 数据，仅当启用日k列时传入 */
   klineData?: Record<string, KlineRow[]>
   /** 日k蜡烛图是否显示（表头眼睛开关） */
@@ -143,6 +144,7 @@ function renderExtValue(
 export function ScreenerTable({
   rows, columns, strategyIdToName, symbolStrategyMap, activeStrategy,
   watchlistSet, onPreview, onToggleWatchlist, watchlistPending, klineData = {},
+  workspaceMutationsDisabled = false,
   dailyKChartVisible = true, onToggleDailyKChart,
   minuteData = {}, intradayChartVisible = true, onToggleIntradayChart,
   intradayAutoRefresh = false, onRefreshIntraday, intradayRefreshing = false,
@@ -243,14 +245,20 @@ export function ScreenerTable({
                 <button
                   type="button"
                   onClick={() => onToggleWatchlist(r.symbol, inWatchlist)}
-                  disabled={watchlistPending}
+                  disabled={workspaceMutationsDisabled || watchlistPending}
+                  aria-disabled={workspaceMutationsDisabled || watchlistPending}
+                  aria-label={workspaceMutationsDisabled
+                    ? '离线只读，暂不能修改自选股'
+                    : inWatchlist ? '移出自选' : '加入自选'}
                   className={`shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full border transition-colors cursor-pointer
                     disabled:opacity-50
                     ${inWatchlist
                       ? 'border-accent/40 bg-accent/10 text-accent'
                       : 'border-border text-muted hover:border-accent/40 hover:text-accent'
                     }`}
-                  title={inWatchlist ? '移出自选' : '加入自选'}
+                  title={workspaceMutationsDisabled
+                    ? '离线只读，暂不能修改自选股'
+                    : inWatchlist ? '移出自选' : '加入自选'}
                 >
                   {inWatchlist ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
                 </button>

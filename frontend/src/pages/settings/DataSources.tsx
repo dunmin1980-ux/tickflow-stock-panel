@@ -7,6 +7,7 @@ import { QK } from '@/lib/queryKeys'
 import { usePreferences } from '@/lib/useSharedQueries'
 import { toast } from '@/components/Toast'
 import { DataSourceEditor } from './DataSourceEditor'
+import { useWorkspaceStatus } from '@/lib/useWorkspaceEvents'
 
 const DATASET_LABEL: Record<string, string> = {
   daily: '日K',
@@ -17,6 +18,8 @@ const DATASET_LABEL: Record<string, string> = {
 
 export function SettingsDataSourcesPanel() {
   const qc = useQueryClient()
+  const workspaceStatus = useWorkspaceStatus()
+  const workspaceMutationsDisabled = workspaceStatus.offlineReadonly
   const prefs = usePreferences()
   const sources = useQuery({ queryKey: QK.dataSources, queryFn: api.dataSources })
   const [selected, setSelected] = useState<string>('tickflow') // 当前在右侧编辑的源 name
@@ -130,6 +133,11 @@ export function SettingsDataSourcesPanel() {
 
   return (
     <div className="space-y-5 max-w-5xl">
+      {workspaceMutationsDisabled && (
+        <p role="status" className="text-xs text-warning">
+          离线只读，数据源配置可查看，但暂不能切换云端共享数据源。
+        </p>
+      )}
       {/* ===== 顶部: 当前数据源 + 数据源选择 (一个大卡片) ===== */}
       <section className="rounded-card border border-border bg-surface p-5">
         <div className="flex items-center justify-between mb-4">
@@ -227,7 +235,9 @@ export function SettingsDataSourcesPanel() {
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={(e) => { e.stopPropagation(); switchProvider.mutate(item.name) }}
-                        disabled={switchProvider.isPending}
+                        disabled={workspaceMutationsDisabled || switchProvider.isPending}
+                        aria-disabled={workspaceMutationsDisabled || switchProvider.isPending}
+                        title={workspaceMutationsDisabled ? '离线只读，暂不能切换数据源' : undefined}
                         className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50"
                       >
                         使用
@@ -248,7 +258,9 @@ export function SettingsDataSourcesPanel() {
                   ) : (
                     <button
                       onClick={(e) => { e.stopPropagation(); switchProvider.mutate(item.name) }}
-                      disabled={switchProvider.isPending}
+                      disabled={workspaceMutationsDisabled || switchProvider.isPending}
+                      aria-disabled={workspaceMutationsDisabled || switchProvider.isPending}
+                      title={workspaceMutationsDisabled ? '离线只读，暂不能切换数据源' : undefined}
                       className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50"
                     >
                       使用
@@ -325,6 +337,7 @@ export function SettingsDataSourcesPanel() {
               active={activeName === 'tickflow'}
               onSwitch={() => switchProvider.mutate('tickflow')}
               switching={switchProvider.isPending}
+              workspaceMutationsDisabled={workspaceMutationsDisabled}
             />
           ) : selected === '__new__' || customList.some(c => c.name === selected) ? (
             <DataSourceEditor
@@ -342,6 +355,7 @@ export function SettingsDataSourcesPanel() {
               }}
               activeName={activeName}
               onActivate={(name) => switchProvider.mutate(name)}
+              workspaceMutationsDisabled={workspaceMutationsDisabled}
               onDelete={selected !== '__new__' && selectedCustom ? () => setConfirmDelete(selected) : undefined}
             />
           ) : pluginList.find(x => x.name === selected) ? (
@@ -351,6 +365,7 @@ export function SettingsDataSourcesPanel() {
               isActive={activeName === selected}
               onSwitch={() => switchProvider.mutate(selected)}
               switching={switchProvider.isPending}
+              workspaceMutationsDisabled={workspaceMutationsDisabled}
             />
           ) : null}
         </motion.div>
@@ -390,11 +405,12 @@ export function SettingsDataSourcesPanel() {
   )
 }
 
-function PluginDetail({ plugin, isActive, onSwitch, switching }: {
+function PluginDetail({ plugin, isActive, onSwitch, switching, workspaceMutationsDisabled }: {
   plugin: PluginDataSourceItem
   isActive: boolean
   onSwitch: () => void
   switching: boolean
+  workspaceMutationsDisabled: boolean
 }) {
   return (
     <section className="rounded-card border border-border bg-surface p-6">
@@ -418,7 +434,9 @@ function PluginDetail({ plugin, isActive, onSwitch, switching }: {
         ) : (
           <button
             onClick={onSwitch}
-            disabled={switching}
+            disabled={workspaceMutationsDisabled || switching}
+            aria-disabled={workspaceMutationsDisabled || switching}
+            title={workspaceMutationsDisabled ? '离线只读，暂不能切换数据源' : undefined}
             className="px-3 py-1.5 rounded-btn bg-accent/10 text-accent hover:bg-accent/20 text-xs font-medium transition-colors disabled:opacity-50"
           >
             切换为当前数据源
@@ -429,7 +447,12 @@ function PluginDetail({ plugin, isActive, onSwitch, switching }: {
   )
 }
 
-function TickFlowDetail({ active, onSwitch, switching }: { active: boolean; onSwitch: () => void; switching: boolean }) {
+function TickFlowDetail({ active, onSwitch, switching, workspaceMutationsDisabled }: {
+  active: boolean
+  onSwitch: () => void
+  switching: boolean
+  workspaceMutationsDisabled: boolean
+}) {
   return (
     <section className="rounded-card border border-border bg-surface p-6">
       <div className="flex items-start gap-4 mb-5">
@@ -469,7 +492,9 @@ function TickFlowDetail({ active, onSwitch, switching }: { active: boolean; onSw
       {!active && (
         <button
           onClick={onSwitch}
-          disabled={switching}
+          disabled={workspaceMutationsDisabled || switching}
+          aria-disabled={workspaceMutationsDisabled || switching}
+          title={workspaceMutationsDisabled ? '离线只读，暂不能切换数据源' : undefined}
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-btn bg-accent text-white text-sm font-medium hover:bg-accent/90 disabled:opacity-50 transition-colors"
         >
           <Zap className="h-3.5 w-3.5" />

@@ -63,7 +63,7 @@ export function StockAnalysis() {
   }
 
   const handleAnalyze = async () => {
-    if (!symbol || checking) return
+    if (!symbol || checking || mutationsDisabled) return
     setChecking(true)
     try {
       // 当日已分析过 → 二次确认(查看今日报告 / 重新分析)
@@ -123,6 +123,7 @@ export function StockAnalysis() {
               <button
                 onClick={handleAnalyze}
                 disabled={checking || mutationsDisabled}
+                aria-disabled={checking || mutationsDisabled}
                 title={mutationsDisabled ? '离线只读，暂不能生成并保存个股复盘' : undefined}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn bg-gradient-to-r from-sky-500/25 to-blue-500/15 border border-sky-400/30 text-sky-300 text-xs font-medium hover:from-sky-500/35 hover:to-blue-500/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
@@ -168,6 +169,7 @@ export function StockAnalysis() {
           onView={() => { openHistoryReport(confirmReport.id); setConfirmReport(null) }}
           onRedo={async () => { setConfirmReport(null); await doAnalysis() }}
           onClose={() => setConfirmReport(null)}
+          mutationsDisabled={mutationsDisabled}
         />
       )}
 
@@ -309,6 +311,7 @@ function HistorySidebar({ mutationsDisabled }: { mutationsDisabled: boolean }) {
                   <button
                     onClick={() => { deleteReport(r.id); toast('已删除', 'success') }}
                     disabled={mutationsDisabled}
+                    aria-disabled={mutationsDisabled}
                     className="shrink-0 text-[10px] text-muted/60 hover:text-danger transition-colors px-1 py-0.5 opacity-0 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
                     title={mutationsDisabled ? '离线只读，暂不能删除报告' : '删除'}
                   >
@@ -325,11 +328,12 @@ function HistorySidebar({ mutationsDisabled }: { mutationsDisabled: boolean }) {
 }
 
 // ===== 二次确认弹窗 =====
-function ConfirmModal({ report, onView, onRedo, onClose }: {
+function ConfirmModal({ report, onView, onRedo, onClose, mutationsDisabled }: {
   report: { id: string; created_at: string; focus: string }
   onView: () => void
   onRedo: () => void
   onClose: () => void
+  mutationsDisabled: boolean
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
@@ -351,8 +355,12 @@ function ConfirmModal({ report, onView, onRedo, onClose }: {
             className="flex-1 h-8 rounded-lg bg-elevated border border-border text-xs text-secondary hover:text-foreground transition-colors">
             查看历史
           </button>
-          <button onClick={onRedo}
-            className="flex-1 h-8 rounded-lg bg-gradient-to-r from-sky-500/20 to-blue-500/15 border border-sky-400/30 text-xs text-sky-300 hover:from-sky-500/30 transition-all">
+          <button
+            onClick={onRedo}
+            disabled={mutationsDisabled}
+            aria-disabled={mutationsDisabled}
+            title={mutationsDisabled ? '离线只读，暂不能重新分析' : undefined}
+            className="flex-1 h-8 rounded-lg bg-gradient-to-r from-sky-500/20 to-blue-500/15 border border-sky-400/30 text-xs text-sky-300 hover:from-sky-500/30 transition-all disabled:cursor-not-allowed disabled:opacity-40">
             重新分析
           </button>
         </div>

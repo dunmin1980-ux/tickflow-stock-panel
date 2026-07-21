@@ -62,6 +62,7 @@ export function DataSourceEditor({
   activeName,
   onActivate,
   onDelete,
+  workspaceMutationsDisabled = false,
 }: {
   existingName?: string
   initial?: CustomSourceConfig | null
@@ -70,6 +71,7 @@ export function DataSourceEditor({
   activeName: string
   onActivate: (name: string) => void
   onDelete?: () => void
+  workspaceMutationsDisabled?: boolean
 }) {
   const isNew = !existingName
   const [config, setConfig] = useState<CustomSourceConfig>(() => initial ? structuredClone(initial) : emptyConfig())
@@ -174,7 +176,10 @@ export function DataSourceEditor({
           {!isNew && !isActive && config.name.trim() && (
             <button
               onClick={() => onActivate(config.name.toLowerCase().trim())}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-btn bg-accent/10 text-accent text-xs font-medium hover:bg-accent/20 transition-colors"
+              disabled={workspaceMutationsDisabled}
+              aria-disabled={workspaceMutationsDisabled}
+              title={workspaceMutationsDisabled ? '离线只读，暂不能切换数据源' : undefined}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-btn bg-accent/10 text-accent text-xs font-medium hover:bg-accent/20 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Zap className="h-3 w-3" /> 切换为当前
             </button>
