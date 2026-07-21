@@ -258,3 +258,17 @@
   data flow into dataset-root selection, archive paths, or filesystem opens.
 - No frontend, API route, proxy, broker, Telegram, OpenClaw, Gold, minute-data, or external-provider
   behavior changed in this follow-up.
+
+## Review Follow-up 4
+
+The coverage policy now records `effective_end` and uses the complete requested
+bounded interval as the weekday-density denominator. Unbounded-start requests
+continue to use the first actual partition as their density start, but still use
+the requested effective end. This closes the case where a five-weekday request
+containing only its first partition was incorrectly scored as 100 percent
+complete.
+
+Two focused regressions cover both enforcement points: the server rejects a
+truncated request tail before building a bundle, and the desktop installer
+rejects a self-consistent tampered ZIP whose manifest ends before the requested
+date. The complete Task 7 suite passes with `117 passed`.

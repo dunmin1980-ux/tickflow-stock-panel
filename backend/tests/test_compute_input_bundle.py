@@ -493,6 +493,24 @@ def test_backtest_bundle_accepts_short_window_at_weekday_density_threshold(
         service.close()
 
 
+def test_backtest_bundle_rejects_truncated_request_tail(tmp_path: Path) -> None:
+    data_dir = tmp_path / "truncated-tail-data"
+    _seed_static_compute_data(data_dir)
+    _seed_partition_dates(data_dir, [date(2026, 7, 13)])
+    service = ComputeInputBundleService(
+        data_dir,
+        temp_root=tmp_path / "truncated-tail-cache",
+    )
+    try:
+        with pytest.raises(ComputeInputDataUnavailable, match="weekday density"):
+            service.build(
+                "strategy_backtest",
+                _strategy_config(start="2026-07-13", end="2026-07-17"),
+            )
+    finally:
+        service.close()
+
+
 def test_default_window_records_deterministic_coverage_policy(tmp_path: Path) -> None:
     data_dir = tmp_path / "coverage-data"
     _seed_static_compute_data(data_dir)
@@ -1250,6 +1268,56 @@ def test_client_rejects_weekly_sparse_density_with_self_consistent_manifest(
         service.close()
 
 
+def test_client_rejects_bundle_truncated_before_requested_end(tmp_path: Path) -> None:
+    data_dir = tmp_path / "client-truncated-tail-data"
+    _seed_static_compute_data(data_dir)
+    weekdays = _weekday_sequence(date(2026, 7, 13), date(2026, 7, 17))
+    _seed_partition_dates(data_dir, weekdays)
+    service = ComputeInputBundleService(
+        data_dir,
+        temp_root=tmp_path / "client-truncated-tail-cache",
+    )
+    config = _strategy_config(start="2026-07-13", end="2026-07-17")
+    artifact = service.build("strategy_backtest", config)
+    malicious = tmp_path / "client-truncated-tail.zip"
+    retained_date = "2026-07-13"
+
+    def retained(path: str) -> bool:
+        if not path.startswith(("kline_daily/", "kline_daily_enriched/")):
+            return True
+        return f"date={retained_date}" in path
+
+    def mutate(info: zipfile.ZipInfo, payload: bytes):
+        if info.filename == "manifest.json":
+            manifest = json.loads(payload)
+            manifest["data_as_of"] = retained_date
+            manifest["coverage_end"] = retained_date
+            manifest["partition_dates"] = [retained_date]
+            manifest["files"] = [
+                entry for entry in manifest["files"] if retained(entry["path"])
+            ]
+            manifest["total_uncompressed_bytes"] = sum(
+                entry["size"] for entry in manifest["files"]
+            )
+            return info, json.dumps(manifest, sort_keys=True).encode()
+        return (info, payload) if retained(info.filename) else None
+
+    try:
+        _rewrite_zip(artifact.path, malicious, mutate)
+        adapter = _adapter(tmp_path, _RemoteStub(b"", {}))
+        with pytest.raises(ComputeInputIntegrityError, match="weekday density"):
+            adapter.install_compute_input(
+                malicious,
+                task="strategy_backtest",
+                config=config,
+                data_as_of=retained_date,
+                bundle_sha256=hashlib.sha256(malicious.read_bytes()).hexdigest(),
+            )
+    finally:
+        artifact.cleanup()
+        service.close()
+
+
 def test_client_rejects_oversized_uncompressed_bundle(
     bundle_service: ComputeInputBundleService,
     tmp_path: Path,
@@ -1444,24 +1512,12 @@ def test_atomic_publish_restores_old_cache_when_replace_fails(
         artifact.cleanup()
 
 
-def test_client_rejects_data_older_than_requested_freshness_window(
+def test_server_rejects_data_older_than_requested_freshness_window(
     bundle_service: ComputeInputBundleService,
-    tmp_path: Path,
 ) -> None:
     config = _strategy_config(end="2026-08-01")
-    artifact = bundle_service.build("strategy_backtest", config)
-    try:
-        adapter = _adapter(tmp_path, _RemoteStub(b"", {}))
-        with pytest.raises(ComputeInputIntegrityError):
-            adapter.install_compute_input(
-                artifact.path,
-                task="strategy_backtest",
-                config=config,
-                data_as_of=artifact.data_as_of,
-                bundle_sha256=artifact.bundle_sha256,
-            )
-    finally:
-        artifact.cleanup()
+    with pytest.raises(ComputeInputDataUnavailable, match="weekday density"):
+        bundle_service.build("strategy_backtest", config)
 
 
 @pytest.mark.parametrize(

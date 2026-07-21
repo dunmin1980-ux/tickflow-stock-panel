@@ -140,6 +140,7 @@ class ComputeInputCoverage(_ManifestModel):
     calendar_basis: Literal["calendar_day_heuristic_without_exchange_calendar"]
     caveat: Literal["weekends_and_exchange_holidays_are_not_authoritative"]
     effective_start: StrictStr | None
+    effective_end: StrictStr
     start_requirement: Literal["exact", "within_tolerance", "unbounded"]
     start_tolerance_days: Literal[7]
     max_partition_gap_days: Literal[7]
@@ -335,10 +336,12 @@ def compute_coverage_policy(
     if task == "screener":
         requested = normalized.get("as_of")
         effective_start = date.fromisoformat(requested) if requested else reference_date
+        effective_end = effective_start
         requirement = "exact"
     else:
         end_value = normalized.get("end")
         end = date.fromisoformat(end_value) if end_value else reference_date
+        effective_end = end
         start_value = normalized.get("start")
         fields_set = set(normalized.get(_FIELDS_SET_KEY, []))
         if start_value:
@@ -354,6 +357,7 @@ def compute_coverage_policy(
         calendar_basis=COVERAGE_CALENDAR_BASIS,
         caveat=COVERAGE_CAVEAT,
         effective_start=effective_start.isoformat() if effective_start else None,
+        effective_end=effective_end.isoformat(),
         start_requirement=requirement,
         start_tolerance_days=COVERAGE_START_TOLERANCE_DAYS,
         max_partition_gap_days=MAX_PARTITION_GAP_DAYS,
@@ -387,6 +391,7 @@ def partition_coverage_error(
     effective_start = (
         date.fromisoformat(coverage.effective_start) if coverage.effective_start else None
     )
+    effective_end = date.fromisoformat(coverage.effective_end)
     if coverage.start_requirement == "exact":
         if effective_start is None or partition_dates[0] != effective_start:
             return "exact start coverage is unavailable"
@@ -399,7 +404,18 @@ def partition_coverage_error(
     elif effective_start is not None:
         return "unbounded coverage unexpectedly declares a start"
 
-    expected_weekdays = _weekday_count(partition_dates[0], partition_dates[-1])
+    density_start = (
+        partition_dates[0]
+        if coverage.start_requirement == "unbounded"
+        else effective_start
+    )
+    if (
+        density_start is None
+        or density_start > effective_end
+        or partition_dates[-1] > effective_end
+    ):
+        return "partition coverage request bounds are inconsistent"
+    expected_weekdays = _weekday_count(density_start, effective_end)
     actual_weekdays = sum(value.weekday() < 5 for value in partition_dates)
     if expected_weekdays == 0 or (
         actual_weekdays * 100
