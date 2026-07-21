@@ -2,20 +2,29 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from datetime import date, datetime
-from typing import Any, Generic, TypeVar
+from pathlib import Path
+from typing import Any, Generic, Literal, TypeVar
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, JsonValue, StrictStr, ValidationError
 from sse_starlette.event import ServerSentEvent
 from sse_starlette.sse import EventSourceResponse
+from starlette.background import BackgroundTask
 
 from app.config import settings
+from app.services import auth as auth_service
+from app.services.compute_input_bundle import (
+    ComputeInputBundleService,
+    ComputeInputConfigError,
+    ComputeInputDataUnavailable,
+)
 from app.tickflow.capabilities import CapabilitySet
 from app.tickflow.policy import tier_label
 from app.workspace.commands import execute_command
@@ -34,6 +43,7 @@ router = APIRouter(prefix="/api/workspace", tags=["workspace"])
 
 _PRIVATE_NO_STORE = "private, no-store"
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
+_COMPUTE_BUILD_SEMAPHORE = asyncio.Semaphore(1)
 
 
 class _DTO(BaseModel):
@@ -175,6 +185,11 @@ class WorkspaceRevisionsDTO(_DTO):
     resources: dict[ResourceName, str]
 
 
+class ComputeInputBuildDTO(_DTO):
+    task: Literal["strategy_backtest", "screener"]
+    config: dict[str, JsonValue]
+
+
 class WorkspaceCommandDTO(_DTO):
     operation: StrictStr
     payload: dict[str, Any]
@@ -312,6 +327,76 @@ def revisions(request: Request) -> JSONResponse:
         ),
     )
     return _private_json(payload.model_dump())
+
+
+def _compute_bundle_service(request: Request) -> ComputeInputBundleService:
+    data_dir = Path(request.app.state.repo.store.data_dir)
+    service = getattr(request.app.state, "compute_input_bundle_service", None)
+    if not isinstance(service, ComputeInputBundleService) or service.data_dir != data_dir.resolve():
+        if isinstance(service, ComputeInputBundleService):
+            service.close()
+        service = ComputeInputBundleService(data_dir)
+        request.app.state.compute_input_bundle_service = service
+    return service
+
+
+@router.post("/compute-inputs/build", response_model=None)
+async def build_compute_inputs(
+    request_body: ComputeInputBuildDTO,
+    request: Request,
+) -> FileResponse | JSONResponse:
+    token = request.cookies.get("tf_session")
+    if not token or not auth_service.is_valid_session(token):
+        return _command_error(
+            "AUTH_REQUIRED",
+            "Authentication is required to build compute inputs",
+            401,
+        )
+    if not settings.workspace_sync_enabled:
+        return _command_error(
+            "WORKSPACE_SYNC_DISABLED",
+            "Versioned workspace sync is disabled",
+            503,
+        )
+    if _adapter(request) is not None:
+        return _command_error(
+            "COMPUTE_INPUT_BUILD_CLOUD_ONLY",
+            "Compute input bundles must be built by the authenticated cloud workspace",
+            409,
+        )
+
+    service = _compute_bundle_service(request)
+    try:
+        async with _COMPUTE_BUILD_SEMAPHORE:
+            artifact = await asyncio.to_thread(
+                service.build,
+                request_body.task,
+                request_body.config,
+            )
+    except ComputeInputConfigError:
+        return _command_error(
+            "INVALID_COMPUTE_INPUT_CONFIG",
+            "Compute input configuration is invalid",
+            422,
+        )
+    except ComputeInputDataUnavailable:
+        return _command_error(
+            "COMPUTE_INPUT_DATA_UNAVAILABLE",
+            "Required local daily data is unavailable",
+            409,
+        )
+
+    return FileResponse(
+        artifact.path,
+        media_type="application/zip",
+        filename="tickflow-compute-input.zip",
+        headers={
+            "Cache-Control": _PRIVATE_NO_STORE,
+            "X-Data-As-Of": artifact.data_as_of,
+            "X-Bundle-SHA256": artifact.bundle_sha256,
+        },
+        background=BackgroundTask(artifact.cleanup),
+    )
 
 
 def _heartbeat() -> ServerSentEvent:

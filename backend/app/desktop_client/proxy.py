@@ -35,6 +35,7 @@ _LOCAL_ROUTE_TEMPLATES = frozenset(
         ("GET", "/api/workspace/revisions"),
         ("GET", "/api/workspace/events"),
         ("POST", "/api/workspace/resources/{name}/commands"),
+        ("POST", "/api/workspace/compute-inputs/build"),
     }
 )
 _LOCAL_MATCHERS = tuple(
