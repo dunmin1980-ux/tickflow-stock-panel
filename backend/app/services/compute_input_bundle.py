@@ -30,12 +30,12 @@ ALLOWED_COMPUTE_INPUT_ROOTS = (
     "adj_factor",
 )
 _DATE_PARTITION = re.compile(r"date=(\d{4}-\d{2}-\d{2})")
-_WINDOWS_ABSOLUTE = re.compile(r"^[A-Za-z]:[\\/]")
-_RELATIVE_FILE = re.compile(
-    r"^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+\.(?:parquet|csv|json|db|sqlite|pkl|joblib|py)$",
+_WINDOWS_DRIVE_PATH = re.compile(r"^[A-Za-z]:")
+_RELATIVE_PATH = re.compile(r"^[A-Za-z0-9_.-]+(?:[\\/][A-Za-z0-9_.-]+)+$")
+_BARE_FILE = re.compile(
+    r"^[A-Za-z0-9_.-]+\.(?:parquet|csv|json|db|sqlite|pkl|joblib|py)$",
     re.IGNORECASE,
 )
-_RELATIVE_PATH = re.compile(r"^[A-Za-z0-9_.-]+(?:[\\/][A-Za-z0-9_.-]+)+$")
 _PATH_KEYS = frozenset(
     {
         "path",
@@ -53,6 +53,9 @@ _PATH_KEYS = frozenset(
 _MAX_CANONICAL_CONFIG_BYTES = 64 * 1024
 MAX_BUNDLE_UNCOMPRESSED_BYTES = 2 * 1024**3
 DEFAULT_CACHE_TTL_SECONDS = 10 * 60
+DEFAULT_CACHE_MAX_ENTRIES = 4
+DEFAULT_CACHE_MAX_BYTES = MAX_BUNDLE_UNCOMPRESSED_BYTES
+_FIELDS_SET_KEY = "__fields_set__"
 
 
 class ComputeInputConfigError(ValueError):
@@ -78,6 +81,9 @@ class ComputeInputManifest(_ManifestModel):
     task: ComputeTask
     parameters_digest: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
     data_as_of: StrictStr
+    coverage_start: StrictStr
+    coverage_end: StrictStr
+    partition_dates: list[StrictStr]
     files: list[ComputeInputFile]
     total_uncompressed_bytes: StrictInt = Field(ge=0, le=MAX_BUNDLE_UNCOMPRESSED_BYTES)
 
@@ -111,19 +117,20 @@ class _CachedBundle:
     bundle_sha256: str
     manifest: ComputeInputManifest
     expires_at: float
+    size: int
 
 
 def _looks_like_path(value: str) -> bool:
     lowered = value.casefold()
     if (
         value.startswith(("/", "~/", "\\\\"))
-        or _WINDOWS_ABSOLUTE.match(value)
+        or _WINDOWS_DRIVE_PATH.match(value)
         or lowered.startswith("file:")
         or "../" in value
         or "..\\" in value
     ):
         return True
-    return _RELATIVE_FILE.fullmatch(value) is not None or _RELATIVE_PATH.fullmatch(value) is not None
+    return _BARE_FILE.fullmatch(value) is not None or _RELATIVE_PATH.fullmatch(value) is not None
 
 
 def _reject_paths(value: Any) -> None:
@@ -187,6 +194,7 @@ def normalize_compute_config(task: str, config: Mapping[str, Any]) -> dict[str, 
             raise ComputeInputConfigError("local compute inputs support daily timeframe only")
 
     normalized = model.model_dump(mode="json")
+    normalized[_FIELDS_SET_KEY] = sorted(model.model_fields_set)
     try:
         canonical_config_bytes(normalized)
     except (TypeError, ValueError) as exc:
@@ -244,6 +252,8 @@ class ComputeInputBundleService:
         *,
         temp_root: Path | None = None,
         cache_ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS,
+        cache_max_entries: int = DEFAULT_CACHE_MAX_ENTRIES,
+        cache_max_bytes: int = DEFAULT_CACHE_MAX_BYTES,
         monotonic: Callable[[], float] = time.monotonic,
         today: Callable[[], date] = date.today,
     ) -> None:
@@ -254,11 +264,20 @@ class ComputeInputBundleService:
         self.temp_root.mkdir(parents=True, exist_ok=True)
         os.chmod(self.temp_root, 0o700)
         self._cache_ttl_seconds = cache_ttl_seconds
+        if cache_max_entries < 0 or cache_max_bytes < 0:
+            raise ValueError("compute input cache limits must be non-negative")
+        self._cache_max_entries = cache_max_entries
+        self._cache_max_bytes = cache_max_bytes
         self._monotonic = monotonic
         self._today = today
         self._lock = threading.Lock()
         self._cache: dict[str, _CachedBundle] = {}
         self._closed = False
+        root_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        self._data_dir_fd = os.open(self.data_dir, root_flags)
+        if not stat.S_ISDIR(os.fstat(self._data_dir_fd).st_mode):
+            os.close(self._data_dir_fd)
+            raise ComputeInputConfigError("compute data directory is not a local directory")
 
     def close(self) -> None:
         with self._lock:
@@ -266,6 +285,7 @@ class ComputeInputBundleService:
                 return
             self._closed = True
             self._cache.clear()
+            os.close(self._data_dir_fd)
             shutil.rmtree(self.temp_root, ignore_errors=True)
 
     def _purge_expired(self, now: float) -> None:
@@ -273,6 +293,16 @@ class ComputeInputBundleService:
         for key in expired:
             item = self._cache.pop(key)
             item.path.unlink(missing_ok=True)
+
+    def _enforce_cache_limits(self) -> None:
+        total = sum(item.size for item in self._cache.values())
+        while self._cache and (
+            len(self._cache) > self._cache_max_entries or total > self._cache_max_bytes
+        ):
+            oldest_key = next(iter(self._cache))
+            oldest = self._cache.pop(oldest_key)
+            total -= oldest.size
+            oldest.path.unlink(missing_ok=True)
 
     def _root_files(self, root_name: str) -> list[Path]:
         root = self.data_dir / root_name
@@ -320,7 +350,7 @@ class ComputeInputBundleService:
             start_value = normalized.get("start")
             if start_value:
                 start: date | None = date.fromisoformat(start_value)
-            elif "start" in original:
+            elif "start" in normalized[_FIELDS_SET_KEY]:
                 start = None
             else:
                 start = end - timedelta(days=180)
@@ -341,18 +371,26 @@ class ComputeInputBundleService:
                     and (start is None or partition >= start)
                 ):
                     enriched_by_date.setdefault(partition, []).append(path)
-            common_dates = sorted(set(daily_by_date).intersection(enriched_by_date))
-            if not common_dates:
+            daily_dates = set(daily_by_date)
+            enriched_dates = set(enriched_by_date)
+            if daily_dates != enriched_dates:
+                raise ComputeInputDataUnavailable(
+                    "daily and enriched backtest partitions do not match"
+                )
+            partition_dates = sorted(daily_dates)
+            if not partition_dates:
                 raise ComputeInputDataUnavailable("daily backtest data is unavailable")
+            if start_value and partition_dates[0] != date.fromisoformat(start_value):
+                raise ComputeInputDataUnavailable("requested backtest start coverage is unavailable")
             if not factors:
                 raise ComputeInputDataUnavailable("adjustment factor data is unavailable")
             selected = []
-            for partition in common_dates:
+            for partition in partition_dates:
                 selected.extend(sorted(daily_by_date[partition]))
                 selected.extend(sorted(enriched_by_date[partition]))
             selected.extend(instruments)
             selected.extend(factors)
-            data_as_of = common_dates[-1]
+            data_as_of = partition_dates[-1]
 
         sources = [
             _SourceFile(path, path.relative_to(self.data_dir).as_posix()) for path in selected
@@ -367,12 +405,32 @@ class ComputeInputBundleService:
             raise ComputeInputConfigError("compute input escaped the dataset whitelist")
         return sources, data_as_of.isoformat()
 
-    @staticmethod
-    def _snapshot_source(source: _SourceFile, staging: Path) -> ComputeInputFile:
+    def _open_source_fd(self, archive_path: str) -> int:
+        parts = PurePosixPath(archive_path).parts
+        if not parts or parts[0] not in ALLOWED_COMPUTE_INPUT_ROOTS:
+            raise ComputeInputConfigError("compute input escaped the dataset whitelist")
+        directory_fd = os.dup(self._data_dir_fd)
+        try:
+            directory_flags = (
+                os.O_RDONLY
+                | getattr(os, "O_DIRECTORY", 0)
+                | getattr(os, "O_NOFOLLOW", 0)
+            )
+            for part in parts[:-1]:
+                next_fd = os.open(part, directory_flags, dir_fd=directory_fd)
+                os.close(directory_fd)
+                directory_fd = next_fd
+            file_flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+            return os.open(parts[-1], file_flags, dir_fd=directory_fd)
+        except OSError as exc:
+            raise ComputeInputConfigError("compute input source changed or is unsafe") from exc
+        finally:
+            os.close(directory_fd)
+
+    def _snapshot_source(self, source: _SourceFile, staging: Path) -> ComputeInputFile:
         target = staging / source.archive_path
         target.parent.mkdir(parents=True, exist_ok=True)
-        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-        fd = os.open(source.source, flags)
+        fd = self._open_source_fd(source.archive_path)
         digest = hashlib.sha256()
         size = 0
         try:
@@ -419,11 +477,24 @@ class ComputeInputBundleService:
                     raise ComputeInputConfigError("compute input bundle exceeds 2 GiB")
                 entries.append(entry)
 
+            partition_dates = sorted(
+                {
+                    partition.isoformat()
+                    for entry in entries
+                    if (partition := _partition_date(Path(entry.path))) is not None
+                }
+            )
+            if not partition_dates:
+                raise ComputeInputDataUnavailable("compute input partition coverage is unavailable")
+
             manifest = ComputeInputManifest(
                 schema_version=1,
                 task=task,
                 parameters_digest=parameters_digest,
                 data_as_of=data_as_of,
+                coverage_start=partition_dates[0],
+                coverage_end=partition_dates[-1],
+                partition_dates=partition_dates,
                 files=entries,
                 total_uncompressed_bytes=total,
             )
@@ -458,6 +529,7 @@ class ComputeInputBundleService:
             bundle_sha256=bundle_sha256,
             manifest=manifest,
             expires_at=now + self._cache_ttl_seconds,
+            size=master.stat().st_size,
         )
 
     def _lease(self, cached: _CachedBundle, task: ComputeTask, from_cache: bool) -> ComputeInputArtifact:
@@ -505,5 +577,13 @@ class ComputeInputBundleService:
                 data_as_of,
                 now,
             )
-            self._cache[server_cache_key] = cached
-            return self._lease(cached, typed_task, False)
+            artifact = self._lease(cached, typed_task, False)
+            if (
+                self._cache_max_entries > 0
+                and cached.size <= self._cache_max_bytes
+            ):
+                self._cache[server_cache_key] = cached
+                self._enforce_cache_limits()
+            else:
+                cached.path.unlink(missing_ok=True)
+            return artifact

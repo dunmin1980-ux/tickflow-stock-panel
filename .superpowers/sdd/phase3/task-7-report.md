@@ -64,3 +64,71 @@
 - The ten-minute service cache intentionally may serve the same local snapshot for that TTL after a same-day parquet correction. The manifest and bundle hashes still identify the exact bytes delivered.
 - Local input preparation always verifies the downloaded archive before replacing the read-only cache. Integrity failures do not invoke cloud computation; Task 8 will enforce the execution fallback boundary.
 - The full-suite warnings are existing Polars, websockets/uvicorn, and `datetime.utcnow()` deprecations.
+
+## Review Follow-up (base `00de851`)
+
+### Hardened Boundaries
+
+1. Configuration path rejection now covers path-bearing keys, absolute and relative paths,
+   Windows drive-relative paths such as `C:foo.parquet`, and bare executable/data filenames such
+   as `private.parquet` and `model.pkl`. Domain values including symbols, ISO dates, enums,
+   timeframes, and indicator expressions remain accepted.
+2. Canonical configuration now records the validated Pydantic `model_fields_set`. Omitted `start`
+   retains the bounded 180-day default while explicit `start: null` retains unbounded-history
+   semantics; the two forms now have different parameter digests, server cache entries, and client
+   cache keys.
+3. Backtest builds fail closed unless daily and enriched partition-date sets match. Explicit start
+   coverage must be present. The manifest now records `coverage_start`, `coverage_end`, and sorted
+   `partition_dates`; the desktop client independently reconciles those fields against archive
+   members and task-required roots.
+4. Client archive `fstat`, whole-ZIP SHA-256, and `ZipFile` reads now use the same open file
+   description with no-follow semantics. Server source copies traverse the four whitelisted roots
+   through no-follow directory descriptors, then `fstat`, hash, and copy bytes from the same source
+   descriptor.
+5. The ten-minute process-local master cache is bounded to four entries and 2 GiB by default, with
+   deterministic oldest-entry eviction and immediate expiry cleanup. Oversized masters are served
+   through a unique lease without being retained. Streaming responses clean leases in generator
+   finalization and a background fallback; application shutdown closes the service and removes its
+   temporary root.
+6. Atomic publication retains the prior cache as a uniquely named backup until the new target has
+   final read-only permissions. Replace or permission failure restores the old target. If the OS
+   also rejects restoration, the code preserves the backup and keeps a recoverable target instead
+   of deleting both trees.
+
+### Follow-up TDD Evidence
+
+1. Review RED:
+   - Command: `uv run --project backend pytest -q backend/tests/test_compute_input_bundle.py`
+   - Result: `18 failed, 43 passed`; failures mapped to the six review findings.
+2. Task 7 GREEN:
+   - Same command after implementation.
+   - Result: `61 passed in 3.55s`; final repeat after publication hardening:
+     `61 passed in 3.91s`.
+3. Workspace and desktop regression:
+   - Command: `uv run --project backend pytest -q backend/tests/test_compute_input_bundle.py backend/tests/test_desktop_lifecycle.py backend/tests/test_desktop_cloud_proxy.py backend/tests/test_desktop_client_auth.py backend/tests/test_desktop_workspace_adapter.py backend/tests/test_desktop_paths.py backend/tests/workspace`
+   - Result: `355 passed, 2 warnings in 9.78s`.
+4. Full backend:
+   - Command: `uv run --project backend pytest -q backend/tests`
+   - Result: `1143 passed, 11 warnings in 51.28s`.
+   - A final managed-sandbox rerun reached `1141 passed` and only the two localhost-binding
+     lifecycle cases failed with sandbox `PermissionError`; the complete lifecycle file was then
+     rerun outside the network sandbox and passed `6 passed, 2 warnings in 6.41s`.
+5. Ruff:
+   - Strict Task 7 files excluding legacy `main.py` debt: `All checks passed!`.
+   - All changed backend files with the repository's established `RUF100,RUF003` legacy ignores:
+     `All checks passed!`.
+6. Diff validation:
+   - Command: `git diff --check`
+   - Result: exit `0`, no output.
+
+### Follow-up Caveats
+
+- Explicit non-null backtest `start` is intentionally fail closed when that exact local partition is
+  absent. Exchange-calendar-aware normalization remains a future improvement for weekend or holiday
+  start dates.
+- Cache limits and the build semaphore remain process-local. They do not claim cross-worker or
+  cross-container coordination.
+- Restoration after an underlying filesystem refuses both publish and rollback cannot guarantee the
+  old directory name, but recovery bytes are preserved rather than cleaned up.
+- No frontend, proxy, broker, Telegram, OpenClaw, Gold, minute-data, or external-provider behavior
+  was changed in this review follow-up.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import io
 import json
@@ -14,8 +15,11 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from app import main as main_module
 from app.api import auth as auth_api
+from app.api import workspace as workspace_api
 from app.config import settings
+from app.desktop_client import workspace_adapter as workspace_adapter_module
 from app.desktop_client.cache import WorkspaceCache
 from app.desktop_client.proxy import route_target
 from app.desktop_client.workspace_adapter import (
@@ -27,6 +31,7 @@ from app.services import auth as auth_service
 from app.services.compute_input_bundle import (
     ComputeInputBundleService,
     ComputeInputConfigError,
+    ComputeInputDataUnavailable,
     compute_cache_key,
     normalize_compute_config,
 )
@@ -95,6 +100,9 @@ def test_strategy_bundle_is_manifest_first_and_whitelisted(
         assert manifest["schema_version"] == 1
         assert manifest["task"] == "strategy_backtest"
         assert manifest["data_as_of"] == "2026-07-20"
+        assert manifest["coverage_start"] == "2026-07-17"
+        assert manifest["coverage_end"] == "2026-07-20"
+        assert manifest["partition_dates"] == ["2026-07-17", "2026-07-20"]
         assert manifest["parameters_digest"] == artifact.parameters_digest
         assert manifest["total_uncompressed_bytes"] == sum(
             item["size"] for item in manifest["files"]
@@ -135,6 +143,9 @@ def test_screener_bundle_contains_only_target_enriched_and_instruments(
         ("strategy_backtest", _strategy_config(params={"model_path": "models/a.pkl"})),
         ("strategy_backtest", _strategy_config(params={"source": "../outside"})),
         ("strategy_backtest", _strategy_config(params={"source": "models/private"})),
+        ("strategy_backtest", _strategy_config(params={"source": "private.parquet"})),
+        ("strategy_backtest", _strategy_config(params={"source": "model.pkl"})),
+        ("strategy_backtest", _strategy_config(params={"source": "C:foo.parquet"})),
         ("strategy_backtest", _strategy_config(minute_fill=True)),
         ("strategy_backtest", _strategy_config(asset_type="etf")),
         (
@@ -152,6 +163,101 @@ def test_bundle_rejects_unsupported_or_path_bearing_configs(
         bundle_service.build(task, config)
 
 
+@pytest.mark.parametrize(
+    "value",
+    ["000403.SZ", "2026-07-20", "open_t+1", "stock", "1d", "close / ma5"],
+)
+def test_config_path_rules_preserve_normal_domain_strings(
+    bundle_service: ComputeInputBundleService,
+    value: str,
+) -> None:
+    artifact = bundle_service.build(
+        "strategy_backtest",
+        _strategy_config(params={"domain_value": value}),
+    )
+    artifact.cleanup()
+
+
+def test_omitted_start_and_explicit_null_keep_distinct_semantics_and_cache_keys(
+    bundle_service: ComputeInputBundleService,
+) -> None:
+    for root_name in ("kline_daily", "kline_daily_enriched"):
+        old = bundle_service.data_dir / root_name / "date=2025-01-02" / "part.parquet"
+        old.parent.mkdir(parents=True)
+        old.write_bytes(f"{root_name}-old".encode())
+        default_edge = (
+            bundle_service.data_dir / root_name / "date=2026-01-22" / "part.parquet"
+        )
+        default_edge.parent.mkdir(parents=True)
+        default_edge.write_bytes(f"{root_name}-default-edge".encode())
+
+    omitted = {"strategy_id": "macd_cross", "end": "2026-07-20", "asset_type": "stock"}
+    explicit_null = {**omitted, "start": None}
+    omitted_artifact = bundle_service.build("strategy_backtest", omitted)
+    explicit_artifact = bundle_service.build("strategy_backtest", explicit_null)
+    explicit_cached = bundle_service.build("strategy_backtest", explicit_null)
+    try:
+        omitted_manifest, omitted_names = _manifest(omitted_artifact.path)
+        explicit_manifest, explicit_names = _manifest(explicit_artifact.path)
+        assert omitted_manifest["parameters_digest"] != explicit_manifest["parameters_digest"]
+        assert omitted_artifact.bundle_sha256 != explicit_artifact.bundle_sha256
+        assert "kline_daily/date=2025-01-02/part.parquet" not in omitted_names
+        assert "kline_daily/date=2025-01-02/part.parquet" in explicit_names
+        assert omitted_artifact.from_cache is False
+        assert explicit_artifact.from_cache is False
+        assert explicit_cached.from_cache is True
+    finally:
+        omitted_artifact.cleanup()
+        explicit_artifact.cleanup()
+        explicit_cached.cleanup()
+
+
+def test_client_rejects_omitted_start_for_explicit_null_bundle(
+    bundle_service: ComputeInputBundleService,
+    tmp_path: Path,
+) -> None:
+    omitted = {"strategy_id": "macd_cross", "end": "2026-07-20", "asset_type": "stock"}
+    explicit_null = {**omitted, "start": None}
+    artifact = bundle_service.build("strategy_backtest", explicit_null)
+    try:
+        adapter = _adapter(tmp_path, _RemoteStub(b"", {}))
+        with pytest.raises(ComputeInputIntegrityError):
+            adapter.install_compute_input(
+                artifact.path,
+                task="strategy_backtest",
+                config=omitted,
+                data_as_of=artifact.data_as_of,
+                bundle_sha256=artifact.bundle_sha256,
+            )
+    finally:
+        artifact.cleanup()
+
+
+def test_backtest_bundle_fails_closed_when_daily_and_enriched_dates_differ(
+    bundle_service: ComputeInputBundleService,
+) -> None:
+    mismatched = (
+        bundle_service.data_dir
+        / "kline_daily_enriched"
+        / "date=2026-07-17"
+        / "part.parquet"
+    )
+    mismatched.unlink()
+
+    with pytest.raises(ComputeInputDataUnavailable):
+        bundle_service.build("strategy_backtest", _strategy_config())
+
+
+def test_backtest_bundle_fails_when_requested_start_coverage_is_missing(
+    bundle_service: ComputeInputBundleService,
+) -> None:
+    with pytest.raises(ComputeInputDataUnavailable):
+        bundle_service.build(
+            "strategy_backtest",
+            _strategy_config(start="2026-07-01"),
+        )
+
+
 def test_bundle_rejects_symlinked_source_file(
     bundle_service: ComputeInputBundleService,
     tmp_path: Path,
@@ -163,6 +269,31 @@ def test_bundle_rejects_symlinked_source_file(
 
     with pytest.raises(ComputeInputConfigError):
         bundle_service.build("strategy_backtest", _strategy_config())
+
+
+def test_source_parent_replacement_is_rejected_before_snapshot_copy(
+    bundle_service: ComputeInputBundleService,
+    tmp_path: Path,
+) -> None:
+    normalized = normalize_compute_config("strategy_backtest", _strategy_config())
+    sources, _data_as_of = bundle_service._select_sources(
+        "strategy_backtest",
+        normalized,
+        _strategy_config(),
+    )
+    source = next(item for item in sources if item.archive_path == "instruments/part.parquet")
+    original_root = bundle_service.data_dir / "instruments"
+    retained_root = bundle_service.data_dir / "instruments-original"
+    original_root.rename(retained_root)
+    replacement = tmp_path / "replacement-instruments"
+    replacement.mkdir()
+    (replacement / "part.parquet").write_bytes(b"replacement")
+    original_root.symlink_to(replacement, target_is_directory=True)
+
+    staging = tmp_path / "source-staging"
+    staging.mkdir()
+    with pytest.raises(ComputeInputConfigError):
+        bundle_service._snapshot_source(source, staging)
 
 
 def test_bundle_reuses_master_for_ten_minutes_but_leases_unique_files(
@@ -180,6 +311,82 @@ def test_bundle_reuses_master_for_ten_minutes_but_leases_unique_files(
         second.cleanup()
     assert not first.path.exists()
     assert not second.path.exists()
+
+
+def test_master_cache_enforces_predictable_entry_capacity(tmp_path: Path) -> None:
+    data_dir = tmp_path / "capacity-data"
+    _seed_market_data(data_dir)
+    service = ComputeInputBundleService(
+        data_dir,
+        temp_root=tmp_path / "capacity-cache",
+        cache_max_entries=2,
+        cache_max_bytes=64 * 1024 * 1024,
+    )
+    artifacts = [
+        service.build(
+            "strategy_backtest",
+            _strategy_config(strategy_id=f"strategy-{index}"),
+        )
+        for index in range(3)
+    ]
+    for artifact in artifacts:
+        artifact.cleanup()
+    assert len(list(service.temp_root.glob("master-*.zip"))) == 2
+
+    first_again = service.build(
+        "strategy_backtest",
+        _strategy_config(strategy_id="strategy-0"),
+    )
+    try:
+        assert first_again.from_cache is False
+        assert len(list(service.temp_root.glob("master-*.zip"))) == 2
+    finally:
+        first_again.cleanup()
+        service.close()
+
+
+def test_master_larger_than_cache_byte_budget_is_served_uncached(tmp_path: Path) -> None:
+    data_dir = tmp_path / "byte-data"
+    _seed_market_data(data_dir)
+    service = ComputeInputBundleService(
+        data_dir,
+        temp_root=tmp_path / "byte-cache",
+        cache_max_entries=2,
+        cache_max_bytes=1,
+    )
+    artifact = service.build("strategy_backtest", _strategy_config())
+    try:
+        assert artifact.path.exists()
+        assert not list(service.temp_root.glob("master-*.zip"))
+    finally:
+        artifact.cleanup()
+        service.close()
+
+
+def test_expired_master_is_removed_before_rebuild(tmp_path: Path) -> None:
+    data_dir = tmp_path / "ttl-data"
+    _seed_market_data(data_dir)
+    clock = [0.0]
+    service = ComputeInputBundleService(
+        data_dir,
+        temp_root=tmp_path / "ttl-cache",
+        cache_ttl_seconds=10,
+        monotonic=lambda: clock[0],
+    )
+    first = service.build("strategy_backtest", _strategy_config())
+    first.cleanup()
+    old_master = next(service.temp_root.glob("master-*.zip"))
+    old_inode = old_master.stat().st_ino
+
+    clock[0] = 11.0
+    second = service.build("strategy_backtest", _strategy_config())
+    try:
+        assert second.from_cache is False
+        assert len(list(service.temp_root.glob("master-*.zip"))) == 1
+        assert old_master.stat().st_ino != old_inode
+    finally:
+        second.cleanup()
+        service.close()
 
 
 class _RemoteStub:
@@ -223,6 +430,52 @@ def _valid_bundle(
         "X-Bundle-SHA256": artifact.bundle_sha256,
     }
     return artifact, headers
+
+
+def test_client_hashes_and_reads_zip_from_the_same_open_file_description(
+    bundle_service: ComputeInputBundleService,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    artifact, headers = _valid_bundle(bundle_service)
+    hash_fds: list[int] = []
+    zip_fds: list[int] = []
+    real_zip_file = zipfile.ZipFile
+
+    def hash_open_file(handle) -> str:
+        hash_fds.append(handle.fileno())
+        digest = hashlib.sha256()
+        handle.seek(0)
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+        handle.seek(0)
+        return digest.hexdigest()
+
+    def audited_zip_file(file, *args, **kwargs):
+        zip_fds.append(file.fileno() if hasattr(file, "fileno") else -1)
+        return real_zip_file(file, *args, **kwargs)
+
+    monkeypatch.setattr(
+        CloudWorkspaceAdapter,
+        "_sha256_open_file",
+        staticmethod(hash_open_file),
+        raising=False,
+    )
+    monkeypatch.setattr(workspace_adapter_module.zipfile, "ZipFile", audited_zip_file)
+    try:
+        adapter = _adapter(tmp_path, _RemoteStub(b"", {}))
+        installed = adapter.install_compute_input(
+            artifact.path,
+            task="strategy_backtest",
+            config=_strategy_config(),
+            data_as_of=headers["X-Data-As-Of"],
+            bundle_sha256=headers["X-Bundle-SHA256"],
+        )
+        assert installed.exists()
+        assert len(hash_fds) == 1
+        assert hash_fds == zip_fds
+    finally:
+        artifact.cleanup()
 
 
 def test_prepare_compute_input_downloads_validates_and_publishes_read_only(
@@ -353,6 +606,76 @@ def test_client_rejects_manifest_contract_failures(
         artifact.cleanup()
 
 
+@pytest.mark.parametrize("field", ["coverage_start", "coverage_end", "partition_dates"])
+def test_client_rejects_manifest_coverage_tampering(
+    bundle_service: ComputeInputBundleService,
+    tmp_path: Path,
+    field: str,
+) -> None:
+    artifact, headers = _valid_bundle(bundle_service)
+    malicious = tmp_path / f"bad-{field}.zip"
+
+    def mutate(info: zipfile.ZipInfo, payload: bytes):
+        if info.filename != "manifest.json":
+            return info, payload
+        manifest = json.loads(payload)
+        manifest[field] = ["2026-07-20"] if field == "partition_dates" else "2026-07-18"
+        return info, json.dumps(manifest, sort_keys=True).encode()
+
+    try:
+        _rewrite_zip(artifact.path, malicious, mutate)
+        bundle_hash = hashlib.sha256(malicious.read_bytes()).hexdigest()
+        adapter = _adapter(tmp_path, _RemoteStub(b"", {}))
+        with pytest.raises(ComputeInputIntegrityError):
+            adapter.install_compute_input(
+                malicious,
+                task="strategy_backtest",
+                config=_strategy_config(),
+                data_as_of=headers["X-Data-As-Of"],
+                bundle_sha256=bundle_hash,
+            )
+    finally:
+        artifact.cleanup()
+
+
+def test_client_rejects_archive_partition_gap_even_when_file_list_is_rewritten(
+    bundle_service: ComputeInputBundleService,
+    tmp_path: Path,
+) -> None:
+    artifact, headers = _valid_bundle(bundle_service)
+    malicious = tmp_path / "missing-enriched-partition.zip"
+    missing_path = "kline_daily_enriched/date=2026-07-17/part.parquet"
+
+    def mutate(info: zipfile.ZipInfo, payload: bytes):
+        if info.filename == missing_path:
+            return None
+        if info.filename != "manifest.json":
+            return info, payload
+        manifest = json.loads(payload)
+        manifest["files"] = [
+            item for item in manifest["files"] if item["path"] != missing_path
+        ]
+        manifest["total_uncompressed_bytes"] = sum(
+            item["size"] for item in manifest["files"]
+        )
+        return info, json.dumps(manifest, sort_keys=True).encode()
+
+    try:
+        _rewrite_zip(artifact.path, malicious, mutate)
+        bundle_hash = hashlib.sha256(malicious.read_bytes()).hexdigest()
+        adapter = _adapter(tmp_path, _RemoteStub(b"", {}))
+        with pytest.raises(ComputeInputIntegrityError):
+            adapter.install_compute_input(
+                malicious,
+                task="strategy_backtest",
+                config=_strategy_config(),
+                data_as_of=headers["X-Data-As-Of"],
+                bundle_sha256=bundle_hash,
+            )
+    finally:
+        artifact.cleanup()
+
+
 def test_client_rejects_oversized_uncompressed_bundle(
     bundle_service: ComputeInputBundleService,
     tmp_path: Path,
@@ -450,6 +773,103 @@ def test_client_rejects_preplanted_cache_target_symlink_without_touching_destina
         artifact.cleanup()
 
 
+def test_atomic_publish_restores_old_cache_when_final_permissions_fail(
+    bundle_service: ComputeInputBundleService,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    first, first_headers = _valid_bundle(bundle_service)
+    adapter = _adapter(tmp_path, _RemoteStub(b"", {}))
+    installed = adapter.install_compute_input(
+        first.path,
+        task="strategy_backtest",
+        config=_strategy_config(),
+        data_as_of=first_headers["X-Data-As-Of"],
+        bundle_sha256=first_headers["X-Bundle-SHA256"],
+    )
+    old_bytes = (installed / "instruments" / "part.parquet").read_bytes()
+
+    replacement_data = tmp_path / "replacement-data"
+    _seed_market_data(replacement_data)
+    (replacement_data / "instruments" / "part.parquet").write_bytes(b"new-instruments")
+    replacement_service = ComputeInputBundleService(
+        replacement_data,
+        temp_root=tmp_path / "replacement-bundles",
+    )
+    second = replacement_service.build("strategy_backtest", _strategy_config())
+    real_chmod = workspace_adapter_module.os.chmod
+    injected = False
+
+    def fail_final_target_chmod(path, mode):
+        nonlocal injected
+        if Path(path) == installed and mode == 0o555 and not injected:
+            injected = True
+            raise OSError("injected final permission failure")
+        return real_chmod(path, mode)
+
+    monkeypatch.setattr(workspace_adapter_module.os, "chmod", fail_final_target_chmod)
+    try:
+        with pytest.raises(ComputeInputIntegrityError):
+            adapter.install_compute_input(
+                second.path,
+                task="strategy_backtest",
+                config=_strategy_config(),
+                data_as_of=second.data_as_of,
+                bundle_sha256=second.bundle_sha256,
+            )
+        assert injected is True
+        assert installed.exists()
+        assert (installed / "instruments" / "part.parquet").read_bytes() == old_bytes
+        assert not list(adapter.compute_root.glob(".*.retired-*"))
+    finally:
+        first.cleanup()
+        second.cleanup()
+        replacement_service.close()
+
+
+def test_atomic_publish_restores_old_cache_when_replace_fails(
+    bundle_service: ComputeInputBundleService,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    artifact, headers = _valid_bundle(bundle_service)
+    adapter = _adapter(tmp_path, _RemoteStub(b"", {}))
+    installed = adapter.install_compute_input(
+        artifact.path,
+        task="strategy_backtest",
+        config=_strategy_config(),
+        data_as_of=headers["X-Data-As-Of"],
+        bundle_sha256=headers["X-Bundle-SHA256"],
+    )
+    old_manifest = (installed / "manifest.json").read_bytes()
+    real_replace = workspace_adapter_module.os.replace
+    injected = False
+
+    def fail_new_publish(source, destination):
+        nonlocal injected
+        source_path = Path(source)
+        if source_path.name.startswith(".staging-") and Path(destination) == installed:
+            injected = True
+            raise OSError("injected replace failure")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(workspace_adapter_module.os, "replace", fail_new_publish)
+    try:
+        with pytest.raises(ComputeInputIntegrityError):
+            adapter.install_compute_input(
+                artifact.path,
+                task="strategy_backtest",
+                config=_strategy_config(),
+                data_as_of=headers["X-Data-As-Of"],
+                bundle_sha256=headers["X-Bundle-SHA256"],
+            )
+        assert injected is True
+        assert installed.exists()
+        assert (installed / "manifest.json").read_bytes() == old_manifest
+    finally:
+        artifact.cleanup()
+
+
 def test_client_rejects_data_older_than_requested_freshness_window(
     bundle_service: ComputeInputBundleService,
     tmp_path: Path,
@@ -539,6 +959,38 @@ def test_compute_input_api_returns_zip_headers_and_cleans_response_lease(
         pass
     service = app.state.compute_input_bundle_service
     assert not list(service.temp_root.glob("lease-*.zip"))
+
+
+def test_streaming_response_cleans_lease_when_client_disconnects(
+    bundle_service: ComputeInputBundleService,
+) -> None:
+    artifact = bundle_service.build("strategy_backtest", _strategy_config())
+
+    async def consume_one_chunk_then_disconnect() -> None:
+        stream = workspace_api._stream_compute_artifact(artifact, chunk_size=1)
+        await anext(stream)
+        await stream.aclose()
+
+    asyncio.run(consume_one_chunk_then_disconnect())
+    assert not artifact.path.exists()
+
+
+def test_application_shutdown_closes_compute_bundle_service(tmp_path: Path) -> None:
+    data_dir = tmp_path / "shutdown-data"
+    _seed_market_data(data_dir)
+    service = ComputeInputBundleService(
+        data_dir,
+        temp_root=tmp_path / "shutdown-bundles",
+    )
+    service.build("strategy_backtest", _strategy_config()).cleanup()
+    fake_app = SimpleNamespace(
+        state=SimpleNamespace(compute_input_bundle_service=service),
+    )
+
+    main_module._close_compute_input_bundle_service(fake_app)
+
+    assert not service.temp_root.exists()
+    assert fake_app.state.compute_input_bundle_service is None
 
 
 def test_desktop_proxy_keeps_compute_input_orchestration_local() -> None:

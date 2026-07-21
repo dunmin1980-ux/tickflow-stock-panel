@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from collections.abc import AsyncIterator
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Generic, Literal, TypeVar
@@ -12,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, JsonValue, StrictStr, ValidationError
 from sse_starlette.event import ServerSentEvent
 from sse_starlette.sse import EventSourceResponse
@@ -21,6 +22,7 @@ from starlette.background import BackgroundTask
 from app.config import settings
 from app.services import auth as auth_service
 from app.services.compute_input_bundle import (
+    ComputeInputArtifact,
     ComputeInputBundleService,
     ComputeInputConfigError,
     ComputeInputDataUnavailable,
@@ -340,11 +342,24 @@ def _compute_bundle_service(request: Request) -> ComputeInputBundleService:
     return service
 
 
+async def _stream_compute_artifact(
+    artifact: ComputeInputArtifact,
+    *,
+    chunk_size: int = 1024 * 1024,
+) -> AsyncIterator[bytes]:
+    try:
+        with artifact.path.open("rb") as handle:
+            while chunk := await asyncio.to_thread(handle.read, chunk_size):
+                yield chunk
+    finally:
+        artifact.cleanup()
+
+
 @router.post("/compute-inputs/build", response_model=None)
 async def build_compute_inputs(
     request_body: ComputeInputBuildDTO,
     request: Request,
-) -> FileResponse | JSONResponse:
+) -> StreamingResponse | JSONResponse:
     token = request.cookies.get("tf_session")
     if not token or not auth_service.is_valid_session(token):
         return _command_error(
@@ -386,12 +401,12 @@ async def build_compute_inputs(
             409,
         )
 
-    return FileResponse(
-        artifact.path,
+    return StreamingResponse(
+        _stream_compute_artifact(artifact),
         media_type="application/zip",
-        filename="tickflow-compute-input.zip",
         headers={
             "Cache-Control": _PRIVATE_NO_STORE,
+            "Content-Disposition": 'attachment; filename="tickflow-compute-input.zip"',
             "X-Data-As-Of": artifact.data_as_of,
             "X-Bundle-SHA256": artifact.bundle_sha256,
         },

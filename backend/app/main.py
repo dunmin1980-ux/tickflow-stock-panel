@@ -91,6 +91,14 @@ def _initialize_desktop_workspace(app: FastAPI) -> None:
     app.state.workspace_adapter = CloudWorkspaceAdapter(_desktop_remote_client, cache)
 
 
+def _close_compute_input_bundle_service(app: FastAPI) -> None:
+    service = getattr(app.state, "compute_input_bundle_service", None)
+    close = getattr(service, "close", None)
+    if callable(close):
+        close()
+    app.state.compute_input_bundle_service = None
+
+
 class ImmutableAssetStaticFiles(StaticFiles):
     """Serve Vite-hashed build assets with an immutable cache policy."""
 
@@ -390,6 +398,7 @@ async def lifespan(app: FastAPI):
         gold_lock = getattr(app.state, "gold_runtime_lock", None)
         if gold_lock is not None:
             gold_lock.release()
+        _close_compute_input_bundle_service(app)
         logger.info("shutdown")
 
 

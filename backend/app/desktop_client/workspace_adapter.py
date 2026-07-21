@@ -9,6 +9,7 @@ import shutil
 import stat
 import tempfile
 import threading
+import uuid
 import zipfile
 import zlib
 from collections.abc import Callable, Iterator
@@ -46,7 +47,7 @@ class WorkspaceOfflineReadOnly(RuntimeError):  # noqa: N818 - binding public con
     pass
 
 
-class ComputeInputIntegrityError(RuntimeError):  # noqa: N818 - fail-closed public contract
+class ComputeInputIntegrityError(RuntimeError):
     """A downloaded local-compute input failed a security or freshness check."""
 
 
@@ -236,12 +237,91 @@ class CloudWorkspaceAdapter:
         return name
 
     @staticmethod
-    def _sha256_path(path: Path) -> str:
+    def _sha256_open_file(handle) -> str:
         digest = hashlib.sha256()
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(chunk)
+        handle.seek(0)
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+        handle.seek(0)
         return digest.hexdigest()
+
+    @staticmethod
+    def _manifest_partition_date(path: str) -> str | None:
+        for part in PurePosixPath(path).parts:
+            if not part.startswith("date="):
+                continue
+            value = part.removeprefix("date=")
+            try:
+                parsed = date.fromisoformat(value)
+            except ValueError:
+                return None
+            return value if parsed.isoformat() == value else None
+        return None
+
+    @classmethod
+    def _validate_manifest_coverage(
+        cls,
+        manifest: ComputeInputManifest,
+        task: str,
+        normalized: dict[str, Any],
+    ) -> None:
+        try:
+            parsed_dates = [date.fromisoformat(value) for value in manifest.partition_dates]
+            coverage_start = date.fromisoformat(manifest.coverage_start)
+            coverage_end = date.fromisoformat(manifest.coverage_end)
+        except ValueError as exc:
+            raise ComputeInputIntegrityError("compute input coverage dates are invalid") from exc
+        canonical_dates = [value.isoformat() for value in parsed_dates]
+        if (
+            not canonical_dates
+            or canonical_dates != manifest.partition_dates
+            or canonical_dates != sorted(set(canonical_dates))
+            or coverage_start.isoformat() != manifest.coverage_start
+            or coverage_end.isoformat() != manifest.coverage_end
+            or manifest.coverage_start != canonical_dates[0]
+            or manifest.coverage_end != canonical_dates[-1]
+            or manifest.data_as_of != manifest.coverage_end
+        ):
+            raise ComputeInputIntegrityError("compute input coverage manifest is inconsistent")
+
+        roots = {PurePosixPath(entry.path).parts[0] for entry in manifest.files}
+        partition_sets: dict[str, set[str]] = {
+            "kline_daily": set(),
+            "kline_daily_enriched": set(),
+        }
+        for entry in manifest.files:
+            root = PurePosixPath(entry.path).parts[0]
+            if root not in partition_sets:
+                continue
+            partition = cls._manifest_partition_date(entry.path)
+            if partition is None:
+                raise ComputeInputIntegrityError("compute input partition path is invalid")
+            partition_sets[root].add(partition)
+
+        expected = set(canonical_dates)
+        if "instruments" not in roots:
+            raise ComputeInputIntegrityError("compute input instruments are missing")
+        if task == "strategy_backtest":
+            if "adj_factor" not in roots or any(
+                partitions != expected for partitions in partition_sets.values()
+            ):
+                raise ComputeInputIntegrityError("compute input backtest coverage is incomplete")
+            fields_set = set(normalized.get("__fields_set__", []))
+            requested_start = normalized.get("start")
+            if (
+                requested_start is not None
+                and "start" in fields_set
+                and manifest.coverage_start != requested_start
+            ):
+                raise ComputeInputIntegrityError(
+                    "compute input requested start coverage is incomplete"
+                )
+        elif (
+            partition_sets["kline_daily"]
+            or partition_sets["kline_daily_enriched"] != expected
+            or len(expected) != 1
+        ):
+            raise ComputeInputIntegrityError("compute input screener coverage is incomplete")
 
     def _validate_freshness(
         self,
@@ -292,28 +372,48 @@ class CloudWorkspaceAdapter:
         os.chmod(path, 0o555)
 
     def _publish_compute_input(self, staging: Path, target: Path) -> None:
-        backup = target.with_name(
-            f".{target.name}.retired-{os.getpid()}-{threading.get_ident()}"
-        )
-        self._remove_tree(backup)
+        suffix = f"{os.getpid()}-{threading.get_ident()}-{uuid.uuid4().hex}"
+        backup = target.with_name(f".{target.name}.retired-{suffix}")
+        failed_new = target.with_name(f".{target.name}.failed-{suffix}")
         moved_old = False
+        moved_new = False
         try:
+            if target.is_symlink() or (target.exists() and not target.is_dir()):
+                raise ComputeInputIntegrityError("compute input cache target is invalid")
             if target.exists():
-                os.replace(target, backup)
+                os.chmod(target, 0o700)
+                try:
+                    os.replace(target, backup)
+                except Exception:
+                    os.chmod(target, 0o555)
+                    raise
                 moved_old = True
             os.replace(staging, target)
+            moved_new = True
+            os.chmod(target, 0o555)
         except Exception:
-            if moved_old and not target.exists() and backup.exists():
-                try:
-                    os.replace(backup, target)
-                    moved_old = False
-                except OSError:
-                    # Preserve the recovery copy if restoration itself fails.
-                    pass
+            if moved_new and target.exists():
+                # If this rename fails, keep the new tree and preserve the old backup.
+                with suppress(OSError):
+                    os.replace(target, failed_new)
+            if moved_old and backup.exists():
+                if not target.exists():
+                    try:
+                        os.replace(backup, target)
+                        moved_old = False
+                        os.chmod(target, 0o555)
+                    except OSError:
+                        if failed_new.exists() and not target.exists():
+                            with suppress(OSError):
+                                os.replace(failed_new, target)
+                                os.chmod(target, 0o555)
+                if not moved_old:
+                    self._remove_tree(failed_new)
+            elif failed_new.exists():
+                self._remove_tree(failed_new)
             raise
-        finally:
-            if not moved_old or target.exists():
-                self._remove_tree(backup)
+        if moved_old:
+            self._remove_tree(backup)
 
     def install_compute_input(
         self,
@@ -328,101 +428,134 @@ class CloudWorkspaceAdapter:
         bundle_path = Path(bundle_path)
         staging: Path | None = None
         try:
-            if bundle_path.is_symlink():
-                raise ComputeInputIntegrityError("compute input archive must not be a symlink")
+            flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+            bundle_fd = os.open(bundle_path, flags)
             compressed_limit = self._compute_max_uncompressed_bytes + 64 * 1024 * 1024
-            if bundle_path.stat().st_size > compressed_limit:
-                raise ComputeInputIntegrityError("compute input archive is too large")
-            with zipfile.ZipFile(bundle_path) as archive:
-                infos = archive.infolist()
-                if not infos:
-                    raise ComputeInputIntegrityError("compute input archive is empty")
-                names = [self._safe_bundle_member(info) for info in infos]
-                if len(names) != len(set(names)) or names[0] != "manifest.json":
-                    raise ComputeInputIntegrityError("compute input manifest must be the unique first item")
-                manifest_info = infos[0]
-                if manifest_info.file_size > 1024 * 1024:
-                    raise ComputeInputIntegrityError("compute input manifest is too large")
-                try:
-                    manifest = ComputeInputManifest.model_validate_json(
-                        archive.read(manifest_info)
+            with os.fdopen(bundle_fd, "rb") as bundle_handle:
+                metadata = os.fstat(bundle_handle.fileno())
+                if not stat.S_ISREG(metadata.st_mode):
+                    raise ComputeInputIntegrityError(
+                        "compute input archive must be a regular file"
                     )
-                except (ValidationError, ValueError, TypeError) as exc:
-                    raise ComputeInputIntegrityError("compute input manifest is invalid") from exc
-
-                if task is None or config is None or data_as_of is None or bundle_sha256 is None:
-                    raise ComputeInputIntegrityError("compute input verification context is missing")
-                normalized = normalize_compute_config(task, config)
-                parameters_digest = compute_parameters_digest(normalized)
-                if manifest.task != task or manifest.parameters_digest != parameters_digest:
-                    raise ComputeInputIntegrityError("compute input request contract does not match")
-                if manifest.data_as_of != data_as_of:
-                    raise ComputeInputIntegrityError("compute input data date header does not match")
-                self._validate_freshness(task, normalized, data_as_of)
-
+                if metadata.st_size > compressed_limit:
+                    raise ComputeInputIntegrityError("compute input archive is too large")
                 if not isinstance(bundle_sha256, str) or len(bundle_sha256) != 64:
                     raise ComputeInputIntegrityError("compute input bundle hash header is invalid")
-                actual_bundle_hash = self._sha256_path(bundle_path)
+                actual_bundle_hash = self._sha256_open_file(bundle_handle)
                 if actual_bundle_hash != bundle_sha256:
                     raise ComputeInputIntegrityError("compute input bundle hash does not match")
 
-                data_infos = infos[1:]
-                if len(manifest.files) != len({entry.path for entry in manifest.files}):
-                    raise ComputeInputIntegrityError("compute input manifest paths are not unique")
-                manifest_files = {entry.path: entry for entry in manifest.files}
-                if set(names[1:]) != set(manifest_files):
-                    raise ComputeInputIntegrityError("compute input archive contains unlisted files")
-                total = sum(info.file_size for info in data_infos)
-                if (
-                    total > self._compute_max_uncompressed_bytes
-                    or total != manifest.total_uncompressed_bytes
-                    or total != sum(entry.size for entry in manifest.files)
-                ):
-                    raise ComputeInputIntegrityError("compute input uncompressed size is invalid")
-                for info in data_infos:
-                    entry = manifest_files[info.filename]
-                    if info.file_size != entry.size:
-                        raise ComputeInputIntegrityError("compute input file size does not match")
+                with zipfile.ZipFile(bundle_handle) as archive:
+                    infos = archive.infolist()
+                    if not infos:
+                        raise ComputeInputIntegrityError("compute input archive is empty")
+                    names = [self._safe_bundle_member(info) for info in infos]
+                    if len(names) != len(set(names)) or names[0] != "manifest.json":
+                        raise ComputeInputIntegrityError(
+                            "compute input manifest must be the unique first item"
+                        )
+                    manifest_info = infos[0]
+                    if manifest_info.file_size > 1024 * 1024:
+                        raise ComputeInputIntegrityError("compute input manifest is too large")
+                    try:
+                        manifest = ComputeInputManifest.model_validate_json(
+                            archive.read(manifest_info)
+                        )
+                    except (ValidationError, ValueError, TypeError) as exc:
+                        raise ComputeInputIntegrityError(
+                            "compute input manifest is invalid"
+                        ) from exc
 
-                self.compute_root.parent.mkdir(parents=True, exist_ok=True)
-                if self.compute_root.parent.is_symlink():
-                    raise ComputeInputIntegrityError(
-                        "compute input cache parent must not be a symlink"
+                    if task is None or config is None or data_as_of is None:
+                        raise ComputeInputIntegrityError(
+                            "compute input verification context is missing"
+                        )
+                    normalized = normalize_compute_config(task, config)
+                    parameters_digest = compute_parameters_digest(normalized)
+                    if manifest.task != task or manifest.parameters_digest != parameters_digest:
+                        raise ComputeInputIntegrityError(
+                            "compute input request contract does not match"
+                        )
+                    if manifest.data_as_of != data_as_of:
+                        raise ComputeInputIntegrityError(
+                            "compute input data date header does not match"
+                        )
+                    self._validate_freshness(task, normalized, data_as_of)
+                    self._validate_manifest_coverage(manifest, task, normalized)
+
+                    data_infos = infos[1:]
+                    if len(manifest.files) != len({entry.path for entry in manifest.files}):
+                        raise ComputeInputIntegrityError(
+                            "compute input manifest paths are not unique"
+                        )
+                    manifest_files = {entry.path: entry for entry in manifest.files}
+                    if set(names[1:]) != set(manifest_files):
+                        raise ComputeInputIntegrityError(
+                            "compute input archive contains unlisted files"
+                        )
+                    total = sum(info.file_size for info in data_infos)
+                    if (
+                        total > self._compute_max_uncompressed_bytes
+                        or total != manifest.total_uncompressed_bytes
+                        or total != sum(entry.size for entry in manifest.files)
+                    ):
+                        raise ComputeInputIntegrityError(
+                            "compute input uncompressed size is invalid"
+                        )
+                    for info in data_infos:
+                        entry = manifest_files[info.filename]
+                        if info.file_size != entry.size:
+                            raise ComputeInputIntegrityError(
+                                "compute input file size does not match"
+                            )
+
+                    self.compute_root.parent.mkdir(parents=True, exist_ok=True)
+                    if self.compute_root.parent.is_symlink():
+                        raise ComputeInputIntegrityError(
+                            "compute input cache parent must not be a symlink"
+                        )
+                    if self.compute_root.is_symlink():
+                        raise ComputeInputIntegrityError(
+                            "compute input cache root must not be a symlink"
+                        )
+                    self.compute_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+                    os.chmod(self.compute_root, 0o700)
+                    staging = Path(
+                        tempfile.mkdtemp(prefix=".staging-", dir=self.compute_root)
                     )
-                if self.compute_root.is_symlink():
-                    raise ComputeInputIntegrityError("compute input cache root must not be a symlink")
-                self.compute_root.mkdir(mode=0o700, parents=True, exist_ok=True)
-                os.chmod(self.compute_root, 0o700)
-                staging = Path(tempfile.mkdtemp(prefix=".staging-", dir=self.compute_root))
 
-                manifest_target = staging / "manifest.json"
-                manifest_target.write_bytes(archive.read(manifest_info))
-                os.chmod(manifest_target, 0o400)
-                extracted_total = 0
-                for info in data_infos:
-                    entry = manifest_files[info.filename]
-                    target_file = staging.joinpath(*PurePosixPath(info.filename).parts)
-                    target_file.parent.mkdir(parents=True, exist_ok=True)
-                    digest = hashlib.sha256()
-                    size = 0
-                    with archive.open(info) as source, target_file.open("xb") as output:
-                        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-                            size += len(chunk)
-                            extracted_total += len(chunk)
-                            if (
-                                size > entry.size
-                                or extracted_total > self._compute_max_uncompressed_bytes
-                            ):
-                                raise ComputeInputIntegrityError(
-                                    "compute input expanded beyond its declared size"
-                                )
-                            digest.update(chunk)
-                            output.write(chunk)
-                    if size != entry.size or digest.hexdigest() != entry.sha256:
-                        raise ComputeInputIntegrityError("compute input file integrity does not match")
-                    os.chmod(target_file, 0o400)
-                if extracted_total != manifest.total_uncompressed_bytes:
-                    raise ComputeInputIntegrityError("compute input extracted size does not match")
+                    manifest_target = staging / "manifest.json"
+                    manifest_target.write_bytes(archive.read(manifest_info))
+                    os.chmod(manifest_target, 0o400)
+                    extracted_total = 0
+                    for info in data_infos:
+                        entry = manifest_files[info.filename]
+                        target_file = staging.joinpath(*PurePosixPath(info.filename).parts)
+                        target_file.parent.mkdir(parents=True, exist_ok=True)
+                        digest = hashlib.sha256()
+                        size = 0
+                        with archive.open(info) as source, target_file.open("xb") as output:
+                            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                                size += len(chunk)
+                                extracted_total += len(chunk)
+                                if (
+                                    size > entry.size
+                                    or extracted_total > self._compute_max_uncompressed_bytes
+                                ):
+                                    raise ComputeInputIntegrityError(
+                                        "compute input expanded beyond its declared size"
+                                    )
+                                digest.update(chunk)
+                                output.write(chunk)
+                        if size != entry.size or digest.hexdigest() != entry.sha256:
+                            raise ComputeInputIntegrityError(
+                                "compute input file integrity does not match"
+                            )
+                        os.chmod(target_file, 0o400)
+                    if extracted_total != manifest.total_uncompressed_bytes:
+                        raise ComputeInputIntegrityError(
+                            "compute input extracted size does not match"
+                        )
 
             cache_key = compute_cache_key(task, normalized, data_as_of)
             target = self.compute_root / cache_key
@@ -435,11 +568,6 @@ class CloudWorkspaceAdapter:
             with self._compute_lock:
                 self._publish_compute_input(staging, target)
             staging = None
-            try:
-                os.chmod(target, 0o555)
-            except OSError:
-                self._remove_tree(target)
-                raise
             return target
         except ComputeInputIntegrityError:
             raise
