@@ -193,3 +193,68 @@
   following or deleting an attacker-owned path.
 - This follow-up changes only the Task 7 backend service, desktop adapter, tests, and this report.
   Concurrent frontend changes visible in the shared worktree are unrelated and remain unstaged.
+
+## Review Follow-up 3 (base `fd5a9ff`)
+
+### Daily Coverage Invariants
+
+1. Every backtest coverage mode now enforces a minimum weekday partition density in addition to
+   matching daily/enriched date sets and the existing seven-calendar-day maximum gap. The inclusive
+   `coverage_start..coverage_end` weekday count is the denominator; only actual weekday partitions
+   count toward the numerator, and integer comparison requires at least 80 percent.
+2. The same `partition_coverage_error()` function runs during server bundle construction and desktop
+   installation. The manifest policy now fixes `minimum_weekday_density_percent: 80`, and the client
+   both recomputes the expected policy and validates the downloaded partition list. A self-consistent
+   ZIP reduced to one partition per week is therefore rejected before publication.
+3. Tests cover omitted-start default windows, explicit windows, and explicit-null all-history
+   windows. Weekly sparse histories fail; weekday-dense histories with weekends and a small number
+   of simulated holidays pass. A five-weekday short window with four partitions verifies the exact
+   80-percent boundary.
+
+### Provable File-Selection Boundary
+
+1. Lexical rejection remains for path-bearing keys, POSIX/Windows absolute forms, drive-relative
+   paths, file URIs, traversal, backslashes, unambiguous relative directory paths, and common bare
+   data/model/script filenames. Unicode paths and `models/private model.pkl` remain rejected.
+2. Operator-spaced arithmetic syntax distinguishes formulas such as `close / ma20 - 1` from normal
+   slash-separated directory paths. Unknown bare extensions and extensionless tokens are not
+   classified as paths solely from their text because that distinction is not generally provable.
+3. Security instead relies on a verified data-flow contract. `_select_sources()` no longer accepts
+   the original client config, `_root_files()` is called only from `ALLOWED_COMPUTE_INPUT_ROOTS`,
+   every archive path is derived from a selected file relative to the fixed data directory, and
+   `_open_source_fd()` independently rejects roots outside that same allowlist. Audit tests inject
+   nested arbitrary `params` and `overrides` strings and prove they never reach root names, opened
+   paths, archive paths, or alter the selected file list.
+
+### Follow-up 3 TDD Evidence
+
+1. Review RED:
+   - Command: `uv run --project backend pytest -q backend/tests/test_compute_input_bundle.py`
+   - Result: `12 failed, 103 passed in 12.86s`; failures covered server/client density and lexical
+     false positives.
+2. Task 7 GREEN:
+   - Same command after implementation.
+   - Result: `115 passed in 9.25s`.
+3. Workspace and desktop regression, run outside the network sandbox for lifecycle port binding:
+   - Command: `uv run --project backend pytest -q backend/tests/test_compute_input_bundle.py backend/tests/test_desktop_lifecycle.py backend/tests/test_desktop_cloud_proxy.py backend/tests/test_desktop_client_auth.py backend/tests/test_desktop_workspace_adapter.py backend/tests/test_desktop_paths.py backend/tests/workspace`
+   - Result: `409 passed, 2 warnings in 12.72s`.
+4. Full backend, run outside the network sandbox:
+   - Command: `uv run --project backend pytest -q backend/tests`
+   - Result: `1197 passed, 11 warnings in 74.01s`.
+5. Ruff and diff validation:
+   - Command: `uv run --project backend ruff check backend/app/services/compute_input_bundle.py backend/app/desktop_client/workspace_adapter.py backend/tests/test_compute_input_bundle.py`
+   - Result: `All checks passed!`.
+   - Command: `git diff --check`
+   - Result: exit `0`, no output.
+
+### Follow-up 3 Caveats
+
+- Weekday density is deliberately conservative and does not model official A-share holidays. It may
+  overstate expected sessions, but the 80-percent threshold permits ordinary holiday gaps while
+  rejecting weekly sampling. The existing seven-day maximum gap can still fail closed across an
+  exceptional closure longer than seven calendar days.
+- Operator-spaced formula recognition is intentionally narrow. Ambiguous extensionless tokens and
+  unknown bare extensions receive no lexical safety guarantee; their safety comes from having no
+  data flow into dataset-root selection, archive paths, or filesystem opens.
+- No frontend, API route, proxy, broker, Telegram, OpenClaw, Gold, minute-data, or external-provider
+  behavior changed in this follow-up.

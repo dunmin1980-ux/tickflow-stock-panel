@@ -41,6 +41,42 @@ ALLOWED_COMPUTE_INPUT_ROOTS = (
 _DATE_PARTITION = re.compile(r"date=(\d{4}-\d{2}-\d{2})")
 _WINDOWS_DRIVE_PATH = re.compile(r"^[A-Za-z]:")
 _A_SHARE_SYMBOL = re.compile(r"^\d{6}\.(?:SH|SZ|BJ)$", re.IGNORECASE)
+_FORMULA_ATOM = r"(?:[A-Za-z_][A-Za-z0-9_]*|\d+(?:\.\d+)?)"
+_SPACED_FORMULA = re.compile(
+    rf"^\s*{_FORMULA_ATOM}(?:\s+(?:[+*/<>-]|>=|<=|==|!=|and|or)\s+{_FORMULA_ATOM})+\s*$"
+)
+_COMMON_FILE_EXTENSIONS = frozenset(
+    {
+        "bin",
+        "cfg",
+        "csv",
+        "db",
+        "env",
+        "gz",
+        "h5",
+        "hdf5",
+        "ini",
+        "joblib",
+        "json",
+        "model",
+        "onnx",
+        "parquet",
+        "pkl",
+        "pt",
+        "pth",
+        "py",
+        "sh",
+        "sqlite",
+        "tar",
+        "toml",
+        "txt",
+        "xls",
+        "xlsx",
+        "yaml",
+        "yml",
+        "zip",
+    }
+)
 _PATH_KEYS = frozenset(
     {
         "path",
@@ -63,6 +99,7 @@ DEFAULT_CACHE_MAX_BYTES = MAX_BUNDLE_UNCOMPRESSED_BYTES
 _FIELDS_SET_KEY = "__fields_set__"
 COVERAGE_START_TOLERANCE_DAYS = 7
 MAX_PARTITION_GAP_DAYS = 7
+MINIMUM_WEEKDAY_DENSITY_PERCENT = 80
 COVERAGE_CALENDAR_BASIS = "calendar_day_heuristic_without_exchange_calendar"
 COVERAGE_CAVEAT = "weekends_and_exchange_holidays_are_not_authoritative"
 
@@ -106,6 +143,7 @@ class ComputeInputCoverage(_ManifestModel):
     start_requirement: Literal["exact", "within_tolerance", "unbounded"]
     start_tolerance_days: Literal[7]
     max_partition_gap_days: Literal[7]
+    minimum_weekday_density_percent: Literal[80]
 
 
 class ComputeInputManifest(_ManifestModel):
@@ -153,15 +191,9 @@ class _CachedBundle:
     size: int
 
 
-def _looks_like_bare_filename(value: str) -> bool:
-    stem, separator, extension = value.rpartition(".")
-    if not separator or not extension:
-        return False
-    if not stem and value != f".{extension}":
-        return False
-    return all(character.isalnum() or character in "_-" for character in extension) and any(
-        character.isalpha() for character in extension
-    )
+def _looks_like_common_bare_filename(value: str) -> bool:
+    _stem, separator, extension = value.rpartition(".")
+    return bool(separator and extension.casefold() in _COMMON_FILE_EXTENSIONS)
 
 
 def _looks_like_path(value: str) -> bool:
@@ -173,14 +205,15 @@ def _looks_like_path(value: str) -> bool:
         candidate.startswith(("/", "~", "\\"))
         or _WINDOWS_DRIVE_PATH.match(candidate)
         or lowered.startswith("file:")
-        or "/" in candidate
         or "\\" in candidate
         or candidate in {".", ".."}
     ):
         return True
+    if "/" in candidate:
+        return _SPACED_FORMULA.fullmatch(candidate) is None
     if _A_SHARE_SYMBOL.fullmatch(candidate):
         return False
-    return _looks_like_bare_filename(candidate)
+    return _looks_like_common_bare_filename(candidate)
 
 
 def _reject_paths(value: Any) -> None:
@@ -324,6 +357,18 @@ def compute_coverage_policy(
         start_requirement=requirement,
         start_tolerance_days=COVERAGE_START_TOLERANCE_DAYS,
         max_partition_gap_days=MAX_PARTITION_GAP_DAYS,
+        minimum_weekday_density_percent=MINIMUM_WEEKDAY_DENSITY_PERCENT,
+    )
+
+
+def _weekday_count(start: date, end: date) -> int:
+    day_count = (end - start).days + 1
+    if day_count <= 0:
+        return 0
+    complete_weeks, remaining_days = divmod(day_count, 7)
+    return complete_weeks * 5 + sum(
+        (start + timedelta(days=offset)).weekday() < 5
+        for offset in range(remaining_days)
     )
 
 
@@ -353,6 +398,14 @@ def partition_coverage_error(
             return "bounded coverage start is truncated"
     elif effective_start is not None:
         return "unbounded coverage unexpectedly declares a start"
+
+    expected_weekdays = _weekday_count(partition_dates[0], partition_dates[-1])
+    actual_weekdays = sum(value.weekday() < 5 for value in partition_dates)
+    if expected_weekdays == 0 or (
+        actual_weekdays * 100
+        < expected_weekdays * coverage.minimum_weekday_density_percent
+    ):
+        return "partition coverage weekday density is below the required threshold"
     return None
 
 
@@ -436,12 +489,15 @@ class ComputeInputBundleService:
         self,
         task: ComputeTask,
         normalized: dict[str, Any],
-        original: Mapping[str, Any],
     ) -> tuple[list[_SourceFile], str, ComputeInputCoverage]:
-        daily = self._root_files("kline_daily")
-        enriched = self._root_files("kline_daily_enriched")
-        instruments = self._root_files("instruments")
-        factors = self._root_files("adj_factor")
+        files_by_root = {
+            root_name: self._root_files(root_name)
+            for root_name in ALLOWED_COMPUTE_INPUT_ROOTS
+        }
+        daily = files_by_root["kline_daily"]
+        enriched = files_by_root["kline_daily_enriched"]
+        instruments = files_by_root["instruments"]
+        factors = files_by_root["adj_factor"]
         if not instruments:
             raise ComputeInputDataUnavailable("instrument data is unavailable")
 
@@ -686,7 +742,6 @@ class ComputeInputBundleService:
             sources, data_as_of, coverage = self._select_sources(
                 typed_task,
                 normalized,
-                config,
             )
             cached = self._create_master(
                 server_cache_key,

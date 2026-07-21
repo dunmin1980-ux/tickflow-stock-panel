@@ -30,6 +30,7 @@ from app.desktop_client.workspace_adapter import (
 from app.main import app
 from app.services import auth as auth_service
 from app.services.compute_input_bundle import (
+    ALLOWED_COMPUTE_INPUT_ROOTS,
     ComputeInputBundleService,
     ComputeInputConfigError,
     ComputeInputDataUnavailable,
@@ -65,6 +66,16 @@ def _seed_partition_dates(root: Path, dates: list[date]) -> None:
             path.write_bytes(f"{root_name}-{partition.isoformat()}".encode())
 
 
+def _seed_static_compute_data(root: Path) -> None:
+    for relative, payload in {
+        "instruments/part.parquet": b"instruments",
+        "adj_factor/part.parquet": b"factors",
+    }.items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload)
+
+
 def _calendar_sequence(start: date, end: date, *, step_days: int = 7) -> list[date]:
     values: list[date] = []
     cursor = start
@@ -72,6 +83,16 @@ def _calendar_sequence(start: date, end: date, *, step_days: int = 7) -> list[da
         values.append(cursor)
         cursor += timedelta(days=step_days)
     values.append(end)
+    return values
+
+
+def _weekday_sequence(start: date, end: date) -> list[date]:
+    values: list[date] = []
+    cursor = start
+    while cursor <= end:
+        if cursor.weekday() < 5:
+            values.append(cursor)
+        cursor += timedelta(days=1)
     return values
 
 
@@ -171,11 +192,6 @@ def test_screener_bundle_contains_only_target_enriched_and_instruments(
         ("strategy_backtest", _strategy_config(params={"source": "script.sh"})),
         (
             "strategy_backtest",
-            _strategy_config(params={"source": "artifact.reasonably_long_extension_name"}),
-        ),
-        ("strategy_backtest", _strategy_config(params={"source": "model.配置"})),
-        (
-            "strategy_backtest",
             _strategy_config(params={"source": "file:///tmp/private.parquet"}),
         ),
         ("strategy_backtest", _strategy_config(params={"source": "/tmp/private"})),
@@ -221,6 +237,10 @@ def test_bundle_rejects_unsupported_or_path_bearing_configs(
         "stock",
         "1d",
         "close > ma5 and volume > 0",
+        "close / ma20 - 1",
+        "extensionless_model_token",
+        "artifact.reasonably_long_extension_name",
+        "model.配置",
     ],
 )
 def test_config_path_rules_preserve_normal_domain_strings(
@@ -234,12 +254,68 @@ def test_config_path_rules_preserve_normal_domain_strings(
     artifact.cleanup()
 
 
+def test_client_strings_cannot_flow_into_compute_file_selection(
+    bundle_service: ComputeInputBundleService,
+    monkeypatch,
+) -> None:
+    baseline = bundle_service.build("strategy_backtest", _strategy_config())
+    root_calls: list[str] = []
+    open_calls: list[str] = []
+    original_root_files = bundle_service._root_files
+    original_open_source_fd = bundle_service._open_source_fd
+
+    def audited_root_files(root_name: str):
+        root_calls.append(root_name)
+        return original_root_files(root_name)
+
+    def audited_open_source_fd(archive_path: str):
+        open_calls.append(archive_path)
+        return original_open_source_fd(archive_path)
+
+    monkeypatch.setattr(bundle_service, "_root_files", audited_root_files)
+    monkeypatch.setattr(bundle_service, "_open_source_fd", audited_open_source_fd)
+    client_values = {
+        "formula": "close / ma20 - 1",
+        "extensionless": "private_model_token",
+        "ambiguous_extension": "artifact.experimental_format",
+        "nested_override": "custom_override_token",
+    }
+    config = _strategy_config(
+        params={
+            "formula": client_values["formula"],
+            "nested": {
+                "extensionless": client_values["extensionless"],
+                "artifact": client_values["ambiguous_extension"],
+            },
+        },
+        overrides={"signals": [{"token": client_values["nested_override"]}]},
+    )
+    custom = bundle_service.build("strategy_backtest", config)
+    try:
+        _baseline_manifest, baseline_names = _manifest(baseline.path)
+        custom_manifest, custom_names = _manifest(custom.path)
+        assert root_calls == list(ALLOWED_COMPUTE_INPUT_ROOTS)
+        assert open_calls
+        assert all(
+            path.split("/", 1)[0] in ALLOWED_COMPUTE_INPUT_ROOTS for path in open_calls
+        )
+        assert custom_names[1:] == baseline_names[1:]
+        archive_paths = [entry["path"] for entry in custom_manifest["files"]]
+        assert all(
+            value not in root_calls and value not in open_calls and value not in archive_paths
+            for value in client_values.values()
+        )
+    finally:
+        baseline.cleanup()
+        custom.cleanup()
+
+
 def test_omitted_start_and_explicit_null_keep_distinct_semantics_and_cache_keys(
     bundle_service: ComputeInputBundleService,
 ) -> None:
     _seed_partition_dates(
         bundle_service.data_dir,
-        _calendar_sequence(date(2025, 1, 2), date(2026, 7, 20)),
+        _weekday_sequence(date(2025, 1, 2), date(2026, 7, 20)),
     )
 
     omitted = {"strategy_id": "macd_cross", "end": "2026-07-20", "asset_type": "stock"}
@@ -330,14 +406,106 @@ def test_backtest_bundle_fails_closed_on_common_partition_gap(
         )
 
 
-def test_default_window_records_deterministic_coverage_policy(tmp_path: Path) -> None:
-    data_dir = tmp_path / "coverage-data"
-    _seed_market_data(data_dir)
-    effective_start = date(2026, 7, 20) - timedelta(days=180)
-    first_partition = effective_start + timedelta(days=5)
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"strategy_id": "macd_cross", "end": "2026-07-20", "asset_type": "stock"},
+        _strategy_config(start="2025-12-01", end="2026-07-20"),
+        _strategy_config(start=None, end="2026-07-20"),
+    ],
+    ids=["default-window", "explicit-window", "all-history"],
+)
+def test_backtest_bundle_rejects_weekly_sparse_partition_density(
+    tmp_path: Path,
+    config: dict,
+) -> None:
+    data_dir = tmp_path / "weekly-sparse-data"
+    _seed_static_compute_data(data_dir)
     _seed_partition_dates(
         data_dir,
-        _calendar_sequence(first_partition, date(2026, 7, 20)),
+        _calendar_sequence(date(2025, 12, 1), date(2026, 7, 20)),
+    )
+    service = ComputeInputBundleService(data_dir, temp_root=tmp_path / "weekly-sparse-cache")
+    try:
+        with pytest.raises(ComputeInputDataUnavailable, match="weekday density"):
+            service.build("strategy_backtest", config)
+    finally:
+        service.close()
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"strategy_id": "macd_cross", "end": "2026-07-20", "asset_type": "stock"},
+        _strategy_config(start="2025-12-01", end="2026-07-20"),
+        _strategy_config(start=None, end="2026-07-20"),
+    ],
+    ids=["default-window", "explicit-window", "all-history"],
+)
+def test_backtest_bundle_accepts_dense_weekdays_with_small_holiday_gaps(
+    tmp_path: Path,
+    config: dict,
+) -> None:
+    data_dir = tmp_path / "dense-data"
+    _seed_static_compute_data(data_dir)
+    end = date(2026, 7, 20)
+    weekdays = _weekday_sequence(date(2025, 12, 1), end)
+    partitions = [
+        value
+        for index, value in enumerate(weekdays)
+        if value in {weekdays[0], end} or index % 11 != 5
+    ]
+    _seed_partition_dates(data_dir, partitions)
+    service = ComputeInputBundleService(data_dir, temp_root=tmp_path / "dense-cache")
+    artifact = service.build("strategy_backtest", config)
+    try:
+        manifest, _names = _manifest(artifact.path)
+        assert manifest["coverage"]["minimum_weekday_density_percent"] == 80
+    finally:
+        artifact.cleanup()
+        service.close()
+
+
+def test_backtest_bundle_accepts_short_window_at_weekday_density_threshold(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "short-window-data"
+    _seed_static_compute_data(data_dir)
+    _seed_partition_dates(
+        data_dir,
+        [date(2026, 7, 13), date(2026, 7, 14), date(2026, 7, 16), date(2026, 7, 17)],
+    )
+    service = ComputeInputBundleService(data_dir, temp_root=tmp_path / "short-window-cache")
+    artifact = service.build(
+        "strategy_backtest",
+        _strategy_config(start="2026-07-13", end="2026-07-17"),
+    )
+    try:
+        manifest, _names = _manifest(artifact.path)
+        assert manifest["partition_dates"] == [
+            "2026-07-13",
+            "2026-07-14",
+            "2026-07-16",
+            "2026-07-17",
+        ]
+    finally:
+        artifact.cleanup()
+        service.close()
+
+
+def test_default_window_records_deterministic_coverage_policy(tmp_path: Path) -> None:
+    data_dir = tmp_path / "coverage-data"
+    _seed_static_compute_data(data_dir)
+    effective_start = date(2026, 7, 20) - timedelta(days=180)
+    first_partition = effective_start + timedelta(days=5)
+    weekdays = _weekday_sequence(first_partition, date(2026, 7, 20))
+    _seed_partition_dates(
+        data_dir,
+        [
+            value
+            for index, value in enumerate(weekdays)
+            if value in {weekdays[0], weekdays[-1]} or index % 13 != 7
+        ],
     )
     service = ComputeInputBundleService(data_dir, temp_root=tmp_path / "coverage-bundles")
     artifact = service.build(
@@ -356,6 +524,7 @@ def test_default_window_records_deterministic_coverage_policy(tmp_path: Path) ->
         assert manifest["coverage"]["start_requirement"] == "within_tolerance"
         assert manifest["coverage"]["start_tolerance_days"] == 7
         assert manifest["coverage"]["max_partition_gap_days"] == 7
+        assert manifest["coverage"]["minimum_weekday_density_percent"] == 80
         assert manifest["coverage_start"] == first_partition.isoformat()
     finally:
         artifact.cleanup()
@@ -383,7 +552,6 @@ def test_source_parent_replacement_is_rejected_before_snapshot_copy(
     sources, _data_as_of, _coverage = bundle_service._select_sources(
         "strategy_backtest",
         normalized,
-        _strategy_config(),
     )
     source = next(item for item in sources if item.archive_path == "instruments/part.parquet")
     original_root = bundle_service.data_dir / "instruments"
@@ -914,6 +1082,7 @@ def test_client_rejects_manifest_coverage_tampering(
         ("caveat", "none"),
         ("start_tolerance_days", 30),
         ("max_partition_gap_days", 30),
+        ("minimum_weekday_density_percent", 10),
     ],
 )
 def test_client_rejects_manifest_coverage_policy_tampering(
@@ -1027,6 +1196,58 @@ def test_client_rejects_common_partition_gap_with_self_consistent_manifest(
             )
     finally:
         artifact.cleanup()
+
+
+def test_client_rejects_weekly_sparse_density_with_self_consistent_manifest(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "client-density-data"
+    _seed_static_compute_data(data_dir)
+    weekdays = _weekday_sequence(date(2026, 6, 1), date(2026, 6, 30))
+    _seed_partition_dates(data_dir, weekdays)
+    service = ComputeInputBundleService(
+        data_dir,
+        temp_root=tmp_path / "client-density-cache",
+    )
+    config = _strategy_config(start="2026-06-01", end="2026-06-30")
+    artifact = service.build("strategy_backtest", config)
+    malicious = tmp_path / "client-weekly-sparse.zip"
+    retained_dates = {value.isoformat() for value in weekdays[::5]}
+
+    def retained(path: str) -> bool:
+        if not path.startswith(("kline_daily/", "kline_daily_enriched/")):
+            return True
+        return any(f"date={value}" in path for value in retained_dates)
+
+    def mutate(info: zipfile.ZipInfo, payload: bytes):
+        if info.filename == "manifest.json":
+            manifest = json.loads(payload)
+            manifest["data_as_of"] = max(retained_dates)
+            manifest["coverage_end"] = max(retained_dates)
+            manifest["partition_dates"] = sorted(retained_dates)
+            manifest["files"] = [
+                entry for entry in manifest["files"] if retained(entry["path"])
+            ]
+            manifest["total_uncompressed_bytes"] = sum(
+                entry["size"] for entry in manifest["files"]
+            )
+            return info, json.dumps(manifest, sort_keys=True).encode()
+        return (info, payload) if retained(info.filename) else None
+
+    try:
+        _rewrite_zip(artifact.path, malicious, mutate)
+        adapter = _adapter(tmp_path, _RemoteStub(b"", {}))
+        with pytest.raises(ComputeInputIntegrityError, match="weekday density"):
+            adapter.install_compute_input(
+                malicious,
+                task="strategy_backtest",
+                config=config,
+                data_as_of=max(retained_dates),
+                bundle_sha256=hashlib.sha256(malicious.read_bytes()).hexdigest(),
+            )
+    finally:
+        artifact.cleanup()
+        service.close()
 
 
 def test_client_rejects_oversized_uncompressed_bundle(
