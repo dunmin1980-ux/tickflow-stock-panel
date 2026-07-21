@@ -60,6 +60,8 @@ import { ConnectionBanner } from './ConnectionBanner'
 import { MobileNav } from './MobileNav'
 import { resolveClientBadge, type ClientBadgeTone } from '@/lib/clientMode'
 import type { ClientStatus } from '@/lib/api'
+import { useWorkspaceStatus } from '@/lib/useWorkspaceEvents'
+import type { WorkspaceStatus } from '@/lib/workspace'
 
 // 品牌色 — 只用于 logo / brand 区域,不影响功能语义色
 const BRAND = '#8B5CF6'
@@ -113,25 +115,43 @@ function ThemeToggle() {
   )
 }
 
-function DesktopClientStatusBar({ status }: { status: ClientStatus | null | undefined }) {
-  if (!status) return null
-  const badge = resolveClientBadge(status)
-  const Icon = status.configured && !status.reachable
-    ? WifiOff
-    : status.configured && status.authenticated && status.mode === 'cloud'
-      ? Cloud
-      : status.configured && status.authenticated
-        ? Network
-        : Laptop
+function DesktopClientStatusBar({
+  status,
+  workspace,
+}: {
+  status: ClientStatus | null | undefined
+  workspace: WorkspaceStatus
+}) {
+  const badge = status ? resolveClientBadge(status) : null
+  const isOffline = workspace.offlineReadonly
+  const isLocalCompute = !isOffline && status?.configured && status.authenticated && status.mode === 'hybrid'
+  const ModeIcon = isOffline ? WifiOff : isLocalCompute ? Laptop : Cloud
+  const modeLabel = isOffline ? '离线只读' : isLocalCompute ? '本地计算' : '云端模式'
+  const syncLabel = workspace.lastSuccessfulSync
+    ? new Date(workspace.lastSuccessfulSync).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    : '尚未同步'
 
   return (
     <div
       role="status"
       aria-live="polite"
-      aria-label={`桌面客户端：${badge.label}`}
-      className="sticky top-0 z-30 flex h-9 items-center justify-end border-b border-border bg-base/90 px-3 backdrop-blur-md sm:px-5"
+      aria-label={`${modeLabel}，最后同步 ${syncLabel}，数据日期 ${workspace.dataAsOf ?? '未知'}`}
+      className="sticky top-0 z-30 flex min-h-9 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border bg-base/90 px-3 py-1 backdrop-blur-md sm:px-5"
     >
-      <NavLink
+      <div className="flex min-w-0 items-center gap-2 text-[11px]">
+        <span className={cn(
+          'inline-flex items-center gap-1.5 font-semibold',
+          isOffline ? 'text-warning' : 'text-secondary',
+        )}>
+          <ModeIcon className="h-3.5 w-3.5 shrink-0" />
+          {modeLabel}
+        </span>
+        <span className="text-muted" aria-label={`最后同步时间 ${syncLabel}`}>同步 {syncLabel}</span>
+        <span className="font-mono text-muted" aria-label={`数据日期 ${workspace.dataAsOf ?? '未知'}`}>
+          数据 {workspace.dataAsOf ?? '--'}
+        </span>
+      </div>
+      {status && badge && <NavLink
         to="/client-connection"
         className={cn(
           'inline-flex h-7 items-center gap-1.5 rounded-btn border px-2.5 text-[11px] font-medium transition-colors hover:brightness-110',
@@ -139,10 +159,10 @@ function DesktopClientStatusBar({ status }: { status: ClientStatus | null | unde
         )}
         title="云端连接设置"
       >
-        <Icon className="h-3.5 w-3.5 shrink-0" />
+        <Network className="h-3.5 w-3.5 shrink-0" />
         <span>{badge.label}</span>
         <Settings className="h-3 w-3 shrink-0 opacity-70" />
-      </NavLink>
+      </NavLink>}
     </div>
   )
 }
@@ -329,6 +349,7 @@ export function Layout() {
   const { data: settingsState } = useSettings()
   const { data: versionData } = useVersion()
   const { data: prefs } = usePreferences()
+  const workspaceStatus = useWorkspaceStatus()
   // 数据源列表 (用于实时行情状态显示当前数据源名称)
   const { data: dataSources } = useQuery({
     queryKey: QK.dataSources,
@@ -732,7 +753,7 @@ export function Layout() {
         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
         className="h-full min-w-0 overflow-auto pb-[calc(4rem+env(safe-area-inset-bottom))] scrollbar-gutter-stable md:pb-0"
       >
-        <DesktopClientStatusBar status={desktopClientStatus} />
+        <DesktopClientStatusBar status={desktopClientStatus} workspace={workspaceStatus} />
         <ConnectionBanner />
         {streamStatus === 'reconnecting' && (
           <div

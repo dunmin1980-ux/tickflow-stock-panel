@@ -58,14 +58,19 @@ describe('report body loading', () => {
   it('fetches the stock report body when history is selected', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input)
-      if (path === '/api/stock-analysis/reports') {
+      if (path === '/api/workspace/resources/stock_reports') {
         return jsonResponse({
-          reports: [{
-            id: 'sar_exact',
-            symbol: '000403.SZ',
-            title: '派林生物日线复盘',
-            created_at: '2026-07-20T16:00:00+08:00',
-          }],
+          resource: 'stock_reports',
+          revision: 'a'.repeat(64),
+          updated_at: '2026-07-20T16:00:00+08:00',
+          data: {
+            reports: [{
+              id: 'sar_exact',
+              symbol: '000403.SZ',
+              title: '派林生物日线复盘',
+              created_at: '2026-07-20T16:00:00+08:00',
+            }],
+          },
         })
       }
       if (path === '/api/stock-analysis/reports/sar_exact') {

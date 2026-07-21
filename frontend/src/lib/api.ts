@@ -7,6 +7,12 @@ import { toast } from '@/components/Toast'
 import { connectivityStore, offlineSessionAccess } from './connectivity'
 import { clearAllSnapshots, getSnapshot, putSnapshot } from './offlineDb'
 import { isOfflineCacheAllowed, isWriteMethod } from './offlinePolicy'
+import {
+  workspaceApi,
+  workspaceCommand,
+  workspaceDataAsOf,
+  type ReportMetadata,
+} from './workspace'
 
 const BASE = ''
 let offlinePersistenceQueue: Promise<void> = Promise.resolve()
@@ -113,6 +119,55 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   connectivityStore.markOnline()
   return data
+}
+
+async function updateSharedPreferences<T extends Record<string, unknown>>(patch: T): Promise<T> {
+  await workspaceCommand('preferences', 'merge_safe', patch)
+  return patch
+}
+
+async function currentWorkspaceDataDate(): Promise<string> {
+  const current = workspaceDataAsOf()
+  if (current) return current
+  const refreshed = (await workspaceApi.bootstrap()).data_as_of
+  if (!refreshed) throw new Error('工作区数据日期未知，无法归档个股复盘')
+  return refreshed
+}
+
+const STOCK_REPORT_VERIFICATION_FIELDS = [
+  'latest_close',
+  'key_levels',
+  'technical_indicators',
+  'financial_data_availability',
+  'material_news',
+  'corporate_actions',
+] as const
+
+function stockReportContent(content: string): string {
+  let body = content.trimStart()
+  if (body.startsWith('---\n')) {
+    const closing = body.indexOf('\n---', 4)
+    if (closing >= 0) body = body.slice(closing + 4).trimStart()
+  }
+  return [
+    '---',
+    'type: stock-analysis',
+    'source_system: tickflow-stock-panel',
+    'data_scope: watchlist-sample',
+    'can_publish: false',
+    'trading_advice: false',
+    'verification_status: pending',
+    'needs_verification:',
+    ...STOCK_REPORT_VERIFICATION_FIELDS.map(field => `  - ${field}`),
+    'timeframe: 1d',
+    '---',
+    '',
+    body,
+  ].join('\n')
+}
+
+function newestReportMetadata(reports: ReportMetadata[], predicate?: (report: ReportMetadata) => boolean) {
+  return reports.find(report => predicate?.(report) ?? true)
 }
 
 // ===== Capabilities =====
@@ -1287,7 +1342,14 @@ export const api = {
   clearAiSettings: () =>
     request<{ ok: boolean }>('/api/settings/ai', { method: 'DELETE' }),
 
-  preferences: () => request<Preferences>('/api/settings/preferences'),
+  preferences: async () => {
+    const desktopStatus = await optionalClientStatus()
+    if (desktopStatus !== null) {
+      const snapshot = await workspaceApi.get('preferences')
+      return snapshot.data.preferences as unknown as Preferences
+    }
+    return request<Preferences>('/api/settings/preferences')
+  },
   dataSources: () => request<DataSourcesResponse>('/api/settings/data-sources'),
   dataSource: (name: string) => request<CustomSourceConfig>(`/api/settings/data-sources/${encodeURIComponent(name)}`),
   saveDataSource: (config: CustomSourceConfig) =>
@@ -1318,10 +1380,7 @@ export const api = {
       body: JSON.stringify({ provider, dataset, symbols }),
     }),
   updateDataProviders: (cfg: Partial<Pick<Preferences, 'daily_data_provider' | 'adj_factor_provider' | 'minute_data_provider' | 'realtime_data_provider' | 'financial_data_provider'>>) =>
-    request<Pick<Preferences, 'daily_data_provider' | 'adj_factor_provider' | 'minute_data_provider' | 'realtime_data_provider'>>(
-      '/api/settings/preferences/data-providers',
-      { method: 'PUT', body: JSON.stringify(cfg) },
-    ),
+    updateSharedPreferences(cfg),
   updateMinuteSync: (enabled: boolean, days: number, segmentDays?: number) =>
     request<Preferences>('/api/settings/preferences/minute-sync', {
       method: 'PUT',
@@ -1356,10 +1415,7 @@ export const api = {
       body: JSON.stringify(cfg),
     }),
   updateIndicesNavPinned: (pinned: boolean) =>
-    request<{ indices_nav_pinned: boolean }>('/api/settings/preferences/indices-nav-pinned', {
-      method: 'PUT',
-      body: JSON.stringify({ indices_nav_pinned: pinned }),
-    }),
+    updateSharedPreferences({ indices_nav_pinned: pinned }),
   quoteStatus: () =>
     request<{
       enabled: boolean
@@ -1394,7 +1450,7 @@ export const api = {
     request<{ rows: IndexQuote[]; count: number }>(
       `/api/intraday/indices${symbols?.length ? `?symbols=${encodeURIComponent(symbols.join(','))}` : ''}`,
     ),
-  updateRealtimeMonitorConfig: (cfg: {
+  updateRealtimeMonitorConfig: async (cfg: {
     sse_refresh_pages?: Record<string, boolean>
     strategy_monitor_enabled?: boolean
     strategy_monitor_ids?: string[]
@@ -1403,8 +1459,19 @@ export const api = {
     minute_intraday_refresh?: boolean
     minute_intraday_refresh_interval?: number
     monitor_ext_fields?: { concept: MonitorExtFieldItem | null; industry: MonitorExtFieldItem | null }
-  }) =>
-    request<{
+  }) => {
+    const {
+      sidebar_index_symbols,
+      screener_auto_run,
+      ...runtimeConfig
+    } = cfg
+    const sharedConfig = {
+      ...(sidebar_index_symbols !== undefined ? { sidebar_index_symbols } : {}),
+      ...(screener_auto_run !== undefined ? { screener_auto_run } : {}),
+    }
+    if (Object.keys(sharedConfig).length > 0) await updateSharedPreferences(sharedConfig)
+    const runtimeResult = Object.keys(runtimeConfig).length > 0
+      ? await request<{
       sse_refresh_pages: Record<string, boolean>
       strategy_monitor_enabled: boolean
       strategy_monitor_ids: string[]
@@ -1413,10 +1480,22 @@ export const api = {
       minute_intraday_refresh: boolean
       minute_intraday_refresh_interval: number
       monitor_ext_fields: { concept: MonitorExtFieldItem | null; industry: MonitorExtFieldItem | null }
-    }>('/api/settings/preferences/realtime-monitor', {
-      method: 'PUT',
-      body: JSON.stringify(cfg),
-    }),
+      }>('/api/settings/preferences/realtime-monitor', {
+        method: 'PUT',
+        body: JSON.stringify(runtimeConfig),
+      })
+      : {}
+    return { ...runtimeResult, ...sharedConfig } as {
+      sse_refresh_pages: Record<string, boolean>
+      strategy_monitor_enabled: boolean
+      strategy_monitor_ids: string[]
+      sidebar_index_symbols: string[]
+      screener_auto_run: boolean
+      minute_intraday_refresh: boolean
+      minute_intraday_refresh_interval: number
+      monitor_ext_fields: { concept: MonitorExtFieldItem | null; industry: MonitorExtFieldItem | null }
+    }
+  },
   updateSystemNotify: (enabled: boolean) =>
     request<{ system_notify_enabled: boolean }>('/api/settings/preferences/system-notify', {
       method: 'PUT',
@@ -1502,15 +1581,9 @@ export const api = {
       body: JSON.stringify({ hour, minute }),
     }),
   saveNavOrder: (nav_order: string[]) =>
-    request<{ nav_order: string[] }>('/api/settings/preferences/nav-order', {
-      method: 'PUT',
-      body: JSON.stringify({ nav_order }),
-    }),
+    updateSharedPreferences({ nav_order }),
   saveNavHidden: (nav_hidden: string[]) =>
-    request<{ nav_hidden: string[] }>('/api/settings/preferences/nav-hidden', {
-      method: 'PUT',
-      body: JSON.stringify({ nav_hidden }),
-    }),
+    updateSharedPreferences({ nav_hidden }),
   updateInstrumentsSchedule: (hour: number, minute: number) =>
     request<{ hour: number; minute: number }>('/api/settings/preferences/instruments-schedule', {
       method: 'PUT',
@@ -1531,19 +1604,13 @@ export const api = {
   watchlistColumns: () =>
     request<{ columns: any[] | null }>('/api/settings/preferences/watchlist-columns'),
   updateWatchlistColumns: (columns: any[]) =>
-    request<{ columns: any[] }>('/api/settings/preferences/watchlist-columns', {
-      method: 'PUT',
-      body: JSON.stringify({ columns }),
-    }),
+    updateSharedPreferences({ watchlist_columns: columns }).then(() => ({ columns })),
 
   // 策略结果列表列配置
   screenerResultColumns: () =>
     request<{ columns: any[] | null }>('/api/settings/preferences/screener-result-columns'),
   updateScreenerResultColumns: (columns: any[]) =>
-    request<{ columns: any[] }>('/api/settings/preferences/screener-result-columns', {
-      method: 'PUT',
-      body: JSON.stringify({ columns }),
-    }),
+    updateSharedPreferences({ screener_result_columns: columns }).then(() => ({ columns })),
 
   capabilities: () => request<CapabilitiesResponse>('/api/capabilities'),
   version: () => request<{ version: string }>('/api/data/version'),
@@ -1666,17 +1733,13 @@ export const api = {
       method: 'POST',
     }),
 
-  watchlistList: () => request<{ symbols: WatchlistEntry[] }>('/api/watchlist'),
-  watchlistAdd: (symbol: string, note = '') =>
-    request<{ symbols: WatchlistEntry[] }>('/api/watchlist', {
-      method: 'POST',
-      body: JSON.stringify({ symbol, note }),
-    }),
-  watchlistBatchAdd: (symbols: string[], note = '') =>
-    request<{ symbols: WatchlistEntry[]; added: number }>('/api/watchlist/batch', {
-      method: 'POST',
-      body: JSON.stringify({ symbols, note }),
-    }),
+  watchlistList: async () => (await workspaceApi.get('watchlist')).data,
+  watchlistAdd: async (symbol: string, note = '') =>
+    (await workspaceCommand('watchlist', 'add', { symbol, note })).data,
+  watchlistBatchAdd: async (symbols: string[], note = '') => {
+    const snapshot = await workspaceCommand('watchlist', 'batch_add', { symbols, note })
+    return { ...snapshot.data, added: symbols.length }
+  },
   watchlistOcrStatus: () =>
     request<{ provider: string; available: boolean }>('/api/watchlist/ocr-status'),
   watchlistImportImage: (file: File) => {
@@ -1687,18 +1750,14 @@ export const api = {
       body: fd,
     })
   },
-  watchlistRemove: (symbol: string) =>
-    request<{ symbols: WatchlistEntry[] }>(
-      `/api/watchlist/${encodeURIComponent(symbol)}`,
-      { method: 'DELETE' },
-    ),
-  watchlistMoveToTop: (symbol: string) =>
-    request<{ symbols: WatchlistEntry[] }>(
-      `/api/watchlist/${encodeURIComponent(symbol)}/top`,
-      { method: 'POST' },
-    ),
-  watchlistClear: () =>
-    request<{ removed: number }>('/api/watchlist', { method: 'DELETE' }),
+  watchlistRemove: async (symbol: string) =>
+    (await workspaceCommand('watchlist', 'remove', { symbol })).data,
+  watchlistMoveToTop: async (symbol: string) =>
+    (await workspaceCommand('watchlist', 'move_to_top', { symbol })).data,
+  watchlistClear: async () => {
+    const snapshot = await workspaceCommand('watchlist', 'clear', {})
+    return { removed: 0, symbols: snapshot.data.symbols }
+  },
   watchlistQuotes: () => request<{ quotes: Quote[] }>('/api/watchlist/quotes'),
   watchlistEnriched: (extColumns?: string) =>
     request<{ rows: any[]; as_of: string | null; elapsed_ms: number }>(
@@ -2098,22 +2157,56 @@ export const api = {
     request<StockLevels>(`/api/stock-analysis/levels?symbol=${encodeURIComponent(symbol)}&days=${days}`),
 
   stockAnalysisReportsList: () =>
-    request<{ reports: AiStockReportMetadata[] }>('/api/stock-analysis/reports'),
+    workspaceApi.get('stock_reports').then(snapshot => ({
+      reports: snapshot.data.reports as AiStockReportMetadata[],
+    })),
 
   stockAnalysisReportGet: (reportId: string) =>
     request<{ report: AiStockReport }>(`/api/stock-analysis/reports/${encodeURIComponent(reportId)}`),
 
-  stockAnalysisReportSave: (r: {
+  stockAnalysisReportSave: async (r: {
     symbol: string; name?: string; focus?: string; content: string
     summary?: string; close?: number | null
     levels?: Record<LevelType, PriceLevel[]>
-  }) =>
-    request<{ ok: boolean; report: AiStockReport }>('/api/stock-analysis/reports', {
-      method: 'POST', body: JSON.stringify(r),
-    }),
+  }) => {
+    const dataAsOf = await currentWorkspaceDataDate()
+    const title = `${r.name || r.symbol} 个股日线复盘`
+    const content = stockReportContent(r.content)
+    const snapshot = await workspaceCommand('stock_reports', 'append', {
+      ...r,
+      title,
+      content,
+      data_as_of: dataAsOf,
+      type: 'stock-analysis',
+      source_system: 'tickflow-stock-panel',
+      data_scope: 'watchlist-sample',
+      can_publish: false,
+      trading_advice: false,
+      verification_status: 'pending',
+      needs_verification: [...STOCK_REPORT_VERIFICATION_FIELDS],
+      timeframe: '1d',
+    })
+    const metadata = newestReportMetadata(snapshot.data.reports, report => report.symbol === r.symbol)
+    return {
+      ok: true,
+      report: {
+        ...r,
+        id: metadata?.id ?? '',
+        title: metadata?.title ?? title,
+        content,
+        created_at: metadata?.created_at ?? new Date().toISOString(),
+        data_as_of: metadata?.data_as_of ?? dataAsOf,
+        verification_status: metadata?.verification_status ?? 'pending',
+        can_publish: false,
+        trading_advice: false,
+      },
+    }
+  },
 
-  stockAnalysisReportDelete: (reportId: string) =>
-    request<{ ok: boolean }>(`/api/stock-analysis/reports/${encodeURIComponent(reportId)}`, { method: 'DELETE' }),
+  stockAnalysisReportDelete: async (reportId: string) => {
+    await workspaceCommand('stock_reports', 'delete', { id: reportId })
+    return { ok: true }
+  },
 
   /**
    * AI 个股四维分析 — 流式调用(NDJSON,与财务分析同协议)。
@@ -2164,21 +2257,46 @@ export const api = {
 
   // ===== 大盘复盘 =====
   reviewReportsList: () =>
-    request<{ reports: AiReviewReportMetadata[] }>('/api/market-recap/reports'),
+    workspaceApi.get('market_recaps').then(snapshot => ({
+      reports: snapshot.data.reports as AiReviewReportMetadata[],
+    })),
 
   reviewReportGet: (reportId: string) =>
     request<{ report: AiReviewReport }>(`/api/market-recap/reports/${encodeURIComponent(reportId)}`),
 
-  reviewReportSave: (r: {
+  reviewReportSave: async (r: {
     as_of: string; focus?: string; content: string
     summary?: string; emotion_score?: number | null; emotion_label?: string
-  }) =>
-    request<{ ok: boolean; report: AiReviewReport }>('/api/market-recap/reports', {
-      method: 'POST', body: JSON.stringify(r),
-    }),
+  }) => {
+    const title = `A 股盘后复盘 ${r.as_of}`
+    const snapshot = await workspaceCommand('market_recaps', 'append', {
+      ...r,
+      title,
+      data_as_of: r.as_of,
+      verification_status: 'pending',
+      can_publish: false,
+      trading_advice: false,
+    })
+    const metadata = newestReportMetadata(snapshot.data.reports)
+    return {
+      ok: true,
+      report: {
+        ...r,
+        id: metadata?.id ?? '',
+        title: metadata?.title ?? title,
+        created_at: metadata?.created_at ?? new Date().toISOString(),
+        data_as_of: metadata?.data_as_of ?? r.as_of,
+        verification_status: metadata?.verification_status ?? 'pending',
+        can_publish: false,
+        trading_advice: false,
+      },
+    }
+  },
 
-  reviewReportDelete: (reportId: string) =>
-    request<{ ok: boolean }>(`/api/market-recap/reports/${encodeURIComponent(reportId)}`, { method: 'DELETE' }),
+  reviewReportDelete: async (reportId: string) => {
+    await workspaceCommand('market_recaps', 'delete', { id: reportId })
+    return { ok: true }
+  },
 
   /**
    * AI 大盘复盘 — 流式调用(NDJSON,与个股/财务分析同协议)。

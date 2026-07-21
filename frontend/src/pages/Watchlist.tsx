@@ -26,6 +26,7 @@ import { boardTag, renderBuiltinDataCell } from '@/components/stock-table/primit
 import { getSignals, signalCls, getSortValue, UNSORTABLE_KEYS } from '@/lib/stock-table'
 import { resolveCandleConfig, resolveIntradayConfig } from '@/lib/list-columns'
 import { useQuoteStatus, useCapabilities, usePreferences } from '@/lib/useSharedQueries'
+import { useWorkspaceStatus } from '@/lib/useWorkspaceEvents'
 import {
   type ColumnConfig,
   BUILTIN_COLUMNS,
@@ -207,10 +208,12 @@ function StockSearchBox({
   onPreview,
   existingSymbols,
   onAdd,
+  mutationsDisabled,
 }: {
   onPreview: (symbol: string, name: string) => void
   existingSymbols: string[]
   onAdd: (symbol: string) => void
+  mutationsDisabled: boolean
 }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
@@ -308,13 +311,13 @@ function StockSearchBox({
                   <button
                     type="button"
                     onClick={e => { e.stopPropagation(); onAdd(r.symbol) }}
-                    disabled={inWatchlist}
+                    disabled={inWatchlist || mutationsDisabled}
                     className={`shrink-0 p-1 rounded transition-colors ${
                       inWatchlist
                         ? 'text-accent bg-accent/10 cursor-default'
                         : 'text-muted hover:text-accent hover:bg-accent/10'
                     }`}
-                    title={inWatchlist ? '已加自选' : '加入自选'}
+                    title={mutationsDisabled ? '离线只读，暂不能修改自选股' : inWatchlist ? '已加自选' : '加入自选'}
                   >
                     {inWatchlist ? <Check className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                   </button>
@@ -388,6 +391,7 @@ const StockCard = React.memo(function StockCard({
   onToggleExpand,
   onDimensionClick,
   isMonitored,
+  mutationsDisabled,
 }: {
   r: any
   candleRows: KlineRow[]
@@ -402,6 +406,7 @@ const StockCard = React.memo(function StockCard({
   onToggleExpand: (key: string) => void
   onDimensionClick: (target: DimensionMembersTarget) => void
   isMonitored?: boolean
+  mutationsDisabled: boolean
 }) {
   const board = boardTag(r.symbol)
   const price = r.rt_price ?? r.close
@@ -436,7 +441,8 @@ const StockCard = React.memo(function StockCard({
           <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
             <button
               onClick={() => onConfirmRemove(r.symbol)}
-              className="px-1.5 py-0.5 rounded text-[10px] text-danger bg-danger/10 hover:bg-danger/20 transition-colors"
+              disabled={mutationsDisabled}
+              className="px-1.5 py-0.5 rounded text-[10px] text-danger bg-danger/10 hover:bg-danger/20 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
             >
               确认
             </button>
@@ -447,8 +453,10 @@ const StockCard = React.memo(function StockCard({
         ) : (
           <button
             onClick={e => { e.stopPropagation(); onRequestRemove(r.symbol) }}
-            className="opacity-0 group-hover:opacity-100 text-muted hover:text-danger transition-all duration-150 p-0.5 rounded hover:bg-elevated"
+            disabled={mutationsDisabled}
+            className="opacity-0 group-hover:opacity-100 text-muted hover:text-danger transition-all duration-150 p-0.5 rounded hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="移除"
+            title={mutationsDisabled ? '离线只读，暂不能修改自选股' : '移除'}
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>
@@ -556,6 +564,8 @@ const StockCard = React.memo(function StockCard({
 
 export function Watchlist() {
   const qc = useQueryClient()
+  const workspaceStatus = useWorkspaceStatus()
+  const mutationsDisabled = workspaceStatus.offlineReadonly
   const [viewMode, setViewMode] = useState<'table' | 'card'>(() => {
     const isMobile = typeof window.matchMedia === 'function'
       && window.matchMedia('(max-width: 767px)').matches
@@ -938,6 +948,7 @@ export function Watchlist() {
       onToggleExpand={handleToggleExpand}
       onDimensionClick={setDimensionTarget}
       isMonitored={monitoredSymbols.has(r.symbol)}
+      mutationsDisabled={mutationsDisabled}
     />
   )
 
@@ -1005,11 +1016,13 @@ export function Watchlist() {
               onPreview={(sym, name) => { setPreviewSymbol(sym); setPreviewName(name) }}
               existingSymbols={allSymbols as string[]}
               onAdd={(sym) => addMutation.mutate(sym)}
+              mutationsDisabled={mutationsDisabled}
             />
             <button
               onClick={() => setImportOpen(true)}
-              className="inline-flex items-center justify-center h-8 w-8 rounded-btn bg-elevated hover:bg-elevated/80 text-secondary hover:text-foreground transition-colors duration-150 ease-smooth"
-              title="从截图导入自选"
+              disabled={mutationsDisabled}
+              className="inline-flex items-center justify-center h-8 w-8 rounded-btn bg-elevated hover:bg-elevated/80 text-secondary hover:text-foreground transition-colors duration-150 ease-smooth disabled:cursor-not-allowed disabled:opacity-40"
+              title={mutationsDisabled ? '离线只读，暂不能导入自选股' : '从截图导入自选'}
             >
               <ImagePlus className="h-4 w-4" />
             </button>
@@ -1044,8 +1057,9 @@ export function Watchlist() {
                 <div className="w-px h-5 bg-border" />
                 <button
                   onClick={() => setConfirmClear(true)}
-                  className="inline-flex items-center justify-center h-8 w-8 rounded-btn bg-danger/10 text-danger hover:bg-danger/20 transition-colors duration-150 ease-smooth"
-                  title="清空自选"
+                  disabled={mutationsDisabled}
+                  className="inline-flex items-center justify-center h-8 w-8 rounded-btn bg-danger/10 text-danger hover:bg-danger/20 transition-colors duration-150 ease-smooth disabled:cursor-not-allowed disabled:opacity-40"
+                  title={mutationsDisabled ? '离线只读，暂不能修改自选股' : '清空自选'}
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -1252,7 +1266,8 @@ export function Watchlist() {
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => { remove.mutate(r.symbol); setConfirmRemove(null) }}
-                                className="px-1.5 py-0.5 rounded text-[10px] text-danger bg-danger/10 hover:bg-danger/20 transition-colors"
+                                disabled={mutationsDisabled}
+                                className="px-1.5 py-0.5 rounded text-[10px] text-danger bg-danger/10 hover:bg-danger/20 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                               >
                                 确认
                               </button>
@@ -1267,7 +1282,8 @@ export function Watchlist() {
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => setConfirmRemove(r.symbol)}
-                                className="p-0.5 text-muted hover:text-danger transition-colors duration-150 ease-smooth"
+                                disabled={mutationsDisabled}
+                                className="p-0.5 text-muted hover:text-danger transition-colors duration-150 ease-smooth disabled:cursor-not-allowed disabled:opacity-40"
                                 aria-label="移除"
                                 title="移除"
                               >
@@ -1275,7 +1291,7 @@ export function Watchlist() {
                               </button>
                               <button
                                 onClick={() => moveToTop.mutate(r.symbol)}
-                                disabled={moveToTop.isPending || allSymbols[0] === r.symbol}
+                                disabled={mutationsDisabled || moveToTop.isPending || allSymbols[0] === r.symbol}
                                 className="p-0.5 text-muted hover:text-accent transition-colors duration-150 ease-smooth disabled:opacity-30 disabled:hover:text-muted"
                                 aria-label="移到顶部"
                                 title="移到顶部"
@@ -1417,8 +1433,8 @@ export function Watchlist() {
                 </button>
                 <button
                   onClick={() => clearAll.mutate()}
-                  disabled={clearAll.isPending}
-                  className="px-3 py-1.5 rounded-btn bg-danger/15 text-danger hover:bg-danger/25 text-sm font-medium transition-colors disabled:opacity-50"
+                  disabled={mutationsDisabled || clearAll.isPending}
+                  className="px-3 py-1.5 rounded-btn bg-danger/15 text-danger hover:bg-danger/25 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {clearAll.isPending ? '清除中...' : '确认清空'}
                 </button>

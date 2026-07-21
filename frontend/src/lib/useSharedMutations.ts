@@ -4,6 +4,20 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from './api'
 import { QK } from './queryKeys'
+import { WorkspaceApiError, workspaceCommand, type WorkspaceResourceName } from './workspace'
+
+function invalidateWorkspaceConflict(
+  error: unknown,
+  resource: WorkspaceResourceName,
+  qc: ReturnType<typeof useQueryClient>,
+) {
+  if (!(error instanceof WorkspaceApiError) || error.status !== 412) return
+  qc.invalidateQueries({ queryKey: ['workspace', resource] })
+  if (resource === 'watchlist') {
+    qc.invalidateQueries({ queryKey: QK.watchlist })
+    qc.invalidateQueries({ queryKey: ['watchlist-enriched'] })
+  }
+}
 
 /** 切换实时行情 — Layout / Data 共用 */
 export function useToggleRealtimeQuotes() {
@@ -40,5 +54,16 @@ export function useWatchlistBatchAdd() {
       // 不能用 QK.watchlistEnriched()(= undefined) 精确匹配, 否则列表不刷新。
       qc.invalidateQueries({ queryKey: ['watchlist-enriched'] })
     },
+    onError: error => invalidateWorkspaceConflict(error, 'watchlist', qc),
+  })
+}
+
+export function useWorkspaceCommand(resource: WorkspaceResourceName) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ operation, payload }: { operation: string; payload: Record<string, unknown> }) =>
+      workspaceCommand(resource, operation, payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workspace', resource] }),
+    onError: error => invalidateWorkspaceConflict(error, resource, qc),
   })
 }

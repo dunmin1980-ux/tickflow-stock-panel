@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-qu
 import { router } from './router'
 import { OfflineWriteError } from './lib/api'
 import { connectivityStore } from './lib/connectivity'
+import { WorkspaceEvents } from './lib/useWorkspaceEvents'
 import './index.css'
 
 // 全局认证拦截: 任何 query/mutation 收到 401 (未登录/会话过期) → 跳登录页。
@@ -58,6 +59,7 @@ window.addEventListener('offline', () => connectivityStore.markOffline())
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
+      <WorkspaceEvents />
       <RouterProvider router={router} />
     </QueryClientProvider>
   </React.StrictMode>

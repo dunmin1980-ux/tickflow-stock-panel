@@ -15,6 +15,7 @@ import {
   startAnalysis, findTodayReport, useHistoryReports,
   deleteReport, openHistoryReport, loadHistory,
 } from '@/lib/stockAnalysisStore'
+import { WORKSPACE_RESOURCE_EVENT, useWorkspaceStatus } from '@/lib/useWorkspaceEvents'
 
 /**
  * 个股分析页 —— 日 K + 关键价位(压力/支撑/密集区/枢轴/前高前低)+ AI 四维分析。
@@ -31,9 +32,19 @@ export function StockAnalysis() {
   const [confirmReport, setConfirmReport] = useState<{ id: string; created_at: string; focus: string } | null>(null)
   const [previewSymbol, setPreviewSymbol] = useState<string | null>(null)
   const { last: lastStock, remember: rememberStock } = useLastStock('stock-analysis')
+  const workspaceStatus = useWorkspaceStatus()
+  const mutationsDisabled = workspaceStatus.offlineReadonly
 
   // 进入页面立即加载历史报告(供右侧常驻列表)。store 内部有 historyLoaded 去重, 重复调用安全。
-  useEffect(() => { loadHistory() }, [])
+  useEffect(() => {
+    void loadHistory()
+    const reload = (event: Event) => {
+      const resource = (event as CustomEvent<{ resource?: string }>).detail?.resource
+      if (resource === 'stock_reports') void loadHistory()
+    }
+    window.addEventListener(WORKSPACE_RESOURCE_EVENT, reload)
+    return () => window.removeEventListener(WORKSPACE_RESOURCE_EVENT, reload)
+  }, [])
 
   // 自动恢复上次选中的股票(切走再回来不丢)。useLastStock 的 last 来自 localStorage, 同步可用。
   useEffect(() => {
@@ -111,7 +122,8 @@ export function StockAnalysis() {
               </button>
               <button
                 onClick={handleAnalyze}
-                disabled={checking}
+                disabled={checking || mutationsDisabled}
+                title={mutationsDisabled ? '离线只读，暂不能生成并保存个股复盘' : undefined}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn bg-gradient-to-r from-sky-500/25 to-blue-500/15 border border-sky-400/30 text-sky-300 text-xs font-medium hover:from-sky-500/35 hover:to-blue-500/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {checking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
@@ -145,7 +157,7 @@ export function StockAnalysis() {
               <StockAnalysisBoard symbol={symbol} />
             )}
           </div>
-          <HistorySidebar />
+          <HistorySidebar mutationsDisabled={mutationsDisabled} />
         </div>
       </div>
 
@@ -246,7 +258,7 @@ function StockAnalysisBoard({ symbol }: { symbol: string }) {
 }
 
 // ===== 左侧常驻:历史报告侧栏(所有股票,按时间倒序平铺) =====
-function HistorySidebar() {
+function HistorySidebar({ mutationsDisabled }: { mutationsDisabled: boolean }) {
   const { reports, loaded } = useHistoryReports()
 
   return (
@@ -296,8 +308,9 @@ function HistorySidebar() {
                   </button>
                   <button
                     onClick={() => { deleteReport(r.id); toast('已删除', 'success') }}
-                    className="shrink-0 text-[10px] text-muted/60 hover:text-danger transition-colors px-1 py-0.5 opacity-0 group-hover:opacity-100"
-                    title="删除"
+                    disabled={mutationsDisabled}
+                    className="shrink-0 text-[10px] text-muted/60 hover:text-danger transition-colors px-1 py-0.5 opacity-0 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    title={mutationsDisabled ? '离线只读，暂不能删除报告' : '删除'}
                   >
                     删除
                   </button>

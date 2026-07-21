@@ -28,6 +28,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { MarkdownRenderer } from '@/components/financials/MarkdownRenderer'
 import { toast } from '@/components/Toast'
 import { usePreferences } from '@/lib/useSharedQueries'
+import { useWorkspaceStatus } from '@/lib/useWorkspaceEvents'
 import { useReviewState } from '@/lib/useReviewStore'
 import {
   startReviewGeneration, resetReview, isReviewGenerating,
@@ -80,6 +81,8 @@ export function Review() {
   const { phase, content, error, meta } = useReviewState()
   const [viewing, setViewing] = useState<AiReviewReport | null>(null)  // 查看历史报告
   const reportEndRef = useRef<HTMLDivElement>(null)
+  const workspaceStatus = useWorkspaceStatus()
+  const mutationsDisabled = workspaceStatus.offlineReadonly
 
   // 看板数据(与总览页同源)
   const marketQuery = useQuery<OverviewMarket>({
@@ -260,7 +263,8 @@ export function Review() {
             </button>
             <button
               onClick={generate}
-              disabled={isGenerating}
+              disabled={isGenerating || mutationsDisabled}
+              title={mutationsDisabled ? '离线只读，暂不能生成并保存复盘' : undefined}
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-btn px-3.5 py-1.5 text-xs font-medium transition-all',
                 isGenerating
@@ -337,6 +341,7 @@ export function Review() {
                   onCopy={copyContent}
                   onDownload={downloadContent}
                   onRegenerate={generate}
+                  mutationsDisabled={mutationsDisabled}
                   reportEndRef={reportEndRef}
                 />
                 <HistoryPanel
@@ -347,6 +352,7 @@ export function Review() {
                   onView={viewReport}
                   onBackToGenerating={() => setViewing(null)}
                   onDelete={(id) => deleteMut.mutate(id)}
+                  mutationsDisabled={mutationsDisabled}
                 />
               </div>
             </>
@@ -595,6 +601,7 @@ function MarketSummaryBar({ data }: { data: OverviewMarket }) {
 // ================================================================
 function ReportPanel({
   phase, content, error, isGenerating, viewing, onCopy, onDownload, onRegenerate, reportEndRef,
+  mutationsDisabled,
 }: {
   phase: ReviewPhase
   content: string
@@ -605,6 +612,7 @@ function ReportPanel({
   onDownload: () => void
   onRegenerate: () => void
   reportEndRef: React.RefObject<HTMLDivElement>
+  mutationsDisabled: boolean
 }) {
   if (phase === 'error') {
     return (
@@ -616,7 +624,9 @@ function ReportPanel({
         <div className="max-w-md text-center text-xs text-secondary">{error || '请检查 AI 配置后重试'}</div>
         <button
           onClick={onRegenerate}
-          className="mt-1 inline-flex items-center gap-1.5 rounded-btn bg-accent/15 px-3 py-1.5 text-xs text-accent transition-colors hover:bg-accent/20"
+          disabled={mutationsDisabled}
+          title={mutationsDisabled ? '离线只读，暂不能重新生成复盘' : undefined}
+          className="mt-1 inline-flex items-center gap-1.5 rounded-btn bg-accent/15 px-3 py-1.5 text-xs text-accent transition-colors hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <RefreshCw className="h-3.5 w-3.5" />重新生成
         </button>
@@ -727,6 +737,7 @@ function ReportPanel({
 // ================================================================
 function HistoryPanel({
   reports, loading, viewingId, generating, onView, onBackToGenerating, onDelete,
+  mutationsDisabled,
 }: {
   reports: AiReviewReportMetadata[]
   loading: boolean
@@ -735,6 +746,7 @@ function HistoryPanel({
   onView: (r: AiReviewReportMetadata) => void
   onBackToGenerating: () => void
   onDelete: (id: string) => void
+  mutationsDisabled: boolean
 }) {
   const empty = !generating && reports.length === 0
   return (
@@ -797,8 +809,9 @@ function HistoryPanel({
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); onDelete(r.id) }}
-                    className="shrink-0 p-1 text-muted opacity-0 transition-all hover:text-bear group-hover:opacity-100"
-                    title="删除"
+                    disabled={mutationsDisabled}
+                    className="shrink-0 p-1 text-muted opacity-0 transition-all hover:text-bear group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    title={mutationsDisabled ? '离线只读，暂不能删除复盘' : '删除'}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>

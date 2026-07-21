@@ -7,6 +7,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from './api'
 import { QK } from './queryKeys'
+import { workspaceApi, type WorkspaceResourceName } from './workspace'
 
 // ===== 全局共享 =====
 
@@ -31,6 +32,20 @@ export function usePreferences() {
   return useQuery({
     queryKey: QK.preferences,
     queryFn: api.preferences,
+  })
+}
+
+export function useWorkspaceResource<R extends WorkspaceResourceName>(resource: R) {
+  return useQuery({
+    queryKey: ['workspace', resource],
+    queryFn: () => workspaceApi.get(resource),
+  })
+}
+
+export function useBacktestSummaries() {
+  return useQuery({
+    queryKey: ['workspace', 'backtest_summaries'],
+    queryFn: async () => (await workspaceApi.get('backtest_summaries')).data,
   })
 }
 

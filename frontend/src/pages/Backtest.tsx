@@ -5,6 +5,8 @@ import { StrategyBacktest } from './backtest/StrategyBacktest'
 import { StrategyOptimizer } from './backtest/StrategyOptimizer'
 import { StrategyWalkForward } from './backtest/StrategyWalkForward'
 import { BarChart3, FlaskConical, SlidersHorizontal, Waypoints } from 'lucide-react'
+import { useBacktestSummaries } from '@/lib/useSharedQueries'
+import type { BacktestSummary } from '@/lib/workspace'
 
 type Tab = 'factor' | 'strategy' | 'optimizer' | 'walkforward'
 
@@ -40,6 +42,7 @@ const TAB_ICONS: Record<Tab, typeof BarChart3> = {
 
 export function Backtest() {
   const [activeTab, setActiveTab] = useState<Tab>('strategy')
+  const summaries = useBacktestSummaries()
 
   const modeSwitch = (
     <div className="inline-flex rounded-btn border border-border bg-surface/80 p-0.5 shadow-sm">
@@ -73,19 +76,63 @@ export function Backtest() {
 
   return (
     <div className="min-h-full bg-base flex flex-col">
-      <PageHeader
+      <div className="hidden md:block">
+        <PageHeader
         title="回测工作台"
         subtitle={`${MODES[activeTab].title} · ${MODES[activeTab].hint}`}
         right={modeSwitch}
         className="shrink-0 bg-base/95"
-      />
+        />
+      </div>
 
-      <main className="flex-1 min-h-0 px-3 pb-3 pt-3 lg:px-4 lg:pb-4">
+      <main className="hidden flex-1 min-h-0 px-3 pb-3 pt-3 md:block lg:px-4 lg:pb-4">
         {activeTab === 'factor' && <FactorBacktest />}
         {activeTab === 'strategy' && <StrategyBacktest />}
         {activeTab === 'optimizer' && <StrategyOptimizer />}
         {activeTab === 'walkforward' && <StrategyWalkForward />}
       </main>
+
+      <main className="min-h-full px-3 py-4 md:hidden" aria-label="回测摘要">
+        <h1 className="text-base font-semibold text-foreground">最近回测摘要</h1>
+        <div className="mt-3 space-y-2">
+          {summaries.isLoading ? (
+            <div className="rounded-card border border-border bg-surface px-3 py-8 text-center text-xs text-muted">
+              正在加载
+            </div>
+          ) : (summaries.data?.summaries.length ?? 0) === 0 ? (
+            <div className="rounded-card border border-border bg-surface px-3 py-8 text-center text-xs text-muted">
+              暂无回测摘要
+            </div>
+          ) : summaries.data?.summaries.map(summary => (
+            <MobileBacktestSummary key={summary.id} summary={summary} />
+          ))}
+        </div>
+      </main>
     </div>
+  )
+}
+
+function MobileBacktestSummary({ summary }: { summary: BacktestSummary }) {
+  return (
+    <article className="rounded-card border border-border bg-surface p-3">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-medium text-foreground">{summary.strategy_id}</h2>
+          <p className="mt-0.5 font-mono text-[10px] text-muted">{summary.task} · {summary.engine}</p>
+        </div>
+        <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] text-secondary">
+          {summary.execution_target === 'local' ? '本地' : '云端'}
+        </span>
+      </div>
+      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
+        {Object.entries(summary.stats).slice(0, 6).map(([label, value]) => (
+          <div key={label} className="min-w-0 border-t border-border/60 pt-1.5">
+            <dt className="truncate text-[10px] text-muted">{label}</dt>
+            <dd className="mt-0.5 truncate font-mono text-xs text-foreground">{Number(value).toFixed(2)}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-3 font-mono text-[10px] text-muted">数据日期 {summary.data_as_of}</p>
+    </article>
   )
 }
