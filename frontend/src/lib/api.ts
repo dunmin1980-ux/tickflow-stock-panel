@@ -1452,9 +1452,11 @@ export const api = {
       return structuredClone(lastCompletePreferences)
     }
     if (desktopStatus !== null) {
+      const full = await request<unknown>('/api/settings/preferences')
+      const complete = mergeCompletePreferences(DEFAULT_PREFERENCES, full)
       const snapshot = await workspaceApi.get('preferences')
       lastCompletePreferences = mergeSharedPreferences(
-        lastCompletePreferences,
+        complete,
         snapshot.data.preferences,
       )
       return structuredClone(lastCompletePreferences)

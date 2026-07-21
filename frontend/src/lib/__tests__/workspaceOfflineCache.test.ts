@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connectivityStore, offlineSessionAccess } from '../connectivity'
 import { etagStore } from '../etagStore'
 import { clearAllSnapshots, getSnapshot } from '../offlineDb'
-import { workspaceApi } from '../workspace'
+import { workspaceApi, workspaceStatusStore } from '../workspace'
 
 const REVISION = 'a'.repeat(64)
 const BODY_CANARY = 'MARKDOWN_BODY_MUST_NOT_BE_CACHED'
@@ -66,6 +66,7 @@ describe('workspace offline metadata cache', () => {
     etagStore.clear()
     offlineSessionAccess.revoke()
     connectivityStore.markOnline()
+    workspaceStatusStore.markOnline()
   })
 
   afterEach(() => {
@@ -138,5 +139,47 @@ describe('workspace offline metadata cache', () => {
 
     expect(offlineSessionAccess.isGranted()).toBe(false)
     expect(await getSnapshot('/api/workspace/bootstrap')).toBeNull()
+  })
+
+  it('revokes access and clears every workspace metadata snapshot after a read returns 401', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse(bootstrapPayload())))
+    await workspaceApi.bootstrap()
+    expect(offlineSessionAccess.isGranted()).toBe(true)
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response(
+      JSON.stringify({ detail: 'expired' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } },
+    )))
+    await expect(workspaceApi.bootstrap()).rejects.toMatchObject({ status: 401 })
+
+    expect(offlineSessionAccess.isGranted()).toBe(false)
+    expect(await getSnapshot('/api/workspace/bootstrap')).toBeNull()
+    for (const resource of [
+      'watchlist', 'preferences', 'stock_reports', 'market_recaps', 'backtest_summaries',
+    ]) {
+      expect(await getSnapshot(`/api/workspace/resources/${resource}`)).toBeNull()
+    }
+
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValueOnce(new TypeError('Failed to fetch')))
+    await expect(workspaceApi.bootstrap()).rejects.toThrow('Failed to fetch')
+  })
+
+  it('revokes access and clears workspace snapshots after a command returns 401', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse(bootstrapPayload())))
+    await workspaceApi.bootstrap()
+    workspaceStatusStore.markOnline()
+    connectivityStore.markOnline()
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response(
+      JSON.stringify({ detail: 'expired' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } },
+    )))
+
+    await expect(
+      workspaceApi.command('watchlist', 'clear', {}, REVISION),
+    ).rejects.toMatchObject({ status: 401 })
+    expect(offlineSessionAccess.isGranted()).toBe(false)
+    expect(await getSnapshot('/api/workspace/bootstrap')).toBeNull()
+    expect(await getSnapshot('/api/workspace/resources/watchlist')).toBeNull()
   })
 })

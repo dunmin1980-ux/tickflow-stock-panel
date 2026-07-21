@@ -138,7 +138,7 @@ export function useWorkspaceEvents(): void {
       })
 
       currentSource.addEventListener('resync_required', () => {
-        void reconcileRevisions(queryClient).catch(() => workspaceStatusStore.markOffline())
+        void reconcileRevisions(queryClient).catch(() => disconnectAndRetry(currentSource))
       })
 
       currentSource.onerror = () => disconnectAndRetry(currentSource)

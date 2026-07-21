@@ -94,8 +94,8 @@ export function WatchlistImportDialog({ open, onClose }: Props) {
       return
     }
     try {
-      await batchAdd.mutateAsync(symbols)
-      toast(`已添加 ${symbols.length} 只自选`, 'success')
+      const result = await batchAdd.mutateAsync(symbols)
+      toast(`已添加 ${result.added} 只自选`, 'success')
       onClose()
     } catch {
       /* toast in request */
@@ -183,9 +183,9 @@ export function WatchlistImportDialog({ open, onClose }: Props) {
               )}
             </div>
             <ul className="divide-y divide-border/60 rounded-btn border border-border overflow-hidden">
-              {candidates.map(c => {
-                const key = c.symbol || c.code
-                const disabled = !c.matched || !c.symbol
+              {candidates.map((c, index) => {
+                const key = `${c.symbol || c.code}:${c.code}:${index}`
+                const disabled = !c.matched || !c.symbol || c.already_in_watchlist
                 const checked = !!(c.symbol && selected.has(c.symbol))
                 return (
                   <li key={key}>

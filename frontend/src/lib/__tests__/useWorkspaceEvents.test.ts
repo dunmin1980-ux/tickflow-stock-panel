@@ -173,4 +173,41 @@ describe('workspace event refresh', () => {
     act(() => vi.advanceTimersByTime(1_000))
     expect(FakeEventSource.instances).toHaveLength(2)
   })
+
+  it('rebuilds an opened stream after resync reconciliation fails and recovers automatically', async () => {
+    vi.useFakeTimers()
+    workspaceStatusStore.markOffline()
+    connectivityStore.markOffline()
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    renderBridge(queryClient)
+    await act(async () => { await Promise.resolve() })
+    const firstSource = FakeEventSource.instances[0]
+
+    await act(async () => {
+      firstSource.onopen?.()
+      await Promise.resolve()
+    })
+    expect(workspaceStatusStore.getSnapshot().offlineReadonly).toBe(false)
+
+    vi.mocked(workspaceApi.revisions).mockRejectedValueOnce(new TypeError('resync failed'))
+    await act(async () => {
+      firstSource.emit('resync_required', { type: 'resync_required' })
+      await Promise.resolve()
+    })
+
+    expect(firstSource.closed).toBe(true)
+    expect(workspaceStatusStore.getSnapshot().offlineReadonly).toBe(true)
+    expect(connectivityStore.getSnapshot().mode).toBe('offline-readonly')
+
+    act(() => vi.advanceTimersByTime(1_000))
+    expect(FakeEventSource.instances).toHaveLength(2)
+
+    await act(async () => {
+      FakeEventSource.instances[1].onopen?.()
+      await Promise.resolve()
+    })
+    expect(workspaceStatusStore.getSnapshot().offlineReadonly).toBe(false)
+    expect(connectivityStore.getSnapshot().mode).toBe('online')
+    expect(workspaceApi.revisions).toHaveBeenCalledTimes(3)
+  })
 })

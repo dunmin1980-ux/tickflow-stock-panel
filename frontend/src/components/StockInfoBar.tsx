@@ -4,6 +4,7 @@ import type { KlineRow, FinancialMetricRecord } from '@/lib/api'
 import { fmtPrice, fmtBigNum, fmtVolume } from '@/lib/format'
 import { ListColumnCustomizer } from '@/components/ListColumnCustomizer'
 import { INFO_GROUPS, type ColumnConfig } from '@/lib/stock-info-fields'
+import { useWorkspaceStatus } from '@/lib/useWorkspaceEvents'
 
 const BULL = '#C74040'
 const BEAR = '#2D9B65'
@@ -96,6 +97,8 @@ export function StockInfoBar({ symbol, name, stockInfo, rows, fields, onFieldsCh
   const [customizerOpen, setCustomizerOpen] = useState(false)
   // ext 标签展开状态：按 symbol::colId，切股/切字段时互不干扰
   const [expandedExt, setExpandedExt] = useState<Set<string>>(new Set())
+  const workspaceStatus = useWorkspaceStatus()
+  const watchlistWriteDisabled = workspaceStatus.offlineReadonly
 
   const toggleExtExpand = (key: string) => {
     setExpandedExt(prev => {
@@ -218,9 +221,15 @@ export function StockInfoBar({ symbol, name, stockInfo, rows, fields, onFieldsCh
         <div className="ml-auto self-center flex items-center gap-1">
           {onToggleWatchlist && (
             <button
-              onClick={onToggleWatchlist}
-              className={`p-1 rounded-btn transition-colors cursor-pointer ${inWatchlist ? 'text-[#FACC15]' : 'text-muted hover:text-foreground hover:bg-elevated'}`}
-              title={inWatchlist ? '移出自选' : '加自选'}
+              type="button"
+              disabled={watchlistWriteDisabled}
+              aria-disabled={watchlistWriteDisabled}
+              aria-label={watchlistWriteDisabled ? '离线只读，暂不能修改自选股' : (inWatchlist ? '移出自选' : '加自选')}
+              onClick={() => {
+                if (!watchlistWriteDisabled) onToggleWatchlist()
+              }}
+              className={`p-1 rounded-btn transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${watchlistWriteDisabled ? '' : 'cursor-pointer'} ${inWatchlist ? 'text-[#FACC15]' : 'text-muted hover:text-foreground hover:bg-elevated'}`}
+              title={watchlistWriteDisabled ? '离线只读，暂不能修改自选股' : (inWatchlist ? '移出自选' : '加自选')}
             >
               <Star className="h-3.5 w-3.5" />
             </button>

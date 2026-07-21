@@ -119,3 +119,61 @@ All seven Task 9 review findings were addressed in the follow-up commit:
   though sanitized IndexedDB snapshots remain; this is intentional session
   isolation, not a persistent-login mechanism.
 - Physical-device and real two-client SSE/conflict acceptance remain Task 10.
+
+## Review Follow-up 2
+
+All five second-round Task 9 review findings were addressed in the follow-up
+commit:
+
+1. Every workspace 401 now revokes `offlineSessionAccess`, advances its
+   generation, and clears IndexedDB snapshots. Bootstrap, resource reads, and
+   revisions share this path; commands apply the same handling. A later network
+   failure therefore cannot return any of the five stale workspace projections.
+2. A failed `resync_required` revision pull now closes the opened stream and
+   enters the existing polling plus 1/2/5/10/30-second reconnect path. A
+   successful reconnect reconciles the missed window before restoring online
+   state and stopping polling.
+3. Desktop preferences now read `/api/client/status`, then the complete safe
+   runtime response from `/api/settings/preferences`, and only then overlay the
+   sanitized workspace preference projection. The desktop proxy forwards the
+   complete runtime route and does not redirect it through workspace APIs.
+   Realtime, minute, monitor, and Review values are refreshed from runtime after
+   mutations; unknown or credential-like fields are neither merged nor cached.
+4. `StockInfoBar` exposes native `disabled`, `aria-disabled`, and a descriptive
+   accessible name for offline watchlist writes. `StockPreviewDialog` also
+   blocks its mutation handler before the API call, covering the shared stock
+   preview path.
+5. Screenshot import keeps already-present candidates disabled, de-duplicates
+   selected OCR matches, and displays the actual `added` count returned by the
+   batch mutation instead of the submitted symbol count.
+
+### Follow-up 2 Verification
+
+- `./node_modules/.bin/vitest run`: 20 files, 92 tests passed.
+- `./node_modules/.bin/tsc -b`: passed.
+- `./node_modules/.bin/vite build`: passed; PWA service worker generated with
+  69 precache entries. Vite retained the existing large-chunk warning.
+- `git diff --check`: passed before commit.
+
+### Follow-up 2 Files
+
+- `frontend/src/lib/workspace.ts`
+- `frontend/src/lib/useWorkspaceEvents.ts`
+- `frontend/src/lib/api.ts`
+- `frontend/src/components/StockInfoBar.tsx`
+- `frontend/src/components/StockPreviewDialog.tsx`
+- `frontend/src/components/WatchlistImportDialog.tsx`
+- `frontend/src/lib/__tests__/workspaceOfflineCache.test.ts`
+- `frontend/src/lib/__tests__/useWorkspaceEvents.test.ts`
+- `frontend/src/lib/__tests__/workspacePreferences.test.ts`
+- `frontend/src/lib/__tests__/workspaceMutationUi.test.tsx`
+- `frontend/src/lib/__tests__/stockPreviewWorkspaceUi.test.tsx`
+- `frontend/src/lib/__tests__/watchlistImportDialog.test.tsx`
+
+### Follow-up 2 Caveats
+
+- The desktop same-origin complete-preferences route is intentionally proxied to
+  the authenticated cloud runtime; there is no separate local-only complete
+  preferences endpoint in the current desktop gateway contract.
+- Physical-device recovery and real two-client SSE propagation remain Task 10
+  acceptance items.

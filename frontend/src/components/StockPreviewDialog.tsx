@@ -10,6 +10,7 @@ import { DatePicker } from '@/components/DatePicker'
 import { RuleEditor } from '@/components/monitor/RuleEditor'
 import { usePreferences, useQuoteStatus } from '@/lib/useSharedQueries'
 import { setFocusSymbol, clearFocusSymbol } from '@/lib/useQuoteStream'
+import { useWorkspaceStatus } from '@/lib/useWorkspaceEvents'
 
 interface Props {
   symbol: string | null
@@ -45,6 +46,7 @@ export function StockPreviewDialog({ symbol, name, onClose, triggerInfo }: Props
   const [dateRange, setDateRange] = useState(getDefaultRange)
   const [showMonitorEditor, setShowMonitorEditor] = useState(false)
   const qc = useQueryClient()
+  const workspaceStatus = useWorkspaceStatus()
 
   const watchlist = useQuery({
     queryKey: QK.watchlist,
@@ -261,7 +263,9 @@ export function StockPreviewDialog({ symbol, name, onClose, triggerInfo }: Props
                 dateRange={dateRange}
                 onMonitor={() => setShowMonitorEditor(true)}
                 inWatchlist={inWatchlist}
-                onToggleWatchlist={() => toggleWatchlist.mutate()}
+                onToggleWatchlist={() => {
+                  if (!workspaceStatus.offlineReadonly) toggleWatchlist.mutate()
+                }}
                 refetchIntervalMs={intradayRefetchMs}
               />
             </div>

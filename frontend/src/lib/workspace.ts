@@ -1,7 +1,7 @@
 import { toast } from '@/components/Toast'
 import { connectivityStore, offlineSessionAccess } from './connectivity'
 import { etagStore, parseRevision, quoteRevision, type WorkspaceResourceName } from './etagStore'
-import { clearSnapshot, getSnapshot, putSnapshot, type OfflineSnapshot } from './offlineDb'
+import { clearAllSnapshots, clearSnapshot, getSnapshot, putSnapshot, type OfflineSnapshot } from './offlineDb'
 
 export type { WorkspaceResourceName } from './etagStore'
 export const WORKSPACE_CONFLICT_EVENT = 'tickflow:workspace-revision-conflict'
@@ -409,6 +409,15 @@ async function cachedWorkspaceValue<T>(path: string): Promise<OfflineSnapshot<T>
   return cached
 }
 
+async function revokeWorkspaceOfflineAccess(): Promise<void> {
+  offlineSessionAccess.revoke()
+  try {
+    await clearAllSnapshots()
+  } catch {
+    // Revocation prevents cache reuse even when IndexedDB cleanup is unavailable.
+  }
+}
+
 async function responseError(response: Response): Promise<WorkspaceApiError> {
   let code: string | undefined
   let detail: string | undefined
@@ -419,6 +428,7 @@ async function responseError(response: Response): Promise<WorkspaceApiError> {
   } catch {
     // A typed status is still more useful than replacing it with a parse error.
   }
+  if (response.status === 401) await revokeWorkspaceOfflineAccess()
   const messages: Record<number, string> = {
     409: '云端内容与当前操作冲突，请刷新后检查',
     412: '云端内容已变化，请检查后重试',
@@ -577,6 +587,7 @@ export const workspaceApi = {
       } catch {
         // Preserve the HTTP contract even when an intermediary returns invalid JSON.
       }
+      if (response.status === 401) await revokeWorkspaceOfflineAccess()
       const currentRevision = parseRevision(response.headers.get('ETag'))
       const messages: Record<number, string> = {
         409: '云端内容与当前操作冲突，请刷新后检查',
