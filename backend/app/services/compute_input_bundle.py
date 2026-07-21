@@ -15,10 +15,19 @@ import zipfile
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date, timedelta
+from itertools import pairwise
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictInt,
+    StrictStr,
+    ValidationError,
+    field_validator,
+)
 
 ComputeTask = Literal["strategy_backtest", "screener"]
 
@@ -31,11 +40,7 @@ ALLOWED_COMPUTE_INPUT_ROOTS = (
 )
 _DATE_PARTITION = re.compile(r"date=(\d{4}-\d{2}-\d{2})")
 _WINDOWS_DRIVE_PATH = re.compile(r"^[A-Za-z]:")
-_RELATIVE_PATH = re.compile(r"^[A-Za-z0-9_.-]+(?:[\\/][A-Za-z0-9_.-]+)+$")
-_BARE_FILE = re.compile(
-    r"^[A-Za-z0-9_.-]+\.(?:parquet|csv|json|db|sqlite|pkl|joblib|py)$",
-    re.IGNORECASE,
-)
+_A_SHARE_SYMBOL = re.compile(r"^\d{6}\.(?:SH|SZ|BJ)$", re.IGNORECASE)
 _PATH_KEYS = frozenset(
     {
         "path",
@@ -56,6 +61,10 @@ DEFAULT_CACHE_TTL_SECONDS = 10 * 60
 DEFAULT_CACHE_MAX_ENTRIES = 4
 DEFAULT_CACHE_MAX_BYTES = MAX_BUNDLE_UNCOMPRESSED_BYTES
 _FIELDS_SET_KEY = "__fields_set__"
+COVERAGE_START_TOLERANCE_DAYS = 7
+MAX_PARTITION_GAP_DAYS = 7
+COVERAGE_CALENDAR_BASIS = "calendar_day_heuristic_without_exchange_calendar"
+COVERAGE_CAVEAT = "weekends_and_exchange_holidays_are_not_authoritative"
 
 
 class ComputeInputConfigError(ValueError):
@@ -75,6 +84,29 @@ class ComputeInputFile(_ManifestModel):
     size: StrictInt = Field(ge=0)
     sha256: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
 
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        if not value or "\x00" in value or "\\" in value:
+            raise ValueError("compute input file path is invalid")
+        path = PurePosixPath(value)
+        if (
+            path.is_absolute()
+            or any(part in {"", ".", ".."} for part in path.parts)
+            or path.as_posix() != value
+        ):
+            raise ValueError("compute input file path is not canonical")
+        return value
+
+
+class ComputeInputCoverage(_ManifestModel):
+    calendar_basis: Literal["calendar_day_heuristic_without_exchange_calendar"]
+    caveat: Literal["weekends_and_exchange_holidays_are_not_authoritative"]
+    effective_start: StrictStr | None
+    start_requirement: Literal["exact", "within_tolerance", "unbounded"]
+    start_tolerance_days: Literal[7]
+    max_partition_gap_days: Literal[7]
+
 
 class ComputeInputManifest(_ManifestModel):
     schema_version: Literal[1]
@@ -84,6 +116,7 @@ class ComputeInputManifest(_ManifestModel):
     coverage_start: StrictStr
     coverage_end: StrictStr
     partition_dates: list[StrictStr]
+    coverage: ComputeInputCoverage
     files: list[ComputeInputFile]
     total_uncompressed_bytes: StrictInt = Field(ge=0, le=MAX_BUNDLE_UNCOMPRESSED_BYTES)
 
@@ -120,17 +153,34 @@ class _CachedBundle:
     size: int
 
 
+def _looks_like_bare_filename(value: str) -> bool:
+    stem, separator, extension = value.rpartition(".")
+    if not separator or not extension:
+        return False
+    if not stem and value != f".{extension}":
+        return False
+    return all(character.isalnum() or character in "_-" for character in extension) and any(
+        character.isalpha() for character in extension
+    )
+
+
 def _looks_like_path(value: str) -> bool:
-    lowered = value.casefold()
+    candidate = value.strip()
+    if not candidate:
+        return False
+    lowered = candidate.casefold()
     if (
-        value.startswith(("/", "~/", "\\\\"))
-        or _WINDOWS_DRIVE_PATH.match(value)
+        candidate.startswith(("/", "~", "\\"))
+        or _WINDOWS_DRIVE_PATH.match(candidate)
         or lowered.startswith("file:")
-        or "../" in value
-        or "..\\" in value
+        or "/" in candidate
+        or "\\" in candidate
+        or candidate in {".", ".."}
     ):
         return True
-    return _BARE_FILE.fullmatch(value) is not None or _RELATIVE_PATH.fullmatch(value) is not None
+    if _A_SHARE_SYMBOL.fullmatch(candidate):
+        return False
+    return _looks_like_bare_filename(candidate)
 
 
 def _reject_paths(value: Any) -> None:
@@ -142,7 +192,7 @@ def _reject_paths(value: Any) -> None:
             if lowered in _PATH_KEYS or lowered.endswith(("_path", "_file", "_dir", "_root")):
                 raise ComputeInputConfigError("compute config must not contain file paths")
             _reject_paths(nested)
-    elif isinstance(value, list):
+    elif isinstance(value, (list, tuple)):
         for nested in value:
             _reject_paths(nested)
     elif isinstance(value, str) and _looks_like_path(value):
@@ -243,6 +293,69 @@ def _partition_date(path: Path) -> date | None:
     return None
 
 
+def compute_coverage_policy(
+    task: str,
+    normalized: Mapping[str, Any],
+    *,
+    reference_date: date,
+) -> ComputeInputCoverage:
+    if task == "screener":
+        requested = normalized.get("as_of")
+        effective_start = date.fromisoformat(requested) if requested else reference_date
+        requirement = "exact"
+    else:
+        end_value = normalized.get("end")
+        end = date.fromisoformat(end_value) if end_value else reference_date
+        start_value = normalized.get("start")
+        fields_set = set(normalized.get(_FIELDS_SET_KEY, []))
+        if start_value:
+            effective_start = date.fromisoformat(start_value)
+            requirement = "exact"
+        elif "start" in fields_set:
+            effective_start = None
+            requirement = "unbounded"
+        else:
+            effective_start = end - timedelta(days=180)
+            requirement = "within_tolerance"
+    return ComputeInputCoverage(
+        calendar_basis=COVERAGE_CALENDAR_BASIS,
+        caveat=COVERAGE_CAVEAT,
+        effective_start=effective_start.isoformat() if effective_start else None,
+        start_requirement=requirement,
+        start_tolerance_days=COVERAGE_START_TOLERANCE_DAYS,
+        max_partition_gap_days=MAX_PARTITION_GAP_DAYS,
+    )
+
+
+def partition_coverage_error(
+    partition_dates: list[date],
+    coverage: ComputeInputCoverage,
+) -> str | None:
+    if not partition_dates:
+        return "partition coverage is empty"
+    for previous, current in pairwise(partition_dates):
+        if current <= previous:
+            return "partition coverage is not strictly increasing"
+        if (current - previous).days > coverage.max_partition_gap_days:
+            return "partition coverage contains a common gap"
+
+    effective_start = (
+        date.fromisoformat(coverage.effective_start) if coverage.effective_start else None
+    )
+    if coverage.start_requirement == "exact":
+        if effective_start is None or partition_dates[0] != effective_start:
+            return "exact start coverage is unavailable"
+    elif coverage.start_requirement == "within_tolerance":
+        if effective_start is None:
+            return "bounded coverage start is unavailable"
+        start_delta = (partition_dates[0] - effective_start).days
+        if start_delta < 0 or start_delta > coverage.start_tolerance_days:
+            return "bounded coverage start is truncated"
+    elif effective_start is not None:
+        return "unbounded coverage unexpectedly declares a start"
+    return None
+
+
 class ComputeInputBundleService:
     """Builds bundles exclusively from an existing local parquet snapshot."""
 
@@ -324,7 +437,7 @@ class ComputeInputBundleService:
         task: ComputeTask,
         normalized: dict[str, Any],
         original: Mapping[str, Any],
-    ) -> tuple[list[_SourceFile], str]:
+    ) -> tuple[list[_SourceFile], str, ComputeInputCoverage]:
         daily = self._root_files("kline_daily")
         enriched = self._root_files("kline_daily_enriched")
         instruments = self._root_files("instruments")
@@ -344,16 +457,16 @@ class ComputeInputBundleService:
                 raise ComputeInputDataUnavailable("screener enriched data is unavailable")
             selected = sorted(enriched_by_date[target]) + instruments
             data_as_of = target
+            coverage = compute_coverage_policy(task, normalized, reference_date=target)
         else:
             end_value = normalized.get("end")
             end = date.fromisoformat(end_value) if end_value else self._today()
-            start_value = normalized.get("start")
-            if start_value:
-                start: date | None = date.fromisoformat(start_value)
-            elif "start" in normalized[_FIELDS_SET_KEY]:
-                start = None
-            else:
-                start = end - timedelta(days=180)
+            coverage = compute_coverage_policy(task, normalized, reference_date=end)
+            start = (
+                date.fromisoformat(coverage.effective_start)
+                if coverage.effective_start
+                else None
+            )
 
             daily_by_date: dict[date, list[Path]] = {}
             enriched_by_date: dict[date, list[Path]] = {}
@@ -380,8 +493,8 @@ class ComputeInputBundleService:
             partition_dates = sorted(daily_dates)
             if not partition_dates:
                 raise ComputeInputDataUnavailable("daily backtest data is unavailable")
-            if start_value and partition_dates[0] != date.fromisoformat(start_value):
-                raise ComputeInputDataUnavailable("requested backtest start coverage is unavailable")
+            if coverage_error := partition_coverage_error(partition_dates, coverage):
+                raise ComputeInputDataUnavailable(coverage_error)
             if not factors:
                 raise ComputeInputDataUnavailable("adjustment factor data is unavailable")
             selected = []
@@ -403,7 +516,7 @@ class ComputeInputBundleService:
             for name in archive_names
         ):
             raise ComputeInputConfigError("compute input escaped the dataset whitelist")
-        return sources, data_as_of.isoformat()
+        return sources, data_as_of.isoformat(), coverage
 
     def _open_source_fd(self, archive_path: str) -> int:
         parts = PurePosixPath(archive_path).parts
@@ -464,6 +577,7 @@ class ComputeInputBundleService:
         parameters_digest: str,
         sources: list[_SourceFile],
         data_as_of: str,
+        coverage: ComputeInputCoverage,
         now: float,
     ) -> _CachedBundle:
         with tempfile.TemporaryDirectory(dir=self.temp_root, prefix="build-") as build_dir:
@@ -495,6 +609,7 @@ class ComputeInputBundleService:
                 coverage_start=partition_dates[0],
                 coverage_end=partition_dates[-1],
                 partition_dates=partition_dates,
+                coverage=coverage,
                 files=entries,
                 total_uncompressed_bytes=total,
             )
@@ -568,13 +683,18 @@ class ComputeInputBundleService:
             self._purge_expired(now)
             if cached := self._cache.get(server_cache_key):
                 return self._lease(cached, typed_task, True)
-            sources, data_as_of = self._select_sources(typed_task, normalized, config)
+            sources, data_as_of, coverage = self._select_sources(
+                typed_task,
+                normalized,
+                config,
+            )
             cached = self._create_master(
                 server_cache_key,
                 typed_task,
                 parameters_digest,
                 sources,
                 data_as_of,
+                coverage,
                 now,
             )
             artifact = self._lease(cached, typed_task, False)

@@ -13,10 +13,10 @@ import uuid
 import zipfile
 import zlib
 from collections.abc import Callable, Iterator
-from contextlib import suppress
+from contextlib import nullcontext, suppress
 from datetime import UTC, date, datetime
 from pathlib import Path, PurePosixPath
-from typing import Any, Protocol
+from typing import Any, BinaryIO, Protocol
 
 import httpx
 from pydantic import ValidationError
@@ -30,8 +30,10 @@ from app.services.compute_input_bundle import (
     ComputeInputConfigError,
     ComputeInputManifest,
     compute_cache_key,
+    compute_coverage_policy,
     compute_parameters_digest,
     normalize_compute_config,
+    partition_coverage_error,
 )
 from app.workspace.models import (
     ResourceName,
@@ -258,9 +260,8 @@ class CloudWorkspaceAdapter:
             return value if parsed.isoformat() == value else None
         return None
 
-    @classmethod
     def _validate_manifest_coverage(
-        cls,
+        self,
         manifest: ComputeInputManifest,
         task: str,
         normalized: dict[str, Any],
@@ -272,6 +273,16 @@ class CloudWorkspaceAdapter:
         except ValueError as exc:
             raise ComputeInputIntegrityError("compute input coverage dates are invalid") from exc
         canonical_dates = [value.isoformat() for value in parsed_dates]
+        reference_date = (
+            self._compute_today()
+            if task == "strategy_backtest" and not normalized.get("end")
+            else date.fromisoformat(manifest.data_as_of)
+        )
+        expected_coverage = compute_coverage_policy(
+            task,
+            normalized,
+            reference_date=reference_date,
+        )
         if (
             not canonical_dates
             or canonical_dates != manifest.partition_dates
@@ -281,8 +292,11 @@ class CloudWorkspaceAdapter:
             or manifest.coverage_start != canonical_dates[0]
             or manifest.coverage_end != canonical_dates[-1]
             or manifest.data_as_of != manifest.coverage_end
+            or manifest.coverage != expected_coverage
         ):
             raise ComputeInputIntegrityError("compute input coverage manifest is inconsistent")
+        if coverage_error := partition_coverage_error(parsed_dates, manifest.coverage):
+            raise ComputeInputIntegrityError(coverage_error)
 
         roots = {PurePosixPath(entry.path).parts[0] for entry in manifest.files}
         partition_sets: dict[str, set[str]] = {
@@ -293,7 +307,7 @@ class CloudWorkspaceAdapter:
             root = PurePosixPath(entry.path).parts[0]
             if root not in partition_sets:
                 continue
-            partition = cls._manifest_partition_date(entry.path)
+            partition = self._manifest_partition_date(entry.path)
             if partition is None:
                 raise ComputeInputIntegrityError("compute input partition path is invalid")
             partition_sets[root].add(partition)
@@ -306,16 +320,6 @@ class CloudWorkspaceAdapter:
                 partitions != expected for partitions in partition_sets.values()
             ):
                 raise ComputeInputIntegrityError("compute input backtest coverage is incomplete")
-            fields_set = set(normalized.get("__fields_set__", []))
-            requested_start = normalized.get("start")
-            if (
-                requested_start is not None
-                and "start" in fields_set
-                and manifest.coverage_start != requested_start
-            ):
-                raise ComputeInputIntegrityError(
-                    "compute input requested start coverage is incomplete"
-                )
         elif (
             partition_sets["kline_daily"]
             or partition_sets["kline_daily_enriched"] != expected
@@ -417,7 +421,7 @@ class CloudWorkspaceAdapter:
 
     def install_compute_input(
         self,
-        bundle_path: Path,
+        bundle_path: Path | BinaryIO,
         *,
         task: str | None = None,
         config: dict[str, Any] | None = None,
@@ -425,13 +429,16 @@ class CloudWorkspaceAdapter:
         bundle_sha256: str | None = None,
     ) -> Path:
         """Validate an archive completely before publishing a read-only data mirror."""
-        bundle_path = Path(bundle_path)
         staging: Path | None = None
         try:
-            flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-            bundle_fd = os.open(bundle_path, flags)
+            if hasattr(bundle_path, "read") and hasattr(bundle_path, "fileno"):
+                bundle_context = nullcontext(bundle_path)
+            else:
+                flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                bundle_fd = os.open(Path(bundle_path), flags)
+                bundle_context = os.fdopen(bundle_fd, "rb")
             compressed_limit = self._compute_max_uncompressed_bytes + 64 * 1024 * 1024
-            with os.fdopen(bundle_fd, "rb") as bundle_handle:
+            with bundle_context as bundle_handle:
                 metadata = os.fstat(bundle_handle.fileno())
                 if not stat.S_ISREG(metadata.st_mode):
                     raise ComputeInputIntegrityError(
@@ -585,6 +592,50 @@ class CloudWorkspaceAdapter:
             if staging is not None:
                 self._remove_tree(staging)
 
+    def _install_compute_input_from_handle(
+        self,
+        bundle_handle: BinaryIO,
+        *,
+        task: str,
+        config: dict[str, Any],
+        data_as_of: str | None,
+        bundle_sha256: str | None,
+    ) -> Path:
+        return self.install_compute_input(
+            bundle_handle,
+            task=task,
+            config=config,
+            data_as_of=data_as_of,
+            bundle_sha256=bundle_sha256,
+        )
+
+    @staticmethod
+    def _temporary_path_matches_handle(path: Path, handle: BinaryIO) -> bool:
+        try:
+            path_metadata = os.stat(path, follow_symlinks=False)
+            handle_metadata = os.fstat(handle.fileno())
+        except OSError:
+            return False
+        return (
+            stat.S_ISREG(path_metadata.st_mode)
+            and stat.S_ISREG(handle_metadata.st_mode)
+            and path_metadata.st_dev == handle_metadata.st_dev
+            and path_metadata.st_ino == handle_metadata.st_ino
+        )
+
+    @staticmethod
+    def _remove_owned_temporary(path: Path, identity: tuple[int, int]) -> None:
+        try:
+            metadata = os.stat(path, follow_symlinks=False)
+        except OSError:
+            return
+        if (
+            stat.S_ISREG(metadata.st_mode)
+            and (metadata.st_dev, metadata.st_ino) == identity
+        ):
+            with suppress(OSError):
+                path.unlink()
+
     def prepare_compute_input(self, task: str, config: dict[str, Any]) -> Path:
         """Download a cloud-built bundle, then verify and publish it locally."""
         normalize_compute_config(task, config)
@@ -594,38 +645,64 @@ class CloudWorkspaceAdapter:
             suffix=".zip",
             dir=self.compute_root.parent,
         )
-        os.close(fd)
         temporary = Path(temporary_name)
+        metadata = os.fstat(fd)
+        identity = (metadata.st_dev, metadata.st_ino)
+        output: BinaryIO | None = None
         try:
-            remote = self._remote()
-            stream_method = getattr(remote, "stream", None)
-            if not callable(stream_method):
-                raise WorkspaceOfflineReadOnly("cloud compute input stream is unavailable")
-            with stream_method(
-                "POST",
-                "/api/workspace/compute-inputs/build",
-                json={"task": task, "config": config},
-            ) as response:
-                response.raise_for_status()
-                data_as_of = response.headers.get("X-Data-As-Of")
-                bundle_sha256 = response.headers.get("X-Bundle-SHA256")
-                compressed_limit = self._compute_max_uncompressed_bytes + 64 * 1024 * 1024
-                downloaded = 0
-                with temporary.open("wb") as output:
+            output = os.fdopen(fd, "w+b")
+            fd = -1
+            with output:
+                remote = self._remote()
+                stream_method = getattr(remote, "stream", None)
+                if not callable(stream_method):
+                    raise WorkspaceOfflineReadOnly(
+                        "cloud compute input stream is unavailable"
+                    )
+                with stream_method(
+                    "POST",
+                    "/api/workspace/compute-inputs/build",
+                    json={"task": task, "config": config},
+                ) as response:
+                    response.raise_for_status()
+                    data_as_of = response.headers.get("X-Data-As-Of")
+                    bundle_sha256 = response.headers.get("X-Bundle-SHA256")
+                    compressed_limit = (
+                        self._compute_max_uncompressed_bytes + 64 * 1024 * 1024
+                    )
+                    downloaded = 0
                     for chunk in response.iter_bytes(1024 * 1024):
                         downloaded += len(chunk)
                         if downloaded > compressed_limit:
-                            raise ComputeInputIntegrityError("compute input download is too large")
+                            raise ComputeInputIntegrityError(
+                                "compute input download is too large"
+                            )
                         output.write(chunk)
-            return self.install_compute_input(
-                temporary,
-                task=task,
-                config=config,
-                data_as_of=data_as_of,
-                bundle_sha256=bundle_sha256,
-            )
+                output.flush()
+                os.fsync(output.fileno())
+                if not self._temporary_path_matches_handle(temporary, output):
+                    raise ComputeInputIntegrityError(
+                        "compute input temporary download path changed"
+                    )
+                output.seek(0)
+                return self._install_compute_input_from_handle(
+                    output,
+                    task=task,
+                    config=config,
+                    data_as_of=data_as_of,
+                    bundle_sha256=bundle_sha256,
+                )
+        except ComputeInputIntegrityError:
+            raise
+        except OSError as exc:
+            raise ComputeInputIntegrityError(
+                "compute input download staging failed"
+            ) from exc
         finally:
-            temporary.unlink(missing_ok=True)
+            if fd >= 0:
+                with suppress(OSError):
+                    os.close(fd)
+            self._remove_owned_temporary(temporary, identity)
 
     def stream_events(self) -> Iterator[dict]:
         try:

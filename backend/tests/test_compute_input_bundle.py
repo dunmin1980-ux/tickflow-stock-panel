@@ -4,10 +4,11 @@ import asyncio
 import hashlib
 import io
 import json
+import os
 import stat
 import zipfile
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -32,7 +33,9 @@ from app.services.compute_input_bundle import (
     ComputeInputBundleService,
     ComputeInputConfigError,
     ComputeInputDataUnavailable,
+    ComputeInputFile,
     compute_cache_key,
+    compute_parameters_digest,
     normalize_compute_config,
 )
 
@@ -52,6 +55,24 @@ def _seed_market_data(root: Path) -> None:
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(payload)
+
+
+def _seed_partition_dates(root: Path, dates: list[date]) -> None:
+    for partition in dates:
+        for root_name in ("kline_daily", "kline_daily_enriched"):
+            path = root / root_name / f"date={partition.isoformat()}" / "part.parquet"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(f"{root_name}-{partition.isoformat()}".encode())
+
+
+def _calendar_sequence(start: date, end: date, *, step_days: int = 7) -> list[date]:
+    values: list[date] = []
+    cursor = start
+    while cursor < end:
+        values.append(cursor)
+        cursor += timedelta(days=step_days)
+    values.append(end)
+    return values
 
 
 def _strategy_config(**overrides) -> dict:
@@ -145,7 +166,33 @@ def test_screener_bundle_contains_only_target_enriched_and_instruments(
         ("strategy_backtest", _strategy_config(params={"source": "models/private"})),
         ("strategy_backtest", _strategy_config(params={"source": "private.parquet"})),
         ("strategy_backtest", _strategy_config(params={"source": "model.pkl"})),
+        ("strategy_backtest", _strategy_config(params={"source": "weights.onnx"})),
+        ("strategy_backtest", _strategy_config(params={"source": "config.yaml"})),
+        ("strategy_backtest", _strategy_config(params={"source": "script.sh"})),
+        (
+            "strategy_backtest",
+            _strategy_config(params={"source": "artifact.reasonably_long_extension_name"}),
+        ),
+        ("strategy_backtest", _strategy_config(params={"source": "model.配置"})),
+        (
+            "strategy_backtest",
+            _strategy_config(params={"source": "file:///tmp/private.parquet"}),
+        ),
+        ("strategy_backtest", _strategy_config(params={"source": "/tmp/private"})),
         ("strategy_backtest", _strategy_config(params={"source": "C:foo.parquet"})),
+        ("strategy_backtest", _strategy_config(params={"source": "folder/value"})),
+        ("strategy_backtest", _strategy_config(params={"source": "folder\\value"})),
+        ("strategy_backtest", _strategy_config(params={"source": "模型/权重.onnx"})),
+        ("strategy_backtest", _strategy_config(params={"source": "model files/weights.onnx"})),
+        ("strategy_backtest", _strategy_config(params={"source": "模型 权重.onnx"})),
+        (
+            "strategy_backtest",
+            _strategy_config(params={"nested": [{"artifact": "weights.onnx"}]}),
+        ),
+        (
+            "strategy_backtest",
+            _strategy_config(overrides={"signals": [{"source": "config.yaml"}]}),
+        ),
         ("strategy_backtest", _strategy_config(minute_fill=True)),
         ("strategy_backtest", _strategy_config(asset_type="etf")),
         (
@@ -165,7 +212,16 @@ def test_bundle_rejects_unsupported_or_path_bearing_configs(
 
 @pytest.mark.parametrize(
     "value",
-    ["000403.SZ", "2026-07-20", "open_t+1", "stock", "1d", "close / ma5"],
+    [
+        "000403.SZ",
+        "600489.SH",
+        "2026-07-20",
+        "open_t+1",
+        "macd_cross_v2",
+        "stock",
+        "1d",
+        "close > ma5 and volume > 0",
+    ],
 )
 def test_config_path_rules_preserve_normal_domain_strings(
     bundle_service: ComputeInputBundleService,
@@ -181,15 +237,10 @@ def test_config_path_rules_preserve_normal_domain_strings(
 def test_omitted_start_and_explicit_null_keep_distinct_semantics_and_cache_keys(
     bundle_service: ComputeInputBundleService,
 ) -> None:
-    for root_name in ("kline_daily", "kline_daily_enriched"):
-        old = bundle_service.data_dir / root_name / "date=2025-01-02" / "part.parquet"
-        old.parent.mkdir(parents=True)
-        old.write_bytes(f"{root_name}-old".encode())
-        default_edge = (
-            bundle_service.data_dir / root_name / "date=2026-01-22" / "part.parquet"
-        )
-        default_edge.parent.mkdir(parents=True)
-        default_edge.write_bytes(f"{root_name}-default-edge".encode())
+    _seed_partition_dates(
+        bundle_service.data_dir,
+        _calendar_sequence(date(2025, 1, 2), date(2026, 7, 20)),
+    )
 
     omitted = {"strategy_id": "macd_cross", "end": "2026-07-20", "asset_type": "stock"}
     explicit_null = {**omitted, "start": None}
@@ -258,6 +309,59 @@ def test_backtest_bundle_fails_when_requested_start_coverage_is_missing(
         )
 
 
+def test_default_window_fails_closed_when_coverage_start_is_truncated(
+    bundle_service: ComputeInputBundleService,
+) -> None:
+    config = {"strategy_id": "macd_cross", "end": "2026-07-20", "asset_type": "stock"}
+
+    with pytest.raises(ComputeInputDataUnavailable):
+        bundle_service.build("strategy_backtest", config)
+
+
+def test_backtest_bundle_fails_closed_on_common_partition_gap(
+    bundle_service: ComputeInputBundleService,
+) -> None:
+    _seed_partition_dates(bundle_service.data_dir, [date(2026, 7, 1)])
+
+    with pytest.raises(ComputeInputDataUnavailable):
+        bundle_service.build(
+            "strategy_backtest",
+            _strategy_config(start="2026-07-01"),
+        )
+
+
+def test_default_window_records_deterministic_coverage_policy(tmp_path: Path) -> None:
+    data_dir = tmp_path / "coverage-data"
+    _seed_market_data(data_dir)
+    effective_start = date(2026, 7, 20) - timedelta(days=180)
+    first_partition = effective_start + timedelta(days=5)
+    _seed_partition_dates(
+        data_dir,
+        _calendar_sequence(first_partition, date(2026, 7, 20)),
+    )
+    service = ComputeInputBundleService(data_dir, temp_root=tmp_path / "coverage-bundles")
+    artifact = service.build(
+        "strategy_backtest",
+        {"strategy_id": "macd_cross", "end": "2026-07-20", "asset_type": "stock"},
+    )
+    try:
+        manifest, _names = _manifest(artifact.path)
+        assert manifest["coverage"]["calendar_basis"] == (
+            "calendar_day_heuristic_without_exchange_calendar"
+        )
+        assert manifest["coverage"]["caveat"] == (
+            "weekends_and_exchange_holidays_are_not_authoritative"
+        )
+        assert manifest["coverage"]["effective_start"] == effective_start.isoformat()
+        assert manifest["coverage"]["start_requirement"] == "within_tolerance"
+        assert manifest["coverage"]["start_tolerance_days"] == 7
+        assert manifest["coverage"]["max_partition_gap_days"] == 7
+        assert manifest["coverage_start"] == first_partition.isoformat()
+    finally:
+        artifact.cleanup()
+        service.close()
+
+
 def test_bundle_rejects_symlinked_source_file(
     bundle_service: ComputeInputBundleService,
     tmp_path: Path,
@@ -276,7 +380,7 @@ def test_source_parent_replacement_is_rejected_before_snapshot_copy(
     tmp_path: Path,
 ) -> None:
     normalized = normalize_compute_config("strategy_backtest", _strategy_config())
-    sources, _data_as_of = bundle_service._select_sources(
+    sources, _data_as_of, _coverage = bundle_service._select_sources(
         "strategy_backtest",
         normalized,
         _strategy_config(),
@@ -509,6 +613,127 @@ def test_prepare_compute_input_downloads_validates_and_publishes_read_only(
         artifact.cleanup()
 
 
+def test_prepare_compute_input_keeps_mkstemp_fd_through_fsync_and_install(
+    bundle_service: ComputeInputBundleService,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    artifact, headers = _valid_bundle(bundle_service)
+    remote = _RemoteStub(artifact.path.read_bytes(), headers)
+    adapter = _adapter(tmp_path, remote)
+    real_mkstemp = workspace_adapter_module.tempfile.mkstemp
+    real_fsync = workspace_adapter_module.os.fsync
+    created_fds: list[int] = []
+    fsync_fds: list[int] = []
+    install_fds: list[int] = []
+    installed = tmp_path / "installed-from-stable-fd"
+
+    def audited_mkstemp(*args, **kwargs):
+        fd, name = real_mkstemp(*args, **kwargs)
+        created_fds.append(fd)
+        return fd, name
+
+    def audited_fsync(fd: int) -> None:
+        fsync_fds.append(fd)
+        real_fsync(fd)
+
+    def install_from_handle(_self, handle, **_kwargs):
+        install_fds.append(handle.fileno())
+        assert handle.tell() == 0
+        return installed
+
+    monkeypatch.setattr(workspace_adapter_module.tempfile, "mkstemp", audited_mkstemp)
+    monkeypatch.setattr(workspace_adapter_module.os, "fsync", audited_fsync)
+    monkeypatch.setattr(
+        CloudWorkspaceAdapter,
+        "_install_compute_input_from_handle",
+        install_from_handle,
+        raising=False,
+    )
+    try:
+        result = adapter.prepare_compute_input("strategy_backtest", _strategy_config())
+        assert result == installed
+        assert len(created_fds) == 1
+        assert created_fds == fsync_fds == install_fds
+        with pytest.raises(OSError):
+            os.fstat(created_fds[0])
+        assert not list(adapter.compute_root.parent.glob("compute-input-*.zip"))
+    finally:
+        artifact.cleanup()
+
+
+@pytest.mark.parametrize("replacement_kind", ["symlink", "regular"])
+def test_prepare_compute_input_fails_closed_when_temp_path_is_replaced(
+    bundle_service: ComputeInputBundleService,
+    tmp_path: Path,
+    monkeypatch,
+    replacement_kind: str,
+) -> None:
+    artifact, headers = _valid_bundle(bundle_service)
+    adapter = _adapter(tmp_path, _RemoteStub(artifact.path.read_bytes(), headers))
+    real_fsync = workspace_adapter_module.os.fsync
+    attacker = tmp_path / "attacker-owned.zip"
+    attacker.write_bytes(b"attacker-canary")
+    replacement: Path | None = None
+
+    def replace_after_fsync(fd: int) -> None:
+        nonlocal replacement
+        real_fsync(fd)
+        replacement = next(adapter.compute_root.parent.glob("compute-input-*.zip"))
+        replacement.unlink()
+        if replacement_kind == "symlink":
+            replacement.symlink_to(attacker)
+        else:
+            replacement.write_bytes(b"replacement-canary")
+
+    monkeypatch.setattr(workspace_adapter_module.os, "fsync", replace_after_fsync)
+    try:
+        with pytest.raises(ComputeInputIntegrityError):
+            adapter.prepare_compute_input("strategy_backtest", _strategy_config())
+        assert replacement is not None
+        if replacement_kind == "symlink":
+            assert replacement.is_symlink()
+            assert attacker.read_bytes() == b"attacker-canary"
+        else:
+            assert replacement.read_bytes() == b"replacement-canary"
+    finally:
+        if replacement is not None:
+            replacement.unlink(missing_ok=True)
+        artifact.cleanup()
+
+
+def test_prepare_compute_input_cleans_fd_and_file_when_fsync_fails(
+    bundle_service: ComputeInputBundleService,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    artifact, headers = _valid_bundle(bundle_service)
+    adapter = _adapter(tmp_path, _RemoteStub(artifact.path.read_bytes(), headers))
+    real_mkstemp = workspace_adapter_module.tempfile.mkstemp
+    created: list[tuple[int, Path]] = []
+
+    def audited_mkstemp(*args, **kwargs):
+        fd, name = real_mkstemp(*args, **kwargs)
+        created.append((fd, Path(name)))
+        return fd, name
+
+    def fail_fsync(_fd: int) -> None:
+        raise OSError("injected fsync failure")
+
+    monkeypatch.setattr(workspace_adapter_module.tempfile, "mkstemp", audited_mkstemp)
+    monkeypatch.setattr(workspace_adapter_module.os, "fsync", fail_fsync)
+    try:
+        with pytest.raises(ComputeInputIntegrityError):
+            adapter.prepare_compute_input("strategy_backtest", _strategy_config())
+        assert len(created) == 1
+        fd, path = created[0]
+        with pytest.raises(OSError):
+            os.fstat(fd)
+        assert not path.exists()
+    finally:
+        artifact.cleanup()
+
+
 def _rewrite_zip(source: Path, target: Path, mutate) -> None:
     with zipfile.ZipFile(source) as archive, zipfile.ZipFile(target, "w") as output:
         for info in archive.infolist():
@@ -606,6 +831,50 @@ def test_client_rejects_manifest_contract_failures(
         artifact.cleanup()
 
 
+@pytest.mark.parametrize(
+    "invalid_path",
+    ["", "/absolute", "../escaped", "safe\\bad", "nul\x00name", "a//b", "./a"],
+)
+def test_client_classifies_malformed_manifest_file_paths_as_integrity_errors(
+    bundle_service: ComputeInputBundleService,
+    tmp_path: Path,
+    invalid_path: str,
+) -> None:
+    artifact, headers = _valid_bundle(bundle_service)
+    malicious = tmp_path / "invalid-manifest-path.zip"
+
+    def mutate(info: zipfile.ZipInfo, payload: bytes):
+        if info.filename != "manifest.json":
+            return info, payload
+        manifest = json.loads(payload)
+        manifest["files"][0]["path"] = invalid_path
+        return info, json.dumps(manifest, sort_keys=True).encode()
+
+    try:
+        _rewrite_zip(artifact.path, malicious, mutate)
+        bundle_hash = hashlib.sha256(malicious.read_bytes()).hexdigest()
+        adapter = _adapter(tmp_path, _RemoteStub(b"", {}))
+        with pytest.raises(ComputeInputIntegrityError):
+            adapter.install_compute_input(
+                malicious,
+                task="strategy_backtest",
+                config=_strategy_config(),
+                data_as_of=headers["X-Data-As-Of"],
+                bundle_sha256=bundle_hash,
+            )
+    finally:
+        artifact.cleanup()
+
+
+@pytest.mark.parametrize(
+    "invalid_path",
+    ["", "/absolute", "../escaped", "safe\\bad", "nul\x00name", "a//b", "./a"],
+)
+def test_manifest_file_model_rejects_noncanonical_paths(invalid_path: str) -> None:
+    with pytest.raises(ValueError):
+        ComputeInputFile(path=invalid_path, size=0, sha256="0" * 64)
+
+
 @pytest.mark.parametrize("field", ["coverage_start", "coverage_end", "partition_dates"])
 def test_client_rejects_manifest_coverage_tampering(
     bundle_service: ComputeInputBundleService,
@@ -620,6 +889,47 @@ def test_client_rejects_manifest_coverage_tampering(
             return info, payload
         manifest = json.loads(payload)
         manifest[field] = ["2026-07-20"] if field == "partition_dates" else "2026-07-18"
+        return info, json.dumps(manifest, sort_keys=True).encode()
+
+    try:
+        _rewrite_zip(artifact.path, malicious, mutate)
+        bundle_hash = hashlib.sha256(malicious.read_bytes()).hexdigest()
+        adapter = _adapter(tmp_path, _RemoteStub(b"", {}))
+        with pytest.raises(ComputeInputIntegrityError):
+            adapter.install_compute_input(
+                malicious,
+                task="strategy_backtest",
+                config=_strategy_config(),
+                data_as_of=headers["X-Data-As-Of"],
+                bundle_sha256=bundle_hash,
+            )
+    finally:
+        artifact.cleanup()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("calendar_basis", "exchange_calendar"),
+        ("caveat", "none"),
+        ("start_tolerance_days", 30),
+        ("max_partition_gap_days", 30),
+    ],
+)
+def test_client_rejects_manifest_coverage_policy_tampering(
+    bundle_service: ComputeInputBundleService,
+    tmp_path: Path,
+    field: str,
+    value: str | int,
+) -> None:
+    artifact, headers = _valid_bundle(bundle_service)
+    malicious = tmp_path / f"bad-policy-{field}.zip"
+
+    def mutate(info: zipfile.ZipInfo, payload: bytes):
+        if info.filename != "manifest.json":
+            return info, payload
+        manifest = json.loads(payload)
+        manifest["coverage"][field] = value
         return info, json.dumps(manifest, sort_keys=True).encode()
 
     try:
@@ -670,6 +980,49 @@ def test_client_rejects_archive_partition_gap_even_when_file_list_is_rewritten(
                 task="strategy_backtest",
                 config=_strategy_config(),
                 data_as_of=headers["X-Data-As-Of"],
+                bundle_sha256=bundle_hash,
+            )
+    finally:
+        artifact.cleanup()
+
+
+def test_client_rejects_common_partition_gap_with_self_consistent_manifest(
+    bundle_service: ComputeInputBundleService,
+    tmp_path: Path,
+) -> None:
+    artifact, _headers = _valid_bundle(bundle_service)
+    malicious = tmp_path / "common-partition-gap.zip"
+    old_date = "2026-07-20"
+    new_date = "2026-07-30"
+    config = _strategy_config(end=new_date)
+
+    def mutate(info: zipfile.ZipInfo, payload: bytes):
+        if info.filename == "manifest.json":
+            manifest = json.loads(payload)
+            manifest["data_as_of"] = new_date
+            manifest["coverage_end"] = new_date
+            manifest["partition_dates"] = ["2026-07-17", new_date]
+            manifest["parameters_digest"] = compute_parameters_digest(
+                normalize_compute_config("strategy_backtest", config)
+            )
+            for entry in manifest["files"]:
+                entry["path"] = entry["path"].replace(
+                    f"date={old_date}", f"date={new_date}"
+                )
+            return info, json.dumps(manifest, sort_keys=True).encode()
+        info.filename = info.filename.replace(f"date={old_date}", f"date={new_date}")
+        return info, payload
+
+    try:
+        _rewrite_zip(artifact.path, malicious, mutate)
+        bundle_hash = hashlib.sha256(malicious.read_bytes()).hexdigest()
+        adapter = _adapter(tmp_path, _RemoteStub(b"", {}))
+        with pytest.raises(ComputeInputIntegrityError):
+            adapter.install_compute_input(
+                malicious,
+                task="strategy_backtest",
+                config=config,
+                data_as_of=new_date,
                 bundle_sha256=bundle_hash,
             )
     finally:

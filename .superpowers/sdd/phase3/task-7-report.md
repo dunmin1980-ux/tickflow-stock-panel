@@ -132,3 +132,64 @@
   old directory name, but recovery bytes are preserved rather than cleaned up.
 - No frontend, proxy, broker, Telegram, OpenClaw, Gold, minute-data, or external-provider behavior
   was changed in this review follow-up.
+
+## Review Follow-up 2 (base `2907739`)
+
+### Closed Integrity Gaps
+
+1. Configuration path rejection no longer depends on an extension allowlist or denylist. It
+   recursively checks `params`, `overrides`, lists, and nested mappings; rejects path-bearing keys,
+   any slash or backslash, POSIX/drive/file-URI forms, and bare filenames by structurally parsing a
+   non-empty extension of arbitrary length. Explicit A-share symbols such as `000403.SZ` and
+   `600489.SH`, ISO dates, normal strategy identifiers, enums, and condition expressions remain
+   accepted. Tests cover `weights.onnx`, `config.yaml`, `script.sh`, long and Unicode extensions,
+   Unicode and space-containing paths, and nested `params` / `overrides` values.
+2. The default 180-calendar-day backtest window now has a deterministic conservative coverage
+   contract. Daily and enriched date sets must still be identical, the first partition may trail
+   `effective_start` by at most seven calendar days, and adjacent common partition dates may differ
+   by at most seven calendar days. Explicit non-null `start` remains exact. The manifest records the
+   policy, effective start, thresholds, calendar basis, and the lack of an authoritative exchange
+   calendar; the client recomputes and enforces the same policy before publication.
+3. `prepare_compute_input()` retains the descriptor returned by `mkstemp`, streams into that same
+   descriptor, flushes and `fsync`s it, verifies that the temporary pathname still identifies the
+   same regular-file device/inode, rewinds it, and passes the same open file description into ZIP
+   hash and install validation. Failures close the descriptor and remove only the original owned
+   temporary file. Symlink and regular-file pathname replacement tests fail closed without deleting
+   attacker-owned replacements.
+4. `ComputeInputFile.path` now has a strict Pydantic validator for a non-empty canonical relative
+   POSIX path with no absolute form, traversal, backslash, NUL, duplicate separators, or dot
+   segments. Malformed manifest entries are translated to `ComputeInputIntegrityError` by the
+   desktop client before any extraction or publication.
+
+### Follow-up 2 TDD Evidence
+
+1. Review RED:
+   - Command: `uv run --project backend pytest -q backend/tests/test_compute_input_bundle.py`
+   - Result: `28 failed, 71 passed in 7.77s`; failures covered all four review findings.
+2. Task 7 GREEN:
+   - Same command after implementation and expanded path cases.
+   - Result: `103 passed in 4.98s`.
+3. Workspace and desktop regression, run outside the network sandbox for lifecycle port binding:
+   - Command: `uv run --project backend pytest -q backend/tests/test_compute_input_bundle.py backend/tests/test_desktop_lifecycle.py backend/tests/test_desktop_cloud_proxy.py backend/tests/test_desktop_client_auth.py backend/tests/test_desktop_workspace_adapter.py backend/tests/test_desktop_paths.py backend/tests/workspace`
+   - Result: `397 passed, 2 warnings in 11.03s`.
+4. Full backend, run outside the network sandbox:
+   - Command: `uv run --project backend pytest -q backend/tests`
+   - Result: `1185 passed, 11 warnings in 53.08s`.
+5. Ruff and diff validation:
+   - Command: `uv run --project backend ruff check backend/app/services/compute_input_bundle.py backend/app/desktop_client/workspace_adapter.py backend/tests/test_compute_input_bundle.py`
+   - Result: `All checks passed!`.
+   - Command: `git diff --check`
+   - Result: exit `0`, no output.
+
+### Follow-up 2 Caveats
+
+- The seven-day start tolerance and maximum partition gap are intentionally conservative
+  calendar-day heuristics, not an authoritative A-share exchange calendar. An exceptional closure
+  longer than seven calendar days will fail closed until an exchange-calendar authority is added.
+- Explicit non-null `start` remains exact, so a requested weekend or market-holiday date without a
+  partition is rejected rather than normalized to a nearby trading day.
+- If another process replaces the temporary download pathname, TickFlow closes its original file
+  descriptor but deliberately leaves the replacement untouched; this prevents cleanup from
+  following or deleting an attacker-owned path.
+- This follow-up changes only the Task 7 backend service, desktop adapter, tests, and this report.
+  Concurrent frontend changes visible in the shared worktree are unrelated and remain unstaged.
