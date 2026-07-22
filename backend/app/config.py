@@ -75,7 +75,9 @@ _RESOURCE_ROOT = _resource_root()
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=str(_RESOURCE_ROOT / ".env") if not _IS_FROZEN else ".env",
+        # A frozen App must not trust an arbitrary .env from its launch directory.
+        # Explicit process environment variables remain supported for controlled smoke tests.
+        env_file=None if _IS_FROZEN else str(_RESOURCE_ROOT / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
