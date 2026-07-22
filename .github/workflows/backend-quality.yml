@@ -1,0 +1,46 @@
+name: Backend Quality
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-quality.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-quality.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  high-risk-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.12
+
+      - name: Install backend development dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Compile backend
+        run: uv run --frozen python -m compileall -q app
+
+      - name: Reject undefined names
+        run: uv run --frozen ruff check app --select F821
+
+      - name: Run backend tests
+        run: uv run --frozen pytest -q
