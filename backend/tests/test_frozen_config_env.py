@@ -14,8 +14,9 @@ def _frozen_settings(tmp_path: Path, *, explicit_data_dir: Path | None = None) -
     cwd.mkdir()
     home.mkdir()
     resources.mkdir()
+    api_key_name = "TICKFLOW_API_KEY"
     (cwd / ".env").write_text(
-        "DATA_DIR=./poisoned-data\nTICKFLOW_API_KEY=poisoned-key\n",
+        f"DATA_DIR=./poisoned-data\n{api_key_name}=poisoned-key\n",
         encoding="utf-8",
     )
     backend = Path(__file__).parents[1]
