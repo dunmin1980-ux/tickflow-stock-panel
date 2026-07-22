@@ -179,7 +179,9 @@ The directory "dist" does not exist. Did you build your project?
 3. `ruff check app --select F821`
 4. `pytest -q`
 
-该门禁针对本次真实逃逸路径：普通 pytest 曾在缺陷存在时仍全绿，因此锁文件一致性、编译、静态未定义名称和真实回归测试必须共同存在。工作流 YAML 已在本地解析，`--locked` dry-run 已通过；实际 GitHub runner 结果要在分支推送后确认。
+该门禁针对本次真实逃逸路径：普通 pytest 曾在缺陷存在时仍全绿，因此锁文件一致性、编译、静态未定义名称和真实回归测试必须共同存在。工作流 YAML 已在本地解析，`--locked` dry-run 已通过。
+
+分支已推送到 `dunmin1980-ux/tickflow-stock-panel:codex/tickflow-p0-validation`。工作流的 `push` 事件只监听 `main`，当前又未创建 PR，因此 GitHub 公共 API 返回该分支 Actions `total_count=0`，不能宣称远端 CI 已通过。应通过 PR 触发 `pull_request` 门禁；本机 `gh` 未登录，本轮没有绕过认证自动建 PR。
 
 ## 7. 云端与发布物真相
 
@@ -264,7 +266,7 @@ NOT_PRODUCTION_READY
 
 ## 11. 下一步执行顺序
 
-1. 推送 `codex/tickflow-p0-validation`，确认 GitHub Actions 质量门禁实际通过，并进行代码审查。
+1. 从已推送的 `codex/tickflow-p0-validation` 创建 PR，确认 GitHub Actions 质量门禁实际通过；独立本地代码审查已无剩余 P0/P1。
 2. 从审查通过的精确 commit 构建带唯一 tag/digest 的云端候选镜像和 Intel App；先在隔离候选实例验收，再决定是否替换现有服务。
 3. 在用户自行配置私有密码、TickFlow/Tushare 能力和 DeepSeek/OpenAI-compatible 密钥后，完成派林生物、中金黄金、东方财富三股的日期、收盘价、均线关系、涨停标签、量能单位和 AI Markdown 人工核验闭环。
 
