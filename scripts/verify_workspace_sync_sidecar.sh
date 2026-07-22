@@ -83,7 +83,9 @@ docker run -d \
   -e AUTH_COOKIE_SECURE=false \
   -e GOLD_WORKSPACE_ENABLED=false \
   -e WORKSPACE_SYNC_ENABLED=true \
-  "$image_id" >"$work/container-id"
+  "$image_id" \
+  /app/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 3018 \
+  >"$work/container-id"
 sidecar_started=true
 
 binding="$(docker port "$sidecar" 3018/tcp)" || fail "sidecar port is unavailable"
