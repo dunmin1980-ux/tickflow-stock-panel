@@ -4,7 +4,15 @@ import { FactorBacktest } from './backtest/FactorBacktest'
 import { StrategyBacktest } from './backtest/StrategyBacktest'
 import { StrategyOptimizer } from './backtest/StrategyOptimizer'
 import { StrategyWalkForward } from './backtest/StrategyWalkForward'
-import { BarChart3, FlaskConical, SlidersHorizontal, Waypoints } from 'lucide-react'
+import {
+  AlertTriangle,
+  BarChart3,
+  FlaskConical,
+  Save,
+  SlidersHorizontal,
+  Waypoints,
+} from 'lucide-react'
+import { confirmBacktestSummary, useBacktestTask } from '@/lib/backtestTask'
 import { useBacktestSummaries } from '@/lib/useSharedQueries'
 import type { BacktestSummary } from '@/lib/workspace'
 
@@ -43,6 +51,8 @@ const TAB_ICONS: Record<Tab, typeof BarChart3> = {
 export function Backtest() {
   const [activeTab, setActiveTab] = useState<Tab>('strategy')
   const summaries = useBacktestSummaries()
+  const backtestTask = useBacktestTask()
+  const summaryConfirmation = backtestTask?.summaryConfirmation
 
   const modeSwitch = (
     <div className="inline-flex rounded-btn border border-border bg-surface/80 p-0.5 shadow-sm">
@@ -84,6 +94,33 @@ export function Backtest() {
         className="shrink-0 bg-base/95"
         />
       </div>
+
+      {summaryConfirmation && (
+        <section
+          role="alert"
+          className="mx-3 mt-3 flex flex-col gap-3 rounded-card border border-amber-400/40 bg-amber-400/10 px-3 py-2.5 text-xs text-foreground md:mx-4 md:flex-row md:items-center md:justify-between"
+        >
+          <div className="flex min-w-0 items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+            <div className="min-w-0">
+              <p className="font-medium">回测已完成，但摘要尚未保存</p>
+              <p className="mt-0.5 text-muted">云端版本已变化，需要你确认后仅保存本次摘要。</p>
+              {summaryConfirmation.error && (
+                <p className="mt-1 text-red-400">{summaryConfirmation.error}</p>
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void confirmBacktestSummary()}
+            disabled={summaryConfirmation.isSaving}
+            className="inline-flex min-h-8 shrink-0 items-center justify-center gap-1.5 rounded-btn bg-accent px-3 py-1.5 font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Save className="h-3.5 w-3.5" />
+            {summaryConfirmation.isSaving ? '保存中' : '确认保存摘要'}
+          </button>
+        </section>
+      )}
 
       <main className="hidden flex-1 min-h-0 px-3 pb-3 pt-3 md:block lg:px-4 lg:pb-4">
         {activeTab === 'factor' && <FactorBacktest />}

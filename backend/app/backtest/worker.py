@@ -26,6 +26,12 @@ class BacktestWorkerInfrastructureError(BacktestWorkerError):
     """A classified worker infrastructure failure eligible for desktop fallback."""
 
     def __init__(self, error_code: str) -> None:
+        if error_code not in {
+            "local_repo_init_failed",
+            "native_library_unavailable",
+            "worker_start_failed",
+        }:
+            raise ValueError("worker failure is not fallback eligible")
         super().__init__("backtest worker infrastructure is unavailable")
         self.error_code = error_code
 
@@ -84,13 +90,17 @@ def _rss_bytes() -> int:
     return int(psutil.Process(os.getpid()).memory_info().rss)
 
 
-def _strategy_dirs(data_dir: Path) -> list[Path]:
+def _strategy_dirs(data_dir: Path, *, read_only_snapshot: bool = False) -> list[Path]:
     app_dir = Path(__file__).resolve().parents[1]
-    return [
-        app_dir / "strategy" / "builtin",
-        data_dir / "strategies" / "custom",
-        data_dir / "strategies" / "ai",
-    ]
+    directories = [app_dir / "strategy" / "builtin"]
+    if not read_only_snapshot:
+        directories.extend(
+            [
+                data_dir / "strategies" / "custom",
+                data_dir / "strategies" / "ai",
+            ]
+        )
+    return directories
 
 
 def _decode_backtest_config(payload: dict[str, Any]):
@@ -193,7 +203,12 @@ def _worker_entry(task: dict[str, Any], event_queue, cancel_event) -> None:
             store = DataStore(data_dir)
             repo = KlineRepository(store)
         stage = "execute"
-        strategy_engine = StrategyEngine(strategy_dirs=_strategy_dirs(data_dir))
+        strategy_engine = StrategyEngine(
+            strategy_dirs=_strategy_dirs(
+                data_dir,
+                read_only_snapshot=bool(task.get("read_only_snapshot")),
+            )
+        )
         service = StrategyBacktestService(BacktestEngine(repo), strategy_engine)
 
         def _progress(message: dict) -> None:
@@ -322,7 +337,9 @@ def run_worker_task(
         if process.is_alive():
             process.terminate()
             process.join(timeout=5.0)
-            raise BacktestWorkerInfrastructureError("worker_exit_failed")
+            raise BacktestWorkerError(
+                "backtest worker returned but did not exit within 10 seconds"
+            )
         if failure is not None:
             error_code = failure.get("error_code")
             if error_code == "compute_input_integrity":
@@ -338,7 +355,13 @@ def run_worker_task(
                 f"{failure.get('message', 'worker failed')}\n{failure.get('traceback', '')}".rstrip()
             )
         if result is None:
-            raise BacktestWorkerInfrastructureError("worker_exit_failed")
+            raise BacktestWorkerError(
+                f"backtest worker exited without result (exitcode={process.exitcode})"
+            )
+        if process.exitcode != 0:
+            raise BacktestWorkerError(
+                f"backtest worker exited after result (exitcode={process.exitcode})"
+            )
 
         parent_metrics = {
             "ipc_elapsed_ms": round((time.perf_counter() - ipc_started) * 1000, 1),

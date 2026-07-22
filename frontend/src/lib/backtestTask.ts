@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import type { StrategyBacktestResult } from './api'
+import { api, type StrategyBacktestResult } from './api'
+import { WorkspaceApiError, type BacktestSummary } from './workspace'
 
 /**
  * 全局回测任务管理 (SSE 模式 + 任务缓存 + 重连支持)。
@@ -27,6 +28,14 @@ export interface BacktestTask {
   error: string | null
   /** 连接中断、正在有界重连中 (UI 显示"连接中断，重试中") */
   reconnecting: boolean
+  summaryConfirmation: BacktestSummaryConfirmation | null
+}
+
+export interface BacktestSummaryConfirmation {
+  pendingSummary: BacktestSummary
+  currentRevision: string
+  isSaving: boolean
+  error: string | null
 }
 
 // 连接断开后最多自动重连次数, 超过则放弃并进入可重试的错误态
@@ -63,6 +72,19 @@ function buildQuery(params: Record<string, string | number | boolean | undefined
     if (v != null && v !== '') sp.set(k, String(v))
   }
   return sp.toString()
+}
+
+function pendingSummaryConfirmation(
+  result: StrategyBacktestResult,
+): BacktestSummaryConfirmation | null {
+  const sync = result.summary_sync
+  if (sync?.status !== 'confirmation_required') return null
+  return {
+    pendingSummary: sync.pending_summary,
+    currentRevision: sync.current_revision,
+    isSaving: false,
+    error: null,
+  }
 }
 
 /** 连接 SSE (新建或重连都用这个) */
@@ -108,7 +130,14 @@ function connectSSE(url: string): void {
     if (current?.id !== id) return
     try {
       const result = JSON.parse(e.data) as StrategyBacktestResult
-      current = { ...current, isPending: false, result, error: null, reconnecting: false }
+      current = {
+        ...current,
+        isPending: false,
+        result,
+        error: null,
+        reconnecting: false,
+        summaryConfirmation: pendingSummaryConfirmation(result),
+      }
       emit()
     } catch {
       current = { ...current, isPending: false, error: '结果解析失败', reconnecting: false }
@@ -189,7 +218,15 @@ export function startBacktest(params: {
   }
 
   const id = ++taskSeq
-  current = { id, isPending: true, result: null, progress: null, error: null, reconnecting: false }
+  current = {
+    id,
+    isPending: true,
+    result: null,
+    progress: null,
+    error: null,
+    reconnecting: false,
+    summaryConfirmation: null,
+  }
   emit()
 
   const qs = buildQuery({
@@ -258,13 +295,71 @@ export function clearBacktest(): void {
   emit()
 }
 
+/** Explicitly save only the pending summary after a revision conflict. */
+export async function confirmBacktestSummary(): Promise<boolean> {
+  const task = current
+  const confirmation = task?.summaryConfirmation
+  if (!task || !confirmation || confirmation.isSaving) return false
+
+  current = {
+    ...task,
+    summaryConfirmation: { ...confirmation, isSaving: true, error: null },
+  }
+  emit()
+  try {
+    const saved = await api.confirmBacktestSummary(
+      confirmation.pendingSummary,
+      confirmation.currentRevision,
+    )
+    if (current?.id === task.id) {
+      current = {
+        ...current,
+        result: current.result
+          ? {
+            ...current.result,
+            summary_sync: { status: 'saved', revision: saved.revision },
+          }
+          : current.result,
+        summaryConfirmation: null,
+      }
+      emit()
+    }
+    return true
+  } catch (error) {
+    if (current?.id === task.id) {
+      const currentRevision = error instanceof WorkspaceApiError && error.currentRevision
+        ? error.currentRevision
+        : confirmation.currentRevision
+      current = {
+        ...current,
+        summaryConfirmation: {
+          ...confirmation,
+          currentRevision,
+          isSaving: false,
+          error: error instanceof Error ? error.message : '摘要保存失败',
+        },
+      }
+      emit()
+    }
+    return false
+  }
+}
+
 /** 恢复: 从 localStorage 读取 reconnect 信息, 重新连接 (刷新后调用) */
 export function tryReconnect(): boolean {
   const qs = localStorage.getItem(RECONNECT_KEY)
   if (!qs) return false
   // 有未完成的任务, 重连
   const id = ++taskSeq
-  current = { id, isPending: true, result: null, progress: null, error: null, reconnecting: false }
+  current = {
+    id,
+    isPending: true,
+    result: null,
+    progress: null,
+    error: null,
+    reconnecting: false,
+    summaryConfirmation: null,
+  }
   emit()
   connectSSE(`/api/backtest/strategy/stream?${qs}`)
   return true

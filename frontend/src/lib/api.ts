@@ -13,6 +13,7 @@ import {
   workspaceApi,
   workspaceCommand,
   workspaceDataAsOf,
+  type BacktestSummary,
   type ReportMetadata,
   type SharedClientPreferences,
 } from './workspace'
@@ -862,6 +863,14 @@ export interface StrategyBacktestResult {
   }
   elapsed_ms: number
   error: string | null
+  execution_target?: 'local' | 'cloud'
+  summary_sync?:
+    | { status: 'saved'; revision: string }
+    | {
+      status: 'confirmation_required'
+      current_revision: string
+      pending_summary: BacktestSummary
+    }
 }
 
 // ===== Settings =====
@@ -2011,6 +2020,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+
+  confirmBacktestSummary: async (summary: BacktestSummary, revision: string) => {
+    const snapshot = await workspaceApi.command(
+      'backtest_summaries',
+      'append',
+      { ...summary },
+      revision,
+    )
+    return { revision: snapshot.revision }
+  },
 
   pipelineRun: () => request<{ job_id: string; reused: boolean }>(
     '/api/pipeline/run', { method: 'POST' },

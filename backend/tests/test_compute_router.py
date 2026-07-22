@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
+import os
 from datetime import UTC, date, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -21,6 +23,7 @@ from app.backtest.worker import (
 from app.desktop_client.workspace_adapter import ComputeInputIntegrityError
 from app.services.compute_input_bundle import (
     ComputeInputDataUnavailable,
+    ComputeInputFile,
     ComputeInputManifest,
     compute_coverage_policy,
     compute_parameters_digest,
@@ -29,6 +32,7 @@ from app.services.compute_input_bundle import (
 from app.services.compute_router import (
     ComputeRouter,
     LocalComputeUnavailable,
+    lease_compute_input,
     open_read_only_compute_repository,
     prepare_local_compute_input,
     run_local_worker,
@@ -73,10 +77,33 @@ def _compute_dir(
     config: dict,
     *,
     data_as_of: str = "2026-07-22",
+    generation: str = "A",
 ) -> Path:
     normalized = normalize_compute_config(task, config)
     reference = date.fromisoformat(data_as_of)
     coverage = compute_coverage_policy(task, normalized, reference_date=reference)
+    required_roots = (
+        ("adj_factor", "instruments", "kline_daily", "kline_daily_enriched")
+        if task == "strategy_backtest"
+        else ("instruments", "kline_daily_enriched")
+    )
+    files = []
+    total_size = 0
+    root.mkdir(parents=True)
+    for root_name in required_roots:
+        relative_path = f"{root_name}/part.parquet"
+        content = f"{generation}:{root_name}".encode()
+        target = root / relative_path
+        target.parent.mkdir()
+        target.write_bytes(content)
+        total_size += len(content)
+        files.append(
+            ComputeInputFile(
+                path=relative_path,
+                size=len(content),
+                sha256=hashlib.sha256(content).hexdigest(),
+            )
+        )
     manifest = ComputeInputManifest(
         schema_version=1,
         task=task,
@@ -86,18 +113,10 @@ def _compute_dir(
         coverage_end=data_as_of,
         partition_dates=[data_as_of],
         coverage=coverage,
-        files=[],
-        total_uncompressed_bytes=0,
+        files=files,
+        total_uncompressed_bytes=total_size,
     )
-    root.mkdir(parents=True)
     (root / "manifest.json").write_text(manifest.model_dump_json(), encoding="utf-8")
-    required_roots = (
-        ("adj_factor", "instruments", "kline_daily", "kline_daily_enriched")
-        if task == "strategy_backtest"
-        else ("instruments", "kline_daily_enriched")
-    )
-    for root_name in required_roots:
-        (root / root_name).mkdir()
     return root
 
 
@@ -378,11 +397,115 @@ def test_local_repository_rejects_snapshot_root_symlink_as_integrity_failure(
         open_read_only_compute_repository(snapshot)
 
 
+def test_compute_lease_pins_one_cache_generation_during_atomic_replacement(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = {
+        "strategy_id": "macd_golden",
+        "start": "2026-07-22",
+        "end": "2026-07-22",
+    }
+    published = _compute_dir(
+        tmp_path / "cache-key",
+        "strategy_backtest",
+        config,
+        generation="A",
+    )
+    replacement = _compute_dir(
+        tmp_path / "replacement",
+        "strategy_backtest",
+        config,
+        generation="B",
+    )
+    retired = tmp_path / "retired"
+    from app.services import compute_router as compute_router_service
+
+    original_copy = compute_router_service._copy_manifest_entry
+    replaced = False
+
+    def replace_before_first_open(*args, **kwargs):
+        nonlocal replaced
+        if not replaced:
+            replaced = True
+            os.replace(published, retired)
+            os.replace(replacement, published)
+        return original_copy(*args, **kwargs)
+
+    monkeypatch.setattr(
+        compute_router_service,
+        "_copy_manifest_entry",
+        replace_before_first_open,
+    )
+
+    with lease_compute_input(published, "strategy_backtest", config) as lease:
+        lease_path = lease.path
+        copied = {
+            entry.path: (lease.path / entry.path).read_bytes()
+            for entry in lease.manifest.files
+        }
+        assert copied
+        assert all(content.startswith(b"A:") for content in copied.values())
+        assert not any(content.startswith(b"B:") for content in copied.values())
+        assert lease.path != published
+        assert lease.path.stat().st_mode & 0o222 == 0
+
+    assert not lease_path.exists()
+
+
+def test_compute_lease_copies_only_manifest_authenticated_data_roots(tmp_path: Path) -> None:
+    config = {
+        "strategy_id": "macd_golden",
+        "start": "2026-07-22",
+        "end": "2026-07-22",
+    }
+    published = _compute_dir(
+        tmp_path / "cache-key",
+        "strategy_backtest",
+        config,
+    )
+    malicious = published / "strategies" / "custom" / "malicious.py"
+    malicious.parent.mkdir(parents=True)
+    malicious.write_text("raise RuntimeError('must not execute')", encoding="utf-8")
+
+    with lease_compute_input(published, "strategy_backtest", config) as lease:
+        assert not (lease.path / "strategies").exists()
+        assert {path.parts[0] for path in map(Path, (item.path for item in lease.manifest.files))} <= {
+            "adj_factor",
+            "instruments",
+            "kline_daily",
+            "kline_daily_enriched",
+        }
+
+
+def test_compute_lease_rejects_same_size_data_tampering_without_cloud(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    req = backtest_api.StrategyBacktestRequest(
+        strategy_id="macd_golden",
+        start=date(2026, 7, 22),
+        end=date(2026, 7, 22),
+    )
+    raw_config = req.model_dump(mode="json", exclude_unset=True)
+    compute_dir = _compute_dir(tmp_path / "verified", "strategy_backtest", raw_config)
+    target = compute_dir / "kline_daily" / "part.parquet"
+    target.write_bytes(b"X" * target.stat().st_size)
+    adapter = _AdapterStub(compute_dir, _RemoteStub())
+    worker = Mock()
+    monkeypatch.setattr(backtest_api, "_run_strategy_worker", worker)
+
+    with pytest.raises(ComputeInputIntegrityError, match="integrity does not match"):
+        backtest_api.strategy_run(req, _request_with_state(workspace_adapter=adapter))
+
+    worker.assert_not_called()
+    assert adapter.remote.calls == []
+
+
 @pytest.mark.parametrize(
     "error_code",
     [
         "worker_start_failed",
-        "worker_exit_failed",
         "native_library_unavailable",
         "local_repo_init_failed",
     ],
@@ -396,6 +519,11 @@ def test_worker_boundary_converts_only_typed_infrastructure_errors(
         run_local_worker(lambda: _raise(error))
 
     assert raised.value.error_code == error_code
+
+
+def test_worker_exit_failure_is_not_fallback_eligible() -> None:
+    with pytest.raises(ValueError, match="not fallback eligible"):
+        BacktestWorkerInfrastructureError("worker_exit_failed")
 
 
 @pytest.mark.parametrize(
@@ -441,7 +569,9 @@ def test_desktop_strategy_run_prepares_verified_input_and_writes_safe_summary(
     assert payload["summary_sync"] == {"status": "saved", "revision": "c" * 64}
     assert adapter.prepare_calls == [("strategy_backtest", raw_config)]
     assert worker.call_count == 1
-    assert worker.call_args.args[0] == compute_dir
+    leased_dir = worker.call_args.args[0]
+    assert leased_dir != compute_dir
+    assert not leased_dir.exists()
     assert worker.call_args.kwargs["read_only_snapshot"] is True
     assert remote.calls == []
     assert len(adapter.command_calls) == 1
@@ -561,6 +691,29 @@ def test_desktop_strategy_business_worker_error_never_calls_cloud(
     assert remote.calls == []
 
 
+def test_desktop_strategy_worker_exit_failure_never_calls_cloud(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    req = backtest_api.StrategyBacktestRequest(
+        strategy_id="macd_golden",
+        start=date(2026, 7, 22),
+        end=date(2026, 7, 22),
+    )
+    raw_config = req.model_dump(mode="json", exclude_unset=True)
+    compute_dir = _compute_dir(tmp_path / "verified", "strategy_backtest", raw_config)
+    remote = _RemoteStub()
+    adapter = _AdapterStub(compute_dir, remote)
+    error = BacktestWorkerError("worker exited without result (exitcode=-9)")
+    monkeypatch.setattr(backtest_api, "_run_strategy_worker", Mock(side_effect=error))
+
+    with pytest.raises(BacktestWorkerError) as raised:
+        backtest_api.strategy_run(req, _request_with_state(workspace_adapter=adapter))
+
+    assert raised.value is error
+    assert remote.calls == []
+
+
 def test_desktop_strategy_rejects_replaced_manifest_before_worker_or_cloud(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -604,13 +757,14 @@ def test_desktop_strategy_rejects_symlinked_snapshot_root_without_cloud(
     compute_dir = _compute_dir(tmp_path / "verified", "strategy_backtest", raw_config)
     outside = tmp_path / "outside"
     outside.mkdir()
+    (compute_dir / "kline_daily" / "part.parquet").unlink()
     (compute_dir / "kline_daily").rmdir()
     (compute_dir / "kline_daily").symlink_to(outside, target_is_directory=True)
     adapter = _AdapterStub(compute_dir, _RemoteStub())
     worker = Mock()
     monkeypatch.setattr(backtest_api, "_run_strategy_worker", worker)
 
-    with pytest.raises(ComputeInputIntegrityError, match="root is invalid"):
+    with pytest.raises(ComputeInputIntegrityError, match="cannot be pinned"):
         backtest_api.strategy_run(req, _request_with_state(workspace_adapter=adapter))
 
     worker.assert_not_called()
@@ -691,7 +845,8 @@ def test_summary_revision_conflict_refreshes_without_recompute_or_replay(
 
     sync = payload["summary_sync"]
     assert sync["status"] == "confirmation_required"
-    assert sync["revision"] == "b" * 64
+    assert sync["current_revision"] == "b" * 64
+    assert "revision" not in sync
     assert set(sync["pending_summary"]) == {
         "id",
         "task",
@@ -751,7 +906,7 @@ def test_strategy_stream_worker_infrastructure_failure_emits_cloud_done_once(
     monkeypatch.setattr(
         backtest_api,
         "_run_strategy_worker",
-        Mock(side_effect=BacktestWorkerInfrastructureError("worker_exit_failed")),
+        Mock(side_effect=BacktestWorkerInfrastructureError("worker_start_failed")),
     )
     monkeypatch.setattr(backtest_api, "_JOB_TTL", 0)
     backtest_api._running_jobs.clear()
@@ -783,6 +938,104 @@ def test_strategy_stream_worker_infrastructure_failure_emits_cloud_done_once(
     assert adapter.command_calls == []
 
 
+def test_strategy_stream_preserves_summary_confirmation_payload(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    raw_config = backtest_api.StrategyBacktestRequest(
+        strategy_id="macd_golden",
+        start=date(2026, 7, 22),
+        end=date(2026, 7, 22),
+    ).model_dump(mode="json", exclude_unset=True)
+    compute_dir = _compute_dir(tmp_path / "verified", "strategy_backtest", raw_config)
+    adapter = _AdapterStub(compute_dir, _RemoteStub())
+    adapter.command_error = WorkspaceRevisionConflict(
+        ResourceName.BACKTEST_SUMMARIES,
+        "b" * 64,
+    )
+    monkeypatch.setattr(
+        backtest_api,
+        "_run_strategy_worker",
+        Mock(return_value=_backtest_result()),
+    )
+    monkeypatch.setattr(backtest_api, "_JOB_TTL", 0)
+    backtest_api._running_jobs.clear()
+
+    class _StreamRequest:
+        app = SimpleNamespace(state=SimpleNamespace(workspace_adapter=adapter))
+
+        async def is_disconnected(self) -> bool:
+            return False
+
+    async def _collect() -> str:
+        response = await backtest_api.strategy_stream(
+            _StreamRequest(),
+            strategy_id="macd_golden",
+            start="2026-07-22",
+            end="2026-07-22",
+        )
+        chunks = []
+        async for chunk in response.body_iterator:
+            chunks.append(chunk.decode() if isinstance(chunk, bytes) else chunk)
+        return "".join(chunks)
+
+    body = asyncio.run(_collect())
+    done_data = next(
+        line.removeprefix("data: ")
+        for line in body.splitlines()
+        if line.startswith("data: ")
+    )
+    payload = json.loads(done_data)
+
+    assert payload["summary_sync"]["status"] == "confirmation_required"
+    assert payload["summary_sync"]["current_revision"] == "b" * 64
+    assert payload["summary_sync"]["pending_summary"]["strategy_id"] == "macd_golden"
+
+
+def test_strategy_stream_worker_exit_failure_emits_error_without_cloud(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    raw_config = backtest_api.StrategyBacktestRequest(
+        strategy_id="macd_golden",
+        start=date(2026, 7, 22),
+        end=date(2026, 7, 22),
+    ).model_dump(mode="json", exclude_unset=True)
+    compute_dir = _compute_dir(tmp_path / "verified", "strategy_backtest", raw_config)
+    adapter = _AdapterStub(compute_dir, _RemoteStub())
+    monkeypatch.setattr(
+        backtest_api,
+        "_run_strategy_worker",
+        Mock(side_effect=BacktestWorkerError("worker exited without result (exitcode=-9)")),
+    )
+    monkeypatch.setattr(backtest_api, "_JOB_TTL", 0)
+    backtest_api._running_jobs.clear()
+
+    class _StreamRequest:
+        app = SimpleNamespace(state=SimpleNamespace(workspace_adapter=adapter))
+
+        async def is_disconnected(self) -> bool:
+            return False
+
+    async def _collect() -> str:
+        response = await backtest_api.strategy_stream(
+            _StreamRequest(),
+            strategy_id="macd_golden",
+            start="2026-07-22",
+            end="2026-07-22",
+        )
+        chunks = []
+        async for chunk in response.body_iterator:
+            chunks.append(chunk.decode() if isinstance(chunk, bytes) else chunk)
+        return "".join(chunks)
+
+    body = asyncio.run(_collect())
+
+    assert "event: error" in body
+    assert "event: done" not in body
+    assert adapter.remote.calls == []
+
+
 def test_desktop_screener_routes_local_snapshot_before_cloud(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -809,7 +1062,10 @@ def test_desktop_screener_routes_local_snapshot_before_cloud(
 
     assert payload["execution_target"] == "local"
     assert adapter.prepare_calls == [("screener", raw_config)]
-    assert local.call_args.args == (compute_dir, req)
+    leased_dir = local.call_args.args[0]
+    assert local.call_args.args[1] == req
+    assert leased_dir != compute_dir
+    assert not leased_dir.exists()
     assert adapter.remote.calls == []
 
 

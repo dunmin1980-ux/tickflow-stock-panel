@@ -19,8 +19,7 @@ from app.services import strategy_cache
 from app.services.compute_router import (
     ComputeResult,
     ComputeRouter,
-    LocalComputeUnavailable,
-    load_compute_input_manifest,
+    lease_compute_input,
     open_read_only_compute_repository,
     prepare_local_compute_input,
     request_cloud_json,
@@ -289,8 +288,6 @@ def _run_local_screener(data_dir: Path, req: CustomRequest) -> dict:
     try:
         store, repo = open_read_only_compute_repository(data_dir)
         return _run_custom_with_repo(repo, req)
-    except (ImportError, ModuleNotFoundError) as exc:
-        raise LocalComputeUnavailable("native_library_unavailable") from exc
     finally:
         if store is not None:
             try:
@@ -313,9 +310,9 @@ def run_custom(req: CustomRequest, request: Request):
         raw_config = req.model_dump(mode="json", exclude_unset=True)
 
         def local() -> dict:
-            data_dir = prepare_local_compute_input(adapter, "screener", raw_config)
-            load_compute_input_manifest(data_dir, "screener", raw_config)
-            return _run_local_screener(data_dir, req)
+            published_dir = prepare_local_compute_input(adapter, "screener", raw_config)
+            with lease_compute_input(published_dir, "screener", raw_config) as lease:
+                return _run_local_screener(lease.path, req)
 
         compute_result = ComputeRouter(cloud_enabled=True).execute(
             "screener",

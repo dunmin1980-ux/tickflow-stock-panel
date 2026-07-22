@@ -31,7 +31,7 @@ from app.services.compute_input_bundle import (
 from app.services.compute_router import (
     ComputeResult,
     ComputeRouter,
-    load_compute_input_manifest,
+    lease_compute_input,
     prepare_local_compute_input,
     request_cloud_json,
     run_local_worker,
@@ -390,7 +390,7 @@ def _write_backtest_summary(request: Request, summary: dict) -> dict:
             refreshed = adapter.get(ResourceName.BACKTEST_SUMMARIES)
             return {
                 "status": "confirmation_required",
-                "revision": refreshed.revision,
+                "current_revision": refreshed.revision,
                 "pending_summary": summary,
             }
         return {"status": "saved", "revision": updated.revision}
@@ -410,7 +410,7 @@ def _write_backtest_summary(request: Request, summary: dict) -> dict:
         refreshed = snapshot_resource(ResourceName.BACKTEST_SUMMARIES)
         return {
             "status": "confirmation_required",
-            "revision": refreshed.revision,
+            "current_revision": refreshed.revision,
             "pending_summary": summary,
         }
     return {"status": "saved", "revision": updated.revision}
@@ -440,26 +440,26 @@ def _execute_strategy_compute(
         local_state: dict[str, str] = {}
 
         def local() -> dict:
-            data_dir = prepare_local_compute_input(
+            published_dir = prepare_local_compute_input(
                 adapter,
                 "strategy_backtest",
                 raw_config,
             )
-            manifest = load_compute_input_manifest(
-                data_dir,
+            with lease_compute_input(
+                published_dir,
                 "strategy_backtest",
                 raw_config,
-            )
-            local_state["data_as_of"] = manifest.data_as_of
-            return run_local_worker(
-                lambda: _run_strategy_worker(
-                    data_dir,
-                    cfg,
-                    progress_cb,
-                    cancel_event,
-                    read_only_snapshot=True,
+            ) as lease:
+                local_state["data_as_of"] = lease.manifest.data_as_of
+                return run_local_worker(
+                    lambda: _run_strategy_worker(
+                        lease.path,
+                        cfg,
+                        progress_cb,
+                        cancel_event,
+                        read_only_snapshot=True,
+                    )
                 )
-            )
 
         compute_result = ComputeRouter(cloud_enabled=True).execute(
             "strategy_backtest",

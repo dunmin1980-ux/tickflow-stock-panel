@@ -98,5 +98,63 @@
   external data provider, or consume additional TickFlow Pro RPM after bundle preparation.
 - Existing API files retain unrelated historical Ruff debt. No broad formatting or refactor was
   performed in this task.
-- No frontend, Task 7 bundle/adapter/proxy file, broker, Telegram, OpenClaw, Gold, minute-data, or
-  automatic-trading behavior was changed.
+- The initial Task 8 commit changed no frontend or Task 7 bundle/adapter/proxy file. Neither that
+  commit nor this follow-up changes broker, Telegram, OpenClaw, Gold, minute-data, or
+  automatic-trading behavior.
+
+## Security Review Follow-up
+
+### Review Findings Addressed
+
+1. Replaced the cache-target symlink execution model with a per-execution compute-input lease.
+   The source directory is pinned with a no-follow directory descriptor. Every manifest member is
+   then opened through no-follow relative descriptors, checked as a regular file, revalidated
+   against its declared size and SHA-256, and copied into a private read-only directory. The worker
+   receives only this lease, and the caller removes it in `finally` through the context manager.
+2. Restricted read-only snapshot workers to the application-owned built-in strategy directory.
+   Snapshot `strategies/custom`, `strategies/ai`, and any unlisted Python are neither copied into the
+   lease nor included in the worker's import search. Unsupported custom or AI strategy IDs therefore
+   return a normal failed backtest and never trigger cloud fallback.
+3. Removed `worker_exit_failed` from both fallback allowlists. Only process start failure, an
+   explicitly reported native-library load failure, and local repository initialization failure are
+   worker-side fallback candidates. A post-start crash, OOM-style nonzero exit, no-result exit, or
+   failure to terminate now raises `BacktestWorkerError` and is fail closed.
+4. Completed the summary conflict UI. SSE `done` retains `summary_sync`, `pending_summary`, and
+   `current_revision`. The Backtest page displays an explicit unsaved-summary alert and requires a
+   click on `Confirm save summary`. That action appends only the pending sanitized summary with the
+   returned revision; it never reruns compute. Offline failures and repeated 412 responses preserve
+   the pending state for another explicit user decision.
+
+### Follow-up TDD Evidence
+
+- Lease RED: targeted test collection failed because `lease_compute_input` did not exist.
+- Contract RED: conflict tests failed with missing `current_revision` in both direct and SSE results.
+- Frontend RED: four tests failed because confirmation state, action, and alert UI did not exist.
+- Worker security regression covers a malicious snapshot custom strategy that writes a marker at
+  import time; the marker remains absent under read-only execution.
+- Cache replacement regression swaps the published cache key during lease construction and proves
+  that the lease contains one generation only. A same-size file tamper is rejected by SHA-256 before
+  either worker or cloud is called.
+- A simulated post-start native crash exits with `-9` and no result; it raises the ordinary worker
+  error rather than the fallback-eligible subtype.
+
+### Follow-up Verification
+
+- Related backtest, screener, proxy, workspace, and Task 8 tests: `470 passed, 2 warnings`.
+- Full backend: `1261 passed, 11 warnings`.
+- Full frontend Vitest: `97 passed` across 22 files.
+- TypeScript project build: `tsc -b` passed.
+- Vite production build: passed; existing chunk-size warnings remain informational.
+- Ruff: strict new service/worker/test scope passed; legacy API files passed with the same documented
+  pre-existing rule exclusions.
+
+### Follow-up Caveats
+
+- The managed `pnpm --dir frontend` wrapper attempted an install and stopped on the environment's
+  ignored-build policy. Verification therefore invoked the already-installed, lockfile-backed
+  `frontend/node_modules/.bin/{vitest,tsc,vite}` binaries directly.
+- The lease is a full verified copy per execution. This deliberately trades local disk I/O for an
+  immutable execution view and a small security boundary; no cloud API, data-provider API, or Pro
+  RPM is consumed while making the lease.
+- Frontend files are now included only for the explicit revision-conflict confirmation flow. Task 10
+  E2E, mock, script, and documentation files remain untouched and unstaged by this follow-up.
