@@ -8,13 +8,14 @@
 - 环境：macOS 14.8.5，Intel `x86_64`
 - 安装位置：`/Applications/TickFlowStockPanel.app`
 - 用户数据：`~/Library/Application Support/TickFlowStockPanel/`
-- 构建基线：`c85279b` (`build: add private Intel macOS DMG`)
+- 运行代码基线：`7c46660`
 
 ## 产物
 
 - 文件：`dist/TickFlowStockPanel-intel-x86_64.dmg`
-- 字节数：`181399898`
-- SHA-256：`a1816f3ce09aca17b182b8a613434c9f04e2ed9c694341a974533f1f7ef7f9b9`
+- 字节数：`187042992`
+- SHA-256：`66b9dfae51d1d757b0c302d5e2fc1407d2499b8cf4507fb7fe95a3dfda52aa15`
+- App tree SHA-256：`750f9f30de3b9663f24115dc8d4ef480b810bd2fd3b7519535fccd6c3c7c5c30`
 - DMG 完整性：通过 `hdiutil verify`
 - 签名：ad-hoc，`codesign --verify --deep --strict` 通过
 - 公证：无
@@ -23,47 +24,50 @@
 ## 自动化验收证据
 
 - `./scripts/verify_macos_intel_app.sh`：`MACOS_INTEL_APP_OK`
-- 桌面定向回归：`33 passed`；另有 2 个第三方 WebSocket 弃用警告
+- 构建 App 与已安装 App tree SHA-256 完全一致。
+- 完整安全门禁：`MULTICLIENT_SECURITY_OK`。
 
 | 检查项 | 结果 | 说明 |
 |---|---|---|
-| DMG 只读挂载与安装 | 通过 | 从 DMG 安装到 `/Applications` |
-| 覆盖升级 | 通过 | 对已安装 App 执行同源 DMG 覆盖 |
-| Application Support 保留 | 通过 | 临时哨兵在覆盖后仍存在，验收后已删除 |
-| URL 配置持久化 | 通过 | Tailscale HTTPS URL 与 `hybrid` 模式在独立进程重载及覆盖升级后保持 |
+| DMG 只读挂载与安装 | 通过 | 从只读 DMG 安装到 `/Applications` |
+| 覆盖升级 | 通过 | 已安装版本保留为时间戳备份，当前版本完成替换 |
+| Application Support 保留 | 通过 | 用户目录未随 App 覆盖删除 |
+| URL 配置持久化 | 通过 | Tailscale HTTPS URL 与客户端模式可跨进程重载 |
 | App 主程序架构 | 通过 | `x86_64` |
-| 原生依赖架构 | 通过 | 验证脚本检查 136 个 `.so`/`.dylib`，均包含 `x86_64` |
+| 原生依赖架构 | 通过 | `.so`/`.dylib` 均包含 `x86_64` |
 | App 签名 | 通过 | ad-hoc 深度严格校验通过 |
-| 图标文件 | 通过 | 源 `.icns` 与安装后 `.icns` 哈希均为 `ca270a638e182f35b32d9a897118d4eb6c90dfc84f060313456afb45202a1c45` |
-| 冻结 App 启动 | 通过 | 安装前后 smoke 均正常退出 |
-| 单实例 | 通过 | 活跃 PID 锁被安装后的冻结 App 正确拒绝；定向测试覆盖锁替换与拒绝 |
-| 干净关闭 | 通过 | 退出后无 App 进程、无监听端口、无 `.desktop.lock` |
-| macOS Keychain | 通过 | 测试会话完成真实 save/load/delete，测试条目已删除 |
-| 测试状态清理 | 通过 | 临时哨兵、测试锁和测试 Keychain 条目均已删除 |
+| 图标文件 | 通过 | 源 `.icns` 在构建中保持不变；视觉仍需人工确认 |
+| 冻结 App 启动 | 通过 | 从 `/tmp` 且清空环境后 smoke 正常退出 |
+| 启动目录隔离 | 通过 | 不读取或修改启动目录 `.env`，用户数据只写 Application Support |
+| 单实例与干净关闭 | 通过 | 退出后无 App 进程、监听端口或 `.desktop.lock` |
+| macOS Keychain | 通过 | 测试会话完成 save/load/delete，测试条目已删除 |
 | 私密文件打包检查 | 通过 | App 不包含 `.env`、会话文件、用户数据库或报告产物 |
-| 敏感字符串扫描 | 有条件通过 | 原始规则命中 3 个固定 `your-api-key` 文档占位符；占位符外命中为 0，报告命中为 0 |
+| canary 扫描 | 通过 | App、DMG、缓存、日志和云端隔离响应均无 canary 明文 |
 
-URL 配置文件保留为非敏感运行配置；自动验收生成的本地缓存和日志也保留在 Application Support，未修改或删除非测试状态。
+## 数据与认证边界
 
-简报指定的原始 grep 不能声明零命中。3 个命中全部位于打包后的 `tickflow-0.1.24.dist-info/METADATA`，内容是上游文档中的 `your-api-key` 示例；`TUSHARE_TOKEN`、`DEEPSEEK_API_KEY`、`tf_session` 以及占位符外的同类模式均为零命中。由于 Task 6 禁止修改源码，本次不篡改第三方元数据或重签安装包，仅将该已知占位符作为验收例外记录。
+- 工作区缓存：`~/Library/Application Support/TickFlowStockPanel/cache/workspace/`
+- 计算输入：`~/Library/Application Support/TickFlowStockPanel/compute_inputs/`
+- 桌面日志：`~/Library/Application Support/TickFlowStockPanel/desktop.log`
+- 启动器日志：`~/Library/Logs/TickFlowStockPanel/`
+- 云端会话只存 macOS Keychain；配置文件仅保存 URL 和客户端模式。
+- 当前云端认证尚未初始化，因此真实登录、重启后会话恢复和界面退出登录仍为人工门槛。
 
-## Keychain 与认证边界
+## 回滚与清理候选
 
-真实 macOS Keychain 已使用独立测试地址验证保存、读取和删除。测试会话值未写入报告、命令行参数或仓库，测试条目在验收过程中删除。
+当前安装前一版保留在：
 
-没有提供或创建云端密码，因此以下项目仍为人工门槛：
+```text
+/Applications/TickFlowStockPanel.before-storage-schema-20260722_143703.app
+```
 
-- 真实云端登录；
-- App 重启后真实会话恢复；
-- 从界面退出登录后确认真实 Keychain 会话删除。
+更早验收备份及隔离副本也保留在 `/Applications`，确认当前 App 稳定后可人工删除：
 
-## 仍需人工完成
-
-1. 在 Finder 中右键首次打开未公证 App，并确认 Gatekeeper 提示符合预期。
-2. 目视确认 Finder 与 Dock 使用红色 TickFlow 图标。
-3. 使用真实但不外泄的云端密码登录，重启 App 验证会话恢复，再从界面退出登录。
-
-在上述三项完成前，不把 Phase 2 标记为无条件发布就绪；可用于本机旁路试用和后续 Phase 3 开发。
+```text
+TickFlowStockPanel.before-multiclient-20260722_124620.app
+TickFlowStockPanel.before-final-canary-20260722_131205.app
+TickFlowStockPanel.quarantined-cwd-env-20260722_133334.app
+```
 
 ## 安全边界
 

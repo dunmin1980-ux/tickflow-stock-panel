@@ -95,6 +95,8 @@ backend/_desktop_run.log
 reports/tickflow_pro_probe/
 reports/pwa_acceptance/
 frontend/reports/pwa_acceptance/
+reports/macos_intel_acceptance/security_canary_build.json
+reports/macos_intel_acceptance/security_canary_build.sha256
 .cursor/debug-*.log
 
 # ===== 打包产物 (本地构建的安装包,不入库) =====

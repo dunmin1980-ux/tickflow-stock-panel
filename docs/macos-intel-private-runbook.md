@@ -24,7 +24,7 @@ hdiutil verify dist/TickFlowStockPanel-intel-x86_64.dmg
 本次验收的 SHA-256：
 
 ```text
-a1816f3ce09aca17b182b8a613434c9f04e2ed9c694341a974533f1f7ef7f9b9
+66b9dfae51d1d757b0c302d5e2fc1407d2499b8cf4507fb7fe95a3dfda52aa15
 ```
 
 ## 首次安装
