@@ -113,6 +113,16 @@ def test_load_recent_history_does_not_hide_polars_query_errors(monkeypatch, tmp_
         pipeline._load_recent_history(tmp_path, ["000403.SZ"], days=60)
 
 
+def test_load_recent_history_treats_corrupt_parquet_as_missing(tmp_path):
+    partition = tmp_path / f"date={date.today().isoformat()}"
+    partition.mkdir()
+    (partition / "part.parquet").write_bytes(b"not a parquet file")
+
+    history = pipeline._load_recent_history(tmp_path, ["000403.SZ"], days=60)
+
+    assert history.is_empty()
+
+
 def test_incremental_pipeline_does_not_readjust_enriched_history(tmp_path, monkeypatch):
     history_date = date.today() - timedelta(days=1)
     new_date = date.today()

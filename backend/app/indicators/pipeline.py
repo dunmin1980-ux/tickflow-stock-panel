@@ -1329,7 +1329,12 @@ def _load_recent_history(enriched_base: Path, symbols: list[str], days: int) -> 
                                  "volume", "amount", "raw_close", "raw_high", "raw_low"]
                     if c in schema_names]
         return lf.select(hist_cols).collect()
-    except (FileNotFoundError, OSError) as e:
+    except (
+        FileNotFoundError,
+        OSError,
+        pl.exceptions.ComputeError,
+        pl.exceptions.NoDataError,
+    ) as e:
         logger.warning("历史数据加载失败: %s", e)
         return pl.DataFrame()
 
