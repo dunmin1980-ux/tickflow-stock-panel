@@ -170,7 +170,7 @@ service_touched=false
 workspace_contract() {
   local image
   image="$(docker inspect TickFlow_Stock_Panel --format '{{.Image}}')" || return 1
-  docker run --rm --network none --read-only \
+  docker run -i --rm --network none --read-only \
     --tmpfs /tmp:rw,noexec,nosuid,size=64m \
     --volumes-from TickFlow_Stock_Panel:ro \
     -e DATA_DIR=/app/data \
@@ -200,9 +200,12 @@ rollback_fail() {
   printf 'ROLLBACK_FAILED: %s; forcing app stop\n' "$reason" >&2
   docker stop TickFlow_Stock_Panel >/dev/null 2>&1 || \
     docker kill TickFlow_Stock_Panel >/dev/null 2>&1 || true
-  running="$(docker inspect TickFlow_Stock_Panel --format '{{.State.Running}}' 2>/dev/null || printf 'false')"
-  if [[ "$running" == true ]]; then
-    printf 'ROLLBACK_EMERGENCY: app is still running; isolate the host manually\n' >&2
+  if ! running="$(docker inspect TickFlow_Stock_Panel --format '{{.State.Running}}' 2>/dev/null)"; then
+    printf 'ROLLBACK_EMERGENCY: unable to confirm app state; isolate the host manually\n' >&2
+    exit 91
+  fi
+  if [[ "$running" != false ]]; then
+    printf 'ROLLBACK_EMERGENCY: app state is %s; isolate the host manually\n' "$running" >&2
     exit 91
   fi
   printf 'ROLLBACK_SERVICE_STOPPED: manual recovery required\n' >&2

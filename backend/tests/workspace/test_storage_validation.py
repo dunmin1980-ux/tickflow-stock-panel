@@ -16,6 +16,7 @@ def test_missing_optional_workspace_files_are_valid(tmp_path: Path) -> None:
     ("filename", "payload"),
     [
         ("preferences.json", "{"),
+        ("preferences.json", '{"indices_nav_pinned": "yes"}'),
         ("secrets.json", "[]"),
         ("auth.json", '{"sessions": []}'),
         ("ai_stock_reports.json", "{}"),

@@ -320,7 +320,7 @@ ssh "$ssh_host" "docker inspect '$remote_container' --format '{{range .Config.En
 ssh "$ssh_host" "docker exec '$remote_container' sh -c 'test -d /app/data/user_data && test -r /app/data/user_data && test -w /app/data/user_data'" || \
   fail "production workspace volume is not readable and writable"
 production_contract="$canary_home/production-workspace-contract.txt"
-ssh "$ssh_host" "image=\"\$(docker inspect '$remote_container' --format '{{.Image}}')\"; docker run --rm --network none --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --volumes-from '$remote_container':ro -e DATA_DIR=/app/data -e WORKSPACE_SYNC_ENABLED=true -e GOLD_WORKSPACE_ENABLED=false \"\$image\" /app/.venv/bin/python -" \
+ssh "$ssh_host" "image=\"\$(docker inspect '$remote_container' --format '{{.Image}}')\"; docker run -i --rm --network none --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --volumes-from '$remote_container':ro -e DATA_DIR=/app/data -e WORKSPACE_SYNC_ENABLED=true -e GOLD_WORKSPACE_ENABLED=false \"\$image\" /app/.venv/bin/python -" \
   >"$production_contract" <<'PY' || fail "production workspace volume contract is invalid"
 from app.api.workspace import _DATA_MODELS
 from app.config import settings

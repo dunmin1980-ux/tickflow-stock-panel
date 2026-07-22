@@ -9,11 +9,19 @@ from pathlib import Path
 from typing import Any
 
 from app.services.backtest_summaries import _validate_summary
+from app.services.preferences import CLIENT_PREFERENCE_KEYS, _valid_client_value
 
 _OBJECT_FILES = ("preferences.json", "secrets.json", "auth.json")
 _REPORT_FILES = ("ai_stock_reports.json", "ai_market_recaps.json")
 _SUMMARY_FILE = "backtest_summaries.json"
 _HEX = re.compile(r"[0-9a-f]+")
+_CREDENTIAL_TEXT_FIELDS = (
+    "feishu_webhook_url",
+    "feishu_webhook_secret",
+    "wecom_webhook_url",
+    "wecom_bot_id",
+    "wecom_bot_secret",
+)
 
 
 class WorkspaceStorageError(RuntimeError):
@@ -62,6 +70,17 @@ def _validate_auth(filename: str, payload: dict) -> None:
         raise _invalid(filename, "password verifier is invalid")
 
 
+def _validate_preferences(filename: str, payload: dict) -> None:
+    for key in CLIENT_PREFERENCE_KEYS:
+        if key in payload and not _valid_client_value(key, payload[key]):
+            raise _invalid(filename, f"{key} is invalid")
+    for key in _CREDENTIAL_TEXT_FIELDS:
+        if key in payload and not isinstance(payload[key], str):
+            raise _invalid(filename, f"{key} must be a string")
+    if "wecom_bot_enabled" in payload and not isinstance(payload["wecom_bot_enabled"], bool):
+        raise _invalid(filename, "wecom_bot_enabled must be a boolean")
+
+
 def validate_storage_files(data_dir: Path) -> tuple[str, ...]:
     """Validate files that tolerant runtime loaders can otherwise erase logically."""
     user_data = Path(data_dir) / "user_data"
@@ -78,7 +97,9 @@ def validate_storage_files(data_dir: Path) -> tuple[str, ...]:
         payload = _parse_json(path)
         if not isinstance(payload, dict):
             raise _invalid(filename, "top level must be an object")
-        if filename == "auth.json":
+        if filename == "preferences.json":
+            _validate_preferences(filename, payload)
+        elif filename == "auth.json":
             _validate_auth(filename, payload)
         validated.append(filename)
 
