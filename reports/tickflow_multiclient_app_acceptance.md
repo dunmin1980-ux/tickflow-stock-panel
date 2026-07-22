@@ -44,7 +44,8 @@ PWA 仅对同一 tailnet 可见。3019 未开放公网，现有 443 主入口保
 | 项目 | 值 |
 |---|---|
 | 云端目录 | `/home/ubuntu/tickflow-stock-panel-stage-a` |
-| 运行源码 | `7c4666003892c12bb284cda4f3dacab3a81de441` |
+| 运行镜像代码基线 | `7c4666003892c12bb284cda4f3dacab3a81de441` |
+| 云端源码目录 | 已快进到当前分支最终验收提交；较镜像基线只新增文档与验收证据 |
 | 镜像 | `sha256:02d556047ec97314eeb10f8ae8f7e902b59efc16d1c93387d4b5d7933f5f56a5` |
 | 容器 | `TickFlow_Stock_Panel` |
 | 端口 | `127.0.0.1:3019 -> 3018/tcp` |
