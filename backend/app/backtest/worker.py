@@ -22,6 +22,14 @@ class BacktestWorkerError(RuntimeError):
     """Raised when a spawned worker fails before returning a task result."""
 
 
+class BacktestWorkerInfrastructureError(BacktestWorkerError):
+    """A classified worker infrastructure failure eligible for desktop fallback."""
+
+    def __init__(self, error_code: str) -> None:
+        super().__init__("backtest worker infrastructure is unavailable")
+        self.error_code = error_code
+
+
 class _PeakRssSampler:
     """Track whole-task and resettable phase RSS peaks with one sampling thread."""
 
@@ -126,7 +134,13 @@ def encode_optimize_config(config) -> dict[str, Any]:
     return payload
 
 
-def make_worker_task(kind: str, data_dir: Path, config) -> dict[str, Any]:
+def make_worker_task(
+    kind: str,
+    data_dir: Path,
+    config,
+    *,
+    read_only_snapshot: bool = False,
+) -> dict[str, Any]:
     if kind == "backtest":
         encoded = encode_backtest_config(config)
     elif kind == "optimize":
@@ -141,6 +155,7 @@ def make_worker_task(kind: str, data_dir: Path, config) -> dict[str, Any]:
         "kind": kind,
         "data_dir": str(data_dir.resolve()),
         "config": encoded,
+        "read_only_snapshot": read_only_snapshot,
     }
 
 
@@ -160,6 +175,7 @@ def _worker_entry(task: dict[str, Any], event_queue, cancel_event) -> None:
     sampler.start()
     started = time.perf_counter()
     store = None
+    stage = "native_library_load"
     try:
         from app.backtest.engine import BacktestEngine
         from app.backtest.optimizer import StrategyOptimizer
@@ -168,8 +184,15 @@ def _worker_entry(task: dict[str, Any], event_queue, cancel_event) -> None:
         from app.tickflow.repository import DataStore, KlineRepository
 
         data_dir = Path(task["data_dir"])
-        store = DataStore(data_dir)
-        repo = KlineRepository(store)
+        stage = "repository_init"
+        if task.get("read_only_snapshot"):
+            from app.services.compute_router import open_read_only_compute_repository
+
+            store, repo = open_read_only_compute_repository(data_dir)
+        else:
+            store = DataStore(data_dir)
+            repo = KlineRepository(store)
+        stage = "execute"
         strategy_engine = StrategyEngine(strategy_dirs=_strategy_dirs(data_dir))
         service = StrategyBacktestService(BacktestEngine(repo), strategy_engine)
 
@@ -221,8 +244,22 @@ def _worker_entry(task: dict[str, Any], event_queue, cancel_event) -> None:
     except BaseException as exc:
         with suppress(Exception):
             sampler.stop()
+        from app.desktop_client.workspace_adapter import ComputeInputIntegrityError
+        from app.services.compute_router import LocalComputeUnavailable
+
+        if isinstance(exc, LocalComputeUnavailable):
+            error_code = exc.error_code
+        elif isinstance(exc, ComputeInputIntegrityError):
+            error_code = "compute_input_integrity"
+        elif isinstance(exc, (ImportError, ModuleNotFoundError, OSError)) and stage == "native_library_load":
+            error_code = "native_library_unavailable"
+        elif stage == "repository_init":
+            error_code = "local_repo_init_failed"
+        else:
+            error_code = "business_error"
         event_queue.put({
             "type": "error",
+            "error_code": error_code,
             "message": str(exc),
             "traceback": traceback.format_exc(),
         })
@@ -230,6 +267,10 @@ def _worker_entry(task: dict[str, Any], event_queue, cancel_event) -> None:
         if store is not None:
             with suppress(Exception):
                 store.db.close()
+            overlay = getattr(store, "_compute_overlay", None)
+            if overlay is not None:
+                with suppress(Exception):
+                    overlay.cleanup()
 
 
 def run_worker_task(
@@ -249,10 +290,10 @@ def run_worker_task(
     parent_rss_before = _rss_bytes()
     try:
         process.start()
-    except BaseException:
+    except (OSError, RuntimeError) as exc:
         events.close()
         events.join_thread()
-        raise
+        raise BacktestWorkerInfrastructureError("worker_start_failed") from exc
     result: dict[str, Any] | None = None
     failure: dict[str, Any] | None = None
     ipc_started = time.perf_counter()
@@ -281,15 +322,23 @@ def run_worker_task(
         if process.is_alive():
             process.terminate()
             process.join(timeout=5.0)
-            raise BacktestWorkerError("backtest worker returned but did not exit within 10 seconds")
+            raise BacktestWorkerInfrastructureError("worker_exit_failed")
         if failure is not None:
+            error_code = failure.get("error_code")
+            if error_code == "compute_input_integrity":
+                from app.desktop_client.workspace_adapter import ComputeInputIntegrityError
+
+                raise ComputeInputIntegrityError("compute input changed before worker start")
+            if error_code in {
+                "local_repo_init_failed",
+                "native_library_unavailable",
+            }:
+                raise BacktestWorkerInfrastructureError(error_code)
             raise BacktestWorkerError(
                 f"{failure.get('message', 'worker failed')}\n{failure.get('traceback', '')}".rstrip()
             )
         if result is None:
-            raise BacktestWorkerError(
-                f"backtest worker exited without result (exitcode={process.exitcode})"
-            )
+            raise BacktestWorkerInfrastructureError("worker_exit_failed")
 
         parent_metrics = {
             "ipc_elapsed_ms": round((time.perf_counter() - ipc_started) * 1000, 1),

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import os
 from datetime import date, timedelta
 
 import polars as pl
+import pytest
 
 from app.backtest.optimizer import OptimizeConfig
 from app.backtest.strategy import StrategyBacktestConfig
 from app.backtest.walkforward import WalkForwardConfig
 from app.backtest.worker import make_worker_task, run_worker_task
+from app.desktop_client.workspace_adapter import ComputeInputIntegrityError
 
 
 def _write_worker_strategy(data_dir) -> None:
@@ -115,6 +118,70 @@ def test_spawn_worker_returns_compact_result_and_memory_metrics(tmp_path):
     assert worker["serialized_result_bytes"] > 0
     assert worker["worker_exitcode"] == 0
     assert worker["parent_rss_after_worker_exit_bytes"] > 0
+
+
+def test_spawn_worker_reads_verified_snapshot_without_mutating_it(tmp_path):
+    start = date(2024, 1, 1)
+    data_dir = tmp_path / "compute-input"
+    _write_worker_strategy(data_dir)
+    _write_market_data(data_dir, start)
+    config = StrategyBacktestConfig(
+        strategy_id="worker_always_entry",
+        symbols=["600000.SH"],
+        start=start,
+        end=start + timedelta(days=2),
+        overrides={"basic_filter": {"enabled": False}},
+        matching="close_t",
+        fees_pct=0,
+        slippage_bps=0,
+        max_positions=1,
+    )
+    before = sorted(path.relative_to(data_dir).as_posix() for path in data_dir.rglob("*"))
+
+    for path in sorted(data_dir.rglob("*"), reverse=True):
+        os.chmod(path, 0o555 if path.is_dir() else 0o444)
+    os.chmod(data_dir, 0o555)
+    try:
+        result = run_worker_task(
+            make_worker_task(
+                "backtest",
+                data_dir,
+                config,
+                read_only_snapshot=True,
+            )
+        )
+    finally:
+        os.chmod(data_dir, 0o755)
+        for path in data_dir.rglob("*"):
+            os.chmod(path, 0o755 if path.is_dir() else 0o644)
+
+    after = sorted(path.relative_to(data_dir).as_posix() for path in data_dir.rglob("*"))
+    assert result["error"] is None
+    assert before == after
+
+
+def test_spawn_worker_preserves_snapshot_integrity_failure(tmp_path):
+    data_dir = tmp_path / "compute-input"
+    outside = tmp_path / "outside"
+    data_dir.mkdir()
+    outside.mkdir()
+    (data_dir / "kline_daily").symlink_to(outside, target_is_directory=True)
+    config = StrategyBacktestConfig(
+        strategy_id="macd_golden",
+        symbols=["600000.SH"],
+        start=date(2024, 1, 1),
+        end=date(2024, 1, 2),
+    )
+
+    with pytest.raises(ComputeInputIntegrityError):
+        run_worker_task(
+            make_worker_task(
+                "backtest",
+                data_dir,
+                config,
+                read_only_snapshot=True,
+            )
+        )
 
 
 def test_spawn_optimizer_reuses_one_matrix_and_exits(tmp_path):

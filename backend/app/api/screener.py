@@ -9,12 +9,22 @@ import re
 import time
 from dataclasses import asdict
 from datetime import date, datetime
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from app.services import strategy_cache
+from app.services.compute_router import (
+    ComputeResult,
+    ComputeRouter,
+    LocalComputeUnavailable,
+    load_compute_input_manifest,
+    open_read_only_compute_repository,
+    prepare_local_compute_input,
+    request_cloud_json,
+)
 from app.services.screener import ScreenerService
 from app.strategy import config as strategy_config
 
@@ -256,9 +266,7 @@ def strategies(
     return {"presets": presets, "load_errors": engine.load_errors()}
 
 
-@router.post("/run")
-def run_custom(req: CustomRequest, request: Request):
-    repo = request.app.state.repo
+def _run_custom_with_repo(repo, req: CustomRequest) -> dict:
     svc = ScreenerService(repo, asset_type=req.asset_type)
     as_of = req.as_of or svc.latest_date()
     if not as_of:
@@ -274,6 +282,50 @@ def run_custom(req: CustomRequest, request: Request):
     safe_data = _safe(asdict(result))
     ext_values = _load_ext_value_maps(repo, req.ext_columns)
     return _result_with_ext(safe_data, ext_values)
+
+
+def _run_local_screener(data_dir: Path, req: CustomRequest) -> dict:
+    store = None
+    try:
+        store, repo = open_read_only_compute_repository(data_dir)
+        return _run_custom_with_repo(repo, req)
+    except (ImportError, ModuleNotFoundError) as exc:
+        raise LocalComputeUnavailable("native_library_unavailable") from exc
+    finally:
+        if store is not None:
+            try:
+                store.db.close()
+            finally:
+                overlay = getattr(store, "_compute_overlay", None)
+                if overlay is not None:
+                    overlay.cleanup()
+
+
+@router.post("/run")
+def run_custom(req: CustomRequest, request: Request):
+    adapter = getattr(request.app.state, "workspace_adapter", None)
+    if adapter is None:
+        compute_result = ComputeResult(
+            value=_run_custom_with_repo(request.app.state.repo, req),
+            execution_target="cloud",
+        )
+    else:
+        raw_config = req.model_dump(mode="json", exclude_unset=True)
+
+        def local() -> dict:
+            data_dir = prepare_local_compute_input(adapter, "screener", raw_config)
+            load_compute_input_manifest(data_dir, "screener", raw_config)
+            return _run_local_screener(data_dir, req)
+
+        compute_result = ComputeRouter(cloud_enabled=True).execute(
+            "screener",
+            local,
+            lambda: request_cloud_json(adapter, "/api/screener/run", raw_config),
+        )
+
+    payload = dict(compute_result.value)
+    payload["execution_target"] = compute_result.execution_target
+    return payload
 
 
 @router.post("/run_preset")

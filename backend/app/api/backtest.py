@@ -2,11 +2,16 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
+import math
+import re
 import threading
+import time
 from dataclasses import asdict
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
@@ -18,6 +23,22 @@ from app.services.backtest import (
     BacktestConfig,
     BacktestService,
     VectorbtUnavailable,
+)
+from app.services.compute_input_bundle import (
+    compute_parameters_digest,
+    normalize_compute_config,
+)
+from app.services.compute_router import (
+    ComputeResult,
+    ComputeRouter,
+    load_compute_input_manifest,
+    prepare_local_compute_input,
+    request_cloud_json,
+    run_local_worker,
+)
+from app.workspace.models import (
+    ResourceName,
+    WorkspaceRevisionConflict,
 )
 
 logger = logging.getLogger(__name__)
@@ -209,17 +230,41 @@ class StrategyBacktestRequest(BaseModel):
     minute_fill: bool = False
 
 
-@router.post("/strategy/run")
-def strategy_run(req: StrategyBacktestRequest, request: Request):
-    """策略回测 — 复用 StrategyDef 体系做全周期回测。"""
+_SUMMARY_STAT_KEYS = frozenset(
+    {
+        "annual_return",
+        "avg_holding_days",
+        "benchmark_return",
+        "calmar",
+        "excess",
+        "max_drawdown",
+        "n_trades",
+        "profit_factor",
+        "sharpe",
+        "sortino",
+        "total_return",
+        "win_rate",
+    }
+)
+_SUMMARY_ID_PATTERN = re.compile(r"[A-Za-z0-9._:-]{1,128}")
+
+
+def _workspace_adapter(request: Request):
+    return getattr(request.app.state, "workspace_adapter", None)
+
+
+def _strategy_request_config(req: StrategyBacktestRequest) -> dict:
+    return req.model_dump(mode="json", exclude_unset=True)
+
+
+def _strategy_backtest_config(
+    req: StrategyBacktestRequest,
+    start: date,
+    end: date,
+):
     from app.backtest.strategy import StrategyBacktestConfig
-    from app.backtest.worker import make_worker_task, run_worker_task
 
-    end = req.end or date.today()
-    start = _resolve_start(req, end, FACTOR_DEFAULT_DAYS)
-    _guard_server_backtest_range(start, end)
-
-    cfg = StrategyBacktestConfig(
+    return StrategyBacktestConfig(
         strategy_id=req.strategy_id,
         symbols=req.symbols if req.symbols else None,
         start=start,
@@ -242,15 +287,229 @@ def strategy_run(req: StrategyBacktestRequest, request: Request):
         asset_type=req.asset_type,
         minute_fill=req.minute_fill,
     )
-    task = make_worker_task("backtest", settings.data_dir, cfg)
-    return run_worker_task(task)
+
+
+def _run_strategy_worker(
+    data_dir: Path,
+    cfg,
+    progress_cb=None,
+    cancel_event=None,
+    *,
+    read_only_snapshot: bool,
+) -> dict:
+    from app.backtest.worker import make_worker_task, run_worker_task
+
+    task = make_worker_task(
+        "backtest",
+        data_dir,
+        cfg,
+        read_only_snapshot=read_only_snapshot,
+    )
+    return run_worker_task(task, progress_cb, cancel_event)
+
+
+def _safe_summary_stats(result: dict) -> dict:
+    stats = result.get("stats")
+    if not isinstance(stats, dict):
+        return {}
+    safe: dict = {}
+    for key in sorted(_SUMMARY_STAT_KEYS.intersection(stats)):
+        value = stats[key]
+        if (
+            value is None
+            or (isinstance(value, int) and not isinstance(value, bool))
+            or (isinstance(value, float) and math.isfinite(value))
+        ):
+            safe[key] = value
+    return safe
+
+
+def _result_data_as_of(result: dict, fallback: date) -> str:
+    curve = result.get("equity_curve")
+    if isinstance(curve, list) and curve and isinstance(curve[-1], dict):
+        value = curve[-1].get("date")
+        if isinstance(value, str):
+            try:
+                return date.fromisoformat(value).isoformat()
+            except ValueError:
+                pass
+    config = result.get("config")
+    if isinstance(config, dict) and isinstance(config.get("end"), str):
+        try:
+            return date.fromisoformat(config["end"]).isoformat()
+        except ValueError:
+            pass
+    return fallback.isoformat()
+
+
+def _build_backtest_summary(
+    req: StrategyBacktestRequest,
+    raw_config: dict,
+    result: dict,
+    *,
+    execution_target: str,
+    data_as_of: str,
+    started_at: datetime,
+) -> dict:
+    normalized = normalize_compute_config("strategy_backtest", raw_config)
+    run_id = result.get("run_id")
+    generated_id = hashlib.sha256(
+        (req.strategy_id + started_at.isoformat()).encode()
+    ).hexdigest()[:16]
+    summary_id = (
+        run_id
+        if isinstance(run_id, str) and _SUMMARY_ID_PATTERN.fullmatch(run_id)
+        else f"bt_{generated_id}"
+    )
+    return {
+        "id": summary_id,
+        "task": "strategy_backtest",
+        "strategy_id": req.strategy_id,
+        "parameters_digest": compute_parameters_digest(normalized),
+        "stats": _safe_summary_stats(result),
+        "started_at": started_at.isoformat(),
+        "finished_at": datetime.now(UTC).isoformat(),
+        "data_as_of": data_as_of,
+        "engine": "tickflow-strategy-backtest-v1",
+        "execution_target": execution_target,
+    }
+
+
+def _write_backtest_summary(request: Request, summary: dict) -> dict:
+    adapter = _workspace_adapter(request)
+    if adapter is not None:
+        current = adapter.get(ResourceName.BACKTEST_SUMMARIES)
+        try:
+            updated = adapter.command(
+                ResourceName.BACKTEST_SUMMARIES,
+                "append",
+                summary,
+                current.revision,
+            )
+        except WorkspaceRevisionConflict:
+            refreshed = adapter.get(ResourceName.BACKTEST_SUMMARIES)
+            return {
+                "status": "confirmation_required",
+                "revision": refreshed.revision,
+                "pending_summary": summary,
+            }
+        return {"status": "saved", "revision": updated.revision}
+
+    from app.workspace.commands import execute_command
+    from app.workspace.registry import snapshot_resource
+
+    current = snapshot_resource(ResourceName.BACKTEST_SUMMARIES)
+    try:
+        updated = execute_command(
+            ResourceName.BACKTEST_SUMMARIES,
+            "append",
+            summary,
+            current.revision,
+        )
+    except WorkspaceRevisionConflict:
+        refreshed = snapshot_resource(ResourceName.BACKTEST_SUMMARIES)
+        return {
+            "status": "confirmation_required",
+            "revision": refreshed.revision,
+            "pending_summary": summary,
+        }
+    return {"status": "saved", "revision": updated.revision}
+
+
+def _execute_strategy_compute(
+    request: Request,
+    req: StrategyBacktestRequest,
+    cfg,
+    raw_config: dict,
+    progress_cb=None,
+    cancel_event=None,
+) -> dict:
+    adapter = _workspace_adapter(request)
+    started_at = datetime.now(UTC)
+    if adapter is None:
+        value = _run_strategy_worker(
+            settings.data_dir,
+            cfg,
+            progress_cb,
+            cancel_event,
+            read_only_snapshot=False,
+        )
+        compute_result = ComputeResult(value=value, execution_target="cloud")
+        data_as_of = _result_data_as_of(value, cfg.end)
+    else:
+        local_state: dict[str, str] = {}
+
+        def local() -> dict:
+            data_dir = prepare_local_compute_input(
+                adapter,
+                "strategy_backtest",
+                raw_config,
+            )
+            manifest = load_compute_input_manifest(
+                data_dir,
+                "strategy_backtest",
+                raw_config,
+            )
+            local_state["data_as_of"] = manifest.data_as_of
+            return run_local_worker(
+                lambda: _run_strategy_worker(
+                    data_dir,
+                    cfg,
+                    progress_cb,
+                    cancel_event,
+                    read_only_snapshot=True,
+                )
+            )
+
+        compute_result = ComputeRouter(cloud_enabled=True).execute(
+            "strategy_backtest",
+            local,
+            lambda: request_cloud_json(
+                adapter,
+                "/api/backtest/strategy/run",
+                raw_config,
+            ),
+        )
+        data_as_of = local_state.get(
+            "data_as_of",
+            _result_data_as_of(compute_result.value, cfg.end),
+        )
+
+    payload = dict(compute_result.value)
+    payload["execution_target"] = compute_result.execution_target
+    if payload.get("error"):
+        return payload
+    if adapter is not None and compute_result.execution_target == "cloud":
+        return payload
+
+    summary = _build_backtest_summary(
+        req,
+        raw_config,
+        payload,
+        execution_target=compute_result.execution_target,
+        data_as_of=data_as_of,
+        started_at=started_at,
+    )
+    payload["summary_sync"] = _write_backtest_summary(request, summary)
+    return payload
+
+
+@router.post("/strategy/run")
+def strategy_run(req: StrategyBacktestRequest, request: Request):
+    """策略回测 — 复用 StrategyDef 体系做全周期回测。"""
+    end = req.end or date.today()
+    start = _resolve_start(req, end, FACTOR_DEFAULT_DAYS)
+    _guard_server_backtest_range(start, end)
+    cfg = _strategy_backtest_config(req, start, end)
+    return _execute_strategy_compute(
+        request,
+        req,
+        cfg,
+        _strategy_request_config(req),
+    )
 
 
 # ── SSE 流式回测 (实时进度 + 可取消 + 支持重连) ───────────────────
-
-import time
-import hashlib
-
 
 class _BacktestJob:
     """单个回测任务的状态, 存模块级供重连使用。"""
@@ -320,6 +579,59 @@ def _make_job_key(
     return hashlib.md5(raw.encode()).hexdigest()[:12]
 
 
+def _stream_strategy_request(
+    *,
+    strategy_id: str,
+    symbols: str | None,
+    start: str | None,
+    end: str | None,
+    matching: str,
+    entry_fill: str | None,
+    exit_fill: str | None,
+    fees_pct: float,
+    commission_pct: float | None,
+    stamp_tax_pct: float | None,
+    slippage_bps: float,
+    max_positions: int,
+    max_exposure_pct: float,
+    initial_capital: float,
+    position_sizing: str,
+    params: str | None,
+    overrides: str | None,
+    mode: str,
+    holding_days: int,
+    asset_type: str,
+    minute_fill: bool,
+) -> StrategyBacktestRequest:
+    payload: dict = {"strategy_id": strategy_id}
+    optional = {
+        "symbols": [item.strip() for item in symbols.split(",") if item.strip()]
+        if symbols
+        else None,
+        "start": start,
+        "end": end,
+        "matching": matching if matching != "open_t+1" else None,
+        "entry_fill": entry_fill,
+        "exit_fill": exit_fill,
+        "fees_pct": fees_pct if fees_pct != 0.0002 else None,
+        "commission_pct": commission_pct,
+        "stamp_tax_pct": stamp_tax_pct,
+        "slippage_bps": slippage_bps if slippage_bps != 5.0 else None,
+        "max_positions": max_positions if max_positions != 10 else None,
+        "max_exposure_pct": max_exposure_pct if max_exposure_pct != 1.0 else None,
+        "initial_capital": initial_capital if initial_capital != 1_000_000.0 else None,
+        "position_sizing": position_sizing if position_sizing != "equal" else None,
+        "params": json.loads(params) if params else None,
+        "overrides": json.loads(overrides) if overrides else None,
+        "mode": mode if mode != "position" else None,
+        "holding_days": holding_days if holding_days != 5 else None,
+        "asset_type": asset_type if asset_type != "stock" else None,
+        "minute_fill": True if minute_fill else None,
+    }
+    payload.update({key: value for key, value in optional.items() if value is not None})
+    return StrategyBacktestRequest.model_validate(payload)
+
+
 @router.get("/strategy/stream")
 async def strategy_stream(
     request: Request,
@@ -356,15 +668,13 @@ async def strategy_stream(
       - done: {result} (完整回测结果)
       - error: {message}
     """
-    from app.backtest.strategy import StrategyBacktestConfig
-    from app.backtest.worker import make_worker_task, run_worker_task
-
     end_date = date.fromisoformat(end) if end else date.today()
     if start:
         start_date = date.fromisoformat(start)
     else:
         # 空 start = 全部历史: 用本地最早日K日期, 查不到再回退到默认窗口
-        earliest = request.app.state.repo.earliest_daily_date()
+        adapter = _workspace_adapter(request)
+        earliest = None if adapter is not None else request.app.state.repo.earliest_daily_date()
         start_date = earliest or (end_date - timedelta(days=FACTOR_DEFAULT_DAYS))
 
     # 服务端范围保护
@@ -421,13 +731,11 @@ async def strategy_stream(
 
         # 如果是新任务, 启动回测线程
         if is_new and not job.done:
-            cfg = StrategyBacktestConfig(
+            compute_request = _stream_strategy_request(
                 strategy_id=strategy_id,
-                symbols=[s.strip() for s in symbols.split(",") if s.strip()] if symbols else None,
-                start=start_date,
-                end=end_date,
-                params=json.loads(params) if params else None,
-                overrides=json.loads(overrides) if overrides else None,
+                symbols=symbols,
+                start=start,
+                end=end,
                 matching=matching,
                 entry_fill=entry_fill,
                 exit_fill=exit_fill,
@@ -435,24 +743,30 @@ async def strategy_stream(
                 commission_pct=commission_pct,
                 stamp_tax_pct=stamp_tax_pct,
                 slippage_bps=slippage_bps,
-                max_positions=int(max_positions),
-                max_exposure_pct=float(max_exposure_pct),
-                initial_capital=float(initial_capital),
+                max_positions=max_positions,
+                max_exposure_pct=max_exposure_pct,
+                initial_capital=initial_capital,
                 position_sizing=position_sizing,
+                params=params,
+                overrides=overrides,
                 mode=mode,
-                holding_days=int(holding_days),
+                holding_days=holding_days,
                 asset_type=asset_type,
                 minute_fill=minute_fill,
             )
+            cfg = _strategy_backtest_config(compute_request, start_date, end_date)
+            raw_config = _strategy_request_config(compute_request)
 
             def _run_backtest():
                 # 信号量限并发: 超额任务在此阻塞排队, 不并发吃满内存 (等待期间 cancel_event
                 # 仍可置位, svc.run 会据此提前返回 cancelled)。持槽跑完在 finally 释放。
                 _backtest_semaphore.acquire()
                 try:
-                    task = make_worker_task("backtest", settings.data_dir, cfg)
-                    result = run_worker_task(
-                        task,
+                    result = _execute_strategy_compute(
+                        request,
+                        compute_request,
+                        cfg,
+                        raw_config,
                         lambda d: job.progress.append(d),
                         job.cancel_event,
                     )
