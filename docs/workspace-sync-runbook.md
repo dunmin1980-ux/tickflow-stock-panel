@@ -167,21 +167,59 @@ rejected_copy="data/user_data.rejected-$restore_id"
 old_moved=false
 service_touched=false
 
+workspace_contract() {
+  local image
+  image="$(docker inspect TickFlow_Stock_Panel --format '{{.Image}}')" || return 1
+  docker run --rm --network none --read-only \
+    --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+    --volumes-from TickFlow_Stock_Panel:ro \
+    -e DATA_DIR=/app/data \
+    -e WORKSPACE_SYNC_ENABLED=true \
+    -e GOLD_WORKSPACE_ENABLED=false \
+    "$image" /app/.venv/bin/python - <<'PY'
+from app.api.workspace import _DATA_MODELS
+from app.workspace.models import ResourceName
+from app.workspace.registry import snapshot_resource
+from app.workspace.revision import revision_for
+
+for resource in ResourceName:
+    snapshot = snapshot_resource(resource)
+    _DATA_MODELS[resource].model_validate(snapshot.data)
+    if snapshot.revision != revision_for(snapshot.data):
+        raise SystemExit(1)
+print("WORKSPACE_RESTORE_CONTRACT_OK")
+PY
+}
+
+rollback_fail() {
+  printf 'ROLLBACK_FAILED: %s; service remains stopped for manual recovery\n' "$1" >&2
+  exit 90
+}
+
 restore_original() {
   rc=$?
   trap - ERR
   set +e
   if [[ "$service_touched" == true ]]; then
     PORT=3019 GOLD_WORKSPACE_ENABLED=false WORKSPACE_SYNC_ENABLED=false \
-      docker compose stop app
+      docker compose stop app || rollback_fail "unable to stop app"
     if [[ "$old_moved" == true && -d "$failed_copy" ]]; then
       if [[ -d data/user_data ]]; then
-        mv data/user_data "$rejected_copy"
+        mv data/user_data "$rejected_copy" || \
+          rollback_fail "unable to preserve rejected restored data"
       fi
-      mv "$failed_copy" data/user_data
+      mv "$failed_copy" data/user_data || \
+        rollback_fail "unable to restore original user_data"
+    elif [[ "$old_moved" == true ]]; then
+      rollback_fail "original user_data copy is missing"
     fi
     PORT=3019 GOLD_WORKSPACE_ENABLED=false WORKSPACE_SYNC_ENABLED=false \
-      docker compose up -d --no-build --force-recreate
+      docker compose up -d --no-build --force-recreate || \
+        rollback_fail "unable to restart rollback image"
+    curl -fsS http://127.0.0.1:3019/health >/dev/null || \
+      rollback_fail "rollback health check failed"
+    workspace_contract >/dev/null || \
+      rollback_fail "rollback workspace contract failed"
   fi
   exit "$rc"
 }
@@ -204,8 +242,9 @@ mv "$restore_tmp/user_data" data/user_data
 chmod -R u=rwX,go= data/user_data
 PORT=3019 GOLD_WORKSPACE_ENABLED=false WORKSPACE_SYNC_ENABLED=false \
   docker compose up -d --no-build --force-recreate
-curl -fsS http://127.0.0.1:3019/health
+curl -fsS http://127.0.0.1:3019/health >/dev/null
+workspace_contract | grep -Fxq 'WORKSPACE_RESTORE_CONTRACT_OK'
 trap - ERR
 ```
 
-任一移动、权限修复、重启或健康检查失败都会触发 `restore_original`：停止 `app`，将失败恢复件留在 `$rejected_copy`，原子移回 `$failed_copy`，并以关闭 workspace 写入的回滚镜像重启。不要在容器运行时覆盖数据库或 JSON 存储。
+任一移动、权限修复、重启、健康检查或五类 workspace DTO/修订校验失败都会触发 `restore_original`：停止 `app`，将失败恢复件留在 `$rejected_copy`，原子移回 `$failed_copy`，并以关闭 workspace 写入的回滚镜像重启。回滚任一步失败都会保持服务停止并以 `ROLLBACK_FAILED` 退出，不会继续运行不确定的数据目录。不要在容器运行时覆盖数据库或 JSON 存储。
