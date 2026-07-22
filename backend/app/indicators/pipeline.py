@@ -1305,18 +1305,19 @@ def _load_recent_history(enriched_base: Path, symbols: list[str], days: int) -> 
 
     try:
         lf = (
-            scan_enriched_parquet(str(enriched_base / "**" / "*.parquet"), cast_options=_cast)
+            scan_enriched_parquet(str(enriched_base / "**" / "*.parquet"))
             .filter(
                 (pl.col("symbol").is_in(symbols))
                 & (pl.col("date") >= cutoff)
             )
             .sort(["symbol", "date"])
         )
+        schema_names = set(lf.collect_schema().names())
         hist_cols = [c for c in ["symbol", "date", "open", "high", "low", "close",
                                  "volume", "amount", "raw_close", "raw_high", "raw_low"]
-                    if c in lf.schema]
+                    if c in schema_names]
         return lf.select(hist_cols).collect()
-    except Exception as e:  # noqa: BLE001
+    except (FileNotFoundError, OSError, pl.exceptions.PolarsError) as e:
         logger.warning("历史数据加载失败: %s", e)
         return pl.DataFrame()
 
