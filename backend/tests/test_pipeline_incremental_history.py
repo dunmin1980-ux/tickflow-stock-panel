@@ -37,7 +37,7 @@ def test_load_recent_history_reads_existing_enriched_rows(tmp_path):
 
 
 def test_load_recent_history_does_not_hide_programming_errors(monkeypatch, tmp_path):
-    def broken_scan(*args, **kwargs):  # noqa: ARG001
+    def broken_scan(*args, **kwargs):
         raise NameError("programming defect")
 
     monkeypatch.setattr(pipeline, "scan_enriched_parquet", broken_scan)
