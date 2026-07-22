@@ -178,10 +178,13 @@ workspace_contract() {
     -e GOLD_WORKSPACE_ENABLED=false \
     "$image" /app/.venv/bin/python - <<'PY'
 from app.api.workspace import _DATA_MODELS
+from app.config import settings
 from app.workspace.models import ResourceName
 from app.workspace.registry import snapshot_resource
 from app.workspace.revision import revision_for
+from app.workspace.storage_validation import validate_storage_files
 
+validate_storage_files(settings.data_dir)
 for resource in ResourceName:
     snapshot = snapshot_resource(resource)
     _DATA_MODELS[resource].model_validate(snapshot.data)
@@ -192,7 +195,17 @@ PY
 }
 
 rollback_fail() {
-  printf 'ROLLBACK_FAILED: %s; service remains stopped for manual recovery\n' "$1" >&2
+  local reason="$1"
+  local running
+  printf 'ROLLBACK_FAILED: %s; forcing app stop\n' "$reason" >&2
+  docker stop TickFlow_Stock_Panel >/dev/null 2>&1 || \
+    docker kill TickFlow_Stock_Panel >/dev/null 2>&1 || true
+  running="$(docker inspect TickFlow_Stock_Panel --format '{{.State.Running}}' 2>/dev/null || printf 'false')"
+  if [[ "$running" == true ]]; then
+    printf 'ROLLBACK_EMERGENCY: app is still running; isolate the host manually\n' >&2
+    exit 91
+  fi
+  printf 'ROLLBACK_SERVICE_STOPPED: manual recovery required\n' >&2
   exit 90
 }
 
@@ -247,4 +260,4 @@ workspace_contract | grep -Fxq 'WORKSPACE_RESTORE_CONTRACT_OK'
 trap - ERR
 ```
 
-任一移动、权限修复、重启、健康检查或五类 workspace DTO/修订校验失败都会触发 `restore_original`：停止 `app`，将失败恢复件留在 `$rejected_copy`，原子移回 `$failed_copy`，并以关闭 workspace 写入的回滚镜像重启。回滚任一步失败都会保持服务停止并以 `ROLLBACK_FAILED` 退出，不会继续运行不确定的数据目录。不要在容器运行时覆盖数据库或 JSON 存储。
+任一移动、权限修复、重启、健康检查、原始 JSON/认证文件结构或五类 workspace DTO 校验失败都会触发 `restore_original`：停止 `app`，将失败恢复件留在 `$rejected_copy`，原子移回 `$failed_copy`，并以关闭 workspace 写入的回滚镜像重启。回滚任一步失败都会再次停止 `TickFlow_Stock_Panel` 并核验容器状态；只有确认未运行后才输出 `ROLLBACK_SERVICE_STOPPED`。不要在容器运行时覆盖数据库或 JSON 存储。

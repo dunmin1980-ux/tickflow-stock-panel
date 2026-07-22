@@ -323,10 +323,13 @@ production_contract="$canary_home/production-workspace-contract.txt"
 ssh "$ssh_host" "image=\"\$(docker inspect '$remote_container' --format '{{.Image}}')\"; docker run --rm --network none --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --volumes-from '$remote_container':ro -e DATA_DIR=/app/data -e WORKSPACE_SYNC_ENABLED=true -e GOLD_WORKSPACE_ENABLED=false \"\$image\" /app/.venv/bin/python -" \
   >"$production_contract" <<'PY' || fail "production workspace volume contract is invalid"
 from app.api.workspace import _DATA_MODELS
+from app.config import settings
 from app.workspace.models import ResourceName
 from app.workspace.registry import snapshot_resource
 from app.workspace.revision import revision_for
+from app.workspace.storage_validation import validate_storage_files
 
+validate_storage_files(settings.data_dir)
 for resource in ResourceName:
     snapshot = snapshot_resource(resource)
     _DATA_MODELS[resource].model_validate(snapshot.data)
