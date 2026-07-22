@@ -7,6 +7,8 @@ report_dir="$root/reports/macos_intel_acceptance"
 app="$root/backend/dist/TickFlowStockPanel.app"
 dmg="$root/dist/TickFlowStockPanel-intel-x86_64.dmg"
 pyinstaller_version="6.16.0"
+canary_receipt="$report_dir/security_canary_build.sha256"
+canary_digest=""
 
 fail() {
   printf 'MACOS_INTEL_BUILD_FAILED: %s\n' "$*" >&2
@@ -24,6 +26,14 @@ done
 
 umask 077
 mkdir -p "$report_dir" "$root/dist"
+rm -f "$canary_receipt"
+if [[ -n "${TICKFLOW_SECRET_CANARY:-}" ]]; then
+  [[ "${#TICKFLOW_SECRET_CANARY}" -ge 24 ]] || fail "secret canary must be at least 24 characters"
+  case "$TICKFLOW_SECRET_CANARY" in
+    *$'\n'*|*$'\r'*) fail "secret canary must be one line" ;;
+  esac
+  canary_digest="$(printf '%s' "$TICKFLOW_SECRET_CANARY" | shasum -a 256 | awk '{print $1}')"
+fi
 icon_hash_before="$(shasum -a 256 "$icon" | awk '{print $1}')"
 printf 'before %s  %s\n' "$icon_hash_before" "$icon" > "$report_dir/icon_hashes.txt"
 
@@ -78,4 +88,7 @@ chmod 600 "$dmg" "$dmg.sha256"
 
 verify_icon_unchanged
 trap - EXIT
+if [[ -n "$canary_digest" ]]; then
+  printf '%s\n' "$canary_digest" > "$canary_receipt"
+fi
 printf 'MACOS_INTEL_BUILD_OK\n'

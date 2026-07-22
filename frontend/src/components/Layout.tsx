@@ -60,7 +60,7 @@ import { ConnectionBanner } from './ConnectionBanner'
 import { MobileNav } from './MobileNav'
 import { resolveClientBadge, type ClientBadgeTone } from '@/lib/clientMode'
 import type { ClientStatus } from '@/lib/api'
-import { useWorkspaceStatus } from '@/lib/useWorkspaceEvents'
+import { WorkspaceEvents, useWorkspaceStatus } from '@/lib/useWorkspaceEvents'
 import type { WorkspaceStatus } from '@/lib/workspace'
 
 // 品牌色 — 只用于 logo / brand 区域,不影响功能语义色
@@ -511,6 +511,7 @@ export function Layout() {
 
   return (
     <div className="grid h-[100dvh] grid-cols-1 overflow-hidden bg-base text-foreground md:grid-cols-[14rem_minmax(0,1fr)]">
+      <WorkspaceEvents />
       <aside className="hidden h-full min-h-0 flex-col overflow-hidden border-r border-border bg-surface md:flex">
         <div className="px-5 py-5 border-b border-border shrink-0">
           {/* Brand block — 原创 logo + 等宽 wordmark */}

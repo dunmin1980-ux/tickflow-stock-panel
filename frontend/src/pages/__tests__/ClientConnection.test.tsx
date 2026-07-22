@@ -53,7 +53,7 @@ describe('ClientConnection', () => {
     renderPage()
 
     const urlInput = await screen.findByLabelText('云端 HTTPS URL')
-    expect(urlInput).toHaveValue('https://vm.tail.ts.net:8443')
+    await waitFor(() => expect(urlInput).toHaveValue('https://vm.tail.ts.net:8443'))
     vi.mocked(api.clientStatus).mockClear()
 
     fireEvent.click(screen.getByRole('button', { name: '保存并检查' }))

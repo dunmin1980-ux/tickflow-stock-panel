@@ -1,4 +1,9 @@
-import type { Page } from '@playwright/test'
+import type { Page, Route } from '@playwright/test'
+
+export interface MockApiOptions {
+  installEventSource?: boolean
+  handleRoute?: (route: Route, url: URL) => Promise<boolean>
+}
 
 const extFields = {
   concept: [
@@ -107,6 +112,84 @@ const overviewMarket = {
   industry_rank: { leading: [], lagging: [] },
 }
 
+const reviewReport = {
+  id: 'review-e2e',
+  title: 'A 股盘后复盘 2026-07-19',
+  as_of: '2026-07-19',
+  data_as_of: '2026-07-19',
+  content: '# 复盘\n\n长文本换行验证\n\n`THIS_IS_A_DETERMINISTIC_UNBROKEN_MARKDOWN_TOKEN_USED_TO_VERIFY_MOBILE_OVERFLOW_HANDLING_20260720`',
+  summary: '上证 +0.8% | 创业板 +1.2%',
+  emotion_score: 58,
+  emotion_label: '冷静',
+  created_at: '2026-07-19T16:00:00+08:00',
+  verification_status: 'pending',
+  can_publish: false,
+  trading_advice: false,
+}
+
+const workspaceRevision = '1'.repeat(64)
+const workspaceUpdatedAt = '2026-07-20T20:00:00+08:00'
+const workspaceResources = {
+  watchlist: {
+    resource: 'watchlist',
+    revision: workspaceRevision,
+    updated_at: workspaceUpdatedAt,
+    data: { symbols: [{ symbol: '600000.SH', note: '' }] },
+  },
+  preferences: {
+    resource: 'preferences',
+    revision: workspaceRevision,
+    updated_at: workspaceUpdatedAt,
+    data: {
+      preferences: {
+        indices_nav_pinned: false,
+        sidebar_index_symbols: [],
+        nav_order: [],
+        nav_hidden: [],
+        screener_auto_run: false,
+        daily_data_provider: 'tickflow',
+        adj_factor_provider: 'tickflow',
+        minute_data_provider: 'tickflow',
+        realtime_data_provider: 'tickflow',
+        financial_data_provider: 'tickflow',
+        has_feishu_webhook: false,
+        has_feishu_credential_data: false,
+        has_wecom_webhook: false,
+        has_wecom_bot: false,
+        has_wecom_bot_credential_data: false,
+      },
+    },
+  },
+  stock_reports: {
+    resource: 'stock_reports',
+    revision: workspaceRevision,
+    updated_at: workspaceUpdatedAt,
+    data: { reports: [] },
+  },
+  market_recaps: {
+    resource: 'market_recaps',
+    revision: workspaceRevision,
+    updated_at: workspaceUpdatedAt,
+    data: {
+      reports: [{
+        id: reviewReport.id,
+        title: reviewReport.title,
+        created_at: reviewReport.created_at,
+        data_as_of: reviewReport.data_as_of,
+        verification_status: reviewReport.verification_status,
+        can_publish: reviewReport.can_publish,
+        trading_advice: reviewReport.trading_advice,
+      }],
+    },
+  },
+  backtest_summaries: {
+    resource: 'backtest_summaries',
+    revision: workspaceRevision,
+    updated_at: workspaceUpdatedAt,
+    data: { summaries: [] },
+  },
+}
+
 function payloadFor(url: URL): unknown | undefined {
   const { pathname } = url
 
@@ -130,6 +213,28 @@ function payloadFor(url: URL): unknown | undefined {
       ai_user_agent: '',
     }
   }
+  if (pathname === '/api/workspace/bootstrap') {
+    return {
+      schema_version: 1,
+      server_time: workspaceUpdatedAt,
+      data_as_of: '2026-07-20',
+      mode: 'cloud',
+      capabilities: { label: 'None', capabilities: {} },
+      resources: workspaceResources,
+    }
+  }
+  if (pathname === '/api/workspace/revisions') {
+    return {
+      server_time: workspaceUpdatedAt,
+      resources: Object.fromEntries(
+        Object.entries(workspaceResources).map(([name, snapshot]) => [name, snapshot.revision]),
+      ),
+    }
+  }
+  const workspaceResource = pathname.match(/^\/api\/workspace\/resources\/([^/]+)$/)?.[1]
+  if (workspaceResource && workspaceResource in workspaceResources) {
+    return workspaceResources[workspaceResource as keyof typeof workspaceResources]
+  }
   if (pathname === '/api/capabilities') return { label: 'None', capabilities: {} }
   if (pathname === '/api/data/version') return { version: '0.1.86-e2e' }
   if (pathname === '/api/settings/preferences') return preferences
@@ -150,18 +255,9 @@ function payloadFor(url: URL): unknown | undefined {
 
   if (pathname === '/api/overview/market') return overviewMarket
   if (pathname === '/api/market-recap/reports') {
-    return {
-      reports: [{
-        id: 'review-e2e',
-        as_of: '2026-07-19',
-        content: '# 复盘\n\n长文本换行验证\n\n`THIS_IS_A_DETERMINISTIC_UNBROKEN_MARKDOWN_TOKEN_USED_TO_VERIFY_MOBILE_OVERFLOW_HANDLING_20260720`',
-        summary: '上证 +0.8% | 创业板 +1.2%',
-        emotion_score: 58,
-        emotion_label: '冷静',
-        created_at: '2026-07-19T16:00:00+08:00',
-      }],
-    }
+    return { reports: [reviewReport] }
   }
+  if (pathname === `/api/market-recap/reports/${reviewReport.id}`) return { report: reviewReport }
 
   if (pathname === '/api/ext-data') {
     const now = '2026-07-20T20:00:00+08:00'
@@ -184,10 +280,15 @@ function payloadFor(url: URL): unknown | undefined {
   return undefined
 }
 
-export async function installMockApi(page: Page): Promise<string[]> {
+export async function installMockApi(page: Page, options: MockApiOptions = {}): Promise<string[]> {
   const unexpectedRequests: string[] = []
 
-  await page.addInitScript(() => {
+  await page.route(
+    /https:\/\/(?:rsms\.me|fonts\.googleapis\.com|fonts\.gstatic\.com)\//,
+    route => route.abort('blockedbyclient'),
+  )
+
+  if (options.installEventSource !== false) await page.addInitScript(() => {
     localStorage.removeItem('watchlist_view')
 
     class TestEventSource {
@@ -221,6 +322,11 @@ export async function installMockApi(page: Page): Promise<string[]> {
   await page.route('**/api/**', async (route) => {
     const request = route.request()
     const url = new URL(request.url())
+    if (options.handleRoute && await options.handleRoute(route, url)) return
+    if (url.pathname === '/api/client/status') {
+      await route.fulfill({ status: 404, body: '' })
+      return
+    }
     const payload = payloadFor(url)
     if (payload === undefined) {
       unexpectedRequests.push(`${request.method()} ${url.pathname}${url.search}`)
