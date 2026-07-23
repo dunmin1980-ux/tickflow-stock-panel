@@ -1,5 +1,7 @@
 # tickflow-stock-panel P0 修复与全链路评测校验报告
 
+> 运行态更新（2026-07-23）：本报告验收的分支现已部署到云端 3019。部署、镜像 digest、回滚点和替换后验证见 `reports/tickflow_p0_cloud_upgrade_20260723.md`。下文 `NOT_DEPLOYED` 结论仅代表 2026-07-22 的原始快照。
+>
 > 验收时间：2026-07-22（Asia/Shanghai）  
 > 权威工作区：`/Users/macbookpro/Documents/TradingView 量化/tickflow-multiclient-app`  
 > 基线：`b524b94b335d51e630bdd08012c832d9522917c0`  
