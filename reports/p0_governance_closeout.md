@@ -80,6 +80,7 @@ sync、compileall、Ruff `F821` 和后端 pytest 全部通过。
 | TypeScript | 通过 |
 | Vite/PWA build | 通过，69 个 precache 条目 |
 | Playwright | `25 passed, 2 skipped` |
+| Readiness 权限/逐标的覆盖 fixture | `REAL_DATA_READINESS_FIXTURES_OK` |
 
 前端 frozen 安装首次曾因 npm 网络超时失败；本轮仅重试同一
 `--frozen-lockfile` 命令，成功后才继续测试，没有使用非冻结依赖解析。
@@ -201,7 +202,10 @@ REAL_DATA_READINESS_BLOCKED
 
 三只样本股票的 raw/enriched 日线均各有 244 行，最新日期均为
 `2026-07-22`。该日期仍须与独立交易日历人工核验。脚本没有读取
-secret 值，也没有发出外部行情或 AI 请求。
+secret 值，也没有发出外部行情或 AI 请求。readiness 门禁会检查
+`preferences.json`、`auth.json`、`secrets.json` 的权限，并在复权或
+财务文件存在时核验三只样本逐标的覆盖，不能由无关标的文件误触发
+全绿。
 
 在认证、复权因子、财务数据和人工交易日校验完成前，不得声称
 AI Review ready，也不得生成可发布金融日报。后续操作顺序见

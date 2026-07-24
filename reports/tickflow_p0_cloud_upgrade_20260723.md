@@ -1,5 +1,11 @@
 # TickFlow P0 云端补丁升级验收报告
 
+> **已被后续报告取代：** 本文记录的是 `aa9fc0a` 首次部署现场。
+> 之后治理复验发现根 PWA 资源和 Workbox 运行时仍会错误回落到 SPA
+> HTML；该问题已由 `d89e088` / `494ee71` 修复并重新部署。PWA
+> 服务端当前状态以 `reports/p0_governance_closeout.md` 为准，本文中的
+> `CLOUD_PWA_PATCH_DEPLOYED` 不代表安装链路已完整修复。
+
 > 执行时间：2026-07-23（Asia/Shanghai）  
 > 本地分支：`codex/tickflow-p0-validation`  
 > 部署 commit：`aa9fc0a84b8e72091f8e26c86983c66819befd30`  

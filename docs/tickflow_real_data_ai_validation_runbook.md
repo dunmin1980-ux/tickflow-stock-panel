@@ -83,7 +83,8 @@ The script:
 - never reads secret values;
 - checks the three instrument records;
 - compares raw and enriched daily coverage;
-- reports adjustment-factor and financial-file availability;
+- verifies adjustment-factor and financial coverage for all three sample
+  symbols, rather than relying only on repository-wide file counts;
 - checks sensitive file modes when those files exist.
 
 `REAL_DATA_READINESS_BLOCKED` is expected before authentication, factors, financials, and AI are configured.

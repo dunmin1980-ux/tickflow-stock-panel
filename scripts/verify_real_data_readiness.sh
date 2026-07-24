@@ -57,6 +57,22 @@ def _table_rows(pattern: str) -> list[dict[str, object]]:
     ]
 
 
+def _symbols_with_rows(pattern: str) -> list[str] | None:
+    parquet_glob = str(data_dir / pattern)
+    if not list(data_dir.glob(pattern)):
+        return []
+    placeholders = ", ".join(repr(symbol) for symbol in symbols)
+    try:
+        rows = duckdb.sql(
+            "SELECT DISTINCT symbol "
+            f"FROM read_parquet('{parquet_glob}', union_by_name=true) "
+            f"WHERE symbol IN ({placeholders}) ORDER BY symbol"
+        ).fetchall()
+    except duckdb.Error:
+        return None
+    return [symbol for (symbol,) in rows]
+
+
 instrument_glob = str(data_dir / "instruments" / "*.parquet")
 instrument_files = list((data_dir / "instruments").glob("*.parquet"))
 instruments: list[dict[str, str]] = []
@@ -85,7 +101,9 @@ print(json.dumps({
     "raw_daily": _table_rows("kline_daily/**/*.parquet"),
     "enriched_daily": _table_rows("kline_daily_enriched/**/*.parquet"),
     "adjustment_factor_files": len(list((data_dir / "adj_factor").rglob("*.parquet"))),
+    "adjustment_factor_symbols": _symbols_with_rows("adj_factor/**/*.parquet"),
     "financial_files": len(list((data_dir / "financials").rglob("*.parquet"))),
+    "financial_symbols": _symbols_with_rows("financials/**/*.parquet"),
     "user_data_permissions": permission_state,
     "secret_values_read": False,
     "external_requests_made": False,
@@ -131,10 +149,23 @@ if not any(item.endswith("SAMPLE_INCOMPLETE") for item in blockers):
 
 if data["adjustment_factor_files"] == 0:
     blockers.append("ADJUSTMENT_FACTOR_DATA_UNAVAILABLE")
+elif data["adjustment_factor_symbols"] is None:
+    blockers.append("ADJUSTMENT_FACTOR_COVERAGE_UNREADABLE")
+else:
+    missing = sorted(expected_symbols - set(data["adjustment_factor_symbols"]))
+    if missing:
+        blockers.append(f"ADJUSTMENT_FACTOR_SAMPLE_INCOMPLETE:{','.join(missing)}")
+
 if data["financial_files"] == 0:
     blockers.append("FINANCIAL_DATA_UNAVAILABLE")
+elif data["financial_symbols"] is None:
+    blockers.append("FINANCIAL_COVERAGE_UNREADABLE")
+else:
+    missing = sorted(expected_symbols - set(data["financial_symbols"]))
+    if missing:
+        blockers.append(f"FINANCIAL_SAMPLE_INCOMPLETE:{','.join(missing)}")
 
-for name in ("auth.json", "secrets.json"):
+for name in ("preferences.json", "auth.json", "secrets.json"):
     state = data["user_data_permissions"][name]
     if state["present"] and state["mode"] != "600":
         blockers.append(f"UNSAFE_FILE_MODE:{name}:{state['mode']}")
