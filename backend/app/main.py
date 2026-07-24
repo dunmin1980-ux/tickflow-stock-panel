@@ -108,6 +108,32 @@ class ImmutableAssetStaticFiles(StaticFiles):
         return response
 
 
+_ROOT_STATIC_FILES = frozenset(
+    {
+        "registerSW.js",
+        "favicon.svg",
+        "apple-touch-icon.png",
+        "pwa-192.png",
+        "pwa-512.png",
+    }
+)
+
+
+def _static_or_spa_response(static_dir: Path, full_path: str):
+    if full_path in _ROOT_STATIC_FILES:
+        asset = static_dir / full_path
+        if asset.is_file():
+            return FileResponse(asset, headers={"Cache-Control": "no-cache"})
+
+    index = static_dir / "index.html"
+    if index.exists():
+        return FileResponse(
+            index,
+            headers={"Cache-Control": "no-store, must-revalidate"},
+        )
+    return {"error": "frontend not built"}
+
+
 def _initialize_gold_runtime(app: FastAPI, store: DataStore) -> None:
     app.state.gold_shadow_service = None
     app.state.gold_store = None
@@ -530,10 +556,4 @@ if _static.exists():
         index.html 禁止缓存 (Cache-Control: no-store), 确保浏览器每次拿到
         最新版本引用的 JS/CSS 文件名 (assets 带 hash, 可长缓存)。
         """
-        index = _static / "index.html"
-        if index.exists():
-            return FileResponse(
-                index,
-                headers={"Cache-Control": "no-store, must-revalidate"},
-            )
-        return {"error": "frontend not built"}
+        return _static_or_spa_response(_static, full_path)
