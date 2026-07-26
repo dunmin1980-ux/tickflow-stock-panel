@@ -653,7 +653,10 @@ def test_master_larger_than_cache_byte_budget_is_served_uncached(tmp_path: Path)
         service.close()
 
 
-def test_expired_master_is_removed_before_rebuild(tmp_path: Path) -> None:
+def test_expired_master_is_removed_before_rebuild(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     data_dir = tmp_path / "ttl-data"
     _seed_market_data(data_dir)
     clock = [0.0]
@@ -666,14 +669,22 @@ def test_expired_master_is_removed_before_rebuild(tmp_path: Path) -> None:
     first = service.build("strategy_backtest", _strategy_config())
     first.cleanup()
     old_master = next(service.temp_root.glob("master-*.zip"))
-    old_inode = old_master.stat().st_ino
+    original_create_master = service._create_master
+    master_absent_before_rebuild: list[bool] = []
+
+    def create_master_after_expiry(*args, **kwargs):
+        master_absent_before_rebuild.append(not old_master.exists())
+        return original_create_master(*args, **kwargs)
+
+    monkeypatch.setattr(service, "_create_master", create_master_after_expiry)
 
     clock[0] = 11.0
     second = service.build("strategy_backtest", _strategy_config())
     try:
         assert second.from_cache is False
-        assert len(list(service.temp_root.glob("master-*.zip"))) == 1
-        assert old_master.stat().st_ino != old_inode
+        masters = list(service.temp_root.glob("master-*.zip"))
+        assert master_absent_before_rebuild == [True]
+        assert masters == [old_master]
     finally:
         second.cleanup()
         service.close()
