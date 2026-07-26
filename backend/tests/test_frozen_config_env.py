@@ -49,9 +49,14 @@ print(json.dumps({{"data_dir": str(settings.data_dir), "key": settings.tickflow_
 def test_frozen_settings_ignore_cwd_dotenv(tmp_path: Path) -> None:
     result = _frozen_settings(tmp_path)
 
-    assert result["data_dir"] == str(
-        tmp_path / "home" / "Library" / "Application Support" / "TickFlowStockPanel"
-    )
+    if sys.platform == "darwin":
+        expected_data_dir = (
+            tmp_path / "home" / "Library" / "Application Support" / "TickFlowStockPanel"
+        )
+    else:
+        expected_data_dir = Path(sys.executable).resolve().parent / "data"
+
+    assert result["data_dir"] == str(expected_data_dir)
     assert result["key"] == ""
 
 

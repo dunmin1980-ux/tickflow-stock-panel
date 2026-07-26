@@ -1,0 +1,43 @@
+TickFlow P0 governance preflight
+Captured: 2026-07-24 Asia/Shanghai
+Workspace: /Users/macbookpro/Documents/TradingView 量化/tickflow-multiclient-app
+
+git status --short:
+(clean)
+
+git branch --show-current:
+codex/tickflow-p0-validation
+
+git rev-parse HEAD:
+12c99db6da323d8149b578358899cff5c8e53f55
+
+Isolation:
+git_dir=/Users/macbookpro/Documents/TradingView 量化/tickflow-stock-panel/.git/worktrees/tickflow-multiclient-app
+git_common_dir=/Users/macbookpro/Documents/TradingView 量化/tickflow-stock-panel/.git
+linked_worktree=true
+superproject=(none)
+
+git log -10 --oneline --decorate:
+12c99db (HEAD -> codex/tickflow-p0-validation, fork/codex/tickflow-p0-validation) docs: record P0 cloud patch deployment
+aa9fc0a docs: record remote CI trigger state
+389eaf8 docs: add P0 validation evaluation report
+0c2b73d fix: preserve corrupt history fallback
+0f081c5 ci: validate backend lockfile consistency
+927314d fix: prevent incremental double adjustment
+1d0ef6b test: remove stale noqa from history regression
+5797714 ci: enforce backend undefined-name gate
+2722c12 fix: resolve backend undefined names
+aff5443 fix: restore incremental indicator history warmup
+
+Remote PR base:
+fork/codex/tickflow-multiclient-app=b524b94b335d51e630bdd08012c832d9522917c0
+ahead=11
+behind=0
+
+GitHub CLI:
+not authenticated
+status=PR_USER_ACTION_REQUIRED
+
+Safety:
+- No reset, discard, checkout, deployment, restart, or secret read was performed.
+- The clean linked worktree is retained; no nested worktree was created.

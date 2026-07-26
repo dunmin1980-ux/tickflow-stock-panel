@@ -108,6 +108,46 @@ class ImmutableAssetStaticFiles(StaticFiles):
         return response
 
 
+_ROOT_STATIC_FILES = frozenset(
+    {
+        "registerSW.js",
+        "favicon.svg",
+        "apple-touch-icon.png",
+        "pwa-192.png",
+        "pwa-512.png",
+    }
+)
+
+
+def _static_or_spa_response(static_dir: Path, full_path: str):
+    workbox_hash = (
+        full_path.removeprefix("workbox-").removesuffix(".js")
+        if full_path.startswith("workbox-") and full_path.endswith(".js")
+        else ""
+    )
+    is_pwa_asset = full_path in _ROOT_STATIC_FILES or (
+        bool(workbox_hash)
+        and all(char.isalnum() or char in "_-" for char in workbox_hash)
+    )
+    if is_pwa_asset:
+        asset = static_dir / full_path
+        if asset.is_file():
+            return FileResponse(asset, headers={"Cache-Control": "no-cache"})
+        return JSONResponse(
+            status_code=404,
+            content={"detail": "PWA static asset not found"},
+            headers={"Cache-Control": "no-store"},
+        )
+
+    index = static_dir / "index.html"
+    if index.exists():
+        return FileResponse(
+            index,
+            headers={"Cache-Control": "no-store, must-revalidate"},
+        )
+    return {"error": "frontend not built"}
+
+
 def _initialize_gold_runtime(app: FastAPI, store: DataStore) -> None:
     app.state.gold_shadow_service = None
     app.state.gold_store = None
@@ -524,16 +564,10 @@ if _static.exists():
         )
 
     @app.get("/{full_path:path}", include_in_schema=False)
-    def spa_fallback(full_path: str):  # noqa: ARG001
+    def spa_fallback(full_path: str):
         """所有未匹配路径回退到 index.html — React Router 接管。
 
         index.html 禁止缓存 (Cache-Control: no-store), 确保浏览器每次拿到
         最新版本引用的 JS/CSS 文件名 (assets 带 hash, 可长缓存)。
         """
-        index = _static / "index.html"
-        if index.exists():
-            return FileResponse(
-                index,
-                headers={"Cache-Control": "no-store, must-revalidate"},
-            )
-        return {"error": "frontend not built"}
+        return _static_or_spa_response(_static, full_path)

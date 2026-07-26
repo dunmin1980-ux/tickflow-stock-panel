@@ -1,0 +1,38 @@
+{
+  "captured_at": "2026-07-24T12:58:26+08:00",
+  "container": "TickFlow_Stock_Panel",
+  "container_id": "364dcddc7955",
+  "app_version": "0.1.86",
+  "health_status": "ok",
+  "mode": "none",
+  "deployed_revision": "494ee71481f1487c1046e1030381c1dfab03d707",
+  "image_id": "sha256:f4b6652d3b57d680b366057c32149f00a5e9fd099961c0245ab30cb4a4cbed43",
+  "immutable_reference": "tickflow-stock-panel-stage-a-app:candidate-494ee71",
+  "compose_image": "tickflow-stock-panel-stage-a-app:candidate-494ee71",
+  "docker_repo_digests_reported": [
+    "tickflow-stock-panel-stage-a-app@sha256:f4b6652d3b57d680b366057c32149f00a5e9fd099961c0245ab30cb4a4cbed43"
+  ],
+  "repo_digest_available": false,
+  "registry_repo_digest_available": false,
+  "registry_repo_digest_note": "The reported repository name is local and unqualified; no pullable registry digest was established. The unique local tag is the deployment reference.",
+  "port": "127.0.0.1:3019",
+  "tailscale_https": "https://vm-0-9-ubuntu.tail21c236.ts.net:8443",
+  "tailscale_proxy": "http://127.0.0.1:3019",
+  "restart_count": 0,
+  "container_user": "root (Docker Config.User is empty)",
+  "gold_enabled": false,
+  "gold_external_send_count": 0,
+  "authentication_configured": false,
+  "workspace_sync_enabled": true,
+  "user_data_sha256": "949132c081de283f72829dadb95435bcf8d20bbe8623a483185fe9691d7706d0",
+  "backup": "/home/ubuntu/tickflow-backups/20260724_105311-pre-pwa-494ee71",
+  "backup_user_data_diff_bytes": 0,
+  "rollback_tag": "tickflow-stock-panel-stage-a-app:rollback-20260724_105311-pre-494ee71",
+  "rollback_image_id": "sha256:4f3f240cec7a911364ce2c0a84e89a42a1206e93bd74496792045775bfdd1003",
+  "other_services_modified": false,
+  "pwa_bundle_hashes": {
+    "assets/index-C8tPsIgq.js": "7a5c4c6b67c01bddba5c46b5f910682d8739e648db0bed03a2436131251fb12e",
+    "assets/index-CvGvQcx2.css": "b4791b492b1699a2300dfe8d04b25189caf2dd0320599f49c5879ece810d17a3"
+  },
+  "verification_result": "CLOUD_P0_RUNTIME_OK"
+}

@@ -944,6 +944,23 @@ def compute_enriched(
     如果提供了 factors, 先应用前复权再算指标。
     如果提供了 instruments, 计算涨跌停信号和换手率。
     """
+    df = _prepare_adjusted_prices(raw, factors)
+    if df.is_empty():
+        return df
+
+    # 全量计算指标 + 信号
+    return compute_all(
+        df,
+        instruments=instruments,
+        historical_shares=historical_shares,
+    )
+
+
+def _prepare_adjusted_prices(
+    raw: pl.DataFrame,
+    factors: pl.DataFrame | None = None,
+) -> pl.DataFrame:
+    """过滤停牌日、保留原始价格并应用前复权，不计算指标。"""
     if raw.is_empty():
         return raw
 
@@ -964,17 +981,7 @@ def compute_enriched(
     if factors is not None and not factors.is_empty():
         raw = _apply_adj_factor(raw, factors)
 
-    # 排序
-    df = raw.sort(["symbol", "date"])
-
-    # 全量计算指标 + 信号
-    df = compute_all(
-        df,
-        instruments=instruments,
-        historical_shares=historical_shares,
-    )
-
-    return df
+    return raw.sort(["symbol", "date"])
 
 
 def _select_storage_cols(df: pl.DataFrame) -> pl.DataFrame:
@@ -1061,19 +1068,24 @@ def run_pipeline(data_dir: Path | None = None,
             sym_list = raw_new["symbol"].unique().to_list()
             hist_df = _load_recent_history(enriched_base, sym_list, days=60)
 
+            # 新数据先单独复权；历史 enriched 已经复权，不能再次应用因子。
+            adjusted_new = _prepare_adjusted_prices(raw_new, factors)
+
             # 合并历史 + 新数据
             if not hist_df.is_empty():
                 # 只取基础行情列做历史前缀
                 hist_cols = [c for c in ["symbol", "date", "open", "high", "low", "close",
                                          "volume", "amount", "raw_close", "raw_high", "raw_low"]
                              if c in hist_df.columns]
-                raw_full = pl.concat([hist_df.select(hist_cols), raw_new], how="diagonal_relaxed")
+                adjusted_full = pl.concat(
+                    [hist_df.select(hist_cols), adjusted_new],
+                    how="diagonal_relaxed",
+                )
             else:
-                raw_full = raw_new
+                adjusted_full = adjusted_new
 
-            enriched_new = compute_enriched(
-                raw_full,
-                factors=factors,
+            enriched_new = compute_all(
+                adjusted_full.sort(["symbol", "date"]),
                 instruments=instruments,
                 historical_shares=historical_shares,
             )
@@ -1305,18 +1317,24 @@ def _load_recent_history(enriched_base: Path, symbols: list[str], days: int) -> 
 
     try:
         lf = (
-            scan_enriched_parquet(str(enriched_base / "**" / "*.parquet"), cast_options=_cast)
+            scan_enriched_parquet(str(enriched_base / "**" / "*.parquet"))
             .filter(
                 (pl.col("symbol").is_in(symbols))
                 & (pl.col("date") >= cutoff)
             )
             .sort(["symbol", "date"])
         )
+        schema_names = set(lf.collect_schema().names())
         hist_cols = [c for c in ["symbol", "date", "open", "high", "low", "close",
                                  "volume", "amount", "raw_close", "raw_high", "raw_low"]
-                    if c in lf.schema]
+                    if c in schema_names]
         return lf.select(hist_cols).collect()
-    except Exception as e:  # noqa: BLE001
+    except (
+        FileNotFoundError,
+        OSError,
+        pl.exceptions.ComputeError,
+        pl.exceptions.NoDataError,
+    ) as e:
         logger.warning("历史数据加载失败: %s", e)
         return pl.DataFrame()
 
