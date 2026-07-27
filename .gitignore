@@ -99,6 +99,14 @@ reports/macos_intel_acceptance/security_canary_build.json
 reports/macos_intel_acceptance/security_canary_build.sha256
 .cursor/debug-*.log
 
+# ===== Phase 1.2 observation runtime-only state =====
+reports/phase1_observation/.runtime.lock/
+reports/phase1_observation/.locks/
+reports/phase1_observation/.*.tmp-*
+reports/phase1_observation/.*.backup-*
+reports/phase1_observation/**/*.partial
+reports/phase1_observation/**/*.staging
+
 # ===== 打包产物 (本地构建的安装包,不入库) =====
 backend/TickFlowStockPanel-win-x64.zip
 backend/TickFlowStockPanel-macos.zip

@@ -1,0 +1,139 @@
+{
+  "boundaries": {
+    "ai": "NOT_CONFIGURED",
+    "cloud_redeployed": false,
+    "integrated_gold_enabled": false,
+    "integrated_gold_external_send_count": 0,
+    "paper_trading": "NOT_STARTED",
+    "real_key": "NOT_EXPOSED"
+  },
+  "contract": "tickflow_phase1_2_observation_day_v1",
+  "evidence_origin": "phase1_1_reuse",
+  "failure_reasons": [],
+  "idempotency_key": "phase1_observation:2026-07-27:f5f48819c7db5ecac1e09e7a0ec634a09aa5675480a9bd0f6d2cc9eea8bf8dd8:tickflow_phase1_2_observation_v1",
+  "live_request_reexecuted": false,
+  "metrics": {
+    "duplicate_timestamps": 0,
+    "ex_factor_checks": 3,
+    "ex_factor_passes": 3,
+    "first_bucket_checks": 3,
+    "first_bucket_matches": 3,
+    "http_429": 0,
+    "lunch_break_bars": 0,
+    "material_negative_amount": 0,
+    "material_ohlc_anomalies": 0,
+    "non_first_bucket_volume_amount_mismatches": 0,
+    "sensitive_shape_hits": 0,
+    "stale_data": 0,
+    "thirty_minute_ohlc_mismatches": 0
+  },
+  "new_api_request_count": 0,
+  "observation_date": "2026-07-27",
+  "observation_day": 1,
+  "source_data_hashes_verified": true,
+  "source_evidence": [
+    {
+      "path": "reports/phase1_data_contracts/000403SZ_daily_contract.json",
+      "sha256": "3a4f57ff239604a56a6f4ca5412cf46d4c25635703126fc2bcb7e2fed6343bd0",
+      "size": 50424
+    },
+    {
+      "path": "reports/phase1_data_contracts/000403SZ_ex_factors_contract.json",
+      "sha256": "5ca719a24371eff25a0e12ab6436e02d972b04ff5c70b282bfebf9491d2fdeb8",
+      "size": 5419
+    },
+    {
+      "path": "reports/phase1_data_contracts/300059SZ_daily_contract.json",
+      "sha256": "53f01c60e1cc414a7d73d0e28e82af72f27ae4dd1256c7a763c90994d1f9c920",
+      "size": 50424
+    },
+    {
+      "path": "reports/phase1_data_contracts/300059SZ_ex_factors_contract.json",
+      "sha256": "af26b000b9f61bb62732a8673c05207989f9e3b08b163c06cc83a47b498cce58",
+      "size": 5441
+    },
+    {
+      "path": "reports/phase1_data_contracts/600489SH_daily_contract.json",
+      "sha256": "604e149929efd2810d80413c648ea0e559a2a4e7114047626caeb59226ea1751",
+      "size": 50424
+    },
+    {
+      "path": "reports/phase1_data_contracts/600489SH_ex_factors_contract.json",
+      "sha256": "6894d2104aed4c32fcf389716e0bf491ddaaf3b986a4f3544cc10421fd6a1d99",
+      "size": 6081
+    },
+    {
+      "path": "reports/phase1_data_contracts/depth5_contract.json",
+      "sha256": "db231e68236479f5c7453a2af8823581755f1c15124a0f2fc0433eef47769697",
+      "size": 1425
+    },
+    {
+      "path": "reports/phase1_data_contracts/gate_status.json",
+      "sha256": "6c65565246949f4caefa4a588f3abbd63be485c0f5e736bec3d52a2b4ef3e013",
+      "size": 1221
+    },
+    {
+      "path": "reports/phase1_data_contracts/instrument_and_quote_contract.json",
+      "sha256": "f8023f8f6836294491ebedcd2b5c129fdc4825b3a728eac95d07a8226e71d2fa",
+      "size": 2778
+    },
+    {
+      "path": "reports/phase1_data_contracts/minute_to_30m_validation.json",
+      "sha256": "053f921581f422bf00353e0067df75d08ac285f323fc62d9df91cff652807186",
+      "size": 85981
+    },
+    {
+      "path": "reports/phase1_numeric_contracts/000403SZ_ex_factor_final.json",
+      "sha256": "c69c02bf8c0d32e8d4f3bfe192af731790f178032887b66f6bc1ab7f5d86197a",
+      "size": 3084
+    },
+    {
+      "path": "reports/phase1_numeric_contracts/000403SZ_ohlc_violation_distribution.json",
+      "sha256": "d9b33bbf836de7ded0abcfe21c99453adb8756986142e297ac89e8e33feb8f20",
+      "size": 7097
+    },
+    {
+      "path": "reports/phase1_numeric_contracts/300059SZ_amount_tolerance.json",
+      "sha256": "f81de1e91ca9467543ef33a7156014f154ba1d4eccf0563ebc376baf817e2d75",
+      "size": 879
+    },
+    {
+      "path": "reports/phase1_numeric_contracts/minute_30m_dual_convention_validation.json",
+      "sha256": "70dfd7f7aa32a3d457389d47109139e73694f65c45fdaa88d7756e993a7e3b1c",
+      "size": 6579
+    },
+    {
+      "path": "reports/phase1_numeric_contracts/verification_summary.json",
+      "sha256": "79b4eac88ec6dfcb1aa59afe2ddb63c559b4b8a61236bfd14669a2d335e2391e",
+      "size": 3082
+    },
+    {
+      "path": "reports/phase1_tickflow_request_audit.json",
+      "sha256": "4b804ef218d5b7ac936e12814c300230f5cbcf1c691b62800f6d00a9edf3cf0e",
+      "size": 31945
+    },
+    {
+      "path": "reports/tickflow_phase1_numeric_contract_closeout.md",
+      "sha256": "2ee43a1c5ab5966a82be876dec9d5a7e5a69e8b74453506d3f00027b37230cee",
+      "size": 3825
+    }
+  ],
+  "source_evidence_digest": "61b96a67f84d96b7648aedc833c9ac5cb6902acc1434722f6e2cca80228530f3",
+  "source_evidence_dir": "reports/phase1_numeric_contracts/",
+  "source_report": "reports/tickflow_phase1_numeric_contract_closeout.md",
+  "source_request_audit": "reports/phase1_tickflow_request_audit.json",
+  "source_request_count": 14,
+  "source_status": "PHASE1_READY_FOR_OBSERVATION_WITH_VENDOR_PENDING",
+  "status": "DAY_PASSED",
+  "symbols": {
+    "000403.SZ": "PASSED",
+    "300059.SZ": "PASSED",
+    "600489.SH": "PASSED"
+  },
+  "vendor_pending": [
+    "intraday_batch_entitlement",
+    "first_30m_bucket_includes_09_30",
+    "volume_unit",
+    "amount_unit"
+  ]
+}

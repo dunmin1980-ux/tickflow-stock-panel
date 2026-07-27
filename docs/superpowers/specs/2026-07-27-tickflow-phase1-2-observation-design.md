@@ -30,7 +30,7 @@
 采用独立离线观察器和薄运行脚本：
 
 1. `scripts/validate_phase1_observation.py`
-   - 负责结构化证据校验、Day 1 复用、每日文件生成、索引汇总和最终报告。
+   - 负责结构化证据校验、Day 1 复用、每日文件生成、索引汇总和阶段报告。
    - Day 1 模式完全离线，只读取 Phase 1.1 报告和 JSON 证据。
    - 未来日期模式接收 Phase 1.1 live 校验器生成的本地临时结果，不直接访问网络。
 2. `scripts/run_phase1_daily_validation.sh`
@@ -91,7 +91,7 @@ evidence_origin: phase1_1_reuse
 live_request_reexecuted: false
 source_status: PHASE1_READY_FOR_OBSERVATION_WITH_VENDOR_PENDING
 source_request_count: 14
-new_request_count: 0
+new_api_request_count: 0
 source_data_hashes_verified: true
 vendor_pending:
   - intraday_batch_entitlement
@@ -126,7 +126,7 @@ OHLCV 行。
 量额差异数量和 09:30 首桶解释结果。
 
 `request_audit.json` 只保存当日 pipeline 的脱敏指标。Day 1 明确写
-`new_request_count=0`，同时引用 `source_request_count=14`，不修改
+`new_api_request_count=0`，同时引用 `source_request_count=14`，不修改
 `reports/phase1_tickflow_request_audit.json`。
 
 ## 6. 幂等与冲突
@@ -160,12 +160,16 @@ OHLCV 行。
 ## 8. 未来交易日流程
 
 1. 操作者在 16:10 至 18:00 Asia/Shanghai 手动运行薄脚本。
-2. 脚本获取日期锁，拒绝同日期并发运行。
-3. 既有 Phase 1.1 live 校验器执行一次，三票分钟接口逐股串行。
-4. 首次 429 立即结束，不进行自动重试。
-5. live 输出先写本地临时文件；观察器离线校验并生成日期目录。
-6. 临时 live 文件在成功物化后删除；失败时只保留经过脱敏的失败证据。
-7. 重建观察索引和最终报告。
+2. 脚本先使用上交所 2026 官方休市安排离线检查日期，再获取全局运行锁。
+3. 脚本拒绝未来日期、历史 live、非下一交易日、已有通过记录、已有成功请求
+   审计及局部输出；非交易日只写 `NON_TRADING_DAY`，不进入 live。
+4. 全局运行锁使用 `reports/phase1_observation/.runtime.lock`，锁持有者存活时
+   第二进程在任何远端调用前退出，异常退出留下的死锁可恢复。
+5. 既有 Phase 1.1 live 校验器执行一次，三票分钟接口逐股串行。
+6. 首次 429 立即结束，不进行自动重试。
+7. live 输出先写本地临时文件；观察器离线校验并生成日期目录。
+8. 临时 live 文件在成功物化后删除；失败时只保留经过脱敏的失败证据。
+9. 重建观察索引和当前阶段报告。
 
 运行脚本不持有、不读取或打印完整凭据，只依赖目标实例已经完成的私密配置。
 
@@ -177,7 +181,13 @@ OHLCV 行。
 reports/phase1_observation/observation_index.json
 ```
 
-最终报告：
+进行中报告（1 至 4 个有效日）：
+
+```text
+reports/tickflow_phase1_observation_status.md
+```
+
+只有 5 日全部通过，或观察被正式阻断并终止时，才生成：
 
 ```text
 reports/tickflow_phase1_observation_final.md
@@ -189,6 +199,9 @@ material negative amount、30m OHLC、非首桶量额、首桶稳定率、因子
 
 Day 1 完成后主报告状态必须为
 `PHASE1_OBSERVATION_IN_PROGRESS`，有效交易日为 1，剩余观察日为 4。
+索引同时区分 `reused_observation_days=1`、
+`phase1_2_live_observation_days=0`、`valid_observation_days=1` 和
+`remaining_observation_days=4`，并保存更新前后内容哈希。
 
 ## 10. 测试
 

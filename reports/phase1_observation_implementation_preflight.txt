@@ -1,0 +1,92 @@
+TickFlow Phase 1.2 observation implementation preflight
+Captured: 2026-07-27 Asia/Shanghai
+
+branch:
+codex/tickflow-phase1-real-data-validation
+
+head:
+aa47b359a73cc6a680c381af6d9e8ea81f65e7ca
+
+recent commits:
+aa47b35 (HEAD -> codex/tickflow-phase1-real-data-validation) docs: design phase1 observation workflow
+94a33d8 (fork/codex/tickflow-multiclient-app) Merge pull request #1 from dunmin1980-ux/codex/tickflow-p0-validation
+992eb54 (fork/codex/tickflow-p0-validation, codex/tickflow-p0-validation) test: make Linux CI assertions deterministic
+4510327 fix: harden real data readiness gates
+ae2850b chore: close out P0 cloud patch governance
+
+tracked diff before this closeout:
+git diff --stat: empty
+git diff --name-status: empty
+
+untracked files observed before this closeout:
+?? backend/scripts/diagnose_phase1_tickflow_blockers.py
+?? backend/scripts/validate_phase1_tickflow_contracts.py
+?? backend/tests/test_phase1_observation.py
+?? backend/tests/test_phase1_tickflow_contract_validator.py
+?? docs/superpowers/plans/2026-07-27-tickflow-phase1-1-minute-contract-closeout.md
+?? docs/superpowers/plans/2026-07-27-tickflow-phase1-2-observation.md
+?? reports/phase1_auth_secret_readiness.md
+?? reports/phase1_blocker_diagnosis_preflight.txt
+?? reports/phase1_data_blockers/
+?? reports/phase1_data_contracts/
+?? reports/phase1_merge_and_baseline_check.md
+?? reports/phase1_numeric_contract_preflight.txt
+?? reports/phase1_numeric_contracts/
+?? reports/phase1_observation/
+?? reports/phase1_tickflow_request_audit.json
+?? reports/tickflow_phase1_blocker_diagnosis.md
+?? reports/tickflow_phase1_data_contract_eval.md
+?? reports/tickflow_phase1_numeric_contract_closeout.md
+?? reports/tickflow_phase1_observation_final.md
+?? reports/tickflow_vendor_evidence_index.json
+?? reports/tickflow_vendor_support_ticket.md
+?? scripts/run_phase1_daily_validation.sh
+?? scripts/tests/test_run_phase1_daily_validation.sh
+?? scripts/validate_phase1_observation.py
+
+Formal Phase 1.2 files intended for this implementation commit:
+- backend/tests/test_phase1_observation.py
+- scripts/run_phase1_daily_validation.sh
+- scripts/tests/test_run_phase1_daily_validation.sh
+- scripts/validate_phase1_observation.py
+- docs/superpowers/plans/2026-07-27-tickflow-phase1-2-observation.md
+- reports/phase1_observation/2026-07-27/
+- reports/phase1_observation/observation_index.json
+- reports/tickflow_phase1_observation_status.md
+- reports/phase1_observation_implementation_preflight.txt
+- reports/phase1_observation_design_conformance.md
+- reports/phase1_observation_implementation_closeout.md
+- exact Phase 1.2 runtime/staging ignore rules, if required
+
+Formal source evidence retained read-only and excluded from this implementation commit:
+- reports/tickflow_phase1_numeric_contract_closeout.md
+- reports/phase1_tickflow_request_audit.json
+- reports/phase1_numeric_contracts/
+- reports/phase1_data_contracts/
+
+Unrelated or prior-phase files excluded from this implementation commit:
+- backend/scripts/diagnose_phase1_tickflow_blockers.py
+- backend/scripts/validate_phase1_tickflow_contracts.py
+- backend/tests/test_phase1_tickflow_contract_validator.py
+- docs/superpowers/plans/2026-07-27-tickflow-phase1-1-minute-contract-closeout.md
+- reports/phase1_auth_secret_readiness.md
+- reports/phase1_blocker_diagnosis_preflight.txt
+- reports/phase1_data_blockers/
+- reports/phase1_merge_and_baseline_check.md
+- reports/phase1_numeric_contract_preflight.txt
+- reports/tickflow_phase1_blocker_diagnosis.md
+- reports/tickflow_phase1_data_contract_eval.md
+- reports/tickflow_vendor_evidence_index.json
+- reports/tickflow_vendor_support_ticket.md
+
+Temporary files:
+- No matching temporary or backup path was present under reports/phase1_observation
+  at preflight time.
+- Any .runtime.lock, .locks, .*.tmp-*, *.bak, *.partial, or *.staging path is
+  runtime-only and must not be committed or included in evidence hashes.
+
+Safety decisions:
+- No reset, discard, cleanup of unrelated files, cloud connection, API call,
+  deployment, scheduler installation, or runtime application edit is permitted.
+- Original Phase 1.1 request-audit SHA-256 at preflight:
+  4b804ef218d5b7ac936e12814c300230f5cbcf1c691b62800f6d00a9edf3cf0e

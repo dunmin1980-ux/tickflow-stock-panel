@@ -1,0 +1,36 @@
+{
+  "observation_date": "2026-07-27",
+  "symbols": {
+    "000403.SZ": {
+      "first_bucket_mechanically_explained": true,
+      "first_bucket_rule": "09:30-10:00",
+      "non_first_bucket_volume_amount_mismatches": 0,
+      "ohlc_mismatches": 0,
+      "status": "PASSED",
+      "vendor_contract_confirmed": false
+    },
+    "300059.SZ": {
+      "first_bucket_mechanically_explained": true,
+      "first_bucket_rule": "09:30-10:00",
+      "non_first_bucket_volume_amount_mismatches": 0,
+      "ohlc_mismatches": 0,
+      "status": "PASSED",
+      "vendor_contract_confirmed": false
+    },
+    "600489.SH": {
+      "first_bucket_mechanically_explained": true,
+      "first_bucket_rule": "09:30-10:00",
+      "non_first_bucket_volume_amount_mismatches": 0,
+      "ohlc_mismatches": 0,
+      "status": "PASSED",
+      "vendor_contract_confirmed": false
+    }
+  },
+  "timezone": "Asia/Shanghai",
+  "vendor_pending": [
+    "intraday_batch_entitlement",
+    "first_30m_bucket_includes_09_30",
+    "volume_unit",
+    "amount_unit"
+  ]
+}
