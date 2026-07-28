@@ -1214,7 +1214,158 @@ def _live_source_manifest(
     ]
 
 
-def _validate_live_security(result: Mapping[str, Any]) -> dict[str, Any]:
+def _explicit_bool(
+    mapping: Mapping[str, Any],
+    field: str,
+    *,
+    missing_code: str,
+    invalid_code: str,
+    detail: str | None = None,
+) -> bool:
+    field_detail = detail or field
+    _require(field in mapping, missing_code, field_detail)
+    value = mapping[field]
+    _require(isinstance(value, bool), invalid_code, field_detail)
+    return value
+
+
+def normalize_boundary_evidence_v1(
+    result: Mapping[str, Any],
+    *,
+    source_evidence_hash: str,
+) -> dict[str, Any]:
+    _require(
+        re.fullmatch(r"[0-9a-fA-F]{64}", source_evidence_hash) is not None,
+        "SOURCE_EVIDENCE_HASH_INVALID",
+    )
+    boundaries = _nested(result, "boundaries", code="BOUNDARY_EVIDENCE_MISSING")
+    boolean_fields = (
+        "cloud_redeployed",
+        "real_key_exposed",
+        "raw_market_values_modified",
+        "timestamps_shifted",
+        "missing_minutes_filled",
+        "ai_configured",
+        "paper_trading_started",
+        "integrated_gold_enabled",
+    )
+    if "boundary_schema_version" in boundaries:
+        version = boundaries["boundary_schema_version"]
+        _require(
+            isinstance(version, int)
+            and not isinstance(version, bool)
+            and version == 1,
+            "BOUNDARY_SCHEMA_VERSION_UNSUPPORTED",
+            repr(version),
+        )
+        canonical = {
+            "boundary_schema_version": version,
+            **{
+                field: _explicit_bool(
+                    boundaries,
+                    field,
+                    missing_code="BOUNDARY_FIELD_MISSING",
+                    invalid_code="BOUNDARY_FIELD_INVALID",
+                )
+                for field in boolean_fields
+            },
+            "integrated_gold_external_send_count": _int_value(
+                boundaries.get("integrated_gold_external_send_count"),
+                "GOLD_SEND_COUNT_INVALID",
+            ),
+        }
+        return {
+            "boundaries": canonical,
+            "normalization_applied": False,
+            "normalization_version": "boundary-v1",
+            "source_schema": "boundary-v1",
+            "source_evidence_hash": source_evidence_hash.lower(),
+            "derived_fields": [],
+        }
+
+    legacy_boolean_fields = (
+        "cloud_redeployed",
+        "real_key_exposed",
+        "ai_configured_by_phase",
+        "paper_trading_started",
+        "integrated_gold_enabled",
+    )
+    legacy_values = {
+        field: _explicit_bool(
+            boundaries,
+            field,
+            missing_code="LEGACY_BOUNDARY_FIELD_MISSING",
+            invalid_code="LEGACY_BOUNDARY_FIELD_INVALID",
+        )
+        for field in legacy_boolean_fields
+    }
+    mutation_field_map = {
+        "raw_market_values_modified": "raw_values_modified",
+        "timestamps_shifted": "timestamps_shifted",
+        "missing_minutes_filled": "missing_minutes_filled",
+    }
+    mutation_values: dict[str, bool] = {}
+    for canonical_field, legacy_field in mutation_field_map.items():
+        per_symbol: list[bool] = []
+        for symbol in SYMBOLS:
+            dual_first_bucket = _nested(
+                result,
+                "contracts",
+                "minute_to_30m",
+                "symbols",
+                symbol,
+                "local_1m_to_30m",
+                "dual_first_bucket",
+                code="LEGACY_BOUNDARY_PATH_MISSING",
+            )
+            value = _explicit_bool(
+                dual_first_bucket,
+                legacy_field,
+                missing_code="LEGACY_BOUNDARY_FIELD_MISSING",
+                invalid_code="LEGACY_BOUNDARY_FIELD_INVALID",
+                detail=f"{symbol}.{legacy_field}",
+            )
+            _require(
+                value is False,
+                "BOUNDARY_EVIDENCE_FAILED",
+                f"{symbol}.{legacy_field}",
+            )
+            per_symbol.append(value)
+        mutation_values[canonical_field] = any(per_symbol)
+
+    canonical = {
+        "boundary_schema_version": 1,
+        "cloud_redeployed": legacy_values["cloud_redeployed"],
+        "real_key_exposed": legacy_values["real_key_exposed"],
+        **mutation_values,
+        "ai_configured": legacy_values["ai_configured_by_phase"],
+        "paper_trading_started": legacy_values["paper_trading_started"],
+        "integrated_gold_enabled": legacy_values["integrated_gold_enabled"],
+        "integrated_gold_external_send_count": _int_value(
+            boundaries.get("integrated_gold_external_send_count"),
+            "GOLD_SEND_COUNT_INVALID",
+        ),
+    }
+    return {
+        "boundaries": canonical,
+        "normalization_applied": True,
+        "normalization_version": "boundary-v1",
+        "source_schema": "legacy-phase1.1",
+        "source_evidence_hash": source_evidence_hash.lower(),
+        "derived_fields": [
+            "raw_market_values_modified",
+            "timestamps_shifted",
+            "missing_minutes_filled",
+            "ai_configured",
+        ],
+    }
+
+
+def _validate_live_security(
+    result: Mapping[str, Any],
+    *,
+    source_evidence_hash: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     _require(
         not _contains_sensitive_shape(result),
         "SENSITIVE_SHAPE_DETECTED",
@@ -1244,7 +1395,11 @@ def _validate_live_security(result: Mapping[str, Any]) -> dict[str, Any]:
         == 0,
         "GOLD_EXTERNAL_SEND_DETECTED",
     )
-    boundaries = _nested(result, "boundaries", code="BOUNDARY_EVIDENCE_MISSING")
+    normalized = normalize_boundary_evidence_v1(
+        result,
+        source_evidence_hash=source_evidence_hash,
+    )
+    boundaries = normalized["boundaries"]
     for field in (
         "cloud_redeployed",
         "real_key_exposed",
@@ -1264,14 +1419,21 @@ def _validate_live_security(result: Mapping[str, Any]) -> dict[str, Any]:
         == 0,
         "GOLD_EXTERNAL_SEND_DETECTED",
     )
-    return {
-        "ai": "NOT_CONFIGURED",
-        "paper_trading": "NOT_STARTED",
-        "cloud_redeployed": False,
-        "integrated_gold_enabled": False,
-        "integrated_gold_external_send_count": 0,
-        "real_key": "NOT_EXPOSED",
-    }
+    return (
+        {
+            "ai": "NOT_CONFIGURED",
+            "paper_trading": "NOT_STARTED",
+            "cloud_redeployed": False,
+            "integrated_gold_enabled": False,
+            "integrated_gold_external_send_count": 0,
+            "real_key": "NOT_EXPOSED",
+        },
+        {
+            key: value
+            for key, value in normalized.items()
+            if key != "boundaries"
+        },
+    )
 
 
 def _compact_live_audit(
@@ -1452,6 +1614,7 @@ def _build_live_day_or_raise(
         "OBSERVATION_DATE_INVALID",
     )
     result = _read_json(result_path)
+    source_evidence_hash = sha256_file(result_path)
     status = result.get("final_status")
     if status == "PHASE1_RATE_LIMIT_BLOCKED":
         request_audit = _compact_live_audit(result, allow_429=True)
@@ -1464,7 +1627,10 @@ def _build_live_day_or_raise(
             source_status="PHASE1_RATE_LIMIT_BLOCKED",
         )
     _require(status == SOURCE_STATUS, "SOURCE_STATUS_MISMATCH", str(status))
-    boundaries = _validate_live_security(result)
+    boundaries, boundary_normalization = _validate_live_security(
+        result,
+        source_evidence_hash=source_evidence_hash,
+    )
     request_audit = _compact_live_audit(result, allow_429=False)
     contracts = _nested(result, "contracts", code="LIVE_CONTRACTS_MISSING")
     daily_contracts = _nested(contracts, "daily", code="DAILY_CONTRACT_MISSING")
@@ -1552,6 +1718,7 @@ def _build_live_day_or_raise(
         "request_audit": request_audit,
         "metrics": metrics,
         "boundaries": boundaries,
+        "boundary_normalization": boundary_normalization,
         "failure_reasons": [],
     }
 
@@ -1738,6 +1905,364 @@ def materialize_day(
     return summary
 
 
+def _repo_relative_path(path: Path, repo_root: Path, code: str) -> str:
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        _fail(code, str(path))
+
+
+def _frozen_file_by_role(
+    manifest: Mapping[str, Any],
+    *,
+    role: str,
+    repo_root: Path,
+) -> tuple[Path, str]:
+    entries = manifest.get("frozen_files")
+    _require(isinstance(entries, list), "FROZEN_FILE_MANIFEST_INVALID")
+    matches = [
+        entry
+        for entry in entries
+        if isinstance(entry, Mapping) and entry.get("role") == role
+    ]
+    _require(len(matches) == 1, "FROZEN_FILE_ROLE_INVALID", role)
+    entry = matches[0]
+    raw_path = entry.get("path")
+    expected_hash = entry.get("sha256")
+    _require(
+        isinstance(raw_path, str)
+        and isinstance(expected_hash, str)
+        and re.fullmatch(r"[0-9a-fA-F]{64}", expected_hash) is not None,
+        "FROZEN_FILE_MANIFEST_INVALID",
+        role,
+    )
+    path = Path(raw_path)
+    if not path.is_absolute():
+        path = repo_root.resolve() / path
+    _repo_relative_path(path, repo_root, "FROZEN_FILE_OUTSIDE_REPOSITORY")
+    actual_hash = sha256_file(path)
+    _require(
+        actual_hash == expected_hash.lower(),
+        "FROZEN_FILE_HASH_MISMATCH",
+        role,
+    )
+    return path, actual_hash
+
+
+def _validate_blocked_evidence_manifest(
+    *,
+    result_path: Path,
+    repo_root: Path,
+    observation_date: str,
+    evidence_manifest_path: Path,
+) -> dict[str, Any]:
+    manifest = _read_json(evidence_manifest_path)
+    _require(
+        manifest.get("contract")
+        == "tickflow_phase1_2_original_blocked_evidence_v1",
+        "FROZEN_MANIFEST_CONTRACT_INVALID",
+    )
+    _require(
+        manifest.get("observation_date") == observation_date,
+        "FROZEN_MANIFEST_DATE_MISMATCH",
+    )
+    _require(
+        manifest.get("original_day_status") == "DAY_BLOCKED",
+        "ORIGINAL_BLOCKED_STATUS_MISSING",
+    )
+    _require(
+        manifest.get("original_blocker") == "BOUNDARY_SCHEMA_MISMATCH",
+        "ORIGINAL_BLOCKER_MISMATCH",
+    )
+    _require(
+        isinstance(manifest.get("original_blocked_at"), str),
+        "ORIGINAL_BLOCKED_TIMESTAMP_MISSING",
+    )
+    _require(
+        manifest.get("source_evidence_modified") is False
+        and manifest.get("api_requests_added") == 0
+        and manifest.get("second_live_run") is False,
+        "FROZEN_MANIFEST_BOUNDARY_INVALID",
+    )
+    source = _nested(
+        manifest,
+        "source_live_result",
+        code="FROZEN_SOURCE_MANIFEST_INVALID",
+    )
+    expected_source_path = source.get("path")
+    expected_source_hash = source.get("sha256")
+    expected_source_size = source.get("size")
+    _require(
+        isinstance(expected_source_path, str)
+        and isinstance(expected_source_hash, str)
+        and re.fullmatch(r"[0-9a-fA-F]{64}", expected_source_hash) is not None
+        and isinstance(expected_source_size, int)
+        and not isinstance(expected_source_size, bool),
+        "FROZEN_SOURCE_MANIFEST_INVALID",
+    )
+    _require(
+        Path(expected_source_path).resolve() == result_path.resolve(),
+        "FROZEN_SOURCE_PATH_MISMATCH",
+    )
+    source_hash = sha256_file(result_path)
+    _require(
+        source_hash == expected_source_hash.lower(),
+        "FROZEN_SOURCE_HASH_MISMATCH",
+    )
+    _require(
+        result_path.stat().st_size == expected_source_size,
+        "FROZEN_SOURCE_SIZE_MISMATCH",
+    )
+
+    preserved_summary_path, preserved_summary_hash = _frozen_file_by_role(
+        manifest,
+        role="preserved_original_blocked_day_summary",
+        repo_root=repo_root,
+    )
+    preserved_audit_path, preserved_audit_hash = _frozen_file_by_role(
+        manifest,
+        role="preserved_original_day2_compact_request_audit",
+        repo_root=repo_root,
+    )
+    preserved_index_path, preserved_index_hash = _frozen_file_by_role(
+        manifest,
+        role="preserved_original_blocked_observation_index",
+        repo_root=repo_root,
+    )
+    diagnosis_path, diagnosis_hash = _frozen_file_by_role(
+        manifest,
+        role="original_blocker_diagnosis",
+        repo_root=repo_root,
+    )
+    cumulative_audit_path, cumulative_audit_hash = _frozen_file_by_role(
+        manifest,
+        role="phase1_cumulative_request_audit",
+        repo_root=repo_root,
+    )
+    preserved_summary = _read_json(preserved_summary_path)
+    _require(
+        preserved_summary.get("observation_date") == observation_date
+        and preserved_summary.get("status") == "DAY_BLOCKED",
+        "ORIGINAL_BLOCKED_SUMMARY_INVALID",
+    )
+    preserved_audit = _read_json(preserved_audit_path)
+    _require(
+        preserved_audit.get("source_request_count") == 14
+        and preserved_audit.get("new_api_request_count") == 14
+        and preserved_audit.get("live_request_reexecuted") is True
+        and preserved_audit.get("http_429") == 0,
+        "ORIGINAL_BLOCKED_AUDIT_INVALID",
+    )
+    preserved_index = _read_json(preserved_index_path)
+    _require(
+        preserved_index.get("final_status") == "PHASE1_OBSERVATION_BLOCKED"
+        and preserved_index.get("valid_observation_days") == 1,
+        "ORIGINAL_BLOCKED_INDEX_INVALID",
+    )
+    cumulative_audit = _read_json(cumulative_audit_path)
+    _require(
+        cumulative_audit.get("phase1_1_request_count") == 14
+        and cumulative_audit.get("http_429_detected") is False
+        and cumulative_audit.get("retry_count") == 0
+        and cumulative_audit.get("cloud_redeployed") is False
+        and cumulative_audit.get("integrated_gold_enabled") is False
+        and cumulative_audit.get("integrated_gold_external_send_count") == 0
+        and cumulative_audit.get("real_key_exposed") is False,
+        "CUMULATIVE_REQUEST_AUDIT_INVALID",
+    )
+    _require(
+        evidence_manifest_path.resolve().parent
+        == (
+            repo_root.resolve()
+            / "reports"
+            / "phase1_observation"
+            / observation_date
+        ),
+        "FROZEN_MANIFEST_PATH_INVALID",
+    )
+    return {
+        "manifest": manifest,
+        "source_hash": source_hash,
+        "manifest_hash": sha256_file(evidence_manifest_path),
+        "manifest_path": _repo_relative_path(
+            evidence_manifest_path,
+            repo_root,
+            "FROZEN_MANIFEST_OUTSIDE_REPOSITORY",
+        ),
+        "preserved_summary_path": _repo_relative_path(
+            preserved_summary_path,
+            repo_root,
+            "FROZEN_FILE_OUTSIDE_REPOSITORY",
+        ),
+        "preserved_summary_hash": preserved_summary_hash,
+        "preserved_audit_path": _repo_relative_path(
+            preserved_audit_path,
+            repo_root,
+            "FROZEN_FILE_OUTSIDE_REPOSITORY",
+        ),
+        "preserved_audit_hash": preserved_audit_hash,
+        "preserved_index_path": _repo_relative_path(
+            preserved_index_path,
+            repo_root,
+            "FROZEN_FILE_OUTSIDE_REPOSITORY",
+        ),
+        "preserved_index_hash": preserved_index_hash,
+        "diagnosis_path": _repo_relative_path(
+            diagnosis_path,
+            repo_root,
+            "FROZEN_FILE_OUTSIDE_REPOSITORY",
+        ),
+        "diagnosis_hash": diagnosis_hash,
+        "cumulative_audit_path": _repo_relative_path(
+            cumulative_audit_path,
+            repo_root,
+            "FROZEN_FILE_OUTSIDE_REPOSITORY",
+        ),
+        "cumulative_audit_hash": cumulative_audit_hash,
+    }
+
+
+def _rematerialized_day_files(day: Mapping[str, Any]) -> dict[str, Any]:
+    contracts = day.get("symbol_contracts")
+    _require(isinstance(contracts, Mapping), "SYMBOL_CONTRACTS_MISSING")
+    files: dict[str, Any] = {
+        "daily_summary.json": _summary_from_day(day),
+        "minute_30m_comparison.json": day.get("minute_30m_comparison"),
+        "request_audit.json": day.get("request_audit"),
+    }
+    for symbol in SYMBOLS:
+        _require(
+            symbol in contracts and isinstance(contracts[symbol], Mapping),
+            "SYMBOL_CONTRACTS_MISSING",
+            symbol,
+        )
+        files[f"{COMPACT_SYMBOLS[symbol]}_contract.json"] = contracts[symbol]
+    return files
+
+
+def _publish_rematerialized_day(
+    day: Mapping[str, Any],
+    target: Path,
+) -> None:
+    _require(target.is_dir() and not target.is_symlink(), "OBSERVATION_PATH_INVALID")
+    files = _rematerialized_day_files(day)
+    current_summary = _read_json(target / "daily_summary.json")
+    if current_summary.get("status") == "DAY_PASSED":
+        for filename, expected in files.items():
+            _require(
+                _read_json(target / filename) == expected,
+                "REMATERIALIZATION_IDEMPOTENCY_CONFLICT",
+                filename,
+            )
+        return
+    _require(
+        current_summary.get("status") == "DAY_BLOCKED",
+        "ORIGINAL_BLOCKED_STATUS_MISSING",
+    )
+
+    temporary = Path(
+        tempfile.mkdtemp(
+            prefix=f".{target.name}.rematerialize-",
+            dir=target.parent,
+        )
+    )
+    try:
+        for filename, value in files.items():
+            staged = temporary / filename
+            _write_json_file(staged, value)
+            staged.chmod(0o600)
+        for filename in sorted(files):
+            if filename == "daily_summary.json":
+                continue
+            os.replace(temporary / filename, target / filename)
+        _fsync_directory(target)
+        os.replace(
+            temporary / "daily_summary.json",
+            target / "daily_summary.json",
+        )
+        _fsync_directory(target)
+    finally:
+        shutil.rmtree(temporary, ignore_errors=True)
+
+
+def rematerialize_blocked_live_day(
+    *,
+    result_path: Path,
+    repo_root: Path,
+    observation_date: str,
+    evidence_manifest_path: Path,
+    schema_fix_commit: str,
+) -> dict[str, Any]:
+    _require(
+        re.fullmatch(r"[0-9a-f]{40}", schema_fix_commit) is not None,
+        "SCHEMA_FIX_COMMIT_INVALID",
+    )
+    frozen = _validate_blocked_evidence_manifest(
+        result_path=result_path,
+        repo_root=repo_root,
+        observation_date=observation_date,
+        evidence_manifest_path=evidence_manifest_path,
+    )
+    passed = _build_live_day_or_raise(
+        result_path,
+        repo_root,
+        observation_date,
+    )
+    source_request_count = _int_value(
+        passed.get("source_request_count"),
+        "REQUEST_AUDIT_INVALID",
+    )
+    _require(source_request_count == 14, "REQUEST_COUNT_MISMATCH")
+    source_audit = passed.get("request_audit")
+    _require(isinstance(source_audit, Mapping), "REQUEST_AUDIT_INVALID")
+    request_audit = {
+        **source_audit,
+        "source_live_request_count": source_request_count,
+        "source_request_count": source_request_count,
+        "new_api_request_count": 0,
+        "live_request_reexecuted": False,
+        "rematerialization_mode": "OFFLINE_EVIDENCE_REUSE",
+    }
+    manifest = frozen["manifest"]
+    rematerialized = {
+        **passed,
+        "evidence_origin": "phase1_2_live_reuse",
+        "live_request_reexecuted": False,
+        "source_live_request_count": source_request_count,
+        "source_request_count": source_request_count,
+        "new_api_request_count": 0,
+        "source_request_audit": frozen["preserved_audit_path"],
+        "source_evidence_manifest": frozen["manifest_path"],
+        "source_evidence_manifest_sha256": frozen["manifest_hash"],
+        "cumulative_request_audit_sha256": frozen[
+            "cumulative_audit_hash"
+        ],
+        "original_status": "DAY_BLOCKED",
+        "original_day_status": "DAY_BLOCKED",
+        "original_blocker": manifest["original_blocker"],
+        "original_blocker_detail": manifest.get("original_blocker_detail"),
+        "original_blocked_at": manifest["original_blocked_at"],
+        "resolution": "OFFLINE_SCHEMA_REMATERIALIZATION",
+        "rematerialization": {
+            "status": "PASSED",
+            "mode": "OFFLINE_EVIDENCE_REUSE",
+            "api_requests_added": 0,
+            "schema_fix_commit": schema_fix_commit,
+            "source_hash_verified": True,
+        },
+        "request_audit": request_audit,
+    }
+    target = (
+        repo_root.resolve()
+        / "reports"
+        / "phase1_observation"
+        / observation_date
+    )
+    _publish_rematerialized_day(rematerialized, target)
+    return rematerialized
+
+
 def _day_directories(observation_root: Path) -> list[Path]:
     if not observation_root.exists():
         return []
@@ -1838,6 +2363,25 @@ def _validate_day_sequence(
             _require(
                 day.get("observation_day") is None,
                 "OBSERVATION_DAY_SEQUENCE_INVALID",
+                observation_date,
+            )
+        if day.get("evidence_origin") == "phase1_2_live_reuse":
+            rematerialization = day.get("rematerialization")
+            _require(
+                day.get("status") == "DAY_PASSED"
+                and day.get("live_request_reexecuted") is False
+                and day.get("source_live_request_count") == 14
+                and day.get("source_request_count") == 14
+                and day.get("new_api_request_count") == 0
+                and day.get("original_status") == "DAY_BLOCKED"
+                and day.get("resolution")
+                == "OFFLINE_SCHEMA_REMATERIALIZATION"
+                and isinstance(rematerialization, Mapping)
+                and rematerialization.get("status") == "PASSED"
+                and rematerialization.get("mode") == "OFFLINE_EVIDENCE_REUSE"
+                and rematerialization.get("api_requests_added") == 0
+                and rematerialization.get("source_hash_verified") is True,
+                "REMATERIALIZED_DAY_INVALID",
                 observation_date,
             )
     if expected_day:
@@ -1965,7 +2509,9 @@ def rebuild_index(reports_root: Path) -> dict[str, Any]:
         day.get("evidence_origin") == "phase1_1_reuse" for day in passed_days
     )
     live_observation_days = sum(
-        day.get("evidence_origin") == "phase1_2_live" for day in passed_days
+        day.get("evidence_origin")
+        in {"phase1_2_live", "phase1_2_live_reuse"}
+        for day in passed_days
     )
     semantic_index = {
         "contract": "tickflow_phase1_2_observation_index_v1",
@@ -1987,6 +2533,9 @@ def rebuild_index(reports_root: Path) -> dict[str, Any]:
                 "evidence_origin": day.get("evidence_origin"),
                 "live_request_reexecuted": day.get("live_request_reexecuted"),
                 "source_request_count": day.get("source_request_count"),
+                "source_live_request_count": day.get(
+                    "source_live_request_count"
+                ),
                 "new_api_request_count": day.get("new_api_request_count"),
                 "source_report": day.get("source_report"),
                 "source_request_audit": day.get("source_request_audit"),
@@ -1997,6 +2546,12 @@ def rebuild_index(reports_root: Path) -> dict[str, Any]:
                 "source_evidence_digest": day.get("source_evidence_digest"),
                 "vendor_pending": day.get("vendor_pending"),
                 "idempotency_key": day.get("idempotency_key"),
+                "original_status": day.get("original_status"),
+                "original_day_status": day.get("original_day_status"),
+                "original_blocker": day.get("original_blocker"),
+                "original_blocked_at": day.get("original_blocked_at"),
+                "resolution": day.get("resolution"),
+                "rematerialization": day.get("rematerialization"),
             }
             for day in days
         ],
@@ -2117,6 +2672,18 @@ def render_observation_report(index: Mapping[str, Any]) -> str:
                     ),
                 ]
             )
+        if day.get("evidence_origin") == "phase1_2_live_reuse":
+            lines.extend(
+                [
+                    "",
+                    (
+                        f"Day {day.get('observation_day')} 保留原 "
+                        f"{day.get('original_status')} 审计，并通过 "
+                        "OFFLINE_SCHEMA_REMATERIALIZATION 复用唯一一次 "
+                        "live 证据；新增 API 请求为 0。"
+                    ),
+                ]
+            )
     lines.extend(
         [
             "",
@@ -2162,7 +2729,7 @@ def render_observation_report(index: Mapping[str, Any]) -> str:
             "",
             "供应商仍待确认：`intraday_batch` 权限、30m 首桶是否正式包含 "
             "09:30、volume 单位、amount 单位。这些待确认项不改变已验证的 "
-            "Day 1 计数。",
+            "有效观察日计数。",
             "",
         ]
     )
@@ -2203,6 +2770,16 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Rebuild the observation index and current status/final report.",
     )
+    mode.add_argument(
+        "--observation-root",
+        type=Path,
+        help="Rebuild one observation root offline (compatibility mode).",
+    )
+    mode.add_argument(
+        "--rematerialize-blocked-live",
+        type=Path,
+        help="Reuse one frozen sanitized live result without any API call.",
+    )
     parser.add_argument(
         "--repo-root",
         type=Path,
@@ -2220,15 +2797,76 @@ def _parser() -> argparse.ArgumentParser:
         "--symbol-set-hash",
         help="Fixed three-symbol contract hash supplied by the runner.",
     )
+    parser.add_argument(
+        "--evidence-manifest",
+        type=Path,
+        help="Frozen original DAY_BLOCKED evidence manifest.",
+    )
+    parser.add_argument(
+        "--schema-fix-commit",
+        help="Full commit SHA implementing boundary schema version 1.",
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
+        if args.observation_root is not None:
+            observation_root = args.observation_root.resolve()
+            _require(
+                observation_root.name == "phase1_observation"
+                and observation_root.is_dir()
+                and not observation_root.is_symlink(),
+                "OBSERVATION_ROOT_INVALID",
+                str(observation_root),
+            )
+            index = rebuild_index(observation_root.parent)
+            print(json.dumps(index, ensure_ascii=False, sort_keys=True))
+            return 0
         if args.summarize:
             index = rebuild_index(args.repo_root / "reports")
             print(json.dumps(index, ensure_ascii=False, sort_keys=True))
+            return 0
+        if args.rematerialize_blocked_live is not None:
+            _require(
+                isinstance(args.observation_date, str),
+                "OBSERVATION_DATE_REQUIRED",
+            )
+            _require(
+                isinstance(args.evidence_manifest, Path),
+                "FROZEN_MANIFEST_REQUIRED",
+            )
+            _require(
+                isinstance(args.schema_fix_commit, str),
+                "SCHEMA_FIX_COMMIT_REQUIRED",
+            )
+            day = rematerialize_blocked_live_day(
+                result_path=args.rematerialize_blocked_live,
+                repo_root=args.repo_root,
+                observation_date=args.observation_date,
+                evidence_manifest_path=args.evidence_manifest,
+                schema_fix_commit=args.schema_fix_commit,
+            )
+            index = rebuild_index(args.repo_root / "reports")
+            print(
+                json.dumps(
+                    {
+                        "day_status": day["status"],
+                        "resolution": day["resolution"],
+                        "final_status": index["final_status"],
+                        "valid_trading_days": index["valid_trading_days"],
+                        "remaining_actual_trading_days": index[
+                            "remaining_actual_trading_days"
+                        ],
+                        "new_api_request_count": day[
+                            "new_api_request_count"
+                        ],
+                    },
+                    ensure_ascii=False,
+                    sort_keys=True,
+                )
+            )
             return 0
         if args.preflight_live_date:
             _require(
