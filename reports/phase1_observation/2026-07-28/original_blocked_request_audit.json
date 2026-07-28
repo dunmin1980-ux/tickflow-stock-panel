@@ -1,0 +1,138 @@
+{
+  "credential_values_recorded": false,
+  "http_429": 0,
+  "intraday_batch_called": false,
+  "live_request_reexecuted": true,
+  "new_api_request_count": 14,
+  "pipeline": "phase1_1_minute_contract_closeout",
+  "records": [
+    {
+      "capability": "instruments.batch",
+      "duration_ms": 222,
+      "pipeline": "phase1_1_minute_contract_closeout",
+      "rate_limit_wait_ms": 0,
+      "retry_count": 0,
+      "status": "PASSED",
+      "symbol_count": 3
+    },
+    {
+      "capability": "klines.batch.1d.adjust_none",
+      "duration_ms": 550,
+      "pipeline": "phase1_1_minute_contract_closeout",
+      "rate_limit_wait_ms": 0,
+      "retry_count": 0,
+      "status": "PASSED",
+      "symbol_count": 3
+    },
+    {
+      "capability": "klines.batch.1d.adjust_forward",
+      "duration_ms": 421,
+      "pipeline": "phase1_1_minute_contract_closeout",
+      "rate_limit_wait_ms": 0,
+      "retry_count": 0,
+      "status": "PASSED",
+      "symbol_count": 3
+    },
+    {
+      "capability": "klines.ex_factors",
+      "duration_ms": 197,
+      "pipeline": "phase1_1_minute_contract_closeout",
+      "rate_limit_wait_ms": 0,
+      "retry_count": 0,
+      "status": "PASSED",
+      "symbol_count": 3
+    },
+    {
+      "capability": "quotes.get",
+      "duration_ms": 207,
+      "pipeline": "phase1_1_minute_contract_closeout",
+      "rate_limit_wait_ms": 0,
+      "retry_count": 0,
+      "status": "PASSED",
+      "symbol_count": 3
+    },
+    {
+      "capability": "klines.intraday.000403.SZ.1m",
+      "duration_ms": 235,
+      "pipeline": "phase1_1_minute_contract_closeout",
+      "rate_limit_wait_ms": 0,
+      "retry_count": 0,
+      "status": "PASSED",
+      "symbol_count": 1
+    },
+    {
+      "capability": "klines.intraday.600489.SH.1m",
+      "duration_ms": 192,
+      "pipeline": "phase1_1_minute_contract_closeout",
+      "rate_limit_wait_ms": 0,
+      "retry_count": 0,
+      "status": "PASSED",
+      "symbol_count": 1
+    },
+    {
+      "capability": "klines.intraday.300059.SZ.1m",
+      "duration_ms": 198,
+      "pipeline": "phase1_1_minute_contract_closeout",
+      "rate_limit_wait_ms": 0,
+      "retry_count": 0,
+      "status": "PASSED",
+      "symbol_count": 1
+    },
+    {
+      "capability": "klines.intraday.000403.SZ.30m",
+      "duration_ms": 191,
+      "pipeline": "phase1_1_minute_contract_closeout",
+      "rate_limit_wait_ms": 0,
+      "retry_count": 0,
+      "status": "PASSED",
+      "symbol_count": 1
+    },
+    {
+      "capability": "klines.intraday.600489.SH.30m",
+      "duration_ms": 188,
+      "pipeline": "phase1_1_minute_contract_closeout",
+      "rate_limit_wait_ms": 0,
+      "retry_count": 0,
+      "status": "PASSED",
+      "symbol_count": 1
+    },
+    {
+      "capability": "klines.intraday.300059.SZ.30m",
+      "duration_ms": 188,
+      "pipeline": "phase1_1_minute_contract_closeout",
+      "rate_limit_wait_ms": 0,
+      "retry_count": 0,
+      "status": "PASSED",
+      "symbol_count": 1
+    },
+    {
+      "capability": "depth.get.once",
+      "duration_ms": 205,
+      "pipeline": "phase1_1_minute_contract_closeout",
+      "rate_limit_wait_ms": 0,
+      "retry_count": 0,
+      "status": "PASSED",
+      "symbol_count": 1
+    },
+    {
+      "capability": "klines.batch.1d.adjust_forward.repeat",
+      "duration_ms": 285,
+      "pipeline": "phase1_1_minute_contract_closeout",
+      "rate_limit_wait_ms": 0,
+      "retry_count": 0,
+      "status": "PASSED",
+      "symbol_count": 3
+    },
+    {
+      "capability": "klines.ex_factors.repeat",
+      "duration_ms": 197,
+      "pipeline": "phase1_1_minute_contract_closeout",
+      "rate_limit_wait_ms": 0,
+      "retry_count": 0,
+      "status": "PASSED",
+      "symbol_count": 3
+    }
+  ],
+  "retry_count": 0,
+  "source_request_count": 14
+}

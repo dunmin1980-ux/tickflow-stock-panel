@@ -1,0 +1,89 @@
+{
+  "boundaries": {
+    "ai": "NOT_CONFIGURED",
+    "cloud_redeployed": false,
+    "integrated_gold_enabled": false,
+    "integrated_gold_external_send_count": 0,
+    "paper_trading": "NOT_STARTED",
+    "real_key": "NOT_EXPOSED"
+  },
+  "boundary_normalization": {
+    "derived_fields": [
+      "raw_market_values_modified",
+      "timestamps_shifted",
+      "missing_minutes_filled",
+      "ai_configured"
+    ],
+    "normalization_applied": true,
+    "normalization_version": "boundary-v1",
+    "source_evidence_hash": "443f56d446f6e09849c0a47eba76041643851b5a2a394e2c2a8f22be84d42719",
+    "source_schema": "legacy-phase1.1"
+  },
+  "contract": "tickflow_phase1_2_observation_day_v1",
+  "cumulative_request_audit_sha256": "4b804ef218d5b7ac936e12814c300230f5cbcf1c691b62800f6d00a9edf3cf0e",
+  "evidence_origin": "phase1_2_live_reuse",
+  "failure_reasons": [],
+  "idempotency_key": "phase1_observation:2026-07-28:f5f48819c7db5ecac1e09e7a0ec634a09aa5675480a9bd0f6d2cc9eea8bf8dd8:tickflow_phase1_2_observation_v1",
+  "live_request_reexecuted": false,
+  "metrics": {
+    "duplicate_timestamps": 0,
+    "ex_factor_checks": 3,
+    "ex_factor_passes": 3,
+    "first_bucket_checks": 3,
+    "first_bucket_matches": 3,
+    "http_429": 0,
+    "lunch_break_bars": 0,
+    "material_negative_amount": 0,
+    "material_ohlc_anomalies": 0,
+    "non_first_bucket_volume_amount_mismatches": 0,
+    "sensitive_shape_hits": 0,
+    "stale_data": 0,
+    "thirty_minute_ohlc_mismatches": 0
+  },
+  "new_api_request_count": 0,
+  "observation_date": "2026-07-28",
+  "observation_day": 2,
+  "original_blocked_at": "2026-07-28T16:12:25+08:00",
+  "original_blocker": "BOUNDARY_SCHEMA_MISMATCH",
+  "original_blocker_detail": "BOUNDARY_EVIDENCE_FAILED: raw_market_values_modified",
+  "original_day_status": "DAY_BLOCKED",
+  "original_status": "DAY_BLOCKED",
+  "rematerialization": {
+    "api_requests_added": 0,
+    "mode": "OFFLINE_EVIDENCE_REUSE",
+    "schema_fix_commit": "ff8f66be656d4f87d8b81a6d28d80c83f5fbfe50",
+    "source_hash_verified": true,
+    "status": "PASSED"
+  },
+  "resolution": "OFFLINE_SCHEMA_REMATERIALIZATION",
+  "source_data_hashes_verified": true,
+  "source_evidence": [
+    {
+      "path": "ephemeral/tickflow-phase1-observation.3FfsSk",
+      "retained_after_materialization": false,
+      "sha256": "443f56d446f6e09849c0a47eba76041643851b5a2a394e2c2a8f22be84d42719",
+      "size": 181650
+    }
+  ],
+  "source_evidence_digest": "144245ef91209ad7ef17f7b41123c826f7bdeebcba7789ec6147500f19eafbdf",
+  "source_evidence_dir": null,
+  "source_evidence_manifest": "reports/phase1_observation/2026-07-28/original_blocked_evidence_manifest.json",
+  "source_evidence_manifest_sha256": "10f080457622c21f5eb9644913d4cc171ee2b884f04a46194ba79e3656e71291",
+  "source_live_request_count": 14,
+  "source_report": null,
+  "source_request_audit": "reports/phase1_observation/2026-07-28/original_blocked_request_audit.json",
+  "source_request_count": 14,
+  "source_status": "PHASE1_READY_FOR_OBSERVATION_WITH_VENDOR_PENDING",
+  "status": "DAY_PASSED",
+  "symbols": {
+    "000403.SZ": "PASSED",
+    "300059.SZ": "PASSED",
+    "600489.SH": "PASSED"
+  },
+  "vendor_pending": [
+    "intraday_batch_entitlement",
+    "first_30m_bucket_includes_09_30",
+    "volume_unit",
+    "amount_unit"
+  ]
+}
