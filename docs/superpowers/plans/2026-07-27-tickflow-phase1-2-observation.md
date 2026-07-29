@@ -307,7 +307,8 @@ uv run pytest -q tests/test_phase1_observation.py -k "index or report"
   - `--preflight-live-date --observation-date YYYY-MM-DD --now ISO8601`
   - `--record-non-trading-day --observation-date YYYY-MM-DD --now ISO8601`
   - `--materialize-live PATH --repo-root PATH --observation-date YYYY-MM-DD
-    --now ISO8601 --symbol-set-hash HASH`
+    --now ISO8601 --run-started-at ISO8601 --run-completed-at ISO8601
+    --symbol-set-hash HASH`
   - `--summarize --repo-root PATH`
 - Runner options:
   - `--date YYYY-MM-DD`
@@ -333,7 +334,10 @@ Prove malformed live JSON exits nonzero without creating a date directory.
 
 The shell test must replace `ssh` with a fixture executable and verify:
 
-- execution outside 16:10 to 18:00 Asia/Shanghai is rejected;
+- execution before 16:10 Asia/Shanghai is rejected;
+- 16:10 through 18:00 is classified as `ON_TIME`;
+- after 18:00 through 23:59:59 is classified as `LATE_SAME_DAY`;
+- a start at next-day 00:00:00 is rejected for the prior observation date;
 - future and historical live dates are rejected;
 - official non-trading days are recorded offline;
 - a completed date or successful request audit is rejected before SSH;
@@ -362,7 +366,9 @@ Use atomic `mkdir` for a macOS/Linux-compatible
 `reports/phase1_observation/.runtime.lock` and remove it with a shell `trap`.
 Use the official 2026 SSE closure schedule for the offline date gate, require
 the next real trading date, and pass the fixed symbol-set hash through every
-live gate. Stream
+live gate. Re-capture `run_started_at` after acquiring the lock, record
+`run_completed_at`, and use the start time as the cross-midnight ownership
+boundary. Stream
 `backend/scripts/validate_phase1_tickflow_contracts.py` over SSH into:
 
 ```text

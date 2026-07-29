@@ -71,16 +71,26 @@ if [[ "$mode" == "validate" ]]; then
     --repo-root "$repo_root"
 fi
 
-now="${PHASE1_OBSERVATION_NOW:-}"
-if [[ -n "$now" && "${PHASE1_TEST_MODE:-0}" != "1" ]]; then
+test_now="${PHASE1_OBSERVATION_NOW:-}"
+if [[ -n "$test_now" && "${PHASE1_TEST_MODE:-0}" != "1" ]]; then
   fail "PHASE1_OBSERVATION_NOW is test-only"
 fi
-if [[ -z "$now" ]]; then
-  now="$(TZ=Asia/Shanghai date '+%Y-%m-%dT%H:%M:%S+08:00')"
-fi
-if [[ ! "$now" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2})T[0-9]{2}:[0-9]{2}:[0-9]{2}\+08:00$ ]]; then
-  fail "current time must be Asia/Shanghai ISO-8601"
-fi
+
+current_shanghai_iso() {
+  if [[ -n "$test_now" ]]; then
+    printf '%s\n' "$test_now"
+  else
+    TZ=Asia/Shanghai date '+%Y-%m-%dT%H:%M:%S+08:00'
+  fi
+}
+
+validate_shanghai_iso() {
+  [[ "$1" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2})T[0-9]{2}:[0-9]{2}:[0-9]{2}\+08:00$ ]] ||
+    fail "current time must be Asia/Shanghai ISO-8601"
+}
+
+now="$(current_shanghai_iso)"
+validate_shanghai_iso "$now"
 current_date="${BASH_REMATCH[1]}"
 if [[ -z "$observation_date" ]]; then
   observation_date="$current_date"
@@ -148,15 +158,26 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# Re-evaluate after taking the process lock so no concurrent run can publish first.
-gate_output="$("$python_command" "${gate_args[@]}")"
+# The post-lock timestamp is the authoritative live start boundary. A run that
+# acquires the lock after midnight cannot be counted for the previous date.
+run_started_at="$(current_shanghai_iso)"
+validate_shanghai_iso "$run_started_at"
+locked_gate_args=(
+  "$observer"
+  --preflight-live-date
+  --repo-root "$repo_root"
+  --observation-date "$observation_date"
+  --now "$run_started_at"
+  --symbol-set-hash "$symbol_set_hash"
+)
+gate_output="$("$python_command" "${locked_gate_args[@]}")"
 case "$gate_output" in
   *'"decision": "NON_TRADING_DAY"'*)
     "$python_command" "$observer" \
       --record-non-trading-day \
       --repo-root "$repo_root" \
       --observation-date "$observation_date" \
-      --now "$now" \
+      --now "$run_started_at" \
       --symbol-set-hash "$symbol_set_hash"
     exit 0
     ;;
@@ -197,6 +218,8 @@ set +e
   <"$validator" >"$temp_result"
 remote_status=$?
 set -e
+run_completed_at="$(current_shanghai_iso)"
+validate_shanghai_iso "$run_completed_at"
 
 [[ -s "$temp_result" ]] ||
   fail "live validator returned no sanitized result"
@@ -205,7 +228,9 @@ set +e
 "$python_command" "$observer" \
   --materialize-live "$temp_result" \
   --observation-date "$observation_date" \
-  --now "$now" \
+  --now "$run_started_at" \
+  --run-started-at "$run_started_at" \
+  --run-completed-at "$run_completed_at" \
   --symbol-set-hash "$symbol_set_hash" \
   --repo-root "$repo_root"
 materialize_status=$?

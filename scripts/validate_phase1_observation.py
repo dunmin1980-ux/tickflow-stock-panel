@@ -49,7 +49,8 @@ PHASE_STATUSES = {
     "PHASE1_OBSERVATION_BLOCKED",
 }
 SAFE_WINDOW_START = time(16, 10)
-SAFE_WINDOW_END = time(18, 0)
+NORMAL_WINDOW_END = time(18, 0)
+EXECUTION_TIMINGS = {"ON_TIME", "LATE_SAME_DAY"}
 SUPPORTED_CALENDAR_YEAR = 2026
 # SSE announcement dated 2025-12-22, notice 45 of 2025.
 # https://www.sse.com.cn/disclosure/announcement/general/c/c_20251222_10802507.shtml
@@ -219,6 +220,65 @@ def _parse_shanghai_now(value: str) -> datetime:
     return parsed
 
 
+def _classify_execution_timing(
+    observation_date: str,
+    run_started_at: str,
+) -> str:
+    target_date = _parse_observation_date(observation_date)
+    started = _parse_shanghai_now(run_started_at)
+    _require(
+        started.date() == target_date,
+        "RUN_STARTED_OUTSIDE_OBSERVATION_DATE",
+        run_started_at,
+    )
+    started_time = started.timetz().replace(tzinfo=None)
+    if started_time < SAFE_WINDOW_START:
+        _fail("BEFORE_SAFE_WINDOW", run_started_at)
+    return (
+        "ON_TIME"
+        if started_time <= NORMAL_WINDOW_END
+        else "LATE_SAME_DAY"
+    )
+
+
+def apply_live_execution_metadata(
+    day: Mapping[str, Any],
+    *,
+    observation_date: str,
+    run_started_at: str,
+    run_completed_at: str,
+) -> dict[str, Any]:
+    """Attach immutable timing metadata without changing contract results."""
+
+    _require(
+        day.get("observation_date") == observation_date,
+        "OBSERVATION_DATE_MISMATCH",
+        observation_date,
+    )
+    execution_timing = _classify_execution_timing(
+        observation_date,
+        run_started_at,
+    )
+    started = _parse_shanghai_now(run_started_at)
+    completed = _parse_shanghai_now(run_completed_at)
+    _require(
+        completed >= started,
+        "RUN_COMPLETED_BEFORE_START",
+        run_completed_at,
+    )
+    enriched = dict(day)
+    enriched.update(
+        {
+            "evidence_origin": "phase1_2_daily_live",
+            "execution_timing": execution_timing,
+            "run_started_at": run_started_at,
+            "run_completed_at": run_completed_at,
+            "counts_as_valid_day": day.get("status") == "DAY_PASSED",
+        }
+    )
+    return enriched
+
+
 def _is_sse_trading_day(value: date) -> bool:
     _require(
         value.year == SUPPORTED_CALENDAR_YEAR,
@@ -273,11 +333,10 @@ def evaluate_live_run_gate(
         _fail("FUTURE_DATE_FORBIDDEN", observation_date)
     if target_date < now.date():
         _fail("HISTORICAL_LIVE_FORBIDDEN", observation_date)
-    now_time = now.timetz().replace(tzinfo=None)
-    if now_time < SAFE_WINDOW_START:
-        _fail("BEFORE_SAFE_WINDOW", now_iso)
-    if now_time > SAFE_WINDOW_END:
-        _fail("AFTER_SAFE_WINDOW", now_iso)
+    execution_timing = _classify_execution_timing(
+        observation_date,
+        now_iso,
+    )
 
     is_trading_day = _is_sse_trading_day(target_date)
     observation_root = reports / "phase1_observation"
@@ -335,7 +394,10 @@ def evaluate_live_run_gate(
     )
     return {
         "decision": "LIVE_ALLOWED",
+        "date_gate": "PASSED",
         "observation_date": observation_date,
+        "execution_timing": execution_timing,
+        "run_started_at": now_iso,
         "calendar_source": "SSE_2026_OFFICIAL_CLOSURES",
         "symbol_set_hash": SYMBOL_SET_HASH,
         "contract_version": CONTRACT_VERSION,
@@ -1700,7 +1762,7 @@ def _build_live_day_or_raise(
         ),
         "status": "DAY_PASSED",
         "idempotency_key": _idempotency_key(observation_date),
-        "evidence_origin": "phase1_2_live",
+        "evidence_origin": "phase1_2_daily_live",
         "live_request_reexecuted": True,
         "source_status": SOURCE_STATUS,
         "source_report": None,
@@ -2384,6 +2446,31 @@ def _validate_day_sequence(
                 "REMATERIALIZED_DAY_INVALID",
                 observation_date,
             )
+        if day.get("evidence_origin") == "phase1_2_daily_live":
+            timing = day.get("execution_timing")
+            started_at = day.get("run_started_at")
+            completed_at = day.get("run_completed_at")
+            _require(
+                timing in EXECUTION_TIMINGS
+                and isinstance(started_at, str)
+                and isinstance(completed_at, str)
+                and day.get("counts_as_valid_day")
+                is (day.get("status") == "DAY_PASSED"),
+                "LIVE_EXECUTION_METADATA_INVALID",
+                observation_date,
+            )
+            _require(
+                _classify_execution_timing(observation_date, started_at)
+                == timing,
+                "LIVE_EXECUTION_TIMING_MISMATCH",
+                observation_date,
+            )
+            _require(
+                _parse_shanghai_now(completed_at)
+                >= _parse_shanghai_now(started_at),
+                "RUN_COMPLETED_BEFORE_START",
+                completed_at,
+            )
     if expected_day:
         day1 = next(
             (
@@ -2510,7 +2597,11 @@ def rebuild_index(reports_root: Path) -> dict[str, Any]:
     )
     live_observation_days = sum(
         day.get("evidence_origin")
-        in {"phase1_2_live", "phase1_2_live_reuse"}
+        in {
+            "phase1_2_live",
+            "phase1_2_live_reuse",
+            "phase1_2_daily_live",
+        }
         for day in passed_days
     )
     semantic_index = {
@@ -2531,6 +2622,10 @@ def rebuild_index(reports_root: Path) -> dict[str, Any]:
                 "observation_day": day.get("observation_day"),
                 "status": day["status"],
                 "evidence_origin": day.get("evidence_origin"),
+                "execution_timing": day.get("execution_timing"),
+                "run_started_at": day.get("run_started_at"),
+                "run_completed_at": day.get("run_completed_at"),
+                "counts_as_valid_day": day.get("counts_as_valid_day"),
                 "live_request_reexecuted": day.get("live_request_reexecuted"),
                 "source_request_count": day.get("source_request_count"),
                 "source_live_request_count": day.get(
@@ -2645,8 +2740,8 @@ def render_observation_report(index: Mapping[str, Any]) -> str:
         "",
         "## 观察日证据",
         "",
-        "| 日期 | Day | 状态 | 证据来源 | live 重跑 | 源请求 | 新增 API 请求 | 哈希复核 |",
-        "|---|---:|---|---|---|---:|---:|---|",
+        "| 日期 | Day | 状态 | 执行时段 | 证据来源 | live 重跑 | 源请求 | 新增 API 请求 | 哈希复核 |",
+        "|---|---:|---|---|---|---|---:|---:|---|",
     ]
     for day in index.get("days", []):
         lines.append(
@@ -2654,6 +2749,7 @@ def render_observation_report(index: Mapping[str, Any]) -> str:
             f"{day.get('observation_date')} | "
             f"{day.get('observation_day') or '-'} | "
             f"{day.get('status')} | "
+            f"{day.get('execution_timing') or '-'} | "
             f"{day.get('evidence_origin') or '-'} | "
             f"{'YES' if day.get('live_request_reexecuted') else 'NO'} | "
             f"{day.get('source_request_count', '-')} | "
@@ -2681,6 +2777,19 @@ def render_observation_report(index: Mapping[str, Any]) -> str:
                         f"{day.get('original_status')} 审计，并通过 "
                         "OFFLINE_SCHEMA_REMATERIALIZATION 复用唯一一次 "
                         "live 证据；新增 API 请求为 0。"
+                    ),
+                ]
+            )
+        if day.get("evidence_origin") == "phase1_2_daily_live":
+            lines.extend(
+                [
+                    "",
+                    (
+                        f"Day {day.get('observation_day')} 于 "
+                        f"{day.get('run_started_at')} 启动，"
+                        f"{day.get('run_completed_at')} 完成；执行时段为 "
+                        f"{day.get('execution_timing')}，"
+                        "行情与安全合同仍按原阈值验收。"
                     ),
                 ]
             )
@@ -2792,6 +2901,14 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--now",
         help="Current Asia/Shanghai ISO-8601 time for a live date gate.",
+    )
+    parser.add_argument(
+        "--run-started-at",
+        help="Formal live start time in Asia/Shanghai.",
+    )
+    parser.add_argument(
+        "--run-completed-at",
+        help="Formal live completion time in Asia/Shanghai.",
     )
     parser.add_argument(
         "--symbol-set-hash",
@@ -2917,10 +3034,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.symbol_set_hash == SYMBOL_SET_HASH,
                 "SYMBOL_SET_HASH_MISMATCH",
             )
+            run_started_at = args.run_started_at or args.now
+            run_completed_at = args.run_completed_at or run_started_at
             decision = evaluate_live_run_gate(
                 args.repo_root / "reports",
                 observation_date=args.observation_date,
-                now_iso=args.now,
+                now_iso=run_started_at,
             )
             _require(
                 decision.get("decision") == "LIVE_ALLOWED",
@@ -2930,6 +3049,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.materialize_live,
                 args.repo_root,
                 args.observation_date,
+            )
+            day = apply_live_execution_metadata(
+                day,
+                observation_date=args.observation_date,
+                run_started_at=run_started_at,
+                run_completed_at=run_completed_at,
             )
         materialize_day(day, args.repo_root / "reports")
         index = rebuild_index(args.repo_root / "reports")

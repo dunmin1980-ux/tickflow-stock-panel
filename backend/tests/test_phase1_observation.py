@@ -1137,7 +1137,7 @@ def test_build_live_day_validates_sanitized_result(tmp_path: Path) -> None:
     day = observer.build_live_day(result_path, repo, observation_date)
 
     assert day["status"] == "DAY_PASSED"
-    assert day["evidence_origin"] == "phase1_2_live"
+    assert day["evidence_origin"] == "phase1_2_daily_live"
     assert day["live_request_reexecuted"] is True
     assert day["source_request_count"] == 14
     assert day["new_api_request_count"] == 14
@@ -1413,6 +1413,7 @@ def test_live_run_gate_allows_next_real_trade_date(tmp_path: Path) -> None:
     )
 
     assert decision["decision"] == "LIVE_ALLOWED"
+    assert decision["date_gate"] == "PASSED"
     assert decision["observation_date"] == "2026-07-28"
     assert decision["symbol_set_hash"] == (
         "f5f48819c7db5ecac1e09e7a0ec634a09aa5675480a9bd0f6d2cc9eea8bf8dd8"
@@ -1420,6 +1421,172 @@ def test_live_run_gate_allows_next_real_trade_date(tmp_path: Path) -> None:
     assert decision["idempotency_key"].startswith(
         "phase1_observation:2026-07-28:"
     )
+    assert decision["execution_timing"] == "ON_TIME"
+    assert decision["run_started_at"] == "2026-07-28T16:30:00+08:00"
+
+
+@pytest.mark.parametrize(
+    ("now", "expected_timing"),
+    [
+        ("2026-07-28T17:00:00+08:00", "ON_TIME"),
+        ("2026-07-28T21:18:00+08:00", "LATE_SAME_DAY"),
+        ("2026-07-28T23:59:59+08:00", "LATE_SAME_DAY"),
+    ],
+)
+def test_live_run_gate_allows_normal_and_late_same_day_execution(
+    tmp_path: Path,
+    now: str,
+    expected_timing: str,
+) -> None:
+    observer = _load_observer()
+    reports = tmp_path / "reports"
+    _write_index_day(reports, TRADE_DATE, "DAY_PASSED", day_number=1)
+
+    decision = observer.evaluate_live_run_gate(
+        reports,
+        observation_date="2026-07-28",
+        now_iso=now,
+    )
+
+    assert decision["decision"] == "LIVE_ALLOWED"
+    assert decision["execution_timing"] == expected_timing
+    assert decision["run_started_at"] == now
+
+
+def test_live_run_gate_rejects_start_at_next_midnight(
+    tmp_path: Path,
+) -> None:
+    observer = _load_observer()
+    reports = tmp_path / "reports"
+    _write_index_day(reports, TRADE_DATE, "DAY_PASSED", day_number=1)
+
+    with pytest.raises(
+        observer.EvidenceError,
+        match="HISTORICAL_LIVE_FORBIDDEN",
+    ):
+        observer.evaluate_live_run_gate(
+            reports,
+            observation_date="2026-07-28",
+            now_iso="2026-07-29T00:00:00+08:00",
+        )
+
+
+def test_live_execution_metadata_uses_start_time_across_midnight(
+    tmp_path: Path,
+) -> None:
+    observer = _load_observer()
+    repo = _valid_phase11_repo(tmp_path)
+    result_path = repo / "phase1-live.json"
+    _write_json(result_path, _valid_live_result(repo, "2026-07-28"))
+    day = observer.build_live_day(result_path, repo, "2026-07-28")
+
+    enriched = observer.apply_live_execution_metadata(
+        day,
+        observation_date="2026-07-28",
+        run_started_at="2026-07-28T23:59:59+08:00",
+        run_completed_at="2026-07-29T00:03:00+08:00",
+    )
+
+    assert enriched["execution_timing"] == "LATE_SAME_DAY"
+    assert enriched["run_started_at"] == "2026-07-28T23:59:59+08:00"
+    assert enriched["run_completed_at"] == "2026-07-29T00:03:00+08:00"
+    assert enriched["counts_as_valid_day"] is True
+
+
+def test_late_same_day_pass_counts_once_and_preserves_prior_evidence(
+    tmp_path: Path,
+) -> None:
+    observer = _load_observer()
+    repo = _valid_phase11_repo(tmp_path)
+    reports = repo / "reports"
+    cumulative_audit = reports / "phase1_tickflow_request_audit.json"
+    audit_hash_before = observer.sha256_file(cumulative_audit)
+
+    day1 = observer.build_reused_day(repo, TRADE_DATE)
+    observer.materialize_day(day1, reports)
+    day1_hash = observer.sha256_file(
+        reports / "phase1_observation" / TRADE_DATE / "daily_summary.json"
+    )
+
+    for observation_date, start, completed in (
+        (
+            "2026-07-28",
+            "2026-07-28T17:00:00+08:00",
+            "2026-07-28T17:02:00+08:00",
+        ),
+        (
+            "2026-07-29",
+            "2026-07-29T21:18:00+08:00",
+            "2026-07-29T21:20:00+08:00",
+        ),
+    ):
+        result_path = repo / f"{observation_date}-live.json"
+        _write_json(
+            result_path,
+            _valid_live_result(repo, observation_date),
+        )
+        day = observer.build_live_day(result_path, repo, observation_date)
+        day = observer.apply_live_execution_metadata(
+            day,
+            observation_date=observation_date,
+            run_started_at=start,
+            run_completed_at=completed,
+        )
+        observer.materialize_day(day, reports)
+
+    index = observer.rebuild_index(reports)
+
+    assert index["final_status"] == "PHASE1_OBSERVATION_IN_PROGRESS"
+    assert index["valid_observation_days"] == 3
+    assert index["remaining_observation_days"] == 2
+    assert index["phase1_2_live_observation_days"] == 2
+    assert index["days"][2]["execution_timing"] == "LATE_SAME_DAY"
+    assert index["days"][2]["counts_as_valid_day"] is True
+    assert observer.sha256_file(cumulative_audit) == audit_hash_before
+    assert (
+        observer.sha256_file(
+            reports
+            / "phase1_observation"
+            / TRADE_DATE
+            / "daily_summary.json"
+        )
+        == day1_hash
+    )
+
+    with pytest.raises(
+        observer.EvidenceError,
+        match="OBSERVATION_DATE_ALREADY_PASSED",
+    ):
+        observer.evaluate_live_run_gate(
+            reports,
+            observation_date="2026-07-29",
+            now_iso="2026-07-29T22:00:00+08:00",
+        )
+
+
+def test_late_execution_does_not_override_stale_market_date(
+    tmp_path: Path,
+) -> None:
+    observer = _load_observer()
+    repo = _valid_phase11_repo(tmp_path)
+    result = _valid_live_result(repo, "2026-07-29")
+    result["contracts"]["daily"]["000403.SZ"]["checks"][
+        "latest_raw_trade_date"
+    ] = "2026-07-28"
+    result_path = repo / "phase1-live-stale.json"
+    _write_json(result_path, result)
+    day = observer.build_live_day(result_path, repo, "2026-07-29")
+
+    enriched = observer.apply_live_execution_metadata(
+        day,
+        observation_date="2026-07-29",
+        run_started_at="2026-07-29T21:18:00+08:00",
+        run_completed_at="2026-07-29T21:20:00+08:00",
+    )
+
+    assert enriched["status"] == "DAY_BLOCKED"
+    assert enriched["counts_as_valid_day"] is False
+    assert enriched["failure_reasons"] == ["DAILY_STALE"]
 
 
 def test_live_run_gate_classifies_exchange_holiday_without_network(
