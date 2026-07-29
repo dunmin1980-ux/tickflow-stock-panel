@@ -10,7 +10,9 @@
   "contract": "tickflow_phase1_2_observation_index_v1",
   "days": [
     {
+      "counts_as_valid_day": null,
       "evidence_origin": "phase1_1_reuse",
+      "execution_timing": null,
       "idempotency_key": "phase1_observation:2026-07-27:f5f48819c7db5ecac1e09e7a0ec634a09aa5675480a9bd0f6d2cc9eea8bf8dd8:tickflow_phase1_2_observation_v1",
       "live_request_reexecuted": false,
       "new_api_request_count": 0,
@@ -22,6 +24,8 @@
       "original_status": null,
       "rematerialization": null,
       "resolution": null,
+      "run_completed_at": null,
+      "run_started_at": null,
       "source_data_hashes_verified": true,
       "source_evidence_digest": "61b96a67f84d96b7648aedc833c9ac5cb6902acc1434722f6e2cca80228530f3",
       "source_evidence_dir": "reports/phase1_numeric_contracts/",
@@ -38,7 +42,9 @@
       ]
     },
     {
+      "counts_as_valid_day": null,
       "evidence_origin": "phase1_2_live_reuse",
+      "execution_timing": null,
       "idempotency_key": "phase1_observation:2026-07-28:f5f48819c7db5ecac1e09e7a0ec634a09aa5675480a9bd0f6d2cc9eea8bf8dd8:tickflow_phase1_2_observation_v1",
       "live_request_reexecuted": false,
       "new_api_request_count": 0,
@@ -56,6 +62,8 @@
         "status": "PASSED"
       },
       "resolution": "OFFLINE_SCHEMA_REMATERIALIZATION",
+      "run_completed_at": null,
+      "run_started_at": null,
       "source_data_hashes_verified": true,
       "source_evidence_digest": "144245ef91209ad7ef17f7b41123c826f7bdeebcba7789ec6147500f19eafbdf",
       "source_evidence_dir": null,
@@ -70,11 +78,43 @@
         "volume_unit",
         "amount_unit"
       ]
+    },
+    {
+      "counts_as_valid_day": true,
+      "evidence_origin": "phase1_2_daily_live",
+      "execution_timing": "LATE_SAME_DAY",
+      "idempotency_key": "phase1_observation:2026-07-29:f5f48819c7db5ecac1e09e7a0ec634a09aa5675480a9bd0f6d2cc9eea8bf8dd8:tickflow_phase1_2_observation_v1",
+      "live_request_reexecuted": true,
+      "new_api_request_count": 14,
+      "observation_date": "2026-07-29",
+      "observation_day": 3,
+      "original_blocked_at": null,
+      "original_blocker": null,
+      "original_day_status": null,
+      "original_status": null,
+      "rematerialization": null,
+      "resolution": null,
+      "run_completed_at": "2026-07-29T21:44:52+08:00",
+      "run_started_at": "2026-07-29T21:44:21+08:00",
+      "source_data_hashes_verified": true,
+      "source_evidence_digest": "787b4824fe75c18fe0589109926de13f0d4768c1b7cd89e3b119a936c99b449f",
+      "source_evidence_dir": null,
+      "source_live_request_count": null,
+      "source_report": null,
+      "source_request_audit": "embedded_sanitized_live_result",
+      "source_request_count": 14,
+      "status": "DAY_PASSED",
+      "vendor_pending": [
+        "intraday_batch_entitlement",
+        "first_30m_bucket_includes_09_30",
+        "volume_unit",
+        "amount_unit"
+      ]
     }
   ],
   "final_status": "PHASE1_OBSERVATION_IN_PROGRESS",
-  "index_hash_after": "3602934c4a1de7ce53f751c20d02a30259851f2d2de946632cb985d257e9db82",
-  "index_hash_before": "af4f8827d687ba5bdf6c4deae4a18fb740fe71ad413b635ca01253c7b54730db",
+  "index_hash_after": "97c1b7fa6f1e781d6765c901c28a1ae39962e9672c501978ea24d6bf84e9963e",
+  "index_hash_before": "a8648174ed9baaac79b60723f7d000c0a1b6eef5d520e32170593e85078c63c7",
   "metrics": {
     "duplicate_timestamps": 0,
     "ex_factor_pass_rate": 1.0,
@@ -88,9 +128,9 @@
     "stale_data": 0,
     "thirty_minute_ohlc_mismatches": 0
   },
-  "phase1_2_live_observation_days": 1,
-  "remaining_actual_trading_days": 3,
-  "remaining_observation_days": 3,
+  "phase1_2_live_observation_days": 2,
+  "remaining_actual_trading_days": 2,
+  "remaining_observation_days": 2,
   "required_trading_days": 5,
   "reused_observation_days": 1,
   "symbols": {
@@ -98,8 +138,8 @@
     "300059.SZ": "PASSED",
     "600489.SH": "PASSED"
   },
-  "valid_observation_days": 2,
-  "valid_trading_days": 2,
+  "valid_observation_days": 3,
+  "valid_trading_days": 3,
   "vendor_pending": [
     "intraday_batch_entitlement",
     "first_30m_bucket_includes_09_30",

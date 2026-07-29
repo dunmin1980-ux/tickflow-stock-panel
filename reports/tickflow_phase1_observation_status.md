@@ -6,21 +6,24 @@
 PHASE1_OBSERVATION_IN_PROGRESS
 ```
 
-有效交易日：2/5，剩余 3 日
-复用观察日：1；Phase 1.2 新增 live 观察日：1
+有效交易日：3/5，剩余 2 日
+复用观察日：1；Phase 1.2 新增 live 观察日：2
 
 当前只完成真实证据已经落盘的观察日；未预生成未来交易日结果。
 
 ## 观察日证据
 
-| 日期 | Day | 状态 | 证据来源 | live 重跑 | 源请求 | 新增 API 请求 | 哈希复核 |
-|---|---:|---|---|---|---:|---:|---|
-| 2026-07-27 | 1 | DAY_PASSED | phase1_1_reuse | NO | 14 | 0 | PASSED |
-| 2026-07-28 | 2 | DAY_PASSED | phase1_2_live_reuse | NO | 14 | 0 | PASSED |
+| 日期 | Day | 状态 | 执行时段 | 证据来源 | live 重跑 | 源请求 | 新增 API 请求 | 哈希复核 |
+|---|---:|---|---|---|---|---:|---:|---|
+| 2026-07-27 | 1 | DAY_PASSED | - | phase1_1_reuse | NO | 14 | 0 | PASSED |
+| 2026-07-28 | 2 | DAY_PASSED | - | phase1_2_live_reuse | NO | 14 | 0 | PASSED |
+| 2026-07-29 | 3 | DAY_PASSED | LATE_SAME_DAY | phase1_2_daily_live | YES | 14 | 14 | PASSED |
 
 Day 1 新增 API 请求：0；该日复用 Phase 1.1 正式 live 证据。
 
 Day 2 保留原 DAY_BLOCKED 审计，并通过 OFFLINE_SCHEMA_REMATERIALIZATION 复用唯一一次 live 证据；新增 API 请求为 0。
+
+Day 3 于 2026-07-29T21:44:21+08:00 启动，2026-07-29T21:44:52+08:00 完成；执行时段为 LATE_SAME_DAY，行情与安全合同仍按原阈值验收。
 
 ## 三票状态
 
