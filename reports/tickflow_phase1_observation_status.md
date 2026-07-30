@@ -13,11 +13,11 @@ PHASE1_OBSERVATION_IN_PROGRESS
 
 ## 观察日证据
 
-| 日期 | Day | 状态 | 执行时段 | 证据来源 | live 重跑 | 源请求 | 新增 API 请求 | 哈希复核 |
-|---|---:|---|---|---|---|---:|---:|---|
-| 2026-07-27 | 1 | DAY_PASSED | - | phase1_1_reuse | NO | 14 | 0 | PASSED |
-| 2026-07-28 | 2 | DAY_PASSED | - | phase1_2_live_reuse | NO | 14 | 0 | PASSED |
-| 2026-07-29 | 3 | DAY_PASSED | LATE_SAME_DAY | phase1_2_daily_live | YES | 14 | 14 | PASSED |
+| 日期 | Day | 状态 | 执行时段 | 证据来源 | 源 live | 原始 live | 观察 live | 重物化 live | 重复 live | 新增 API 请求 |
+|---|---:|---|---|---|---|---|---|---|---|---:|
+| 2026-07-27 | 1 | DAY_PASSED | - | phase1_1_reuse | YES | NO | NO | NO | NO | 0 |
+| 2026-07-28 | 2 | DAY_PASSED | - | phase1_2_live_reuse | NO | YES | NO | NO | NO | 0 |
+| 2026-07-29 | 3 | DAY_PASSED | LATE_SAME_DAY | phase1_2_daily_live | NO | NO | YES | NO | NO | 14 |
 
 Day 1 新增 API 请求：0；该日复用 Phase 1.1 正式 live 证据。
 

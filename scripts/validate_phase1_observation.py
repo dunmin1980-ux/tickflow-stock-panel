@@ -241,6 +241,41 @@ def _classify_execution_timing(
     )
 
 
+def _live_execution_audit(evidence_origin: str) -> dict[str, bool]:
+    fields = {
+        "source_live_executed": False,
+        "original_live_executed": False,
+        "observation_live_executed": False,
+        "rematerialization_live_executed": False,
+        "live_reexecuted": False,
+    }
+    if evidence_origin == "phase1_1_reuse":
+        fields["source_live_executed"] = True
+    elif evidence_origin == "phase1_2_live_reuse":
+        fields["original_live_executed"] = True
+    elif evidence_origin in {"phase1_2_live", "phase1_2_daily_live"}:
+        fields["observation_live_executed"] = True
+    elif evidence_origin != "phase1_2_calendar":
+        _fail("EVIDENCE_ORIGIN_INVALID", evidence_origin)
+    return {
+        "live_executed": any(
+            fields[key]
+            for key in (
+                "source_live_executed",
+                "original_live_executed",
+                "observation_live_executed",
+            )
+        ),
+        **fields,
+    }
+
+
+def _not_reexecuted(day: Mapping[str, Any]) -> bool:
+    if "live_reexecuted" in day:
+        return day.get("live_reexecuted") is False
+    return day.get("live_request_reexecuted") is False
+
+
 def apply_live_execution_metadata(
     day: Mapping[str, Any],
     *,
@@ -267,9 +302,11 @@ def apply_live_execution_metadata(
         run_completed_at,
     )
     enriched = dict(day)
+    enriched.pop("live_request_reexecuted", None)
     enriched.update(
         {
             "evidence_origin": "phase1_2_daily_live",
+            **_live_execution_audit("phase1_2_daily_live"),
             "execution_timing": execution_timing,
             "run_started_at": run_started_at,
             "run_completed_at": run_completed_at,
@@ -883,7 +920,7 @@ def _validate_audit(reports: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         "pipeline": phase["pipeline"],
         "source_request_count": 14,
         "new_api_request_count": 0,
-        "live_request_reexecuted": False,
+        **_live_execution_audit("phase1_1_reuse"),
         "retry_count": 0,
         "http_429": 0,
         "intraday_batch_called": False,
@@ -1114,7 +1151,7 @@ def build_reused_day(
         "status": "DAY_PASSED",
         "idempotency_key": _idempotency_key(observation_date),
         "evidence_origin": "phase1_1_reuse",
-        "live_request_reexecuted": False,
+        **_live_execution_audit("phase1_1_reuse"),
         "source_status": SOURCE_STATUS,
         "source_report": "reports/tickflow_phase1_numeric_contract_closeout.md",
         "source_request_audit": "reports/phase1_tickflow_request_audit.json",
@@ -1174,7 +1211,7 @@ def build_non_trading_day(observation_date: str) -> dict[str, Any]:
         "status": "NON_TRADING_DAY",
         "idempotency_key": _idempotency_key(observation_date),
         "evidence_origin": "phase1_2_calendar",
-        "live_request_reexecuted": False,
+        **_live_execution_audit("phase1_2_calendar"),
         "source_status": "NON_TRADING_DAY",
         "source_report": None,
         "source_request_audit": None,
@@ -1203,7 +1240,7 @@ def build_non_trading_day(observation_date: str) -> dict[str, Any]:
             "pipeline": "phase1_2_observation_calendar_gate",
             "source_request_count": 0,
             "new_api_request_count": 0,
-            "live_request_reexecuted": False,
+            **_live_execution_audit("phase1_2_calendar"),
             "retry_count": 0,
             "http_429": 0,
             "intraday_batch_called": False,
@@ -1564,7 +1601,7 @@ def _compact_live_audit(
         "pipeline": "phase1_1_minute_contract_closeout",
         "source_request_count": count,
         "new_api_request_count": count,
-        "live_request_reexecuted": True,
+        **_live_execution_audit("phase1_2_daily_live"),
         "retry_count": 0,
         "http_429": 1 if allow_429 else 0,
         "intraday_batch_called": False,
@@ -1625,7 +1662,7 @@ def _blocked_live_day(
         "status": "DAY_BLOCKED",
         "idempotency_key": _idempotency_key(observation_date),
         "evidence_origin": "phase1_2_live",
-        "live_request_reexecuted": True,
+        **_live_execution_audit("phase1_2_live"),
         "source_status": source_status,
         "source_report": None,
         "source_request_audit": "embedded_sanitized_live_result",
@@ -1763,7 +1800,7 @@ def _build_live_day_or_raise(
         "status": "DAY_PASSED",
         "idempotency_key": _idempotency_key(observation_date),
         "evidence_origin": "phase1_2_daily_live",
-        "live_request_reexecuted": True,
+        **_live_execution_audit("phase1_2_daily_live"),
         "source_status": SOURCE_STATUS,
         "source_report": None,
         "source_request_audit": "embedded_sanitized_live_result",
@@ -1798,7 +1835,7 @@ def _minimal_blocked_audit(result: Mapping[str, Any]) -> dict[str, Any]:
         "pipeline": "phase1_1_minute_contract_closeout",
         "source_request_count": count,
         "new_api_request_count": count,
-        "live_request_reexecuted": True,
+        **_live_execution_audit("phase1_2_daily_live"),
         "retry_count": 0,
         "http_429": 1 if result.get("http_429_detected") is True else 0,
         "intraday_batch_called": False,
@@ -2109,10 +2146,18 @@ def _validate_blocked_evidence_manifest(
         "ORIGINAL_BLOCKED_SUMMARY_INVALID",
     )
     preserved_audit = _read_json(preserved_audit_path)
+    preserved_live_executed = (
+        preserved_audit.get("live_request_reexecuted") is True
+        or (
+            preserved_audit.get("live_executed") is True
+            and preserved_audit.get("observation_live_executed") is True
+            and preserved_audit.get("live_reexecuted") is False
+        )
+    )
     _require(
         preserved_audit.get("source_request_count") == 14
         and preserved_audit.get("new_api_request_count") == 14
-        and preserved_audit.get("live_request_reexecuted") is True
+        and preserved_live_executed
         and preserved_audit.get("http_429") == 0,
         "ORIGINAL_BLOCKED_AUDIT_INVALID",
     )
@@ -2280,17 +2325,17 @@ def rematerialize_blocked_live_day(
     _require(isinstance(source_audit, Mapping), "REQUEST_AUDIT_INVALID")
     request_audit = {
         **source_audit,
+        **_live_execution_audit("phase1_2_live_reuse"),
         "source_live_request_count": source_request_count,
         "source_request_count": source_request_count,
         "new_api_request_count": 0,
-        "live_request_reexecuted": False,
         "rematerialization_mode": "OFFLINE_EVIDENCE_REUSE",
     }
     manifest = frozen["manifest"]
     rematerialized = {
         **passed,
         "evidence_origin": "phase1_2_live_reuse",
-        "live_request_reexecuted": False,
+        **_live_execution_audit("phase1_2_live_reuse"),
         "source_live_request_count": source_request_count,
         "source_request_count": source_request_count,
         "new_api_request_count": 0,
@@ -2431,7 +2476,7 @@ def _validate_day_sequence(
             rematerialization = day.get("rematerialization")
             _require(
                 day.get("status") == "DAY_PASSED"
-                and day.get("live_request_reexecuted") is False
+                and _not_reexecuted(day)
                 and day.get("source_live_request_count") == 14
                 and day.get("source_request_count") == 14
                 and day.get("new_api_request_count") == 0
@@ -2471,6 +2516,16 @@ def _validate_day_sequence(
                 "RUN_COMPLETED_BEFORE_START",
                 completed_at,
             )
+        normalized_audit = _live_execution_audit(
+            str(day.get("evidence_origin"))
+        )
+        for field, expected in normalized_audit.items():
+            if field in day:
+                _require(
+                    day.get(field) is expected,
+                    "LIVE_EXECUTION_AUDIT_INVALID",
+                    f"{observation_date}:{field}",
+                )
     if expected_day:
         day1 = next(
             (
@@ -2485,7 +2540,7 @@ def _validate_day_sequence(
         _require(
             day1.get("observation_date") == DAY1_DATE
             and day1.get("evidence_origin") == "phase1_1_reuse"
-            and day1.get("live_request_reexecuted") is False
+            and _not_reexecuted(day1)
             and day1.get("source_request_count") == 14
             and day1.get("new_api_request_count") == 0,
             "DAY1_SOURCE_IMMUTABLE",
@@ -2626,7 +2681,7 @@ def rebuild_index(reports_root: Path) -> dict[str, Any]:
                 "run_started_at": day.get("run_started_at"),
                 "run_completed_at": day.get("run_completed_at"),
                 "counts_as_valid_day": day.get("counts_as_valid_day"),
-                "live_request_reexecuted": day.get("live_request_reexecuted"),
+                **_live_execution_audit(str(day.get("evidence_origin"))),
                 "source_request_count": day.get("source_request_count"),
                 "source_live_request_count": day.get(
                     "source_live_request_count"
@@ -2740,8 +2795,8 @@ def render_observation_report(index: Mapping[str, Any]) -> str:
         "",
         "## 观察日证据",
         "",
-        "| 日期 | Day | 状态 | 执行时段 | 证据来源 | live 重跑 | 源请求 | 新增 API 请求 | 哈希复核 |",
-        "|---|---:|---|---|---|---|---:|---:|---|",
+        "| 日期 | Day | 状态 | 执行时段 | 证据来源 | 源 live | 原始 live | 观察 live | 重物化 live | 重复 live | 新增 API 请求 |",
+        "|---|---:|---|---|---|---|---|---|---|---|---:|",
     ]
     for day in index.get("days", []):
         lines.append(
@@ -2751,10 +2806,12 @@ def render_observation_report(index: Mapping[str, Any]) -> str:
             f"{day.get('status')} | "
             f"{day.get('execution_timing') or '-'} | "
             f"{day.get('evidence_origin') or '-'} | "
-            f"{'YES' if day.get('live_request_reexecuted') else 'NO'} | "
-            f"{day.get('source_request_count', '-')} | "
-            f"{day.get('new_api_request_count', '-')} | "
-            f"{'PASSED' if day.get('source_data_hashes_verified') else 'N/A'} |"
+            f"{'YES' if day.get('source_live_executed') else 'NO'} | "
+            f"{'YES' if day.get('original_live_executed') else 'NO'} | "
+            f"{'YES' if day.get('observation_live_executed') else 'NO'} | "
+            f"{'YES' if day.get('rematerialization_live_executed') else 'NO'} | "
+            f"{'YES' if day.get('live_reexecuted') else 'NO'} | "
+            f"{day.get('new_api_request_count', '-')} |"
         )
     for day in index.get("days", []):
         if day.get("evidence_origin") == "phase1_1_reuse":

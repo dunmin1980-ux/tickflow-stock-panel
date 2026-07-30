@@ -88,7 +88,10 @@ observation_date: 2026-07-27
 observation_day: 1
 status: DAY_PASSED
 evidence_origin: phase1_1_reuse
-live_request_reexecuted: false
+live_executed: true
+source_live_executed: true
+observation_live_executed: false
+live_reexecuted: false
 source_status: PHASE1_READY_FOR_OBSERVATION_WITH_VENDOR_PENDING
 source_request_count: 14
 new_api_request_count: 0
@@ -165,6 +168,17 @@ OHLCV 行。
 `execution_timing` 不改变行情合同结论。`MISSED_OBSERVATION_DAY` 只是在目标
 交易日已过 24:00 且没有正式 live 启动记录时使用的操作闭环标识，不属于每日
 证据状态，也不得在 18:00 后提前生成。
+
+live 审计使用明确语义字段：
+
+- Day 1：`source_live_executed=true`、`observation_live_executed=false`。
+- 离线重物化日：`original_live_executed=true`、
+  `rematerialization_live_executed=false`。
+- 正常观察日：`observation_live_executed=true`。
+- 所有未重复请求的观察日固定 `live_reexecuted=false`。
+
+索引可从历史 `evidence_origin` 派生这些字段，不改写既有日期目录；新生成的
+观察记录直接写入新字段，不再使用含义不清的 `live_request_reexecuted`。
 
 ## 8. 未来交易日流程
 

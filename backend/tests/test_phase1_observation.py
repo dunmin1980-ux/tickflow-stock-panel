@@ -559,7 +559,10 @@ def test_build_reused_day_validates_day1_without_network(
     assert day["observation_date"] == TRADE_DATE
     assert day["observation_day"] == 1
     assert day["evidence_origin"] == "phase1_1_reuse"
-    assert day["live_request_reexecuted"] is False
+    assert day["source_live_executed"] is True
+    assert day["observation_live_executed"] is False
+    assert day["live_reexecuted"] is False
+    assert "live_request_reexecuted" not in day
     assert day["source_request_count"] == 14
     assert day["new_api_request_count"] == 0
     assert day["source_data_hashes_verified"] is True
@@ -902,6 +905,10 @@ def test_render_observation_report_carries_required_boundaries(
     observer = _load_observer()
     reports = tmp_path / "reports"
     _write_index_day(reports, TRADE_DATE, "DAY_PASSED", day_number=1)
+    summary_path = (
+        reports / "phase1_observation" / TRADE_DATE / "daily_summary.json"
+    )
+    summary_hash_before = hashlib.sha256(summary_path.read_bytes()).hexdigest()
     index = observer.rebuild_index(reports)
 
     markdown = observer.render_observation_report(index)
@@ -914,14 +921,24 @@ def test_render_observation_report_carries_required_boundaries(
     assert "Integrated Gold：DISABLED / external_send_count=0" in markdown
     assert "phase1_1_reuse" in markdown
     assert "新增 API 请求：0" in markdown
+    assert "live 重跑" not in markdown
+    assert "源 live" in markdown
+    assert "观察 live" in markdown
+    assert "重复 live" in markdown
+    assert all(line == line.rstrip() for line in markdown.splitlines())
     assert index["days"][0]["source_request_count"] == 14
     assert index["days"][0]["source_data_hashes_verified"] is True
+    assert index["days"][0]["source_live_executed"] is True
+    assert index["days"][0]["observation_live_executed"] is False
+    assert index["days"][0]["live_reexecuted"] is False
+    assert "live_request_reexecuted" not in index["days"][0]
     assert index["reused_observation_days"] == 1
     assert index["phase1_2_live_observation_days"] == 0
     assert index["valid_observation_days"] == 1
     assert index["remaining_observation_days"] == 4
     assert len(index["index_hash_before"]) == 64
     assert len(index["index_hash_after"]) == 64
+    assert hashlib.sha256(summary_path.read_bytes()).hexdigest() == summary_hash_before
 
 
 def test_reuse_cli_materializes_day1_and_reports_in_progress(
@@ -1138,7 +1155,9 @@ def test_build_live_day_validates_sanitized_result(tmp_path: Path) -> None:
 
     assert day["status"] == "DAY_PASSED"
     assert day["evidence_origin"] == "phase1_2_daily_live"
-    assert day["live_request_reexecuted"] is True
+    assert day["observation_live_executed"] is True
+    assert day["live_reexecuted"] is False
+    assert "live_request_reexecuted" not in day
     assert day["source_request_count"] == 14
     assert day["new_api_request_count"] == 14
     assert day["source_evidence"][0]["sha256"] == observer.sha256_file(result_path)
@@ -1182,7 +1201,10 @@ def test_offline_rematerialization_preserves_blocked_audit_and_adds_no_requests(
     assert day["status"] == "DAY_PASSED"
     assert day["observation_day"] == 2
     assert day["evidence_origin"] == "phase1_2_live_reuse"
-    assert day["live_request_reexecuted"] is False
+    assert day["original_live_executed"] is True
+    assert day["rematerialization_live_executed"] is False
+    assert day["live_reexecuted"] is False
+    assert "live_request_reexecuted" not in day
     assert day["source_live_request_count"] == 14
     assert day["source_request_count"] == 14
     assert day["new_api_request_count"] == 0
@@ -1199,7 +1221,11 @@ def test_offline_rematerialization_preserves_blocked_audit_and_adds_no_requests(
     }
     assert day["request_audit"]["source_request_count"] == 14
     assert day["request_audit"]["new_api_request_count"] == 0
-    assert day["request_audit"]["live_request_reexecuted"] is False
+    assert day["request_audit"]["live_executed"] is True
+    assert day["request_audit"]["original_live_executed"] is True
+    assert day["request_audit"]["rematerialization_live_executed"] is False
+    assert day["request_audit"]["live_reexecuted"] is False
+    assert "live_request_reexecuted" not in day["request_audit"]
     assert observer.sha256_file(source_path) == source_hash_before
     assert observer.sha256_file(cumulative_audit) == cumulative_hash_before
     assert (
@@ -1221,6 +1247,10 @@ def test_offline_rematerialization_preserves_blocked_audit_and_adds_no_requests(
     day2_index = index["days"][1]
     assert day2_index["original_status"] == "DAY_BLOCKED"
     assert day2_index["resolution"] == "OFFLINE_SCHEMA_REMATERIALIZATION"
+    assert day2_index["original_live_executed"] is True
+    assert day2_index["rematerialization_live_executed"] is False
+    assert day2_index["live_reexecuted"] is False
+    assert "live_request_reexecuted" not in day2_index
 
 
 def test_offline_rematerialization_is_idempotent(
@@ -1491,6 +1521,9 @@ def test_live_execution_metadata_uses_start_time_across_midnight(
     assert enriched["run_started_at"] == "2026-07-28T23:59:59+08:00"
     assert enriched["run_completed_at"] == "2026-07-29T00:03:00+08:00"
     assert enriched["counts_as_valid_day"] is True
+    assert enriched["observation_live_executed"] is True
+    assert enriched["live_reexecuted"] is False
+    assert "live_request_reexecuted" not in enriched
 
 
 def test_late_same_day_pass_counts_once_and_preserves_prior_evidence(
@@ -1542,6 +1575,14 @@ def test_late_same_day_pass_counts_once_and_preserves_prior_evidence(
     assert index["phase1_2_live_observation_days"] == 2
     assert index["days"][2]["execution_timing"] == "LATE_SAME_DAY"
     assert index["days"][2]["counts_as_valid_day"] is True
+    assert index["days"][0]["source_live_executed"] is True
+    assert index["days"][0]["observation_live_executed"] is False
+    assert index["days"][0]["live_reexecuted"] is False
+    assert index["days"][1]["observation_live_executed"] is True
+    assert index["days"][1]["live_reexecuted"] is False
+    assert index["days"][2]["observation_live_executed"] is True
+    assert index["days"][2]["live_reexecuted"] is False
+    assert all("live_request_reexecuted" not in day for day in index["days"])
     assert observer.sha256_file(cumulative_audit) == audit_hash_before
     assert (
         observer.sha256_file(
@@ -1654,7 +1695,9 @@ def test_non_trading_day_is_materialized_without_requests(tmp_path: Path) -> Non
 
     assert day["status"] == "NON_TRADING_DAY"
     assert day["new_api_request_count"] == 0
-    assert day["live_request_reexecuted"] is False
+    assert day["observation_live_executed"] is False
+    assert day["live_reexecuted"] is False
+    assert "live_request_reexecuted" not in day
     assert index["valid_observation_days"] == 0
     assert index["remaining_observation_days"] == 5
 

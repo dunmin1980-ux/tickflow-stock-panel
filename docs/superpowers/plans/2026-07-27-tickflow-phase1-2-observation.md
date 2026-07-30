@@ -57,7 +57,9 @@ def test_build_reused_day_validates_day1_without_network(tmp_path, monkeypatch):
     day = observer.build_reused_day(repo, "2026-07-27")
     assert day["status"] == "DAY_PASSED"
     assert day["evidence_origin"] == "phase1_1_reuse"
-    assert day["live_request_reexecuted"] is False
+    assert day["source_live_executed"] is True
+    assert day["observation_live_executed"] is False
+    assert day["live_reexecuted"] is False
     assert day["source_request_count"] == 14
     assert day["new_api_request_count"] == 0
 
@@ -439,7 +441,8 @@ manifest against every listed source file.
 - [x] **Step 4: Verify all generated schemas**
 
 Parse all generated JSON files, require the six-file date directory, confirm
-`evidence_origin=phase1_1_reuse`, `live_request_reexecuted=false`,
+`evidence_origin=phase1_1_reuse`, `source_live_executed=true`,
+`observation_live_executed=false`, `live_reexecuted=false`,
 `source_request_count=14`, `source_data_hashes_verified=true`, four vendor
 pending items, and no copied raw bars.
 
