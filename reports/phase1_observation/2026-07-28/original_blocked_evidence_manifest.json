@@ -1,0 +1,63 @@
+{
+  "contract": "tickflow_phase1_2_original_blocked_evidence_v1",
+  "frozen_at": "2026-07-28T16:41:48+08:00",
+  "observation_date": "2026-07-28",
+  "original_day_status": "DAY_BLOCKED",
+  "original_blocker": "BOUNDARY_SCHEMA_MISMATCH",
+  "original_blocker_detail": "BOUNDARY_EVIDENCE_FAILED: raw_market_values_modified",
+  "original_blocked_at": "2026-07-28T16:12:25+08:00",
+  "original_blocked_at_basis": "daily_summary.json filesystem modification time",
+  "source_live_result": {
+    "path": "/var/folders/ln/hd9n0j9910s4htp7296nwqbw0000gn/T/tickflow-phase1-observation.3FfsSk",
+    "sha256": "443f56d446f6e09849c0a47eba76041643851b5a2a394e2c2a8f22be84d42719",
+    "size": 181650,
+    "mode": "0600",
+    "generated_at": "2026-07-28T16:12:17+08:00",
+    "source_final_status": "PHASE1_READY_FOR_OBSERVATION_WITH_VENDOR_PENDING"
+  },
+  "frozen_files": [
+    {
+      "path": "reports/phase1_observation/2026-07-28/daily_summary.json",
+      "sha256": "62bfba01c2be93b581d0a5bddb7bdd56c017f1e42873f5aedb8108777bed62b3",
+      "role": "original_blocked_day_summary"
+    },
+    {
+      "path": "reports/phase1_observation/2026-07-28/request_audit.json",
+      "sha256": "72014770169d1ddad00d55326b5c37a0c1c5a8ddc93b296f93ed8e6c28d287da",
+      "role": "original_day2_compact_request_audit"
+    },
+    {
+      "path": "reports/phase1_observation/2026-07-28/original_blocked_daily_summary.json",
+      "sha256": "62bfba01c2be93b581d0a5bddb7bdd56c017f1e42873f5aedb8108777bed62b3",
+      "role": "preserved_original_blocked_day_summary"
+    },
+    {
+      "path": "reports/phase1_observation/2026-07-28/original_blocked_request_audit.json",
+      "sha256": "72014770169d1ddad00d55326b5c37a0c1c5a8ddc93b296f93ed8e6c28d287da",
+      "role": "preserved_original_day2_compact_request_audit"
+    },
+    {
+      "path": "reports/phase1_observation/observation_index.json",
+      "sha256": "d2c23ce6ba90979c52a746b97849aaa459e0ab056af06b6355793ecd3d051c4b",
+      "role": "original_blocked_observation_index"
+    },
+    {
+      "path": "reports/phase1_observation/2026-07-28/original_blocked_observation_index.json",
+      "sha256": "d2c23ce6ba90979c52a746b97849aaa459e0ab056af06b6355793ecd3d051c4b",
+      "role": "preserved_original_blocked_observation_index"
+    },
+    {
+      "path": "reports/tickflow_phase1_day2_blocker_diagnosis.md",
+      "sha256": "ec43fdd005447f2332c65c7c31ad2156b035a5a3beebd983c288aa4fa863c428",
+      "role": "original_blocker_diagnosis"
+    },
+    {
+      "path": "reports/phase1_tickflow_request_audit.json",
+      "sha256": "4b804ef218d5b7ac936e12814c300230f5cbcf1c691b62800f6d00a9edf3cf0e",
+      "role": "phase1_cumulative_request_audit"
+    }
+  ],
+  "source_evidence_modified": false,
+  "api_requests_added": 0,
+  "second_live_run": false
+}

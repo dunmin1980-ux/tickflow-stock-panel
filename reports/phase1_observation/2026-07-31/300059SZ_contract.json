@@ -1,0 +1,50 @@
+{
+  "daily": {
+    "latest_qfq_trade_date": "2026-07-31",
+    "latest_raw_trade_date": "2026-07-31",
+    "qfq_repeat_stable": true,
+    "status": "PASSED"
+  },
+  "direct_30m": {
+    "bar_count": 8,
+    "duplicate_timestamps": 0,
+    "epsilon_amount_warning_count": 0,
+    "epsilon_ohlc_warning_count": 0,
+    "latest_timestamp": "2026-07-31T15:00:00+08:00",
+    "lunch_break_bars": 0,
+    "material_negative_amount": 0,
+    "material_ohlc_anomalies": 0,
+    "period": "30m",
+    "status": "PASSED"
+  },
+  "ex_factors": {
+    "factor_count": 17,
+    "qfq_relation_match_rate": 1.0,
+    "repeat_stable": true,
+    "second_adjustment_detected": false,
+    "status": "PASSED"
+  },
+  "minute_to_30m": {
+    "first_bucket_mechanically_explained": true,
+    "first_bucket_rule": "09:30-10:00",
+    "non_first_bucket_volume_amount_mismatches": 0,
+    "ohlc_mismatches": 0,
+    "status": "PASSED",
+    "vendor_contract_confirmed": false
+  },
+  "name": "东方财富",
+  "one_minute": {
+    "bar_count": 241,
+    "duplicate_timestamps": 0,
+    "epsilon_amount_warning_count": 1,
+    "epsilon_ohlc_warning_count": 3,
+    "latest_timestamp": "2026-07-31T15:00:00+08:00",
+    "lunch_break_bars": 0,
+    "material_negative_amount": 0,
+    "material_ohlc_anomalies": 0,
+    "period": "1m",
+    "status": "PASSED"
+  },
+  "status": "PASSED",
+  "symbol": "300059.SZ"
+}

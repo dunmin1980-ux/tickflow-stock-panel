@@ -1,0 +1,76 @@
+{
+  "boundaries": {
+    "ai": "NOT_CONFIGURED",
+    "cloud_redeployed": false,
+    "integrated_gold_enabled": false,
+    "integrated_gold_external_send_count": 0,
+    "paper_trading": "NOT_STARTED",
+    "real_key": "NOT_EXPOSED"
+  },
+  "boundary_normalization": {
+    "derived_fields": [],
+    "normalization_applied": false,
+    "normalization_version": "boundary-v1",
+    "source_evidence_hash": "b3510f65ab67214bdd211ede5acc29b10891c6fa96813e96f8fad2bd19c7ac40",
+    "source_schema": "boundary-v1"
+  },
+  "contract": "tickflow_phase1_2_observation_day_v1",
+  "counts_as_valid_day": true,
+  "evidence_origin": "phase1_2_daily_live",
+  "execution_timing": "LATE_SAME_DAY",
+  "failure_reasons": [],
+  "idempotency_key": "phase1_observation:2026-07-30:f5f48819c7db5ecac1e09e7a0ec634a09aa5675480a9bd0f6d2cc9eea8bf8dd8:tickflow_phase1_2_observation_v1",
+  "live_executed": true,
+  "live_reexecuted": false,
+  "metrics": {
+    "duplicate_timestamps": 0,
+    "ex_factor_checks": 3,
+    "ex_factor_passes": 3,
+    "first_bucket_checks": 3,
+    "first_bucket_matches": 3,
+    "http_429": 0,
+    "lunch_break_bars": 0,
+    "material_negative_amount": 0,
+    "material_ohlc_anomalies": 0,
+    "non_first_bucket_volume_amount_mismatches": 0,
+    "sensitive_shape_hits": 0,
+    "stale_data": 0,
+    "thirty_minute_ohlc_mismatches": 0
+  },
+  "new_api_request_count": 14,
+  "observation_date": "2026-07-30",
+  "observation_day": 4,
+  "observation_live_executed": true,
+  "original_live_executed": false,
+  "rematerialization_live_executed": false,
+  "run_completed_at": "2026-07-30T20:58:41+08:00",
+  "run_started_at": "2026-07-30T20:58:32+08:00",
+  "source_data_hashes_verified": true,
+  "source_evidence": [
+    {
+      "path": "ephemeral/tickflow-phase1-observation.M5pGLs",
+      "retained_after_materialization": false,
+      "sha256": "b3510f65ab67214bdd211ede5acc29b10891c6fa96813e96f8fad2bd19c7ac40",
+      "size": 183340
+    }
+  ],
+  "source_evidence_digest": "05bae899106da8b3b096b6086356f8b6ef675875669294e70dc7f79e15b5b92b",
+  "source_evidence_dir": null,
+  "source_live_executed": false,
+  "source_report": null,
+  "source_request_audit": "embedded_sanitized_live_result",
+  "source_request_count": 14,
+  "source_status": "PHASE1_READY_FOR_OBSERVATION_WITH_VENDOR_PENDING",
+  "status": "DAY_PASSED",
+  "symbols": {
+    "000403.SZ": "PASSED",
+    "300059.SZ": "PASSED",
+    "600489.SH": "PASSED"
+  },
+  "vendor_pending": [
+    "intraday_batch_entitlement",
+    "first_30m_bucket_includes_09_30",
+    "volume_unit",
+    "amount_unit"
+  ]
+}
