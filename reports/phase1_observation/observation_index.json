@@ -162,11 +162,48 @@
         "volume_unit",
         "amount_unit"
       ]
+    },
+    {
+      "counts_as_valid_day": true,
+      "evidence_origin": "phase1_2_daily_live",
+      "execution_timing": "LATE_SAME_DAY",
+      "idempotency_key": "phase1_observation:2026-07-31:f5f48819c7db5ecac1e09e7a0ec634a09aa5675480a9bd0f6d2cc9eea8bf8dd8:tickflow_phase1_2_observation_v1",
+      "live_executed": true,
+      "live_reexecuted": false,
+      "new_api_request_count": 14,
+      "observation_date": "2026-07-31",
+      "observation_day": 5,
+      "observation_live_executed": true,
+      "original_blocked_at": null,
+      "original_blocker": null,
+      "original_day_status": null,
+      "original_live_executed": false,
+      "original_status": null,
+      "rematerialization": null,
+      "rematerialization_live_executed": false,
+      "resolution": null,
+      "run_completed_at": "2026-07-31T21:11:33+08:00",
+      "run_started_at": "2026-07-31T21:11:16+08:00",
+      "source_data_hashes_verified": true,
+      "source_evidence_digest": "7602d6855bcfd8a625647bb7a3563e42872e0ec034cc1dd3610e1ac87b9ae6c3",
+      "source_evidence_dir": null,
+      "source_live_executed": false,
+      "source_live_request_count": null,
+      "source_report": null,
+      "source_request_audit": "embedded_sanitized_live_result",
+      "source_request_count": 14,
+      "status": "DAY_PASSED",
+      "vendor_pending": [
+        "intraday_batch_entitlement",
+        "first_30m_bucket_includes_09_30",
+        "volume_unit",
+        "amount_unit"
+      ]
     }
   ],
-  "final_status": "PHASE1_OBSERVATION_IN_PROGRESS",
-  "index_hash_after": "dda19dee3abc3a8c845a1116edef4a568db1afcb56a50a948a5ff371c56c086f",
-  "index_hash_before": "153f7c2efe3f15ce158eb7484f6ba3068ed1605b494831f5bb1d2701209d5a77",
+  "final_status": "PHASE1_OBSERVATION_PASSED",
+  "index_hash_after": "a04a05ac9dcee6626513a143800aff65be34d26efb4fa23d35102710644886ed",
+  "index_hash_before": "7ba6e6bd386feac7df09534bdf4a0956f471fbd0fde7040df21e2a1f00db0104",
   "metrics": {
     "duplicate_timestamps": 0,
     "ex_factor_pass_rate": 1.0,
@@ -180,9 +217,9 @@
     "stale_data": 0,
     "thirty_minute_ohlc_mismatches": 0
   },
-  "phase1_2_live_observation_days": 3,
-  "remaining_actual_trading_days": 1,
-  "remaining_observation_days": 1,
+  "phase1_2_live_observation_days": 4,
+  "remaining_actual_trading_days": 0,
+  "remaining_observation_days": 0,
   "required_trading_days": 5,
   "reused_observation_days": 1,
   "symbols": {
@@ -190,8 +227,8 @@
     "300059.SZ": "PASSED",
     "600489.SH": "PASSED"
   },
-  "valid_observation_days": 4,
-  "valid_trading_days": 4,
+  "valid_observation_days": 5,
+  "valid_trading_days": 5,
   "vendor_pending": [
     "intraday_batch_entitlement",
     "first_30m_bucket_includes_09_30",

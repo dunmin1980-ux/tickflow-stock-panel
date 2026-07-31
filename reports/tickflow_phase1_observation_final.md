@@ -3,11 +3,11 @@
 ## 当前状态
 
 ```text
-PHASE1_OBSERVATION_IN_PROGRESS
+PHASE1_OBSERVATION_PASSED
 ```
 
-有效交易日：4/5，剩余 1 日
-复用观察日：1；Phase 1.2 新增 live 观察日：3
+有效交易日：5/5，剩余 0 日
+复用观察日：1；Phase 1.2 新增 live 观察日：4
 
 当前只完成真实证据已经落盘的观察日；未预生成未来交易日结果。
 
@@ -19,6 +19,7 @@ PHASE1_OBSERVATION_IN_PROGRESS
 | 2026-07-28 | 2 | DAY_PASSED | - | phase1_2_live_reuse | NO | YES | NO | NO | NO | 0 |
 | 2026-07-29 | 3 | DAY_PASSED | LATE_SAME_DAY | phase1_2_daily_live | NO | NO | YES | NO | NO | 14 |
 | 2026-07-30 | 4 | DAY_PASSED | LATE_SAME_DAY | phase1_2_daily_live | NO | NO | YES | NO | NO | 14 |
+| 2026-07-31 | 5 | DAY_PASSED | LATE_SAME_DAY | phase1_2_daily_live | NO | NO | YES | NO | NO | 14 |
 
 Day 1 新增 API 请求：0；该日复用 Phase 1.1 正式 live 证据。
 
@@ -27,6 +28,8 @@ Day 2 保留原 DAY_BLOCKED 审计，并通过 OFFLINE_SCHEMA_REMATERIALIZATION 
 Day 3 于 2026-07-29T21:44:21+08:00 启动，2026-07-29T21:44:52+08:00 完成；执行时段为 LATE_SAME_DAY，行情与安全合同仍按原阈值验收。
 
 Day 4 于 2026-07-30T20:58:32+08:00 启动，2026-07-30T20:58:41+08:00 完成；执行时段为 LATE_SAME_DAY，行情与安全合同仍按原阈值验收。
+
+Day 5 于 2026-07-31T21:11:16+08:00 启动，2026-07-31T21:11:33+08:00 完成；执行时段为 LATE_SAME_DAY，行情与安全合同仍按原阈值验收。
 
 ## 三票状态
 
