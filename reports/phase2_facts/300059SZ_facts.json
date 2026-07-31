@@ -1,0 +1,413 @@
+{
+  "adjustment_factors": {
+    "factor_count": 17,
+    "qfq_relation_match_rate": 1.0,
+    "repeat_stable": true,
+    "second_adjustment_detected": false,
+    "status": "PASSED"
+  },
+  "content_readiness": "BLOCKED_SOURCE_EVIDENCE",
+  "daily": {
+    "amount": null,
+    "close": null,
+    "contract_status": "PASSED",
+    "high": null,
+    "latest_qfq_trade_date": "2026-07-31",
+    "latest_raw_trade_date": "2026-07-31",
+    "low": null,
+    "open": null,
+    "reason": "Retained Phase 1 evidence does not include the Day 5 OHLCV values",
+    "status": "UNAVAILABLE_SOURCE_EVIDENCE",
+    "volume": null
+  },
+  "data_freshness": "fresh",
+  "facts_schema_version": 1,
+  "generation": {
+    "ai_calls": 0,
+    "mode": "offline_phase1_evidence_only",
+    "new_tickflow_api_request_count": 0
+  },
+  "indicators": {
+    "atr14": {
+      "implementation": "app.indicators.pipeline.compute_indicators:atr_14",
+      "price_basis": "qfq",
+      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
+      "required_input": "retained_qfq_daily_ohlcv_series",
+      "status": "NOT_IMPLEMENTED",
+      "value": null
+    },
+    "boll_lower": {
+      "implementation": "app.indicators.pipeline.compute_indicators:boll_lower",
+      "price_basis": "qfq",
+      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
+      "required_input": "retained_qfq_daily_ohlcv_series",
+      "status": "NOT_IMPLEMENTED",
+      "value": null
+    },
+    "boll_middle": {
+      "implementation": "app.indicators.pipeline.compute_indicators:ma20",
+      "price_basis": "qfq",
+      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
+      "required_input": "retained_qfq_daily_ohlcv_series",
+      "status": "NOT_IMPLEMENTED",
+      "value": null
+    },
+    "boll_upper": {
+      "implementation": "app.indicators.pipeline.compute_indicators:boll_upper",
+      "price_basis": "qfq",
+      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
+      "required_input": "retained_qfq_daily_ohlcv_series",
+      "status": "NOT_IMPLEMENTED",
+      "value": null
+    },
+    "ma10": {
+      "implementation": "app.indicators.pipeline.compute_indicators:ma10",
+      "price_basis": "qfq",
+      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
+      "required_input": "retained_qfq_daily_ohlcv_series",
+      "status": "NOT_IMPLEMENTED",
+      "value": null
+    },
+    "ma20": {
+      "implementation": "app.indicators.pipeline.compute_indicators:ma20",
+      "price_basis": "qfq",
+      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
+      "required_input": "retained_qfq_daily_ohlcv_series",
+      "status": "NOT_IMPLEMENTED",
+      "value": null
+    },
+    "ma5": {
+      "implementation": "app.indicators.pipeline.compute_indicators:ma5",
+      "price_basis": "qfq",
+      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
+      "required_input": "retained_qfq_daily_ohlcv_series",
+      "status": "NOT_IMPLEMENTED",
+      "value": null
+    },
+    "ma60": {
+      "implementation": "app.indicators.pipeline.compute_indicators:ma60",
+      "price_basis": "qfq",
+      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
+      "required_input": "retained_qfq_daily_ohlcv_series",
+      "status": "NOT_IMPLEMENTED",
+      "value": null
+    },
+    "macd_dea": {
+      "implementation": "app.indicators.pipeline.compute_indicators:macd_dea",
+      "price_basis": "qfq",
+      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
+      "required_input": "retained_qfq_daily_ohlcv_series",
+      "status": "NOT_IMPLEMENTED",
+      "value": null
+    },
+    "macd_dif": {
+      "implementation": "app.indicators.pipeline.compute_indicators:macd_dif",
+      "price_basis": "qfq",
+      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
+      "required_input": "retained_qfq_daily_ohlcv_series",
+      "status": "NOT_IMPLEMENTED",
+      "value": null
+    },
+    "macd_hist": {
+      "implementation": "app.indicators.pipeline.compute_indicators:macd_hist",
+      "price_basis": "qfq",
+      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
+      "required_input": "retained_qfq_daily_ohlcv_series",
+      "status": "NOT_IMPLEMENTED",
+      "value": null
+    },
+    "rsi14": {
+      "implementation": "app.indicators.pipeline.compute_indicators:rsi_14",
+      "price_basis": "qfq",
+      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
+      "required_input": "retained_qfq_daily_ohlcv_series",
+      "status": "NOT_IMPLEMENTED",
+      "value": null
+    },
+    "rsi6": {
+      "implementation": "app.indicators.pipeline.compute_indicators:rsi_6",
+      "price_basis": "qfq",
+      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
+      "required_input": "retained_qfq_daily_ohlcv_series",
+      "status": "NOT_IMPLEMENTED",
+      "value": null
+    },
+    "volume_ma10": {
+      "implementation": "app.indicators.pipeline.compute_indicators:vol_ma10",
+      "price_basis": "none",
+      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
+      "required_input": "retained_qfq_daily_ohlcv_series",
+      "status": "NOT_IMPLEMENTED",
+      "value": null
+    },
+    "volume_ma5": {
+      "implementation": "app.indicators.pipeline.compute_indicators:vol_ma5",
+      "price_basis": "none",
+      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
+      "required_input": "retained_qfq_daily_ohlcv_series",
+      "status": "NOT_IMPLEMENTED",
+      "value": null
+    },
+    "volume_ratio": {
+      "implementation": "app.indicators.pipeline.compute_indicators:vol_ratio_5d",
+      "price_basis": "none",
+      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
+      "required_input": "retained_qfq_daily_ohlcv_series",
+      "status": "NOT_IMPLEMENTED",
+      "value": null
+    }
+  },
+  "key_levels": {
+    "calculation_method": null,
+    "observed_resistances": [],
+    "observed_supports": [],
+    "reason": "No approved deterministic key-level method has retained input data",
+    "status": "NOT_IMPLEMENTED"
+  },
+  "minute_1m": {
+    "bar_count": 241,
+    "duplicate_timestamp_count": 0,
+    "epsilon_amount_warning_count": 1,
+    "epsilon_ohlc_warning_count": 3,
+    "latest_timestamp": "2026-07-31T15:00:00+08:00",
+    "lunch_break_bar_count": 0,
+    "material_negative_amount_count": 0,
+    "material_ohlc_anomaly_count": 0,
+    "period": "1m",
+    "status": "PASSED"
+  },
+  "minute_30m": {
+    "bar_count": 8,
+    "duplicate_timestamp_count": 0,
+    "first_bucket_mechanically_explained": true,
+    "first_bucket_rule": "09:30-10:00",
+    "latest_timestamp": "2026-07-31T15:00:00+08:00",
+    "lunch_break_bar_count": 0,
+    "material_negative_amount_count": 0,
+    "material_ohlc_anomaly_count": 0,
+    "non_first_bucket_volume_amount_mismatch_count": 0,
+    "ohlc_mismatch_count": 0,
+    "period": "30m",
+    "status": "PASSED",
+    "vendor_contract_confirmed": false
+  },
+  "missing_source_inputs": [
+    "retained_raw_daily_ohlcv_values",
+    "retained_qfq_daily_ohlcv_series"
+  ],
+  "name": "东方财富",
+  "numeric_provenance": {
+    "/adjustment_factors/factor_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "qfq",
+      "source_file": "reports/phase1_observation/2026-07-31/300059SZ_contract.json",
+      "source_json_path": "/ex_factors/factor_count",
+      "source_sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
+    },
+    "/adjustment_factors/qfq_relation_match_rate": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "qfq",
+      "source_file": "reports/phase1_observation/2026-07-31/300059SZ_contract.json",
+      "source_json_path": "/ex_factors/qfq_relation_match_rate",
+      "source_sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
+    },
+    "/facts_schema_version": {
+      "calculation_function": "schema_constant",
+      "constant": "FACTS_SCHEMA_VERSION",
+      "kind": "schema_constant",
+      "price_basis": "not_applicable"
+    },
+    "/generation/ai_calls": {
+      "calculation_function": "schema_constant",
+      "constant": "PHASE2A_AI_DISABLED",
+      "kind": "schema_constant",
+      "price_basis": "not_applicable"
+    },
+    "/generation/new_tickflow_api_request_count": {
+      "calculation_function": "schema_constant",
+      "constant": "OFFLINE_BUILD_ZERO_REQUESTS",
+      "kind": "schema_constant",
+      "price_basis": "not_applicable"
+    },
+    "/minute_1m/bar_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "none",
+      "source_file": "reports/phase1_observation/2026-07-31/300059SZ_contract.json",
+      "source_json_path": "/one_minute/bar_count",
+      "source_sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
+    },
+    "/minute_1m/duplicate_timestamp_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "none",
+      "source_file": "reports/phase1_observation/2026-07-31/300059SZ_contract.json",
+      "source_json_path": "/one_minute/duplicate_timestamps",
+      "source_sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
+    },
+    "/minute_1m/epsilon_amount_warning_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "none",
+      "source_file": "reports/phase1_observation/2026-07-31/300059SZ_contract.json",
+      "source_json_path": "/one_minute/epsilon_amount_warning_count",
+      "source_sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
+    },
+    "/minute_1m/epsilon_ohlc_warning_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "none",
+      "source_file": "reports/phase1_observation/2026-07-31/300059SZ_contract.json",
+      "source_json_path": "/one_minute/epsilon_ohlc_warning_count",
+      "source_sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
+    },
+    "/minute_1m/lunch_break_bar_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "none",
+      "source_file": "reports/phase1_observation/2026-07-31/300059SZ_contract.json",
+      "source_json_path": "/one_minute/lunch_break_bars",
+      "source_sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
+    },
+    "/minute_1m/material_negative_amount_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "none",
+      "source_file": "reports/phase1_observation/2026-07-31/300059SZ_contract.json",
+      "source_json_path": "/one_minute/material_negative_amount",
+      "source_sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
+    },
+    "/minute_1m/material_ohlc_anomaly_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "none",
+      "source_file": "reports/phase1_observation/2026-07-31/300059SZ_contract.json",
+      "source_json_path": "/one_minute/material_ohlc_anomalies",
+      "source_sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
+    },
+    "/minute_30m/bar_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "none",
+      "source_file": "reports/phase1_observation/2026-07-31/300059SZ_contract.json",
+      "source_json_path": "/direct_30m/bar_count",
+      "source_sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
+    },
+    "/minute_30m/duplicate_timestamp_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "none",
+      "source_file": "reports/phase1_observation/2026-07-31/300059SZ_contract.json",
+      "source_json_path": "/direct_30m/duplicate_timestamps",
+      "source_sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
+    },
+    "/minute_30m/lunch_break_bar_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "none",
+      "source_file": "reports/phase1_observation/2026-07-31/300059SZ_contract.json",
+      "source_json_path": "/direct_30m/lunch_break_bars",
+      "source_sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
+    },
+    "/minute_30m/material_negative_amount_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "none",
+      "source_file": "reports/phase1_observation/2026-07-31/300059SZ_contract.json",
+      "source_json_path": "/direct_30m/material_negative_amount",
+      "source_sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
+    },
+    "/minute_30m/material_ohlc_anomaly_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "none",
+      "source_file": "reports/phase1_observation/2026-07-31/300059SZ_contract.json",
+      "source_json_path": "/direct_30m/material_ohlc_anomalies",
+      "source_sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
+    },
+    "/minute_30m/non_first_bucket_volume_amount_mismatch_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "none",
+      "source_file": "reports/phase1_observation/2026-07-31/minute_30m_comparison.json",
+      "source_json_path": "/symbols/300059.SZ/non_first_bucket_volume_amount_mismatches",
+      "source_sha256": "7b03618ad9942fba33ebfe97a50e6ea8ee97762e168c178f70989879ea440dd9"
+    },
+    "/minute_30m/ohlc_mismatch_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "none",
+      "source_file": "reports/phase1_observation/2026-07-31/minute_30m_comparison.json",
+      "source_json_path": "/symbols/300059.SZ/ohlc_mismatches",
+      "source_sha256": "7b03618ad9942fba33ebfe97a50e6ea8ee97762e168c178f70989879ea440dd9"
+    },
+    "/source_evidence/observation_days": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "not_applicable",
+      "source_file": "reports/phase1_observation/observation_index.json",
+      "source_json_path": "/valid_observation_days",
+      "source_sha256": "d3b66743f5a37bcac25fa004c33909c45fb844961f6228d53f31df1f4efa2be0"
+    }
+  },
+  "price_basis": {
+    "daily_ohlcv": "none",
+    "indicator_prices": "qfq",
+    "indicator_volume": "none",
+    "minute": "none"
+  },
+  "scope": {
+    "financial_scope": "unavailable",
+    "industry_scope": "manual_verification_required",
+    "market_scope": "incomplete",
+    "news_scope": "unavailable"
+  },
+  "source_evidence": {
+    "observation_days": 5,
+    "phase1_status": "PHASE1_OBSERVATION_PASSED",
+    "source_files": [
+      {
+        "path": "reports/phase1_observation/observation_index.json",
+        "sha256": "d3b66743f5a37bcac25fa004c33909c45fb844961f6228d53f31df1f4efa2be0"
+      },
+      {
+        "path": "reports/phase1_observation/2026-07-31/daily_summary.json",
+        "sha256": "4cc5ea990df205deb17923826df6df49fadd68539784e0c71efee331031cbb60"
+      },
+      {
+        "path": "reports/phase1_observation/2026-07-31/300059SZ_contract.json",
+        "sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
+      },
+      {
+        "path": "reports/phase1_observation/2026-07-31/minute_30m_comparison.json",
+        "sha256": "7b03618ad9942fba33ebfe97a50e6ea8ee97762e168c178f70989879ea440dd9"
+      },
+      {
+        "path": "reports/phase1_observation/2026-07-31/request_audit.json",
+        "sha256": "5b3e4622f9badd6f4033788aabb5fdd7fa65239274bf2a8eea2ed9b2c1380ad7"
+      },
+      {
+        "path": "reports/phase1_tickflow_request_audit.json",
+        "sha256": "4b804ef218d5b7ac936e12814c300230f5cbcf1c691b62800f6d00a9edf3cf0e"
+      },
+      {
+        "path": "reports/tickflow_phase1_observation_final.md",
+        "sha256": "8a335eeced7d60ce1cb33ba42a9b24aadd4b637fae32a677570e727dd6eae463"
+      }
+    ],
+    "source_set_sha256": "df225f4d84a3e7289e8b7f95fe81c62920f88514302534c3527f4f23ac2eb3dd"
+  },
+  "source_system": "tickflow-stock-panel",
+  "symbol": "300059.SZ",
+  "timezone": "Asia/Shanghai",
+  "trade_date": "2026-07-31",
+  "trading": false,
+  "vendor_pending": [
+    "intraday_batch_entitlement",
+    "first_30m_bucket_includes_09_30",
+    "volume_unit",
+    "amount_unit"
+  ]
+}

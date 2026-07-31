@@ -1,0 +1,62 @@
+{
+  "ai_calls": 0,
+  "build_mode": "offline_phase1_evidence_only",
+  "content_readiness": "BLOCKED_SOURCE_EVIDENCE",
+  "facts_schema_version": 1,
+  "missing_source_inputs": [
+    "retained_raw_daily_ohlcv_values",
+    "retained_qfq_daily_ohlcv_series"
+  ],
+  "new_tickflow_api_request_count": 0,
+  "output_hashes": {
+    "000403SZ_facts.json": "6320c5230062c67837033c5d1468a0366c00119d3f08b91d131c409272eac93a",
+    "300059SZ_facts.json": "50fb96dd8e5135b4cc1e43ca9bd90272e017f180446894b68dbfeb55a10f986d",
+    "600489SH_facts.json": "8528801d8bc2f4f5df8b6f89d78271bff35dccc8555c3fc7733c7284d6fca98a"
+  },
+  "source_files": [
+    {
+      "path": "reports/phase1_observation/2026-07-31/000403SZ_contract.json",
+      "sha256": "5b34b51873e1af4020bd6c12edb33043beae30224268ab46ef89213a94fe5f06"
+    },
+    {
+      "path": "reports/phase1_observation/2026-07-31/300059SZ_contract.json",
+      "sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
+    },
+    {
+      "path": "reports/phase1_observation/2026-07-31/600489SH_contract.json",
+      "sha256": "acd782e20069158f166427ab6a1bfa88d0a117d34383e83e91873a1947b2672c"
+    },
+    {
+      "path": "reports/phase1_observation/2026-07-31/daily_summary.json",
+      "sha256": "4cc5ea990df205deb17923826df6df49fadd68539784e0c71efee331031cbb60"
+    },
+    {
+      "path": "reports/phase1_observation/2026-07-31/minute_30m_comparison.json",
+      "sha256": "7b03618ad9942fba33ebfe97a50e6ea8ee97762e168c178f70989879ea440dd9"
+    },
+    {
+      "path": "reports/phase1_observation/2026-07-31/request_audit.json",
+      "sha256": "5b3e4622f9badd6f4033788aabb5fdd7fa65239274bf2a8eea2ed9b2c1380ad7"
+    },
+    {
+      "path": "reports/phase1_observation/observation_index.json",
+      "sha256": "d3b66743f5a37bcac25fa004c33909c45fb844961f6228d53f31df1f4efa2be0"
+    },
+    {
+      "path": "reports/phase1_tickflow_request_audit.json",
+      "sha256": "4b804ef218d5b7ac936e12814c300230f5cbcf1c691b62800f6d00a9edf3cf0e"
+    },
+    {
+      "path": "reports/tickflow_phase1_observation_final.md",
+      "sha256": "8a335eeced7d60ce1cb33ba42a9b24aadd4b637fae32a677570e727dd6eae463"
+    }
+  ],
+  "source_set_sha256": "302111ca829458dc0d90ad3223bad45bdd07761666f8461a6e641057dec05d1f",
+  "status": "FACTS_VALID",
+  "symbols": {
+    "000403.SZ": "VALID",
+    "300059.SZ": "VALID",
+    "600489.SH": "VALID"
+  },
+  "trade_date": "2026-07-31"
+}
