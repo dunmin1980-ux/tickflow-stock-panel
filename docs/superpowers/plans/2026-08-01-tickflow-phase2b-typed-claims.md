@@ -255,7 +255,7 @@ Also rerun the legacy freeform delivery validator and require the same expected
 `PHASE2_AI_OUTPUT_BLOCKED` with `errors=[]`; typed inbox files must not create a
 historical duplicate-route error.
 
-- [ ] **Step 7: Commit renderer and generated artifacts**
+- [x] **Step 7: Commit renderer and generated artifacts**
 
 ```bash
 git add backend/app/services/phase2_claims_renderer.py \
@@ -279,38 +279,38 @@ git commit -m "feat: add deterministic claims renderer"
 - Produces: `build_worker_projection(facts, facts_sha256)`, `read_exact_projection(path, allowed_path)`, `validate_worker_candidate(value, projection)`, and `FakeClaimsWorker`.
 - Consumes: typed candidate models and only the safe Facts fields required by predicate rules.
 
-- [ ] **Step 1: Write failing projection and denial tests**
+- [x] **Step 1: Write failing projection and denial tests**
 
 Assert projection contains no repository/Home/source paths, no `source_evidence`
 or full `numeric_provenance`, no Secrets, and only approved values. Assert exact
 projection file reads succeed while siblings, parent paths, symlinks, `/etc`,
 Home, and repository paths fail before bytes are read.
 
-- [ ] **Step 2: Write failing candidate tests**
+- [x] **Step 2: Write failing candidate tests**
 
 Accept only JSON Claims candidates bound to the projection hash. Reject output
 with Markdown, freeform keys, unknown/forbidden types, symbol/date mismatch,
 unexpected Facts pointers, or raw/qfq mixing.
 
-- [ ] **Step 3: Run tests and confirm RED**
+- [x] **Step 3: Run tests and confirm RED**
 
 Expected: protocol module is absent.
 
-- [ ] **Step 4: Implement minimal projection and fake worker**
+- [x] **Step 4: Implement minimal projection and fake worker**
 
 Projection construction is pure. Exact-path reading uses no-follow open plus
 `fstat` on the same descriptor. The fake worker is deterministic and has no
 network/provider dependency. Validation returns sanitized errors and performs
 zero external attempts.
 
-- [ ] **Step 5: Add shell harness and isolation document**
+- [x] **Step 5: Add shell harness and isolation document**
 
 The shell script runs only the fake protocol tests, rejects Secret-bearing
 environment output, and never calls the real AI or TickFlow. The design must
 list forbidden mounts, short-lived Secret handling, log redaction, teardown,
 and why Python guards do not prove macOS OS-level isolation.
 
-- [ ] **Step 6: Run protocol tests and shell harness**
+- [x] **Step 6: Run protocol tests and shell harness**
 
 Require `ISOLATION_DESIGN_READY` and
 `ISOLATION_RUNTIME_NOT_YET_VERIFIED` in sanitized output.
