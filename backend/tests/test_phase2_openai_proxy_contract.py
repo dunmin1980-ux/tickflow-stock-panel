@@ -751,6 +751,54 @@ def test_transport_uses_one_verified_https_request(
     assert response.read_limits == [proxy_module.MAXIMUM_BYTES + 1]
 
 
+@pytest.mark.parametrize(
+    ("content_type", "accepted"),
+    [
+        ("application/json", True),
+        ("Application/JSON", True),
+        ("application/json; charset=utf-8", True),
+        (" application/json ; charset = UTF-8 ", True),
+        ('application/json; charset="utf-8"', True),
+        ("application/json;", False),
+        ("application/json; boundary=x", False),
+        ("application/json; charset=latin1", False),
+        ("application/json; charset=utf-8; boundary=x", False),
+        ("text/json", False),
+    ],
+)
+def test_transport_content_type_allows_only_json_and_optional_utf8_charset(
+    content_type: str,
+    accepted: bool,
+    proxy_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = _FakeHTTPSResponse(b"{}", content_type=content_type)
+    connection = _FakeHTTPSConnection(response)
+    factory = _FakeConnectionFactory(connection)
+    monkeypatch.setattr(
+        proxy_module,
+        "create_tls_context",
+        lambda: ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT),
+    )
+
+    if accepted:
+        assert proxy_module.perform_provider_request(
+            b"{}",
+            "synthetic-value",
+            connection_factory=factory,
+        ) == (200, b"{}")
+    else:
+        with pytest.raises(proxy_module.ProxyError) as raised:
+            proxy_module.perform_provider_request(
+                b"{}",
+                "synthetic-value",
+                connection_factory=factory,
+            )
+        assert raised.value.category == "UPSTREAM_REJECTED"
+    assert len(connection.requests) == 1
+    assert connection.close_count == 1
+
+
 def test_tls_context_requires_ca_hostname_and_tls12(
     proxy_module: ModuleType,
     monkeypatch: pytest.MonkeyPatch,

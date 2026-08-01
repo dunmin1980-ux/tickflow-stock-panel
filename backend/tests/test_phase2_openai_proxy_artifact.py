@@ -738,3 +738,8 @@ def test_attest_mode_is_the_only_report_writing_fresh_build_path(
     assert artifact_cli.main(["--attest"]) == 0
     assert len(writes) == 1
     assert writes[0][1:] == (candidate, image, contents, provenance)
+
+
+def test_unattested_build_mode_is_not_exposed() -> None:
+    with pytest.raises(SystemExit):
+        artifact_cli.main(["--build"])

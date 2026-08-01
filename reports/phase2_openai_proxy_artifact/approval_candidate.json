@@ -6,11 +6,11 @@
     "/usr/bin/python3",
     "/proxy/proxy.py"
   ],
-  "image_id": "sha256:d5c8adacf70012d23fef0d42c799ddc7ab6a6b770054168fb5ca3c9d05c708bb",
+  "image_id": "sha256:083cd22cd8fac6e6de1051ef78e62033711783a50a5b4a1c0d49c5b8908754d4",
   "image_name": "tickflow-phase2-openai-egress-proxy:canary-v1",
   "launcher_source_sha256": "43eaf09a31cdcf94c0d4d6e60eef8c41a6531f6dc48a90dd554cedfb5fa49e9c",
   "proxy_policy_sha256": "46c8b4aef0f775b31b5da0843fd56791e0ad87c25067f6ba603f291ac93b4093",
-  "proxy_source_sha256": "7484f216937699d70651525187e70c6aa2752c8c48cc7e07299a3af7d217cf3f",
+  "proxy_source_sha256": "b17ce80c480576c36ee81764ce51154720e6834de9c11a6186b99e80ff8021f0",
   "responses_contract_sha256": "6fab15c902e310f299a5a2545c3d84428ab6bf69052a37ca7dee367baa67ac06",
   "runtime_user": "65532:65532"
 }

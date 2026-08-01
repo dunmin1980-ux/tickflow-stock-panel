@@ -351,7 +351,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     modes = parser.add_mutually_exclusive_group(required=True)
     modes.add_argument("--check-base", action="store_true")
-    modes.add_argument("--build", action="store_true")
     modes.add_argument("--attest", action="store_true")
     modes.add_argument("--verify", action="store_true")
     args = parser.parse_args(argv)
@@ -360,10 +359,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         base = _base_evidence()
         if args.check_base:
             _sanitized_output("PHASE2B_CANARY_BASE_IMAGE_LOCAL")
-            return 0
-        if args.build:
-            _fresh_offline_build(root, base=base)
-            _sanitized_output("PHASE2B_PROXY_ARTIFACT_BUILT_OFFLINE")
             return 0
         if args.verify:
             _verify_attested_artifact(root, base=base)

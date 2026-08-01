@@ -37,6 +37,10 @@ _EXPECTED_CONTRACT_SHA256 = (
 )
 _HEX_32 = re.compile(r"^[0-9a-f]{32}$")
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")
+_JSON_CONTENT_TYPE = re.compile(
+    r'^[ \t]*application/json[ \t]*(?:;[ \t]*charset[ \t]*=[ \t]*(?:utf-8|"utf-8")[ \t]*)?$',
+    re.IGNORECASE,
+)
 _NOFOLLOW = os.O_NOFOLLOW if hasattr(os, "O_NOFOLLOW") else 0
 _CONTRACT_FIELDS = {
     "contract_schema_version",
@@ -958,7 +962,7 @@ def perform_provider_request(
         content_type = response.getheader("Content-Type")
         if (
             not isinstance(content_type, str)
-            or content_type.split(";", 1)[0].strip().lower() != "application/json"
+            or _JSON_CONTENT_TYPE.fullmatch(content_type) is None
         ):
             raise ProxyError(
                 "UPSTREAM_REJECTED",
