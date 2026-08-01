@@ -109,6 +109,17 @@ def test_renderer_refuses_invalid_validation() -> None:
         render_claims_document(document, invalid)
 
 
+def test_renderer_refuses_validation_from_another_claims_document() -> None:
+    _, validation = _validated_fixture("000403.SZ")
+    other_document, _ = _validated_fixture("600489.SH")
+
+    with pytest.raises(
+        Phase2ClaimsRenderError,
+        match="claims_validation_binding_mismatch",
+    ):
+        render_claims_document(other_document, validation)
+
+
 def test_rendered_validator_rejects_markdown_html_links_and_zero_width() -> None:
     document, validation = _validated_fixture()
     rendered = render_claims_document(document, validation)
@@ -244,3 +255,25 @@ def test_bundle_index_matches_rendered_and_preview_hashes(tmp_path: Path) -> Non
     assert index["new_tickflow_api_request_count"] == 0
     assert index["new_ai_call_count"] == 0
     assert index["new_provider_attempt_count"] == 0
+
+
+def test_bundle_validator_rejects_symlinked_rendered_artifact_before_read(
+    tmp_path: Path,
+) -> None:
+    reports_root = tmp_path / "reports"
+    reports_root.mkdir()
+    publish_claims_bundle(
+        REPO_ROOT,
+        reports_root,
+        _allow_test_output_root=True,
+    )
+    rendered = reports_root / "phase2_claims/rendered/000403SZ_派林生物.md"
+    outside = tmp_path / "outside.md"
+    outside.write_text("outside content must not be consumed", encoding="utf-8")
+    rendered.unlink()
+    rendered.symlink_to(outside)
+
+    result = validate_claims_bundle(REPO_ROOT, reports_root)
+
+    assert result["status"] == "CLAIMS_INVALID"
+    assert "rendered_artifact_symlink_forbidden:000403.SZ" in result["errors"]

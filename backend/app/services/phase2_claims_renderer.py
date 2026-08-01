@@ -3,13 +3,18 @@
 
 from __future__ import annotations
 
+import hashlib
 import html
 import re
 from collections.abc import Callable
 from typing import Any
 
 from app.schemas.phase2_claims import ClaimsDocument
-from app.services.phase2_claims_service import CLAIMS_VALID, ClaimsValidationResult
+from app.services.phase2_claims_service import (
+    CLAIMS_VALID,
+    ClaimsValidationResult,
+    canonical_json_bytes,
+)
 
 SECTION_HEADINGS = (
     "数据范围",
@@ -291,6 +296,19 @@ def render_claims_document(
         raise Phase2ClaimsRenderError("claims_document_type_invalid")
     if validation.status != CLAIMS_VALID or validation.errors:
         raise Phase2ClaimsRenderError("claims_not_valid")
+    document_sha256 = hashlib.sha256(
+        canonical_json_bytes(document.model_dump(mode="json"))
+    ).hexdigest()
+    if (
+        validation.normalized_sha256 != document_sha256
+        or validation.claim_count != len(document.claims)
+        or validation.free_text_field_count != 0
+        or validation.unsourced_claim_count != 0
+        or validation.trading_claim_count != 0
+        or validation.raw_qfq_mismatch_count != 0
+        or validation.sensitive_hit_count != 0
+    ):
+        raise Phase2ClaimsRenderError("claims_validation_binding_mismatch")
     sections: dict[str, list[str]] = {heading: [] for heading in SECTION_HEADINGS}
     sections["数据范围"].extend(
         (

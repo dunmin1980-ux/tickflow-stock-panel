@@ -279,6 +279,12 @@ def validate_claims_bundle(repo_root: Path, reports_root: Path) -> dict[str, Any
         preview_path = preview_root / "inbox" / f"typed_{filename}"
         expected_rendered.add(filename)
         expected_typed.add(f"typed_{filename}")
+        if rendered_path.is_symlink():
+            errors.append(f"rendered_artifact_symlink_forbidden:{symbol}")
+            continue
+        if not rendered_path.is_file():
+            errors.append(f"rendered_artifact_missing:{symbol}")
+            continue
         try:
             document = ClaimsDocument.model_validate(_load_json(fixture_path))
             validation = validate_claims_document(repo_root, document)
