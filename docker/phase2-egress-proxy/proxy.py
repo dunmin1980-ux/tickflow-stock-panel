@@ -61,24 +61,7 @@ def _read_auth() -> str:
     return value
 
 
-def _write_receipt(
-    *,
-    method_allowed: bool,
-    path_allowed: bool,
-    upstream_attempt_count: int,
-    response_category: str,
-    response_size: int | None,
-    auth_present: bool,
-) -> None:
-    value = {
-        "receipt_schema_version": 1,
-        "method_allowed": method_allowed,
-        "path_allowed": path_allowed,
-        "upstream_attempt_count": upstream_attempt_count,
-        "response_category": response_category,
-        "response_size": response_size,
-        "auth_present": auth_present,
-    }
+def _write_receipt_value(value: dict[str, Any]) -> None:
     flags = os.O_WRONLY | os.O_TRUNC | _NOFOLLOW
     try:
         descriptor = os.open(RECEIPT_PATH, flags)
@@ -97,6 +80,38 @@ def _write_receipt(
             os.close(descriptor)
     except OSError as exc:
         raise ProxyError("receipt_write_failed") from exc
+
+
+def _write_receipt(
+    *,
+    method_allowed: bool,
+    path_allowed: bool,
+    upstream_attempt_count: int,
+    response_category: str,
+    response_size: int | None,
+    auth_present: bool,
+) -> None:
+    _write_receipt_value(
+        {
+            "receipt_schema_version": 1,
+            "method_allowed": method_allowed,
+            "path_allowed": path_allowed,
+            "upstream_attempt_count": upstream_attempt_count,
+            "response_category": response_category,
+            "response_size": response_size,
+            "auth_present": auth_present,
+        }
+    )
+
+
+def _write_ready() -> None:
+    _write_receipt_value(
+        {
+            "receipt_schema_version": 1,
+            "status": "READY",
+            "auth_present": True,
+        }
+    )
 
 
 class ProxyHandler(BaseHTTPRequestHandler):
@@ -272,9 +287,16 @@ def create_server(address: tuple[str, int] = ("0.0.0.0", 8080)) -> HTTPServer:
 
 
 def main() -> int:
+    try:
+        _read_auth()
+    except ProxyError:
+        return 2
     server = create_server()
     try:
+        _write_ready()
         server.serve_forever()
+    except ProxyError:
+        return 2
     finally:
         server.server_close()
     return 0

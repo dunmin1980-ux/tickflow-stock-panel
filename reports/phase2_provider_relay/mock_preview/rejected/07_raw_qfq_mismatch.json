@@ -1,0 +1,34 @@
+{
+  "error_codes": [
+    "CLAIM_REJECTED_RAW_QFQ_MISMATCH",
+    "claim_operand_mismatch:macd_dif_vs_dea"
+  ],
+  "host_validation": {
+    "candidate_sha256": "90edbc24d9c1548637f349b5838abbecc5eca736cdff785d2e76d78a8bb2d091",
+    "claim_count": 0,
+    "claims_status": "CLAIMS_BLOCKED",
+    "errors": [
+      "CLAIM_REJECTED_RAW_QFQ_MISMATCH",
+      "claim_operand_mismatch:macd_dif_vs_dea"
+    ],
+    "facts_pointer_binding_count": 0,
+    "free_text_field_count": 0,
+    "raw_qfq_mismatch_count": 0,
+    "rendered_sha256": "",
+    "renderer_status": "RENDERED_BLOCKED",
+    "sensitive_hit_count": 0,
+    "trading_claim_count": 0,
+    "unsourced_claim_count": 0,
+    "worker_status": "WORKER_CANDIDATE_INVALID"
+  },
+  "provider_attempt_count": 1,
+  "provider_http_status": 200,
+  "rejection_schema_version": 1,
+  "relay_error_category": null,
+  "response_sha256": "bfe52a2a12d5eea7dd0f48f84020bc07eca3c3cdfb7d90b5a9ac3b4abb741135",
+  "response_size": 40696,
+  "retry_count": 0,
+  "route": "mock_preview/rejected",
+  "scenario": "raw_qfq_mismatch",
+  "status": "REJECTED"
+}

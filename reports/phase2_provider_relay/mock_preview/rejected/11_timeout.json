@@ -1,0 +1,16 @@
+{
+  "error_codes": [
+    "TIMEOUT"
+  ],
+  "host_validation": {},
+  "provider_attempt_count": 1,
+  "provider_http_status": null,
+  "rejection_schema_version": 1,
+  "relay_error_category": "TIMEOUT",
+  "response_sha256": null,
+  "response_size": null,
+  "retry_count": 0,
+  "route": "mock_preview/rejected",
+  "scenario": "timeout",
+  "status": "REJECTED"
+}

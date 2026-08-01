@@ -1,0 +1,16 @@
+{
+  "error_codes": [
+    "relay_response_schema_invalid"
+  ],
+  "host_validation": {},
+  "provider_attempt_count": 1,
+  "provider_http_status": 200,
+  "rejection_schema_version": 1,
+  "relay_error_category": null,
+  "response_sha256": "634b58bb17063edbf0ebd205ef93afcf0a167db4e1c0488cbad94f5251913602",
+  "response_size": 40692,
+  "retry_count": 0,
+  "route": "mock_preview/rejected",
+  "scenario": "unknown_claim_type",
+  "status": "REJECTED"
+}

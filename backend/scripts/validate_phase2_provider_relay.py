@@ -21,6 +21,31 @@ _SENSITIVE = re.compile(
     rb"BEGIN [A-Z ]*PRIVATE KEY"
 )
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_IMAGE_SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
+_REQUEST_ID = re.compile(r"^[0-9a-f]{32}$")
+_REQUIRED_AUDIT_FIELDS = {
+    "request_id",
+    "symbol",
+    "projection_sha256",
+    "facts_sha256",
+    "relay_image_digest",
+    "proxy_image_digest",
+    "mock_provider_image_digest",
+    "relay_contract_hash",
+    "proxy_policy_hash",
+    "started_at",
+    "completed_at",
+    "provider_http_status",
+    "provider_attempt_count",
+    "retry_count",
+    "response_size",
+    "response_sha256",
+    "candidate_sha256",
+    "claims_validation_status",
+    "renderer_status",
+    "route",
+    "cleanup_status",
+}
 _INVALID_SCENARIOS = {
     "markdown_instead_of_json",
     "extra_free_text_field",
@@ -172,6 +197,38 @@ def validate_provider_relay_artifacts(artifact_root: Path) -> ProviderRelayResul
             errors.append("receipt_schema_invalid")
         if value.get("cleanup_complete") is not True:
             errors.append("receipt_cleanup_invalid")
+        if not _REQUIRED_AUDIT_FIELDS.issubset(value):
+            errors.append("receipt_audit_fields_invalid")
+            continue
+        if (
+            value.get("symbol") != "000403.SZ"
+            or not isinstance(value.get("request_id"), str)
+            or not _REQUEST_ID.fullmatch(value["request_id"])
+            or value.get("retry_count") != 0
+            or value.get("cleanup_status") != "CLEAN"
+        ):
+            errors.append("receipt_audit_binding_invalid")
+        for field in (
+            "projection_sha256",
+            "facts_sha256",
+            "relay_contract_hash",
+            "proxy_policy_hash",
+        ):
+            field_value = value.get(field)
+            if not isinstance(field_value, str) or not _SHA256.fullmatch(
+                field_value
+            ):
+                errors.append("receipt_audit_hash_invalid")
+        for field in (
+            "relay_image_digest",
+            "proxy_image_digest",
+            "mock_provider_image_digest",
+        ):
+            field_value = value.get(field)
+            if not isinstance(field_value, str) or not _IMAGE_SHA256.fullmatch(
+                field_value
+            ):
+                errors.append("receipt_image_digest_invalid")
 
     determinism = evidence.get("determinism")
     if not isinstance(determinism, dict):

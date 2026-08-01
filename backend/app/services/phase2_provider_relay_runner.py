@@ -60,6 +60,7 @@ _BASE_IMAGE_DIGEST = (
 )
 _BASE_DIGEST_LABEL = "org.tickflow.phase2.base-image-digest"
 _MAXIMUM_BYTES = 1_048_576
+_READINESS_TIMEOUT_SECONDS = 10
 _FIXED_FACTS_FILE = "reports/phase2_facts/000403SZ_facts.json"
 _SCENARIOS = (
     "valid_typed_candidate",
@@ -97,11 +98,23 @@ _PROBE_EXPECTED = {
     "proxy_wrong_path": "BLOCKED",
     "proxy_wrong_method": "BLOCKED",
 }
+_EXPECTED_IMAGE_ENVIRONMENT = {
+    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt",
+    "LANG=C.UTF-8",
+    "PYTHONDONTWRITEBYTECODE=1",
+    "PYTHONHASHSEED=0",
+}
 _RUNTIME_NAME = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,62}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _IMAGE_SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 _SENSITIVE_ENV_NAME = re.compile(
     r"(?:^|_)(?:api_?key|authorization|cookie|credential|password|secret|session|token)(?:$|_)",
+    re.IGNORECASE,
+)
+_SENSITIVE_SERIALIZED = re.compile(
+    rb"Authorization:|Bearer |api[_-]?key\s*[:=]|Cookie:|Session:|"
+    rb"BEGIN [A-Z ]*PRIVATE KEY",
     re.IGNORECASE,
 )
 
@@ -203,6 +216,7 @@ class ContainerContractEvidence:
     networks_valid: bool
     state_valid: bool
     environment_clean: bool
+    network_aliases_valid: bool
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -293,7 +307,15 @@ def build_network_create_command(network: str) -> list[str]:
 def build_network_connect_command(network: str, container: str) -> list[str]:
     _validate_name(network)
     _validate_name(container)
-    return ["docker", "network", "connect", network, container]
+    return [
+        "docker",
+        "network",
+        "connect",
+        "--alias",
+        "phase2-egress-proxy",
+        network,
+        container,
+    ]
 
 
 def build_relay_create_command(
@@ -342,6 +364,8 @@ def build_mock_create_command(
 ) -> list[str]:
     return [
         *_common_create_prefix(name, network),
+        "--network-alias",
+        "phase2-mock-provider",
         "--mount",
         _mount(paths.auth, "/run/phase2/provider-auth", readonly=True),
         "--mount",
@@ -477,6 +501,26 @@ def validate_container_inspect(
         host.get("NetworkMode") == expected_primary_network
         and actual_networks == expected_networks
     )
+    network_aliases_valid = True
+    if isinstance(networks, Mapping) and component in {"proxy", "mock"}:
+        alias_network = expected_primary_network
+        expected_alias = "phase2-mock-provider"
+        if component == "proxy":
+            secondary = expected_networks - {expected_primary_network}
+            if len(secondary) != 1:
+                network_aliases_valid = False
+            else:
+                alias_network = next(iter(secondary))
+                expected_alias = "phase2-egress-proxy"
+        network_value = networks.get(alias_network)
+        aliases = (
+            network_value.get("Aliases")
+            if isinstance(network_value, Mapping)
+            else None
+        )
+        network_aliases_valid = network_aliases_valid and isinstance(
+            aliases, list
+        ) and expected_alias in aliases
     state_valid = state.get("Status") == expected_state
     if expected_state == "exited":
         state_valid = state_valid and state.get("ExitCode") == expected_exit_code
@@ -496,6 +540,7 @@ def validate_container_inspect(
         "runtime_ports_published": published_port_count == 0,
         "runtime_devices_present": device_count == 0,
         "runtime_network_membership_invalid": networks_valid,
+        "runtime_network_alias_invalid": network_aliases_valid,
         "runtime_state_invalid": state_valid,
         "runtime_sensitive_environment": environment_clean,
     }
@@ -552,6 +597,7 @@ def validate_container_inspect(
         networks_valid=networks_valid,
         state_valid=state_valid,
         environment_clean=environment_clean,
+        network_aliases_valid=network_aliases_valid,
     )
 
 
@@ -579,6 +625,7 @@ def validate_network_topology(
     relay_name: str,
     proxy_name: str,
     mock_name: str,
+    relay_runtime_active: bool = True,
 ) -> NetworkTopologyEvidence:
     """Require the Proxy to be the sole bridge between two internal networks."""
     for value in (
@@ -600,6 +647,9 @@ def validate_network_topology(
         provider_item = {}
     relay_members = _network_members(relay_item)
     provider_members = _network_members(provider_item)
+    expected_relay_members = (
+        {relay_name, proxy_name} if relay_runtime_active else {proxy_name}
+    )
     checks = {
         "relay_proxy_network_name_invalid": relay_item.get("Name")
         == relay_network,
@@ -617,7 +667,7 @@ def validate_network_topology(
         "relay_proxy_network_ingress": relay_item.get("Ingress") is False,
         "proxy_provider_network_ingress": provider_item.get("Ingress") is False,
         "relay_proxy_network_members_invalid": relay_members
-        == {relay_name, proxy_name},
+        == expected_relay_members,
         "proxy_provider_network_members_invalid": provider_members
         == {proxy_name, mock_name},
     }
@@ -858,17 +908,18 @@ def _image_runtime_evidence(raw: str, image: str) -> dict[str, Any]:
     labels = config.get("Labels")
     base_digest = labels.get(_BASE_DIGEST_LABEL) if isinstance(labels, Mapping) else None
     environment = config.get("Env")
-    expected_environment = {
-        "PYTHONDONTWRITEBYTECODE=1",
-        "PYTHONHASHSEED=0",
-    }
     checks = {
         "image_id_invalid": isinstance(image_id, str)
         and bool(_IMAGE_SHA256.fullmatch(image_id)),
         "image_user_invalid": config.get("User") == RUNTIME_USER,
         "image_entrypoint_invalid": config.get("Entrypoint") == expected_entrypoint,
         "image_environment_invalid": isinstance(environment, list)
-        and set(environment) == expected_environment,
+        and set(environment) == _EXPECTED_IMAGE_ENVIRONMENT
+        and all(
+            isinstance(value, str)
+            and not _SENSITIVE_ENV_NAME.search(value.partition("=")[0])
+            for value in environment
+        ),
         "image_base_digest_invalid": base_digest == _BASE_IMAGE_DIGEST,
     }
     errors = sorted(code for code, passed in checks.items() if not passed)
@@ -950,6 +1001,10 @@ def _render_valid_candidate(
 
 @dataclass(frozen=True)
 class _ScenarioOutcome:
+    request_id: str
+    symbol: str
+    projection_sha256: str
+    facts_sha256: str
     scenario: str
     mode: Literal["run", "probe"]
     accepted: bool
@@ -968,7 +1023,7 @@ class _ScenarioOutcome:
 
 
 def _wait_ready(path: Path, error_code: str) -> None:
-    deadline = time.monotonic() + 3
+    deadline = time.monotonic() + _READINESS_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         try:
             value = _json_object(path.read_bytes(), error_code)
@@ -1024,6 +1079,19 @@ def _service_receipt(path: Path, component: Literal["proxy", "mock"]) -> dict[st
     return {field: value[field] for field in sorted(allowed)}
 
 
+def _wait_service_receipt(
+    path: Path,
+    component: Literal["proxy", "mock"],
+) -> dict[str, Any]:
+    deadline = time.monotonic() + _READINESS_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        try:
+            return _service_receipt(path, component)
+        except (OSError, Phase2ProviderRelayRuntimeError):
+            time.sleep(0.025)
+    raise Phase2ProviderRelayRuntimeError(f"{component}_receipt_invalid")
+
+
 def _cleanup_runtime(
     executor: Callable[[list[str]], subprocess.CompletedProcess[str]],
     containers: list[str],
@@ -1040,6 +1108,18 @@ def _cleanup_runtime(
         try:
             result = executor(["docker", "network", "rm", network])
             cleanup_complete = cleanup_complete and result.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            cleanup_complete = False
+    for container in containers:
+        try:
+            result = executor(["docker", "inspect", container])
+            cleanup_complete = cleanup_complete and result.returncode != 0
+        except (OSError, subprocess.SubprocessError):
+            cleanup_complete = False
+    for network in networks:
+        try:
+            result = executor(["docker", "network", "inspect", network])
+            cleanup_complete = cleanup_complete and result.returncode != 0
         except (OSError, subprocess.SubprocessError):
             cleanup_complete = False
     return cleanup_complete
@@ -1264,6 +1344,7 @@ def _run_stack(
             relay_name=relay_name,
             proxy_name=proxy_name,
             mock_name=mock_name,
+            relay_runtime_active=False,
         )
         if not topology.topology_valid:
             raise Phase2ProviderRelayRuntimeError("network_topology_invalid")
@@ -1305,8 +1386,8 @@ def _run_stack(
         contract_items["relay_exited"] = relay_contract
 
         relay_receipt = _relay_receipt(relay_receipt_path)
-        proxy_receipt = _service_receipt(proxy_receipt_path, "proxy")
-        mock_receipt = _service_receipt(mock_receipt_path, "mock")
+        proxy_receipt = _wait_service_receipt(proxy_receipt_path, "proxy")
+        mock_receipt = _wait_service_receipt(mock_receipt_path, "mock")
         receipt_artifact = canonical_json_bytes(
             {
                 "scenario": scenario,
@@ -1324,6 +1405,15 @@ def _run_stack(
                 receipt_artifact,
             )
         )
+        for container in containers:
+            log_result = _execute(
+                executor,
+                ["docker", "logs", container],
+                error_code="container_log_scan_failed",
+            )
+            captured.extend((log_result.stdout, log_result.stderr))
+        if any(_SENSITIVE_SERIALIZED.search(_serialized(value)) for value in captured):
+            raise Phase2ProviderRelayRuntimeError("sensitive_shape_exposed")
         secret = validate_secret_boundary(
             relay_paths=relay_paths,
             proxy_paths=proxy_paths,
@@ -1392,6 +1482,10 @@ def _run_stack(
         if not expected_rejection and mode == "run" and not accepted:
             raise Phase2ProviderRelayRuntimeError("valid_scenario_host_blocked")
         outcome = _ScenarioOutcome(
+            request_id=request.request_id,
+            symbol=request.symbol,
+            projection_sha256=request.projection_sha256,
+            facts_sha256=str(projection["facts_sha256"]),
             scenario=scenario,
             mode=mode,
             accepted=accepted,
@@ -1464,10 +1558,54 @@ def _write_artifact(root: Path, relative: str, raw: bytes) -> None:
     _write_durable(path, raw, 0o644)
 
 
-def _sanitized_receipt(outcome: _ScenarioOutcome, ordinal: int) -> dict[str, Any]:
+def _sanitized_receipt(
+    outcome: _ScenarioOutcome,
+    ordinal: int,
+    audit_context: Mapping[str, str],
+) -> dict[str, Any]:
+    route = "mock_preview/receipts"
+    if outcome.mode == "run":
+        route = (
+            "mock_preview/rejected"
+            if outcome.expected_rejection
+            else "mock_preview/inbox"
+        )
     return {
         "receipt_schema_version": 1,
         "run_ordinal": ordinal,
+        "request_id": outcome.request_id,
+        "symbol": outcome.symbol,
+        "projection_sha256": outcome.projection_sha256,
+        "facts_sha256": outcome.facts_sha256,
+        "relay_image_digest": audit_context["relay_image_digest"],
+        "proxy_image_digest": audit_context["proxy_image_digest"],
+        "mock_provider_image_digest": audit_context[
+            "mock_provider_image_digest"
+        ],
+        "relay_contract_hash": audit_context["relay_contract_hash"],
+        "proxy_policy_hash": audit_context["proxy_policy_hash"],
+        "started_at": outcome.relay_receipt["started_at"],
+        "completed_at": outcome.relay_receipt["completed_at"],
+        "provider_http_status": outcome.relay_receipt[
+            "provider_http_status"
+        ],
+        "provider_attempt_count": outcome.relay_receipt[
+            "provider_attempt_count"
+        ],
+        "retry_count": outcome.relay_receipt["retry_count"],
+        "response_size": outcome.relay_receipt["response_size"],
+        "response_sha256": outcome.relay_receipt["response_sha256"],
+        "candidate_sha256": outcome.candidate_sha256 or None,
+        "claims_validation_status": outcome.host_validation.get(
+            "claims_status",
+            "NOT_RUN",
+        ),
+        "renderer_status": outcome.host_validation.get(
+            "renderer_status",
+            "NOT_RUN",
+        ),
+        "route": route,
+        "cleanup_status": "CLEAN" if outcome.cleanup_complete else "BLOCKED",
         "scenario": outcome.scenario,
         "mode": outcome.mode,
         "accepted": outcome.accepted,
@@ -1510,6 +1648,7 @@ def _publish_provider_relay(
     reports_root: Path,
     outcomes: Sequence[_ScenarioOutcome],
     evidence: dict[str, Any],
+    audit_context: Mapping[str, str],
     publisher: Callable[[Path, Path], None],
 ) -> None:
     staging = Path(
@@ -1549,7 +1688,9 @@ def _publish_provider_relay(
             _write_artifact(
                 staging,
                 f"mock_preview/receipts/{ordinal:02d}_{receipt_name}.json",
-                canonical_json_bytes(_sanitized_receipt(outcome, ordinal)),
+                canonical_json_bytes(
+                    _sanitized_receipt(outcome, ordinal, audit_context)
+                ),
             )
         publisher(staging, reports_root / "phase2_provider_relay")
     finally:
@@ -1619,6 +1760,54 @@ def run_mock_provider_relay(
             image_evidence[component]["dockerfile_sha256"] = hashlib.sha256(
                 _read_regular(path, "dockerfile_invalid", 65_536)
             ).hexdigest()
+        source_paths = {
+            "relay": repo_root / "docker/phase2-provider-relay/relay.py",
+            "proxy": repo_root / "docker/phase2-egress-proxy/proxy.py",
+            "mock": repo_root / "docker/phase2-mock-provider/mock_provider.py",
+        }
+        for component, path in source_paths.items():
+            image_evidence[component]["source_sha256"] = hashlib.sha256(
+                _read_regular(path, "component_source_invalid")
+            ).hexdigest()
+        relay_contract_hash = hashlib.sha256(
+            canonical_json_bytes(
+                {
+                    "image_id": image_evidence["relay"]["image_id"],
+                    "dockerfile_sha256": image_evidence["relay"][
+                        "dockerfile_sha256"
+                    ],
+                    "source_sha256": image_evidence["relay"]["source_sha256"],
+                    "runtime_user": RUNTIME_USER,
+                    "mount_count": 4,
+                    "retry_count": 0,
+                    "timeout_seconds": 2,
+                    "maximum_output_bytes": _MAXIMUM_BYTES,
+                }
+            )
+        ).hexdigest()
+        proxy_policy_hash = hashlib.sha256(
+            canonical_json_bytes(
+                {
+                    "image_id": image_evidence["proxy"]["image_id"],
+                    "dockerfile_sha256": image_evidence["proxy"][
+                        "dockerfile_sha256"
+                    ],
+                    "source_sha256": image_evidence["proxy"]["source_sha256"],
+                    "method": "POST",
+                    "path": "/v1/typed-claims",
+                    "upstream_alias": "phase2-mock-provider",
+                    "retry_count": 0,
+                    "redirects_followed": False,
+                }
+            )
+        ).hexdigest()
+        audit_context = {
+            "relay_image_digest": image_evidence["relay"]["image_id"],
+            "proxy_image_digest": image_evidence["proxy"]["image_id"],
+            "mock_provider_image_digest": image_evidence["mock"]["image_id"],
+            "relay_contract_hash": relay_contract_hash,
+            "proxy_policy_hash": proxy_policy_hash,
+        }
 
         facts_path = repo_root / _FIXED_FACTS_FILE
         facts_bytes = _read_regular(facts_path, "facts_source_invalid")
@@ -1732,6 +1921,33 @@ def run_mock_provider_relay(
                     "projection_sha256": projection_sha256,
                     "symbol": projection["symbol"],
                 },
+                "audit_contract": {
+                    "relay_contract_hash": relay_contract_hash,
+                    "proxy_policy_hash": proxy_policy_hash,
+                    "per_run_required_fields": [
+                        "request_id",
+                        "symbol",
+                        "projection_sha256",
+                        "facts_sha256",
+                        "relay_image_digest",
+                        "proxy_image_digest",
+                        "mock_provider_image_digest",
+                        "relay_contract_hash",
+                        "proxy_policy_hash",
+                        "started_at",
+                        "completed_at",
+                        "provider_http_status",
+                        "provider_attempt_count",
+                        "retry_count",
+                        "response_size",
+                        "response_sha256",
+                        "candidate_sha256",
+                        "claims_validation_status",
+                        "renderer_status",
+                        "route",
+                        "cleanup_status",
+                    ],
+                },
                 "runtime_contract": {
                     "all_runs_valid": all(
                         all(
@@ -1824,6 +2040,7 @@ def run_mock_provider_relay(
                 reports_root,
                 outcomes,
                 evidence,
+                audit_context,
                 _publisher,
             )
         except OSError as exc:
@@ -1832,10 +2049,17 @@ def run_mock_provider_relay(
             ) from exc
         status = PHASE2B_PROVIDER_RELAY_READY
     except Phase2ProviderRelayRuntimeError as exc:
-        errors.append(str(exc))
-        if str(exc) in {"network_probe_policy_invalid", "network_topology_invalid"}:
+        error_code = str(exc)
+        errors.append(error_code)
+        if error_code in {"runtime_cleanup_failed", "temporary_cleanup_failed"}:
+            cleanup_complete = False
+        if error_code in {"network_probe_policy_invalid", "network_topology_invalid"}:
             status = PHASE2B_PROVIDER_EGRESS_BLOCKED
-        elif str(exc) in {"secret_boundary_invalid", "secret_value_exposed"}:
+        elif error_code in {
+            "secret_boundary_invalid",
+            "secret_value_exposed",
+            "sensitive_shape_exposed",
+        }:
             status = PHASE2B_PROVIDER_SECRET_BLOCKED
         else:
             status = PHASE2B_PROVIDER_RELAY_E2E_BLOCKED

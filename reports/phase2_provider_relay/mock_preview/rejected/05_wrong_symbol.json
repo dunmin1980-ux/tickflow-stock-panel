@@ -1,0 +1,16 @@
+{
+  "error_codes": [
+    "BINDING_REJECTED"
+  ],
+  "host_validation": {},
+  "provider_attempt_count": 1,
+  "provider_http_status": null,
+  "rejection_schema_version": 1,
+  "relay_error_category": "BINDING_REJECTED",
+  "response_sha256": "a42a4e5bcecc880601dd993ad477a3c4e42342340a4675337f6152c5c2b114a0",
+  "response_size": 40696,
+  "retry_count": 0,
+  "route": "mock_preview/rejected",
+  "scenario": "wrong_symbol",
+  "status": "REJECTED"
+}

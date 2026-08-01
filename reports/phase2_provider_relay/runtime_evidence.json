@@ -1,0 +1,356 @@
+{
+  "audit_contract": {
+    "per_run_required_fields": [
+      "request_id",
+      "symbol",
+      "projection_sha256",
+      "facts_sha256",
+      "relay_image_digest",
+      "proxy_image_digest",
+      "mock_provider_image_digest",
+      "relay_contract_hash",
+      "proxy_policy_hash",
+      "started_at",
+      "completed_at",
+      "provider_http_status",
+      "provider_attempt_count",
+      "retry_count",
+      "response_size",
+      "response_sha256",
+      "candidate_sha256",
+      "claims_validation_status",
+      "renderer_status",
+      "route",
+      "cleanup_status"
+    ],
+    "proxy_policy_hash": "5510b26597622d9d5f8405845dfd66e7bc61921af91c0f12d7c1ee10b1f74bef",
+    "relay_contract_hash": "72fe962ce2962070c3e54834e25faacb0006ee4de2d185ce680410c34e38661f"
+  },
+  "cleanup": {
+    "cleanup_complete": true,
+    "container_residue_count": 0,
+    "network_residue_count": 0,
+    "secret_file_residue_count": 0,
+    "temporary_file_residue_count": 0
+  },
+  "determinism": {
+    "candidate_hash_match": true,
+    "candidate_sha256": "da07152ea51247251df6cca7b67d3f1fe1e58f62b4a486b646244732f9a4b045",
+    "rendered_sha256": "63482087ca33cb7a0ea4767c9b4f41e9176b7abd0f5ac5516bb14b11fc9514e8",
+    "renderer_hash_match": true
+  },
+  "docker": {
+    "arch": "amd64",
+    "os": "linux",
+    "server_version": "29.3.1"
+  },
+  "errors": [],
+  "external_actions": {
+    "cloud_mutation_count": 0,
+    "external_send_count": 0,
+    "integrated_gold_enabled": false,
+    "obsidian_real_vault_write": false,
+    "paper_trading_started": false,
+    "real_ai_call_count": 0,
+    "real_provider_attempt_count": 0,
+    "real_public_network_success_count": 0,
+    "tickflow_api_request_count": 0
+  },
+  "images": {
+    "mock": {
+      "base_image_digest": "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5",
+      "dockerfile_sha256": "23c7a0ca7324210333bc0a8c8d687e545a4c58d07599f2d29d18b7eacf1a105d",
+      "entrypoint_valid": true,
+      "environment_clean": true,
+      "image_id": "sha256:8d843277fad0b1207a83ec0f5dd7fabc7507c31cdb09e1bd6a5aee26f26507fb",
+      "runtime_user": "65532:65532",
+      "source_sha256": "080ee21b65f532074205e742a58fb7c3da82c4afdb039e32d18584291e71bd6f"
+    },
+    "proxy": {
+      "base_image_digest": "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5",
+      "dockerfile_sha256": "f40209a8bff8136a441415b100ae4b805013851536bb4b2c29d7cbf312b7eef4",
+      "entrypoint_valid": true,
+      "environment_clean": true,
+      "image_id": "sha256:d431ec75c7609a6add036f7f7c4a42ba3f351aebab5bfcb6442ee087b2059f6a",
+      "runtime_user": "65532:65532",
+      "source_sha256": "abe567151bfe8321bd5a65e1d043ad5f180647c00b7e5b84b17e32214f6c4df6"
+    },
+    "relay": {
+      "base_image_digest": "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5",
+      "dockerfile_sha256": "fad706cbe077f22d1476b8299012b09a3ee278c9c4572ec7fb57944398c72d68",
+      "entrypoint_valid": true,
+      "environment_clean": true,
+      "image_id": "sha256:efd1c21cdb3502cf3240ab389470556946450f1a7572f66a194ed1134d50dc0d",
+      "runtime_user": "65532:65532",
+      "source_sha256": "e110be08b9a2faea184eac592625f90eb0d43aabcc457bfc93c52a87634d5cb3"
+    }
+  },
+  "mock_matrix": {
+    "invalid_accepted_count": 0,
+    "invalid_rejected_count": 21,
+    "provider_attempt_count": 24,
+    "retry_count": 0,
+    "scenarios": [
+      {
+        "accepted": true,
+        "errors": [],
+        "expected_rejection": false,
+        "mode": "run",
+        "scenario": "valid_typed_candidate"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "STRICT_JSON_REJECTED"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "markdown_instead_of_json"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "BINDING_REJECTED"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "extra_free_text_field"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "relay_response_schema_invalid"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "unknown_claim_type"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "relay_response_schema_invalid"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "unknown_predicate"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "BINDING_REJECTED"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "wrong_symbol"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "BINDING_REJECTED"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "wrong_projection_sha"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "CLAIM_REJECTED_RAW_QFQ_MISMATCH",
+          "claim_operand_mismatch:macd_dif_vs_dea"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "raw_qfq_mismatch"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "claim_fact_refs_mismatch:market_scope",
+          "claim_pointer_invalid:market_scope"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "unsupported_fact_pointer"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "BINDING_REJECTED"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "trading_claim"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "HTTP_REJECTED"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "oversized_response"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "TIMEOUT"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "timeout"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "HTTP_REJECTED"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "http_429"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "HTTP_REJECTED"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "http_500"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "STRICT_JSON_REJECTED"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "invalid_json"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "STRICT_JSON_REJECTED"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "multiple_json_documents"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "EMPTY_RESPONSE"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "empty_response"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "BINDING_REJECTED"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "wrong_request_id"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "claim_facts_sha256_mismatch:market_scope"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "wrong_facts_sha"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "BINDING_REJECTED"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "sensitive_shape"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "HTTP_REJECTED"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "redirect_response"
+      },
+      {
+        "accepted": false,
+        "errors": [
+          "BINDING_REJECTED"
+        ],
+        "expected_rejection": true,
+        "mode": "run",
+        "scenario": "external_url_response"
+      },
+      {
+        "accepted": true,
+        "errors": [],
+        "expected_rejection": false,
+        "mode": "run",
+        "scenario": "valid_typed_candidate"
+      },
+      {
+        "accepted": true,
+        "errors": [],
+        "expected_rejection": false,
+        "mode": "probe",
+        "scenario": "valid_typed_candidate"
+      }
+    ],
+    "valid_run_count": 2
+  },
+  "network_topology": {
+    "all_runs_valid": true,
+    "mock_can_resolve_relay": false,
+    "network_count_per_run": 2,
+    "networks_internal": true,
+    "probe_results": {
+      "arbitrary_hostname": "NOT_REACHABLE",
+      "direct_provider": "NOT_REACHABLE",
+      "docker_control_file": "BLOCKED",
+      "docker_control_tcp": "NOT_REACHABLE",
+      "host_gateway": "NOT_REACHABLE",
+      "proxy_exact": "ALLOWED",
+      "proxy_wrong_method": "BLOCKED",
+      "proxy_wrong_path": "BLOCKED",
+      "public_test_ip": "NOT_REACHABLE"
+    },
+    "relay_can_resolve_mock": false
+  },
+  "runtime_contract": {
+    "all_runs_valid": true,
+    "mock_mount_count": 3,
+    "non_root": true,
+    "proxy_mount_count": 2,
+    "relay_mount_count": 4,
+    "retry_count": 0,
+    "rootfs_readonly": true
+  },
+  "scope": {
+    "provider": "local_mock_only",
+    "scenario_run_count": 24,
+    "symbol": "000403.SZ"
+  },
+  "secret_boundary": {
+    "mock_has_readonly_secret_mount": true,
+    "proxy_has_readonly_secret_mount": true,
+    "relay_has_secret_mount": false,
+    "secret_digest_recorded": false,
+    "secret_file_cleanup": true,
+    "secret_present": true,
+    "secret_value_hit_count": 0
+  },
+  "source_binding": {
+    "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+    "projection_sha256": "5db35e91eabce452e5be3a3020b5c10711797941431df9bd5bb52f67625b42e1",
+    "symbol": "000403.SZ"
+  },
+  "status": "PHASE2B_PROVIDER_RELAY_READY"
+}

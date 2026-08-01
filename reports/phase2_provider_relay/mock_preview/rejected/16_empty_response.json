@@ -1,0 +1,16 @@
+{
+  "error_codes": [
+    "EMPTY_RESPONSE"
+  ],
+  "host_validation": {},
+  "provider_attempt_count": 1,
+  "provider_http_status": 200,
+  "rejection_schema_version": 1,
+  "relay_error_category": "EMPTY_RESPONSE",
+  "response_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "response_size": 0,
+  "retry_count": 0,
+  "route": "mock_preview/rejected",
+  "scenario": "empty_response",
+  "status": "REJECTED"
+}

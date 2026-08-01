@@ -1,0 +1,16 @@
+{
+  "error_codes": [
+    "HTTP_REJECTED"
+  ],
+  "host_validation": {},
+  "provider_attempt_count": 1,
+  "provider_http_status": 429,
+  "rejection_schema_version": 1,
+  "relay_error_category": "HTTP_REJECTED",
+  "response_sha256": null,
+  "response_size": null,
+  "retry_count": 0,
+  "route": "mock_preview/rejected",
+  "scenario": "http_429",
+  "status": "REJECTED"
+}

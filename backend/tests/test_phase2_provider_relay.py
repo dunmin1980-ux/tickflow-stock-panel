@@ -49,6 +49,7 @@ PROXY_PATH = REPO_ROOT / "docker/phase2-egress-proxy/proxy.py"
 PROXY_DOCKERFILE = REPO_ROOT / "docker/phase2-egress-proxy/Dockerfile"
 MOCK_PROVIDER_PATH = REPO_ROOT / "docker/phase2-mock-provider/mock_provider.py"
 MOCK_PROVIDER_DOCKERFILE = REPO_ROOT / "docker/phase2-mock-provider/Dockerfile"
+RUNTIME_SCRIPT = REPO_ROOT / "scripts/test_phase2_provider_relay_runtime.sh"
 WORKER_PATH = REPO_ROOT / "docker/phase2-ai-worker/worker.py"
 PINNED_DISTROLESS = (
     "gcr.io/distroless/python3-debian12@sha256:"
@@ -831,7 +832,9 @@ def test_relay_executable_probe_records_only_bounded_policy_results(
         )
         monkeypatch.setattr(relay, "PROXY_HOST", "127.0.0.1")
         monkeypatch.setattr(relay, "PROXY_PORT", server.server_port)
-        monkeypatch.setattr(relay, "TIMEOUT_SECONDS", 0.03)
+        # Keep the probe bounded without making localhost success depend on
+        # sub-30 ms scheduler latency under the full test load.
+        monkeypatch.setattr(relay, "TIMEOUT_SECONDS", 0.2)
         monkeypatch.setattr(relay, "DIRECT_PROVIDER_HOST", "direct.invalid")
         monkeypatch.setattr(relay, "ARBITRARY_HOST", "arbitrary.invalid")
         monkeypatch.setattr(relay, "HOST_GATEWAY", "host.invalid")
@@ -1549,3 +1552,87 @@ def test_mock_dockerfile_copies_only_approved_factory_and_component_files() -> N
         "COPY --chown=65532:65532 phase2-mock-provider/scenario.placeholder.json /input/scenario.json",
         "COPY --chown=65532:65532 phase2-mock-provider/receipt.placeholder.json /output/receipt.json",
     ]
+
+
+@pytest.mark.parametrize(
+    ("path", "error_type", "dependencies"),
+    [
+        (PROXY_PATH, "ProxyError", ("_read_auth",)),
+        (
+            MOCK_PROVIDER_PATH,
+            "MockProviderError",
+            ("_read_auth", "_read_scenario", "_load_factory"),
+        ),
+    ],
+)
+def test_provider_services_publish_ready_only_after_dependency_validation(
+    path: Path,
+    error_type: str,
+    dependencies: tuple[str, ...],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    component = _load_python_file(path, "phase2_ready_component")
+    events: list[str] = []
+
+    class FakeServer:
+        def serve_forever(self) -> None:
+            events.append("serve")
+
+        def handle_request(self) -> None:
+            events.append("serve")
+
+        def server_close(self) -> None:
+            events.append("close")
+
+    for dependency in dependencies:
+        monkeypatch.setattr(
+            component,
+            dependency,
+            lambda dependency=dependency: events.append(dependency) or "valid",
+        )
+    monkeypatch.setattr(
+        component,
+        "create_server",
+        lambda: events.append("create") or FakeServer(),
+    )
+    monkeypatch.setattr(
+        component,
+        "_write_ready",
+        lambda: events.append("ready"),
+        raising=False,
+    )
+
+    assert component.main() == 0
+    assert events == [*dependencies, "create", "ready", "serve", "close"]
+    assert hasattr(component, error_type)
+
+
+def test_provider_relay_runtime_script_is_fixed_offline_and_credential_free() -> None:
+    source = RUNTIME_SCRIPT.read_text(encoding="utf-8")
+
+    assert source.startswith("#!/bin/bash\nset -euo pipefail\n")
+    assert source.count("docker build") == 3
+    assert source.count("--network none") == 3
+    assert source.count("--pull=false") == 3
+    assert "tickflow-phase2-provider-relay:runtime-v1" in source
+    assert "tickflow-phase2-egress-proxy:runtime-v1" in source
+    assert "tickflow-phase2-mock-provider:runtime-v1" in source
+    assert "docker/phase2-mock-provider/Dockerfile" in source
+    assert "scripts.run_phase2_mock_provider_relay" in source
+    assert source.count("scripts.run_phase2_mock_provider_relay") == 1
+    assert "scripts.validate_phase2_provider_relay" in source
+    assert source.count("scripts.validate_phase2_provider_relay") == 1
+    assert all(
+        forbidden not in source
+        for forbidden in (
+            "eval ",
+            "--retry",
+            "--force",
+            "--endpoint",
+            "--secret",
+            "API_KEY",
+            "AUTHORIZATION",
+            "curl ",
+            "wget ",
+        )
+    )

@@ -10,6 +10,7 @@ from types import ModuleType
 
 import pytest
 
+import app.services.phase2_provider_relay_runner as provider_relay_runner
 from app.services.phase2_ai_worker_protocol import FakeClaimsWorker
 from app.services.phase2_claims_service import canonical_json_bytes
 from app.services.phase2_provider_relay_protocol import (
@@ -71,6 +72,78 @@ def _paths(tmp_path: Path):
         receipt=_file(tmp_path / "mock-receipt.json", b"\n", 0o666),
     )
     return relay, proxy, mock
+
+
+def test_readiness_gate_tolerates_slow_docker_desktop_bind_sync(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    receipt = _file(tmp_path / "ready.json", b"\n", 0o666)
+    clock = iter((0.0, 0.0, 4.0))
+    monkeypatch.setattr(
+        provider_relay_runner.time,
+        "monotonic",
+        lambda: next(clock),
+    )
+    monkeypatch.setattr(
+        provider_relay_runner.time,
+        "sleep",
+        lambda _seconds: receipt.write_bytes(
+            canonical_json_bytes(
+                {
+                    "receipt_schema_version": 1,
+                    "status": "READY",
+                    "auth_present": True,
+                }
+            )
+        ),
+    )
+
+    provider_relay_runner._wait_ready(receipt, "ready_blocked")
+
+
+def test_terminal_receipt_waits_for_timeout_provider_to_finish(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    receipt = _file(
+        tmp_path / "mock-receipt.json",
+        canonical_json_bytes(
+            {
+                "receipt_schema_version": 1,
+                "status": "READY",
+                "auth_present": True,
+            }
+        ),
+        0o666,
+    )
+    terminal = {
+        "receipt_schema_version": 1,
+        "request_count": 1,
+        "method_allowed": True,
+        "path_allowed": True,
+        "auth_valid": True,
+        "envelope_valid": True,
+        "scenario": "timeout",
+        "response_category": "SCENARIO_RESPONSE",
+        "http_status": 200,
+        "response_size": 1024,
+    }
+    clock = iter((0.0, 0.0, 4.0))
+    monkeypatch.setattr(
+        provider_relay_runner.time,
+        "monotonic",
+        lambda: next(clock),
+    )
+    monkeypatch.setattr(
+        provider_relay_runner.time,
+        "sleep",
+        lambda _seconds: receipt.write_bytes(canonical_json_bytes(terminal)),
+    )
+
+    value = provider_relay_runner._wait_service_receipt(receipt, "mock")
+
+    assert value["scenario"] == "timeout"
 
 
 def _common_create_prefix(name: str, network: str) -> list[str]:
@@ -168,6 +241,8 @@ def test_network_and_container_commands_are_exact_and_closed(tmp_path: Path) -> 
         mock_paths,
     ) == [
         *_common_create_prefix(mock_name, provider_network),
+        "--network-alias",
+        "phase2-mock-provider",
         "--mount",
         _mount(mock_paths.auth, "/run/phase2/provider-auth", readonly=True),
         "--mount",
@@ -180,6 +255,8 @@ def test_network_and_container_commands_are_exact_and_closed(tmp_path: Path) -> 
         "docker",
         "network",
         "connect",
+        "--alias",
+        "phase2-egress-proxy",
         relay_network,
         proxy_name,
     ]
@@ -304,6 +381,14 @@ def _inspect_payload(
             (paths.scenario, "/input/scenario.json", False),
             (paths.receipt, "/output/receipt.json", True),
         ]
+    network_values = {network: {"Aliases": []} for network in networks}
+    if component == "proxy":
+        relay_network = next(
+            network for network in networks if "relay-proxy" in network
+        )
+        network_values[relay_network]["Aliases"] = ["phase2-egress-proxy"]
+    elif component == "mock":
+        network_values[primary_network]["Aliases"] = ["phase2-mock-provider"]
     return [
         {
             "Config": {
@@ -336,7 +421,7 @@ def _inspect_payload(
                 for source, destination, writable in mount_specs
             ],
             "NetworkSettings": {
-                "Networks": {network: {} for network in networks},
+                "Networks": network_values,
                 "Ports": {},
             },
             "State": {"Status": state, "ExitCode": 0},
@@ -378,6 +463,42 @@ def test_container_inspect_accepts_only_exact_runtime_contract(
 
     assert evidence.contract_valid is True
     assert evidence.errors == []
+
+
+@pytest.mark.parametrize("component", ["proxy", "mock"])
+def test_container_inspect_requires_fixed_service_network_alias(
+    tmp_path: Path,
+    component: str,
+) -> None:
+    _relay_paths, proxy_paths, mock_paths = _paths(tmp_path)
+    paths = {"proxy": proxy_paths, "mock": mock_paths}[component]
+    relay_network = "phase2-relay-proxy-a1b2c3"
+    provider_network = "phase2-proxy-provider-a1b2c3"
+    networks = {
+        "proxy": {relay_network, provider_network},
+        "mock": {provider_network},
+    }[component]
+    payload = _inspect_payload(
+        component,
+        paths,
+        primary_network=provider_network,
+        networks=networks,
+    )
+    for value in payload[0]["NetworkSettings"]["Networks"].values():
+        value["Aliases"] = []
+
+    evidence = validate_container_inspect(
+        payload,
+        component=component,
+        paths=paths,
+        expected_primary_network=provider_network,
+        expected_networks=networks,
+        expected_state="created",
+    )
+
+    assert evidence.contract_valid is False
+    assert evidence.network_aliases_valid is False
+    assert "runtime_network_alias_invalid" in evidence.errors
     assert evidence.non_root is True
     assert evidence.rootfs_readonly is True
     assert evidence.cap_drop_all is True
@@ -609,6 +730,29 @@ def test_network_topology_requires_two_internal_exact_membership_sets() -> None:
     assert evidence.mock_can_resolve_relay is False
 
 
+def test_network_topology_accepts_created_relay_endpoint_absent_from_network_inspect() -> None:
+    relay_network = "phase2-relay-proxy-a1b2c3"
+    provider_network = "phase2-proxy-provider-a1b2c3"
+    relay_name = "phase2-relay-a1b2c3"
+    proxy_name = "phase2-proxy-a1b2c3"
+    mock_name = "phase2-mock-a1b2c3"
+
+    evidence = validate_network_topology(
+        _network_payload(relay_network, [proxy_name]),
+        _network_payload(provider_network, [proxy_name, mock_name]),
+        relay_network=relay_network,
+        provider_network=provider_network,
+        relay_name=relay_name,
+        proxy_name=proxy_name,
+        mock_name=mock_name,
+        relay_runtime_active=False,
+    )
+
+    assert evidence.topology_valid is True
+    assert evidence.errors == []
+    assert evidence.relay_network_member_count == 1
+
+
 @pytest.mark.parametrize(
     ("network_index", "field", "value", "error_code"),
     [
@@ -800,8 +944,16 @@ def _parse_mounts(command: list[str]) -> dict[str, tuple[Path, bool]]:
 
 
 class FakeProviderRelayDocker:
-    def __init__(self, *, fail_when: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        fail_when: str | None = None,
+        fail_cleanup: bool = False,
+        log_payload: str = "",
+    ) -> None:
         self.fail_when = fail_when
+        self.fail_cleanup = fail_cleanup
+        self.log_payload = log_payload
         self.failed = False
         self.commands: list[list[str]] = []
         self.networks: dict[str, dict] = {}
@@ -865,7 +1017,10 @@ class FakeProviderRelayDocker:
                 "Mounts": mounts,
                 "NetworkSettings": {
                     "Networks": {
-                        network: {} for network in container["networks"]
+                        network: {
+                            "Aliases": sorted(container["aliases"].get(network, set()))
+                        }
+                        for network in container["networks"]
                     },
                     "Ports": {},
                 },
@@ -880,7 +1035,7 @@ class FakeProviderRelayDocker:
         members = [
             container_name
             for container_name, container in self.containers.items()
-            if name in container["networks"]
+            if name in container["networks"] and container["state"] == "running"
         ]
         return _network_payload(name, members)
 
@@ -1096,6 +1251,16 @@ class FakeProviderRelayDocker:
         self.commands.append(list(command))
         joined = " ".join(command)
         if (
+            self.fail_cleanup
+            and not self.failed
+            and (
+                command[:3] == ["docker", "rm", "-f"]
+                or command[:3] == ["docker", "network", "rm"]
+            )
+        ):
+            self.failed = True
+            return self._completed(command, 1, stderr="sanitized cleanup failure")
+        if (
             self.fail_when
             and not self.failed
             and self.fail_when in joined
@@ -1129,6 +1294,9 @@ class FakeProviderRelayDocker:
                                 "User": "65532:65532",
                                 "Entrypoint": entrypoint,
                                 "Env": [
+                                    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                                    "SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt",
+                                    "LANG=C.UTF-8",
                                     "PYTHONDONTWRITEBYTECODE=1",
                                     "PYTHONHASHSEED=0",
                                 ],
@@ -1147,9 +1315,14 @@ class FakeProviderRelayDocker:
             self.networks[command[-1]] = {}
             return self._completed(command, stdout="network-id\n")
         if command[:3] == ["docker", "network", "connect"]:
-            self.containers[command[4]]["networks"].add(command[3])
+            container = self.containers[command[-1]]
+            network = command[-2]
+            container["networks"].add(network)
+            container["aliases"][network] = {command[4]}
             return self._completed(command)
         if command[:3] == ["docker", "network", "inspect"]:
+            if command[3] not in self.networks:
+                return self._completed(command, 1, stderr="not found")
             return self._completed(
                 command,
                 stdout=json.dumps(self._network_inspect(command[3])),
@@ -1157,6 +1330,8 @@ class FakeProviderRelayDocker:
         if command[:3] == ["docker", "network", "rm"]:
             self.networks.pop(command[3], None)
             return self._completed(command)
+        if command[:2] == ["docker", "logs"]:
+            return self._completed(command, stdout=self.log_payload)
         if command[:2] == ["docker", "create"]:
             name = command[command.index("--name") + 1]
             network = command[command.index("--network") + 1]
@@ -1169,6 +1344,13 @@ class FakeProviderRelayDocker:
                 "image": image,
                 "primary_network": network,
                 "networks": {network},
+                "aliases": {
+                    network: (
+                        {command[command.index("--network-alias") + 1]}
+                        if "--network-alias" in command
+                        else set()
+                    )
+                },
                 "mounts": _parse_mounts(command),
                 "state": "created",
                 "exit_code": 0,
@@ -1176,6 +1358,8 @@ class FakeProviderRelayDocker:
             }
             return self._completed(command, stdout="container-id\n")
         if command[:2] == ["docker", "inspect"]:
+            if command[2] not in self.containers:
+                return self._completed(command, 1, stderr="not found")
             return self._completed(
                 command,
                 stdout=json.dumps(self._inspect(command[2])),
@@ -1246,6 +1430,12 @@ def test_mock_orchestrator_runs_every_scenario_once_and_publishes_atomically(
     assert fake.residual_network_count == 0
     assert fake.provider_attempt_count == 24
     assert sum(command[:3] == ["docker", "start", "--attach"] for command in fake.commands) == 24
+    assert sum(command[:2] == ["docker", "logs"] for command in fake.commands) == 72
+    assert sum(command[:2] == ["docker", "inspect"] for command in fake.commands) == 168
+    assert sum(
+        command[:3] == ["docker", "network", "inspect"]
+        for command in fake.commands
+    ) == 96
     assert all("--env" not in command and "--env-file" not in command for command in fake.commands)
 
     output = reports_root / "phase2_provider_relay"
@@ -1255,6 +1445,44 @@ def test_mock_orchestrator_runs_every_scenario_once_and_publishes_atomically(
     assert len(inbox) == 1
     assert len(rejected) == 21
     assert len(receipts) == 24
+    required_audit_fields = {
+        "request_id",
+        "symbol",
+        "projection_sha256",
+        "facts_sha256",
+        "relay_image_digest",
+        "proxy_image_digest",
+        "mock_provider_image_digest",
+        "relay_contract_hash",
+        "proxy_policy_hash",
+        "started_at",
+        "completed_at",
+        "provider_http_status",
+        "provider_attempt_count",
+        "retry_count",
+        "response_size",
+        "response_sha256",
+        "candidate_sha256",
+        "claims_validation_status",
+        "renderer_status",
+        "route",
+        "cleanup_status",
+    }
+    for receipt_path in receipts:
+        receipt = json.loads(receipt_path.read_bytes())
+        assert required_audit_fields <= set(receipt)
+        assert receipt["symbol"] == "000403.SZ"
+        assert len(receipt["request_id"]) == 32
+        assert receipt["retry_count"] == 0
+        assert receipt["cleanup_status"] == "CLEAN"
+        assert all(
+            receipt[field].startswith("sha256:")
+            for field in (
+                "relay_image_digest",
+                "proxy_image_digest",
+                "mock_provider_image_digest",
+            )
+        )
     assert not (reports_root / "phase2_obsidian_preview").exists()
     assert protected_before == _tree_hash(REPO_ROOT / "reports/phase2_claims")
     evidence_bytes = (output / "runtime_evidence.json").read_bytes()
@@ -1320,6 +1548,49 @@ def test_mock_orchestrator_cleans_every_created_resource_on_failure(
     assert result.cleanup_complete is True
 
 
+def test_mock_orchestrator_blocks_on_cleanup_failure(tmp_path: Path) -> None:
+    reports_root = tmp_path / "reports"
+    reports_root.mkdir()
+    fake = FakeProviderRelayDocker(fail_cleanup=True)
+
+    result = run_mock_provider_relay(
+        REPO_ROOT,
+        reports_root,
+        _executor=fake,
+        _allow_test_output_root=True,
+        _secret_factory=lambda: uuid.uuid4().hex + uuid.uuid4().hex,
+        _request_id_factory=_request_ids(),
+    )
+
+    assert result.status == PHASE2B_PROVIDER_RELAY_E2E_BLOCKED
+    assert "runtime_cleanup_failed" in result.errors
+    assert result.cleanup_complete is False
+    assert fake.residual_container_count == 1
+    assert not (reports_root / "phase2_provider_relay").exists()
+
+
+def test_mock_orchestrator_blocks_sensitive_shape_in_container_logs(
+    tmp_path: Path,
+) -> None:
+    reports_root = tmp_path / "reports"
+    reports_root.mkdir()
+    fake = FakeProviderRelayDocker(log_payload="Bearer redacted-shape")
+
+    result = run_mock_provider_relay(
+        REPO_ROOT,
+        reports_root,
+        _executor=fake,
+        _allow_test_output_root=True,
+        _secret_factory=lambda: uuid.uuid4().hex + uuid.uuid4().hex,
+        _request_id_factory=_request_ids(),
+    )
+
+    assert result.status == provider_relay_runner.PHASE2B_PROVIDER_SECRET_BLOCKED
+    assert "sensitive_shape_exposed" in result.errors
+    assert fake.residual_container_count == 0
+    assert fake.residual_network_count == 0
+
+
 def test_atomic_publication_failure_preserves_previous_output(
     tmp_path: Path,
 ) -> None:
@@ -1350,6 +1621,32 @@ def test_atomic_publication_failure_preserves_previous_output(
     assert marker.is_file()
     assert fake.residual_container_count == 0
     assert fake.residual_network_count == 0
+
+
+def test_offline_validator_rejects_missing_per_run_audit_field(
+    tmp_path: Path,
+) -> None:
+    reports_root = tmp_path / "reports"
+    reports_root.mkdir()
+    result = run_mock_provider_relay(
+        REPO_ROOT,
+        reports_root,
+        _executor=FakeProviderRelayDocker(),
+        _allow_test_output_root=True,
+        _secret_factory=lambda: uuid.uuid4().hex + uuid.uuid4().hex,
+        _request_id_factory=_request_ids(),
+    )
+    assert result.status == PHASE2B_PROVIDER_RELAY_READY
+    output = reports_root / "phase2_provider_relay"
+    receipt_path = next((output / "mock_preview/receipts").glob("*.json"))
+    receipt = json.loads(receipt_path.read_bytes())
+    receipt.pop("request_id")
+    receipt_path.write_bytes(canonical_json_bytes(receipt))
+
+    validation = validate_provider_relay_artifacts(output)
+
+    assert validation.status == PHASE2B_PROVIDER_RELAY_E2E_BLOCKED
+    assert "receipt_audit_fields_invalid" in validation.errors
 
 
 def test_provider_relay_cli_exposes_no_runtime_or_retry_overrides() -> None:

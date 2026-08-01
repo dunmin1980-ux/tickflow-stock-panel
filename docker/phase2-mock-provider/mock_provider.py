@@ -325,6 +325,16 @@ def _write_receipt(value: dict[str, Any]) -> None:
         raise MockProviderError("receipt_invalid") from exc
 
 
+def _write_ready() -> None:
+    _write_receipt(
+        {
+            "receipt_schema_version": 1,
+            "status": "READY",
+            "auth_present": True,
+        }
+    )
+
+
 class MockProviderHandler(BaseHTTPRequestHandler):
     server_version = "Phase2MockProvider/1"
     sys_version = ""
@@ -467,9 +477,18 @@ def create_server(address: tuple[str, int] = ("0.0.0.0", 8081)) -> HTTPServer:
 
 
 def main() -> int:
+    try:
+        _read_auth()
+        _read_scenario()
+        _load_factory()
+    except MockProviderError:
+        return 2
     server = create_server()
     try:
+        _write_ready()
         server.handle_request()
+    except MockProviderError:
+        return 2
     finally:
         server.server_close()
     return 0

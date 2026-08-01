@@ -1,0 +1,16 @@
+{
+  "error_codes": [
+    "STRICT_JSON_REJECTED"
+  ],
+  "host_validation": {},
+  "provider_attempt_count": 1,
+  "provider_http_status": null,
+  "rejection_schema_version": 1,
+  "relay_error_category": "STRICT_JSON_REJECTED",
+  "response_sha256": "b51f08b698d88d8027a935d9db649774949f5fb41a0c559bfee6a9a13225c72d",
+  "response_size": 4,
+  "retry_count": 0,
+  "route": "mock_preview/rejected",
+  "scenario": "multiple_json_documents",
+  "status": "REJECTED"
+}
