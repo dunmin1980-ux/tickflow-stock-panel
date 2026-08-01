@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import http.client
 import importlib.util
 import json
 import sys
@@ -26,8 +27,10 @@ from app.schemas.phase2_provider_relay import (
     RelayResponse,
 )
 from app.services.phase2_ai_worker_protocol import (
+    WORKER_CANDIDATE_VALID,
     FakeClaimsWorker,
     build_worker_projection,
+    validate_worker_candidate,
 )
 from app.services.phase2_claims_service import PREDICATE_RULES, canonical_json_bytes
 from app.services.phase2_provider_relay_protocol import (
@@ -42,10 +45,39 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXED_REQUEST_ID = "a" * 32
 RELAY_PATH = REPO_ROOT / "docker/phase2-provider-relay/relay.py"
 RELAY_DOCKERFILE = REPO_ROOT / "docker/phase2-provider-relay/Dockerfile"
+PROXY_PATH = REPO_ROOT / "docker/phase2-egress-proxy/proxy.py"
+PROXY_DOCKERFILE = REPO_ROOT / "docker/phase2-egress-proxy/Dockerfile"
+MOCK_PROVIDER_PATH = REPO_ROOT / "docker/phase2-mock-provider/mock_provider.py"
+MOCK_PROVIDER_DOCKERFILE = REPO_ROOT / "docker/phase2-mock-provider/Dockerfile"
+WORKER_PATH = REPO_ROOT / "docker/phase2-ai-worker/worker.py"
 PINNED_DISTROLESS = (
     "gcr.io/distroless/python3-debian12@sha256:"
     "7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5"
 )
+MOCK_SCENARIOS = {
+    "valid_typed_candidate",
+    "markdown_instead_of_json",
+    "extra_free_text_field",
+    "unknown_claim_type",
+    "unknown_predicate",
+    "wrong_symbol",
+    "wrong_projection_sha",
+    "raw_qfq_mismatch",
+    "unsupported_fact_pointer",
+    "trading_claim",
+    "oversized_response",
+    "timeout",
+    "http_429",
+    "http_500",
+    "invalid_json",
+    "multiple_json_documents",
+    "empty_response",
+    "wrong_request_id",
+    "wrong_facts_sha",
+    "sensitive_shape",
+    "redirect_response",
+    "external_url_response",
+}
 
 
 def _projection() -> dict:
@@ -931,3 +963,589 @@ def test_relay_image_contains_all_single_file_mount_targets(name: str) -> None:
 
     assert path.is_file()
     assert not path.is_symlink()
+
+
+@contextmanager
+def _running_component_server(server: HTTPServer):
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def _http_exchange(
+    port: int,
+    *,
+    method: str = "POST",
+    path: str = "/v1/typed-claims",
+    body: bytes | None = None,
+    headers: dict[str, str] | None = None,
+    timeout: float = 2,
+) -> tuple[int, bytes, dict[str, str]]:
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
+    try:
+        connection.request(method, path, body=body, headers=headers or {})
+        response = connection.getresponse()
+        return response.status, response.read(), dict(response.getheaders())
+    finally:
+        connection.close()
+
+
+def _component_files(tmp_path: Path) -> tuple[Path, Path, str]:
+    auth_value = uuid.uuid4().hex + uuid.uuid4().hex
+    auth_path = tmp_path / "provider-auth"
+    receipt_path = tmp_path / "receipt.json"
+    auth_path.write_text(auth_value + "\n", encoding="utf-8")
+    receipt_path.write_bytes(b"\n")
+    auth_path.chmod(0o400)
+    receipt_path.chmod(0o666)
+    return auth_path, receipt_path, auth_value
+
+
+def test_proxy_policy_constants_are_fixed() -> None:
+    proxy = _load_python_file(PROXY_PATH, "phase2_proxy")
+
+    assert proxy.ALLOWED_METHOD == "POST"
+    assert proxy.ALLOWED_PATH == "/v1/typed-claims"
+    assert proxy.UPSTREAM_HOST == "phase2-mock-provider"
+    assert proxy.UPSTREAM_PORT == 8081
+    assert proxy.UPSTREAM_PATH == "/v1/typed-claims"
+    assert proxy.RETRY_COUNT == 0
+    assert proxy.FOLLOW_REDIRECTS is False
+    assert proxy.MAXIMUM_BYTES == 1_048_576
+    assert proxy.TIMEOUT_SECONDS == 2
+
+
+def test_proxy_forwards_one_exact_request_and_injects_auth_only_upstream(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    proxy = _load_python_file(PROXY_PATH, "phase2_proxy")
+    auth_path, receipt_path, auth_value = _component_files(tmp_path)
+    upstream_body = canonical_json_bytes(_relay_response_payload())
+    with _http_server(body=upstream_body) as upstream:
+        monkeypatch.setattr(proxy, "UPSTREAM_HOST", "127.0.0.1")
+        monkeypatch.setattr(proxy, "UPSTREAM_PORT", upstream.server_port)
+        monkeypatch.setattr(proxy, "AUTH_PATH", auth_path)
+        monkeypatch.setattr(proxy, "RECEIPT_PATH", receipt_path)
+        server = proxy.create_server(("127.0.0.1", 0))
+        with _running_component_server(server):
+            request_body = canonical_json_bytes(
+                build_provider_envelope(
+                    build_relay_request(_projection(), request_id=FIXED_REQUEST_ID),
+                    _projection(),
+                ).model_dump(mode="json")
+            )
+            status, body, headers = _http_exchange(
+                server.server_port,
+                body=request_body,
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+            )
+
+    assert status == 200
+    assert body == upstream_body
+    assert headers["Content-Type"] == "application/json"
+    assert upstream.request_count == 1
+    assert upstream.requests[0]["method"] == "POST"
+    assert upstream.requests[0]["path"] == "/v1/typed-claims"
+    assert upstream.requests[0]["body"] == request_body
+    assert upstream.requests[0]["headers"]["Authorization"] == f"Bearer {auth_value}"
+    receipt_bytes = receipt_path.read_bytes()
+    receipt = json.loads(receipt_bytes)
+    assert auth_value.encode() not in receipt_bytes
+    assert receipt == {
+        "receipt_schema_version": 1,
+        "method_allowed": True,
+        "path_allowed": True,
+        "upstream_attempt_count": 1,
+        "response_category": "FORWARDED",
+        "response_size": len(upstream_body),
+        "auth_present": True,
+    }
+    assert capsys.readouterr() == ("", "")
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "expected_status"),
+    [
+        ("GET", "/v1/typed-claims", 405),
+        ("POST", "/blocked", 404),
+        ("PUT", "/blocked", 405),
+    ],
+)
+def test_proxy_rejects_wrong_method_or_path_before_upstream(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+    path: str,
+    expected_status: int,
+) -> None:
+    proxy = _load_python_file(PROXY_PATH, "phase2_proxy")
+    auth_path, receipt_path, _ = _component_files(tmp_path)
+    with _http_server() as upstream:
+        monkeypatch.setattr(proxy, "UPSTREAM_HOST", "127.0.0.1")
+        monkeypatch.setattr(proxy, "UPSTREAM_PORT", upstream.server_port)
+        monkeypatch.setattr(proxy, "AUTH_PATH", auth_path)
+        monkeypatch.setattr(proxy, "RECEIPT_PATH", receipt_path)
+        server = proxy.create_server(("127.0.0.1", 0))
+        with _running_component_server(server):
+            status, body, _ = _http_exchange(
+                server.server_port,
+                method=method,
+                path=path,
+                body=b"{}",
+            )
+
+    assert status == expected_status
+    assert body == b""
+    assert upstream.request_count == 0
+    receipt = json.loads(receipt_path.read_bytes())
+    assert receipt["upstream_attempt_count"] == 0
+
+
+@pytest.mark.parametrize(
+    ("upstream_status", "headers", "expected_status", "category"),
+    [
+        (302, {"Location": "http://redirect.invalid/"}, 502, "REDIRECT_REJECTED"),
+        (429, {}, 429, "UPSTREAM_REJECTED"),
+        (500, {}, 500, "UPSTREAM_REJECTED"),
+    ],
+)
+def test_proxy_never_follows_redirect_and_passes_rejected_status_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    upstream_status: int,
+    headers: dict[str, str],
+    expected_status: int,
+    category: str,
+) -> None:
+    proxy = _load_python_file(PROXY_PATH, "phase2_proxy")
+    auth_path, receipt_path, _ = _component_files(tmp_path)
+    with _http_server(
+        status=upstream_status,
+        body=b'{"ignored":true}',
+        headers=headers,
+    ) as upstream:
+        monkeypatch.setattr(proxy, "UPSTREAM_HOST", "127.0.0.1")
+        monkeypatch.setattr(proxy, "UPSTREAM_PORT", upstream.server_port)
+        monkeypatch.setattr(proxy, "AUTH_PATH", auth_path)
+        monkeypatch.setattr(proxy, "RECEIPT_PATH", receipt_path)
+        server = proxy.create_server(("127.0.0.1", 0))
+        with _running_component_server(server):
+            status, body, response_headers = _http_exchange(
+                server.server_port,
+                body=b"{}",
+            )
+
+    assert status == expected_status
+    assert body == b""
+    assert "Location" not in response_headers
+    assert upstream.request_count == 1
+    receipt = json.loads(receipt_path.read_bytes())
+    assert receipt["response_category"] == category
+    assert receipt["upstream_attempt_count"] == 1
+
+
+def test_proxy_timeout_is_terminal_and_has_no_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    proxy = _load_python_file(PROXY_PATH, "phase2_proxy")
+    auth_path, receipt_path, _ = _component_files(tmp_path)
+    with _http_server(delay=0.15) as upstream:
+        monkeypatch.setattr(proxy, "UPSTREAM_HOST", "127.0.0.1")
+        monkeypatch.setattr(proxy, "UPSTREAM_PORT", upstream.server_port)
+        monkeypatch.setattr(proxy, "AUTH_PATH", auth_path)
+        monkeypatch.setattr(proxy, "RECEIPT_PATH", receipt_path)
+        monkeypatch.setattr(proxy, "TIMEOUT_SECONDS", 0.03)
+        server = proxy.create_server(("127.0.0.1", 0))
+        with _running_component_server(server):
+            status, body, _ = _http_exchange(server.server_port, body=b"{}")
+
+    assert status == 504
+    assert body == b""
+    assert upstream.request_count == 1
+    receipt = json.loads(receipt_path.read_bytes())
+    assert receipt["response_category"] == "TIMEOUT"
+    assert receipt["upstream_attempt_count"] == 1
+
+
+@pytest.mark.parametrize("declared_size", [0, 1_048_577])
+def test_proxy_rejects_invalid_input_size_before_upstream(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    declared_size: int,
+) -> None:
+    proxy = _load_python_file(PROXY_PATH, "phase2_proxy")
+    auth_path, receipt_path, _ = _component_files(tmp_path)
+    with _http_server() as upstream:
+        monkeypatch.setattr(proxy, "UPSTREAM_HOST", "127.0.0.1")
+        monkeypatch.setattr(proxy, "UPSTREAM_PORT", upstream.server_port)
+        monkeypatch.setattr(proxy, "AUTH_PATH", auth_path)
+        monkeypatch.setattr(proxy, "RECEIPT_PATH", receipt_path)
+        server = proxy.create_server(("127.0.0.1", 0))
+        with _running_component_server(server):
+            connection = http.client.HTTPConnection(
+                "127.0.0.1",
+                server.server_port,
+                timeout=2,
+            )
+            connection.putrequest("POST", "/v1/typed-claims")
+            connection.putheader("Content-Length", str(declared_size))
+            connection.endheaders()
+            response = connection.getresponse()
+            status = response.status
+            response.read()
+            connection.close()
+
+    assert status == 413
+    assert upstream.request_count == 0
+
+
+def _provider_envelope() -> dict:
+    projection = _projection()
+    request = build_relay_request(projection, request_id=FIXED_REQUEST_ID)
+    return build_provider_envelope(request, projection).model_dump(mode="json")
+
+
+def _scenario_accepted(raw_result: dict, projection: dict) -> bool:
+    status = raw_result["status"]
+    body = raw_result["body"]
+    if (
+        not 200 <= status < 300
+        or raw_result["delay_seconds"] > 2
+        or not body
+        or len(body) > 1_048_576
+    ):
+        return False
+    try:
+        parsed = parse_single_json_object(body, maximum_bytes=1_048_576)
+        candidate = validate_relay_response(
+            parsed,
+            build_relay_request(projection, request_id=FIXED_REQUEST_ID),
+        )
+    except (Phase2ProviderRelayError, ValidationError):
+        return False
+    return (
+        validate_worker_candidate(
+            candidate.model_dump(mode="json"),
+            projection,
+        ).status
+        == WORKER_CANDIDATE_VALID
+    )
+
+
+def test_mock_provider_constants_and_scenario_set_are_fixed() -> None:
+    provider = _load_python_file(MOCK_PROVIDER_PATH, "phase2_mock_provider")
+
+    assert provider.ALLOWED_METHOD == "POST"
+    assert provider.ALLOWED_PATH == "/v1/typed-claims"
+    assert provider.MAXIMUM_BYTES == 1_048_576
+    assert MOCK_SCENARIOS == provider.ALLOWED_SCENARIOS
+
+
+@pytest.mark.parametrize("scenario", sorted(MOCK_SCENARIOS))
+def test_mock_provider_matrix_accepts_only_valid_typed_candidate(
+    scenario: str,
+) -> None:
+    provider = _load_python_file(MOCK_PROVIDER_PATH, "phase2_mock_provider")
+    factory = _load_python_file(WORKER_PATH, "phase2_candidate_factory")
+    envelope = _provider_envelope()
+    projection = envelope["projection"]
+
+    result = provider.build_scenario_response(
+        envelope,
+        scenario,
+        factory.generate_candidate,
+    )
+
+    assert set(result) == {"status", "body", "headers", "delay_seconds"}
+    assert _scenario_accepted(result, projection) is (
+        scenario == "valid_typed_candidate"
+    )
+    if scenario == "valid_typed_candidate":
+        parsed = json.loads(result["body"])
+        assert len(parsed["claims_candidate"]["claims"]) == 42
+
+
+def test_mock_provider_valid_response_is_byte_deterministic() -> None:
+    provider = _load_python_file(MOCK_PROVIDER_PATH, "phase2_mock_provider")
+    factory = _load_python_file(WORKER_PATH, "phase2_candidate_factory")
+    envelope = _provider_envelope()
+
+    first = provider.build_scenario_response(
+        envelope,
+        "valid_typed_candidate",
+        factory.generate_candidate,
+    )
+    second = provider.build_scenario_response(
+        deepcopy(envelope),
+        "valid_typed_candidate",
+        factory.generate_candidate,
+    )
+
+    assert first == second
+
+
+def _leaf_differences(left: Any, right: Any, path: str = "") -> set[str]:
+    if isinstance(left, dict) and isinstance(right, dict):
+        differences: set[str] = set()
+        for key in set(left) | set(right):
+            child = f"{path}/{key}"
+            if key not in left or key not in right:
+                differences.add(child)
+            else:
+                differences.update(_leaf_differences(left[key], right[key], child))
+        return differences
+    if isinstance(left, list) and isinstance(right, list):
+        differences = set()
+        if len(left) != len(right):
+            differences.add(f"{path}/length")
+        for index, (left_item, right_item) in enumerate(zip(left, right, strict=False)):
+            differences.update(
+                _leaf_differences(left_item, right_item, f"{path}/{index}")
+            )
+        return differences
+    return set() if left == right else {path}
+
+
+@pytest.mark.parametrize(
+    ("scenario", "expected_difference"),
+    [
+        ("extra_free_text_field", "/claims_candidate/analysis"),
+        ("unknown_claim_type", "/claims_candidate/claims/0/claim_type"),
+        ("unknown_predicate", "/claims_candidate/claims/0/predicate"),
+        ("wrong_symbol", "/symbol"),
+        ("wrong_projection_sha", "/projection_sha256"),
+        (
+            "raw_qfq_mismatch",
+            "/claims_candidate/claims/39/object/right/price_basis",
+        ),
+        (
+            "unsupported_fact_pointer",
+            "/claims_candidate/claims/0/provenance/fact_refs/0",
+        ),
+        ("trading_claim", "/claims_candidate/trading_advice"),
+        ("wrong_request_id", "/request_id"),
+        (
+            "wrong_facts_sha",
+            "/claims_candidate/claims/0/provenance/facts_sha256",
+        ),
+        ("sensitive_shape", "/claims_candidate/api_key"),
+        ("external_url_response", "/external_url"),
+    ],
+)
+def test_mock_provider_structured_scenarios_mutate_only_one_leaf(
+    scenario: str,
+    expected_difference: str,
+) -> None:
+    provider = _load_python_file(MOCK_PROVIDER_PATH, "phase2_mock_provider")
+    factory = _load_python_file(WORKER_PATH, "phase2_candidate_factory")
+    envelope = _provider_envelope()
+    valid = provider.build_scenario_response(
+        envelope,
+        "valid_typed_candidate",
+        factory.generate_candidate,
+    )
+    mutated = provider.build_scenario_response(
+        envelope,
+        scenario,
+        factory.generate_candidate,
+    )
+
+    assert _leaf_differences(
+        json.loads(valid["body"]),
+        json.loads(mutated["body"]),
+    ) == {expected_difference}
+
+
+def test_mock_provider_http_requires_matching_auth_and_exact_envelope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    provider = _load_python_file(MOCK_PROVIDER_PATH, "phase2_mock_provider")
+    auth_path, receipt_path, auth_value = _component_files(tmp_path)
+    scenario_path = tmp_path / "scenario.json"
+    scenario_path.write_bytes(
+        canonical_json_bytes({"scenario": "valid_typed_candidate"})
+    )
+    scenario_path.chmod(0o444)
+    monkeypatch.setattr(provider, "AUTH_PATH", auth_path)
+    monkeypatch.setattr(provider, "SCENARIO_PATH", scenario_path)
+    monkeypatch.setattr(provider, "RECEIPT_PATH", receipt_path)
+    monkeypatch.setattr(provider, "FACTORY_PATH", WORKER_PATH)
+    server = provider.create_server(("127.0.0.1", 0))
+    with _running_component_server(server):
+        status, body, _ = _http_exchange(
+            server.server_port,
+            body=canonical_json_bytes(_provider_envelope()),
+            headers={
+                "Authorization": f"Bearer {auth_value}",
+                "Content-Type": "application/json",
+            },
+        )
+
+    assert status == 200
+    assert len(json.loads(body)["claims_candidate"]["claims"]) == 42
+    receipt_bytes = receipt_path.read_bytes()
+    receipt = json.loads(receipt_bytes)
+    assert auth_value.encode() not in receipt_bytes
+    assert receipt["auth_valid"] is True
+    assert receipt["request_count"] == 1
+    assert capsys.readouterr() == ("", "")
+
+
+@pytest.mark.parametrize("auth_header", [None, "Bearer wrong"])
+def test_mock_provider_http_rejects_missing_or_wrong_auth_without_body_echo(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    auth_header: str | None,
+) -> None:
+    provider = _load_python_file(MOCK_PROVIDER_PATH, "phase2_mock_provider")
+    auth_path, receipt_path, _ = _component_files(tmp_path)
+    scenario_path = tmp_path / "scenario.json"
+    scenario_path.write_bytes(
+        canonical_json_bytes({"scenario": "valid_typed_candidate"})
+    )
+    scenario_path.chmod(0o444)
+    monkeypatch.setattr(provider, "AUTH_PATH", auth_path)
+    monkeypatch.setattr(provider, "SCENARIO_PATH", scenario_path)
+    monkeypatch.setattr(provider, "RECEIPT_PATH", receipt_path)
+    monkeypatch.setattr(provider, "FACTORY_PATH", WORKER_PATH)
+    server = provider.create_server(("127.0.0.1", 0))
+    headers = {"Content-Type": "application/json"}
+    if auth_header is not None:
+        headers["Authorization"] = auth_header
+    with _running_component_server(server):
+        status, body, _ = _http_exchange(
+            server.server_port,
+            body=canonical_json_bytes(_provider_envelope()),
+            headers=headers,
+        )
+
+    assert status == 401
+    assert body == b""
+    receipt = json.loads(receipt_path.read_bytes())
+    assert receipt["auth_valid"] is False
+
+
+def test_mock_provider_timeout_client_disconnect_produces_no_stderr(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    provider = _load_python_file(MOCK_PROVIDER_PATH, "phase2_mock_provider")
+    auth_path, receipt_path, auth_value = _component_files(tmp_path)
+    scenario_path = tmp_path / "scenario.json"
+    scenario_path.write_bytes(canonical_json_bytes({"scenario": "timeout"}))
+    scenario_path.chmod(0o444)
+    monkeypatch.setattr(provider, "AUTH_PATH", auth_path)
+    monkeypatch.setattr(provider, "SCENARIO_PATH", scenario_path)
+    monkeypatch.setattr(provider, "RECEIPT_PATH", receipt_path)
+    monkeypatch.setattr(provider, "FACTORY_PATH", WORKER_PATH)
+    monkeypatch.setattr(provider, "TIMEOUT_DELAY_SECONDS", 0.15)
+    server = provider.create_server(("127.0.0.1", 0))
+    with _running_component_server(server):
+        connection = http.client.HTTPConnection(
+            "127.0.0.1",
+            server.server_port,
+            timeout=0.03,
+        )
+        connection.request(
+            "POST",
+            "/v1/typed-claims",
+            body=canonical_json_bytes(_provider_envelope()),
+            headers={"Authorization": f"Bearer {auth_value}"},
+        )
+        with pytest.raises(TimeoutError):
+            connection.getresponse()
+        connection.close()
+        time.sleep(0.2)
+
+    assert json.loads(receipt_path.read_bytes())["scenario"] == "timeout"
+    assert capsys.readouterr() == ("", "")
+
+
+@pytest.mark.parametrize(
+    ("path", "copy_count", "entrypoint"),
+    [
+        (PROXY_DOCKERFILE, 3, "/proxy/proxy.py"),
+        (MOCK_PROVIDER_DOCKERFILE, 5, "/app/mock_provider.py"),
+    ],
+)
+def test_proxy_and_mock_dockerfiles_are_pinned_non_root_and_minimal(
+    path: Path,
+    copy_count: int,
+    entrypoint: str,
+) -> None:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    source = "\n".join(lines)
+
+    assert lines[0] == f"FROM {PINNED_DISTROLESS}"
+    assert "USER 65532:65532" in lines
+    assert f'ENTRYPOINT ["/usr/bin/python3", "{entrypoint}"]' in lines
+    assert sum(line.startswith("COPY ") for line in lines) == copy_count
+    assert all(
+        item not in source
+        for item in (
+            "RUN ",
+            "ADD ",
+            ":debug",
+            "/bin/sh",
+            "/bin/bash",
+            " apt",
+            "apk ",
+            "pip ",
+            "curl ",
+            "wget ",
+            "http://",
+            "https://",
+        )
+    )
+
+
+@pytest.mark.parametrize("path", [PROXY_PATH, MOCK_PROVIDER_PATH])
+def test_proxy_and_mock_use_only_stdlib_and_hardened_file_io(path: Path) -> None:
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    roots: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            roots.update(alias.name.partition(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            roots.add(node.module.partition(".")[0])
+    attributes = {
+        node.attr for node in ast.walk(tree) if isinstance(node, ast.Attribute)
+    }
+    function_names = {
+        node.func.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+
+    assert roots <= sys.stdlib_module_names
+    assert {"O_NOFOLLOW", "fstat", "fsync"} <= attributes
+    assert "S_ISREG" in attributes
+    assert "print" not in function_names
+
+
+def test_mock_dockerfile_copies_only_approved_factory_and_component_files() -> None:
+    source = MOCK_PROVIDER_DOCKERFILE.read_text(encoding="utf-8")
+    copy_lines = [line for line in source.splitlines() if line.startswith("COPY ")]
+
+    assert copy_lines == [
+        "COPY --chown=65532:65532 phase2-ai-worker/worker.py /app/candidate_factory.py",
+        "COPY --chown=65532:65532 phase2-mock-provider/mock_provider.py /app/mock_provider.py",
+        "COPY --chown=65532:65532 phase2-mock-provider/secret.placeholder /run/phase2/provider-auth",
+        "COPY --chown=65532:65532 phase2-mock-provider/scenario.placeholder.json /input/scenario.json",
+        "COPY --chown=65532:65532 phase2-mock-provider/receipt.placeholder.json /output/receipt.json",
+    ]
