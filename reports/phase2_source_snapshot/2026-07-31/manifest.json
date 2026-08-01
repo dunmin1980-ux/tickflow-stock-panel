@@ -1,0 +1,2612 @@
+{
+  "as_of_trade_date": "2026-07-31",
+  "captured_at": "2026-08-01T09:25:18+0800",
+  "cloud_access_mode": "read_only",
+  "cloud_mutation_count": 0,
+  "normalized_business_sha256": "b61bf121fcc998e2f0bfa49c8b4e8b9abfdb81e8e7ae081b625bf12bd2321095",
+  "phase1_relation": {
+    "phase1_byte_equivalent": false,
+    "phase1_original_payload_recovered": false,
+    "phase1_status": "PHASE1_OBSERVATION_PASSED",
+    "usage": "independent_phase2_indicator_source"
+  },
+  "provider_evidence": {
+    "adjustment_factor_selection_origin": "application_default_absent",
+    "adjustment_factor_source": "same_as_daily",
+    "capabilities_sha256": "eb3fef12e570ead99f36c5fd5b86c458f200433509b4c8373c998a4452352a16",
+    "capability_label": "Pro",
+    "daily_provider": "tickflow",
+    "daily_provider_selection_origin": "application_default_absent",
+    "enriched_task_status": "success",
+    "job_sha256": "2f4c0c03add61154c59908d83dc20d22867747a9dd727fd473504fa64ad33979",
+    "preferences_sha256": "4e1ed19018909d502d544d531ca89487dc1f342c8dff21c649ac6fc5c030cb7c",
+    "sync_completed_at": "2026-07-31T07:32:38Z",
+    "sync_started_at": "2026-07-31T07:30:00Z",
+    "sync_task_id": "e1c347277f",
+    "sync_task_status": "success"
+  },
+  "snapshot_schema_version": 1,
+  "source_partitions": {
+    "qfq": {
+      "aggregate_sha256": "755862c8daba3bbc3d9d4cec4aa1a1e80d02db6a4984d85870c5c737b5eff8c8",
+      "file_count": 251,
+      "files": [
+        {
+          "path": "kline_daily_enriched/date=2025-07-21/part.parquet",
+          "sha256": "5811e6df81d3dc469336516161be31efd1d5b79d56a77d5a14dde28a2766cb68",
+          "size": 207233
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-07-22/part.parquet",
+          "sha256": "d214acdaa71f4b21d80b50b7184a7c08dae386d068f24bd60b3fbd969aea660e",
+          "size": 208013
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-07-23/part.parquet",
+          "sha256": "7d63fe5c1c411431fd198b79301870ad6078d4aeabe56afd1ba964878eeac2da",
+          "size": 208014
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-07-24/part.parquet",
+          "sha256": "3c64e786e5da6133d16f2f208167d3c2b9e95c8392d526547603f6b561b788e9",
+          "size": 207662
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-07-25/part.parquet",
+          "sha256": "fc2be4f772a791740629d3b72a218891e31658fd7b42b89b759574cb1c9715ee",
+          "size": 207927
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-07-28/part.parquet",
+          "sha256": "0c6ad4912810fbc74b0d120d65aeda144efb8904ab3adfc53dee60be596c267e",
+          "size": 207851
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-07-29/part.parquet",
+          "sha256": "859eb51d61ddd57a7e7bd23a658f1bb19421540bceee5ddc59ae01cc08664d66",
+          "size": 208391
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-07-30/part.parquet",
+          "sha256": "c646aa32cf606dfb674f9c9fc4c3e186566f7afcd4f2657d7fed09c9a8d34d76",
+          "size": 208174
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-07-31/part.parquet",
+          "sha256": "28a92f002998874ee57e91474a23563c6326b8343299fce5f28f552a123831b9",
+          "size": 208147
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-01/part.parquet",
+          "sha256": "45a2e1397585e13934a5aeab4ac4abcb4edbbdfc1c50786b1f2f7c43fbacf9b2",
+          "size": 207786
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-04/part.parquet",
+          "sha256": "1a156e475d1c0ade99fd75ffd422bcb78888ddb251a6c573c88692a92cb4e976",
+          "size": 207487
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-05/part.parquet",
+          "sha256": "cb9d50d89fd2f95a5d78084ab625b1fb904a74e8bca0112cc48eeca8b83c12f1",
+          "size": 207828
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-06/part.parquet",
+          "sha256": "0316bfc1b0a61c705fb9c166f36ca2b755d77372fafb88ed36bee81f447d71e5",
+          "size": 208297
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-07/part.parquet",
+          "sha256": "088350c0c6a755d8f04e58bc18fff6250bab8924d1a8efd7e4e8cfb0bb20ca1e",
+          "size": 208489
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-08/part.parquet",
+          "sha256": "cfeb494a18a92b7687b267d037996894c745789234aea1bdba3a709b1dd90dee",
+          "size": 208098
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-11/part.parquet",
+          "sha256": "52d6264ce99c858b3b4b9f6fbbd556ffcb0ba34b66965a124be2cb93a009b1c5",
+          "size": 208711
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-12/part.parquet",
+          "sha256": "aff102cae8ff6f68cffe5b9669d24b7b72b93f1a801012707739b60590135079",
+          "size": 208871
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-13/part.parquet",
+          "sha256": "37362f714fe6eaf5cc9568ba5ed296c6dae19aed793bd111f2fc3d0a2b6b26a3",
+          "size": 209174
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-14/part.parquet",
+          "sha256": "53e0f7a7a6aa6e91a9654570612ec4b9eaa77ccefe495e7f0ef3a3260317306f",
+          "size": 209166
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-15/part.parquet",
+          "sha256": "9ed0833a259cb2715a4110d7387a65b61eb8405cc54e30b560841d44ed827a8a",
+          "size": 209476
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-18/part.parquet",
+          "sha256": "2f99ae9ad7feecf4d1c3711ad40138a97b9e821a03297a83c84f4e2899e8563f",
+          "size": 210157
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-19/part.parquet",
+          "sha256": "f65dd469c170a3cb6fdeda74f79cc52965b466265e8834807d1a703bea2dee47",
+          "size": 209964
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-20/part.parquet",
+          "sha256": "de77a2798459cb78f99aca2eed9985d1c04f6da57d49b03e66c6aa745d6ee371",
+          "size": 209879
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-21/part.parquet",
+          "sha256": "4dda749d89f4b5d6b60998160826743a7909a2560200643ac37267e0ab0b29b8",
+          "size": 210010
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-22/part.parquet",
+          "sha256": "65487aa71fed4913a24ab61796273e008e9f687914e9b092fca5b9c92a837a34",
+          "size": 210015
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-25/part.parquet",
+          "sha256": "25b7cbf2db3dbd8c457ad96310087065daaab56492760281c28c4f6d9db26385",
+          "size": 210802
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-26/part.parquet",
+          "sha256": "0870cf4eaf08e6d89783f4a186e1827b19018a93369067cbbb68464c025438c7",
+          "size": 210259
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-27/part.parquet",
+          "sha256": "24a878c7b915aad43f05d3eaf68f18ed7cfbe360ac90c6ea8f4806710c8efc50",
+          "size": 210484
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-28/part.parquet",
+          "sha256": "e6a1f11044e34fa465b07cd41744edb668c0ca8b8686886b82c94ac4fe6e64f2",
+          "size": 209962
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-08-29/part.parquet",
+          "sha256": "45fdeb935e17a281f1220a30955d41fb974eb9eaf18f0942725d33cfb0325f4d",
+          "size": 210217
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-01/part.parquet",
+          "sha256": "ba661a6fb3c18e70e6448b5e905fd6353e5c2a9b38341ed62d5b351c03234f27",
+          "size": 210357
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-02/part.parquet",
+          "sha256": "5a5c4670790fad322dc9a4cc4a7d170f9f981210f3b1b1258b57db559885f9ca",
+          "size": 210226
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-03/part.parquet",
+          "sha256": "4da24f301f6bb972ab03cf690e2908d5e72ef63bb0323500322ac3fdee1f6f10",
+          "size": 209420
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-04/part.parquet",
+          "sha256": "61cccd749fab81415a47815bc81c7ac06f9edbd62b50240559c0136cd2944250",
+          "size": 209659
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-05/part.parquet",
+          "sha256": "3007e3775f7ae81ba717e14c880a8626b3d8ff221c374bf277bfd9afa3e54c55",
+          "size": 209320
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-08/part.parquet",
+          "sha256": "14509d73daf53275b4ae3fa8f0371aff74b11a4ea8143c79157e49da5214ef7b",
+          "size": 209672
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-09/part.parquet",
+          "sha256": "adec1bdcff74eb124b18cd041047e5ddb13262be3f2ab90b55a31381d402ab67",
+          "size": 209771
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-10/part.parquet",
+          "sha256": "59ffa3070bbe86e964f2f1367913dfc51ad4ac3535e294f8a2c5ba021423ed45",
+          "size": 209584
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-11/part.parquet",
+          "sha256": "39d5eedb2caba59aa64c7609245c04f09c11a14b7aebec6c0fa0a27e8fe7faa7",
+          "size": 210058
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-12/part.parquet",
+          "sha256": "7c375baf649c74aede0bb4e4fb48b871a8e388debfe14d722c960bbe13250f69",
+          "size": 210273
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-15/part.parquet",
+          "sha256": "6e913a1849b9d4c6af3442b5680db480e9cb9d9e9900cd302c8fc72d1024bc13",
+          "size": 210232
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-16/part.parquet",
+          "sha256": "afb3858439b27a19e9ecb9c708bfdca3758f0dafdcdf3d3abc5ea80bb352c2c4",
+          "size": 210270
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-17/part.parquet",
+          "sha256": "669b204c3f75066da9f9a6e91a5c2e2b4bbf127ec2189290bb9b542ecc34051b",
+          "size": 209813
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-18/part.parquet",
+          "sha256": "8f073235b3dc6107fde2e086328beb730ce3e25d5d865baf45117ee6ca1743fb",
+          "size": 210693
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-19/part.parquet",
+          "sha256": "6921e5ab213d04e27294afb4f075c8940a5dec76cc073a5bc03aefa2bab8408f",
+          "size": 209833
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-22/part.parquet",
+          "sha256": "c76259a74d6153c9a741f66325ea2352f47c7734994ac321d6d9679ce987c939",
+          "size": 209664
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-23/part.parquet",
+          "sha256": "3147ea683a66dfb4c75fe4b7b9a78e1468bbea224f156cde342904247344e0b9",
+          "size": 210050
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-24/part.parquet",
+          "sha256": "3e7b94c40e69b53fe9a3735df661617c8a992fefe33910365c4fe4967129a763",
+          "size": 209835
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-25/part.parquet",
+          "sha256": "c68202a50261c643196e79ce41ba8ac9234ddb8634a929c87f389e6efed4d77a",
+          "size": 210153
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-26/part.parquet",
+          "sha256": "33f52b06dedaddc92cb9877e9122c488201e09e25d44e014c79df9a2dcf496f0",
+          "size": 209759
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-29/part.parquet",
+          "sha256": "39edebd43e908f5eb58af0e499ff0cac3f47ebb1abe2de4697dfc7dcb0014ef0",
+          "size": 209546
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-09-30/part.parquet",
+          "sha256": "fcd1f729d058c083b52ee510367943837f1a9087502afb348e240bc3ebe48fc0",
+          "size": 209670
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-10-09/part.parquet",
+          "sha256": "7ad1073d2f50bee2ef054465f1820053be20cdfd5d32efc62ef357bfea3b1fa7",
+          "size": 210704
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-10-10/part.parquet",
+          "sha256": "4322fe097626a0ab85b1ef657ae75f50d502c2617b80e595293d42e64836d2c4",
+          "size": 210061
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-10-13/part.parquet",
+          "sha256": "441fa6a87d1da260663d7c93e013054da164afa17317b1b74d44b8521b6b0a64",
+          "size": 209333
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-10-14/part.parquet",
+          "sha256": "3c1cba80488bd4e96ae4eb5129cefc944d86b9076031f1321bedfc40023f5756",
+          "size": 209994
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-10-15/part.parquet",
+          "sha256": "0b04133f286e7750ca4fb0dbff328de0f82ed8fd97a747dd4369e8b08bcc875e",
+          "size": 209977
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-10-16/part.parquet",
+          "sha256": "6aa10943f11aec5f319a984138fdeb4b7f05b2cb9b882584753c96051f4c7458",
+          "size": 209653
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-10-17/part.parquet",
+          "sha256": "86a8d8af498cde5bd0654eefdfe449883876e29426593966b566e76a4cda0ef4",
+          "size": 209469
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-10-20/part.parquet",
+          "sha256": "a88a2e03dc78ddb2ef3f3520e4e4c00da43ad1e80cfc250992e9e394a59d5788",
+          "size": 209295
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-10-21/part.parquet",
+          "sha256": "8294b0c03d7de50afca6ed507e79909aeca7b762970bc5b0f97ef1a922758dd9",
+          "size": 209568
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-10-22/part.parquet",
+          "sha256": "20ccc53d867de7cfb70e22ac3bd8557d35c7fe7a7268302ca8f193a41fd2489d",
+          "size": 209331
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-10-23/part.parquet",
+          "sha256": "3ead58bec5b275d31fe748821ea0fbae1bb503ff24b0927d1e9e37951893ca9e",
+          "size": 209133
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-10-24/part.parquet",
+          "sha256": "fb61ed10c74323aa85263f71225aecafd605c13da6b10cc9ba555ad364149191",
+          "size": 209711
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-10-27/part.parquet",
+          "sha256": "a86d0f5f52ad3d81777b6916662e5784f7c093d58a367701016606d4e91df9fe",
+          "size": 210296
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-10-28/part.parquet",
+          "sha256": "98b24f4c35e10d67015ee2f9e4aff52c23f927a0e5bb6496f9f54842cc1ce0aa",
+          "size": 210209
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-10-29/part.parquet",
+          "sha256": "5c85f35e5017a62b347520754431f3e9ce4f16bc25ff9c68d8cb70ad42ff1545",
+          "size": 210456
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-10-30/part.parquet",
+          "sha256": "22537fa75bf3aac0101b97ab9f4fe1c842e3858dfa0adb18fc73e0f2c8bf0653",
+          "size": 210925
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-10-31/part.parquet",
+          "sha256": "d42128b1470106bf7157b784cc0ff6a68db20986865d16c825fd68bcf9024a72",
+          "size": 210866
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-03/part.parquet",
+          "sha256": "c038b16bd9034d8b0aa8a829d55e0f934f09d545fd6a457f262d64f3b11fa1fd",
+          "size": 210741
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-04/part.parquet",
+          "sha256": "8e998d416ab3958a867d908f1d87a117573ca550041a33f7c33ab4a46dd4d931",
+          "size": 210337
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-05/part.parquet",
+          "sha256": "63916a7e786c51da7025dec1e79ffcc5d3c28531b094c45d2fecae24ce7b5a81",
+          "size": 209940
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-06/part.parquet",
+          "sha256": "d21ac877459e934cf88150c50711aed85d752b3ab54bd008f4c5a3395e3b6200",
+          "size": 210674
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-07/part.parquet",
+          "sha256": "5b4543c1515d760f7c0ddb9e7fa0788e3d8a5378851ef3057148aa8aa7b53352",
+          "size": 210249
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-10/part.parquet",
+          "sha256": "8dbcdf0d9b7ee2298febb42aa1533a86b91ebb7d9c40f6be8e7d74ec46553f56",
+          "size": 210667
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-11/part.parquet",
+          "sha256": "e7c78e713fc9bd6a992d4255e7bf3bfc80e1ca26f0a601a60bdb6e615285222b",
+          "size": 210537
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-12/part.parquet",
+          "sha256": "634c971b7313b58be92ab711de11d2ebbb089b587e892f2047c372d99739c95b",
+          "size": 210438
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-13/part.parquet",
+          "sha256": "0cebb6ba20b10b14c1d4c164dc0bd4d3ee36eb2aa8f1b54484fb14541fde8f27",
+          "size": 210892
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-14/part.parquet",
+          "sha256": "78728ed75864a79d6cf5f6408d5b7bfe7864d5c942eced51dcfcf807e551e93d",
+          "size": 210527
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-17/part.parquet",
+          "sha256": "53173d9976feb470b7531f0effe9407d2ab2248ff7acca21529a522b4e26d346",
+          "size": 210318
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-18/part.parquet",
+          "sha256": "1896228dee3ed200cc37263fd42e1cb88f10f7af4a5bdcbb0004f449912a5971",
+          "size": 210468
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-19/part.parquet",
+          "sha256": "9df7a1a2fa27e2f779101ff8268af3a0be6e1e3191e1102048a5714fc88da610",
+          "size": 210037
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-20/part.parquet",
+          "sha256": "36eb368a3471cfadbbf9bb7b7efe2d74fcf9632c58f3ded6d06e70fc8b061089",
+          "size": 209693
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-21/part.parquet",
+          "sha256": "892c4750ac17a4e3484423324f97f6a721c16a52020c095aafb38b25e020b925",
+          "size": 209916
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-24/part.parquet",
+          "sha256": "e1bfa169dff52c4561afe6e052b2f2ff8b2090345372b53ef1972a1b29036dc5",
+          "size": 209542
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-25/part.parquet",
+          "sha256": "269adb3456316f7a4c0ccae233e11bd10e68e0b8f363f2d261f22effc4a8744f",
+          "size": 209880
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-26/part.parquet",
+          "sha256": "5b39d68ab2a09cfe9e36d5c547474bcc9b1ee5acbf38afb5e1b2b686b5b71e4b",
+          "size": 209514
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-27/part.parquet",
+          "sha256": "725e040c9b226f6e3b536b942ab55dae5f08d1c3e8d4adf2371a7f6f7b13ee28",
+          "size": 209598
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-11-28/part.parquet",
+          "sha256": "64e0f4061406e05ff07af129e3a9772d5fad584a4241d07089786416b374aa4f",
+          "size": 209495
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-01/part.parquet",
+          "sha256": "8671841f3a40f84b3bd3f64acd924e2525a80cc0938380e00eb2259c0fa918ba",
+          "size": 209517
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-02/part.parquet",
+          "sha256": "ddf0fdb39ada1955a3159efa5e7eb90bd3eb43d1664820e410a76e9be045824d",
+          "size": 209366
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-03/part.parquet",
+          "sha256": "4276e09b91260f7c288fca751dee00d6618abd75ce757f534768c9f1d726d241",
+          "size": 210022
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-04/part.parquet",
+          "sha256": "2fb8791a64eec707cf161c44d6044cc683c86f3e1fb5a7b53d26513d5f1663b8",
+          "size": 209337
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-05/part.parquet",
+          "sha256": "56a2ed785a20096ea85f1cc17cda505ec3bb5f76f6844833777655c837a2c585",
+          "size": 209844
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-08/part.parquet",
+          "sha256": "d606173cd82331b7d8fea2b4a3e93c85a94dd4165b6efe986d06e4424ab00e93",
+          "size": 210598
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-09/part.parquet",
+          "sha256": "a538fe939f974484f13a95fd9cc889cff98dce18ea956449a4b2993e888f166d",
+          "size": 210341
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-10/part.parquet",
+          "sha256": "01ca7916aeab40e47d2e4e2aa9aa49a4537d0dc01c826617dfc702c6f93fca2e",
+          "size": 209877
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-11/part.parquet",
+          "sha256": "c54c0725f48e1160ecb95ced59edf4846a9a1906361db2edd21d01ca1063ecd6",
+          "size": 210240
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-12/part.parquet",
+          "sha256": "d2d0a40351ac5eaa77d6590e1cb45abeb5279373733f1e0182e0abc804478fad",
+          "size": 210680
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-15/part.parquet",
+          "sha256": "257f921dd25bd07282f337e3720239ad531c48a1cfa51d624541e1593badb999",
+          "size": 210123
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-16/part.parquet",
+          "sha256": "748047ce587b128f111e23610cc409e9263eed4b9b88b5e82056d9e4273a10d0",
+          "size": 209908
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-17/part.parquet",
+          "sha256": "85f25d998154af8a4858b60cafe8505084b8c8589197d739297bafe3a977d02f",
+          "size": 209786
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-18/part.parquet",
+          "sha256": "ad563dfcc4cbbe4e665ab56720092628b5fe71f32768c2dc588d6e12a573e284",
+          "size": 210075
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-19/part.parquet",
+          "sha256": "964af3829d839194e50a8c014315c3d2163c8ffbf5718ed25018244b2ae5f287",
+          "size": 210270
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-22/part.parquet",
+          "sha256": "ba7c746f4f3b19ceef6df3bb6e95aaef480e23c6856b56e40f544a0c295cc876",
+          "size": 210919
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-23/part.parquet",
+          "sha256": "5d82283e259020510c8cd8c62dbd17e382f2612d477df9ae455625740b45d4a9",
+          "size": 210695
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-24/part.parquet",
+          "sha256": "930c99adac3e2b9df051159827bc9a97ef0a30282dc98ed6ef5df8f9698f7471",
+          "size": 210920
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-25/part.parquet",
+          "sha256": "d07d5247fe5ef575bc8250bdead9d90486d0299a2cc7f894bb81d14fc32dbffc",
+          "size": 211473
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-26/part.parquet",
+          "sha256": "8a5771a4d68f20e936ed58d44522f3d7682ccf97081c0679b2efc3abf7daad21",
+          "size": 211377
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-29/part.parquet",
+          "sha256": "3a7bfeb9cb4299ff5d5723b116f45e1e041a7c05c93b0a4cd41bbfd9d97094db",
+          "size": 211548
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-30/part.parquet",
+          "sha256": "42394ce4b9675a21e8c97ebed3385cbf76699a9d79a902d31b247ebd2fcb4d9a",
+          "size": 211486
+        },
+        {
+          "path": "kline_daily_enriched/date=2025-12-31/part.parquet",
+          "sha256": "748be45e61aba3d1c1435d88197a2613cdeb82bd12163b67b9c0c94dd0ffe8a1",
+          "size": 211305
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-05/part.parquet",
+          "sha256": "e868db18e77088e5e54265f52de3e5a7bbd09f29655b9e69225123fcd32a4de0",
+          "size": 212281
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-06/part.parquet",
+          "sha256": "b26829d986b502a1754dae28fcd6bb99d5ee61cc876c1f99b4f6f37df873626e",
+          "size": 212968
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-07/part.parquet",
+          "sha256": "852857a01998b42805814525b83feacc6a0ba856d5499bb936d34288ca38704e",
+          "size": 213159
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-08/part.parquet",
+          "sha256": "2679774d0df3af748fda791bbac124a22ea50f682f4a2236f53ed72f0cbea523",
+          "size": 212929
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-09/part.parquet",
+          "sha256": "eeb977a8bdab1b2826ee5a8dc04af95cea9cf9503a92ec1e7c24cf0239a1b9b2",
+          "size": 213676
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-12/part.parquet",
+          "sha256": "9e6cd581c112bf5d92b03318189a0936b065d6164b645748904f192c904dd5f8",
+          "size": 214262
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-13/part.parquet",
+          "sha256": "b1ea131a57c1c6c77af634697af7c8fc4a3a442f45c554476e003d19f9cf1c45",
+          "size": 213661
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-14/part.parquet",
+          "sha256": "edb48a325c313f957cef444ce84284f946a955404c9da083454059c6674caaee",
+          "size": 214098
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-15/part.parquet",
+          "sha256": "12cbea6e01c056fc47bae2f326d84f2e2a7d2d5e68f4509ce52164856031c59f",
+          "size": 213221
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-16/part.parquet",
+          "sha256": "e0735ed91c9e79c258630f58d20ad371cf1cf543c79af66d70c890255b6def34",
+          "size": 213414
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-19/part.parquet",
+          "sha256": "c5554e46a940b49b96fbdc31ccd4d4d1d2e881bd491b845a370c30357cff4d5b",
+          "size": 213325
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-20/part.parquet",
+          "sha256": "2831279e5859e43baaceba3703500edd080fd1989405be6428ceded082022d37",
+          "size": 213783
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-21/part.parquet",
+          "sha256": "f1ae84a208ebd51c63a952e1b3c2aed60e1359a2a2258756e85a721bb85c9b60",
+          "size": 213835
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-22/part.parquet",
+          "sha256": "5b023a49005b7854480c817e6dd542f62aab84393e2cfddb26a6e69373d83abc",
+          "size": 213907
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-23/part.parquet",
+          "sha256": "af7943af4fafcfc0d524bc87febe6da627ca6876c7a9793d3b475de8ed85f149",
+          "size": 214584
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-26/part.parquet",
+          "sha256": "d7b3b4a69bcd38563bef989c7600b9e7e8fc6ff213e6cd0bb5e08267cc5af3d1",
+          "size": 214291
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-27/part.parquet",
+          "sha256": "6cf80a58c01c3b16b1f724a63c94e715cbd42e86d171801826154f4d08edcd40",
+          "size": 213585
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-28/part.parquet",
+          "sha256": "11fb5b2b5702886d7d4f9a72ed62eedd065a7d876e34a8bdad88f7f553b2be45",
+          "size": 214161
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-29/part.parquet",
+          "sha256": "2c2ebf79ede4e358689599a7ef267403b66a628c371583193dc501ce338615e4",
+          "size": 213994
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-01-30/part.parquet",
+          "sha256": "dc0b4ac09d0830b4f20040f79de477c14a6b4db7c9c656e125cfb8fda66a4e88",
+          "size": 213697
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-02-02/part.parquet",
+          "sha256": "6f32ee30c450cbc5fad402b03cf45f12089b4a895eb502be21360ed4695eee51",
+          "size": 213226
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-02-03/part.parquet",
+          "sha256": "88bf07a4ea73a0c2d1d7cb7c95105544b8868ab92acd1c963aa938b1c332925b",
+          "size": 213289
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-02-04/part.parquet",
+          "sha256": "9c0b1372ac830235380e5a1e2d6532656002c60288395563fe8efa13936fafe5",
+          "size": 213534
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-02-05/part.parquet",
+          "sha256": "9706e6c2caff08e2ba04290d9c6dc5134e741981d112a534ebe7892f0fc47884",
+          "size": 212884
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-02-06/part.parquet",
+          "sha256": "8932ca544e2cb35f7b935460c500c2d70ee6be4a7eb13819635b3ba6476e42fe",
+          "size": 212685
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-02-09/part.parquet",
+          "sha256": "695cdcfe1d5654657e6343757025d7ae78e76b630c58738a34071988a0fd0fdd",
+          "size": 213079
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-02-10/part.parquet",
+          "sha256": "3b4eaf8e687ef0c491a45d3f105d5be80365be35a9ec64584a300769cae3dfcc",
+          "size": 213116
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-02-11/part.parquet",
+          "sha256": "5cbf4e96604460e1b29ffb32e560cc467ef24faa36923ebb92204099bba8e810",
+          "size": 212909
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-02-12/part.parquet",
+          "sha256": "34f4b1ea3212e38a5c5e6747a668c3306b92f97734ed297086a02677d364464b",
+          "size": 213220
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-02-13/part.parquet",
+          "sha256": "6e44c4e853677237f83c0afb809a1e7ee1419352e6dc087ae36af485c898e186",
+          "size": 213065
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-02-24/part.parquet",
+          "sha256": "7bf3d58e753a562be267dcc7c3b144d833edffcba8ac0cc844aebbd4ce31b335",
+          "size": 213705
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-02-25/part.parquet",
+          "sha256": "bec34ee196e94a0ed0effb01e14bc3758f568e62ef1f1a66def49d8ab6dc9457",
+          "size": 214067
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-02-26/part.parquet",
+          "sha256": "05b9061e94a80bbf501236e25f1846b0c323b0eb357cb89bde94ef006de8719c",
+          "size": 214201
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-02-27/part.parquet",
+          "sha256": "b9ce190abf548a46f7d12f4743ffc1ad5719781b3c9c6fb9b9cdb88492f7179c",
+          "size": 213970
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-02/part.parquet",
+          "sha256": "a6743e91ac6982169c894cbd474fceb758f9b286a3bda850ce74515a0c303604",
+          "size": 214049
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-03/part.parquet",
+          "sha256": "b5184b7eac730ab61f77071a991d30bf784ca5cab3bba5b5019efcc2f270d941",
+          "size": 214569
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-04/part.parquet",
+          "sha256": "aa0d85e39726cebf452712fa4566e44e548a86dc1cc386f5f308611cca0d25f8",
+          "size": 212915
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-05/part.parquet",
+          "sha256": "47eeaeaf5e72f88a56a17f5aeec476820279b5438a8b5cf1995a798129504b42",
+          "size": 213446
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-06/part.parquet",
+          "sha256": "554f3eea5b7c90fb25f4bf7b011b934f8fa558ff49be8c4556494ecbf4ab83d4",
+          "size": 213526
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-09/part.parquet",
+          "sha256": "ab976bf8e403de977824865a22452537d1055d5d72e63f6cf91659767463635f",
+          "size": 213988
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-10/part.parquet",
+          "sha256": "4eaa29c939861bf1e7ec8e5116dd6a5ab3b701a5211445cd1d969c5564de5c13",
+          "size": 213845
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-11/part.parquet",
+          "sha256": "26dac31c8b3393947ce73051e430e2372352f5442bd17935bdbd841570ebfd70",
+          "size": 214379
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-12/part.parquet",
+          "sha256": "1dcb7148e820b1fc864bfc47de1090717a0e6525bc605640038b8d7980b90bc1",
+          "size": 213983
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-13/part.parquet",
+          "sha256": "5d991463d9ecdb73402cae39deef3ede2cb03ad5aa879d1bb7cae1f34e768f9b",
+          "size": 213643
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-16/part.parquet",
+          "sha256": "11562ab711b6d91e968558bfaecc69593e442d9f45af89e6818af1ca7ec7b55b",
+          "size": 213593
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-17/part.parquet",
+          "sha256": "7513a1230a7745a463c3341f5042fecf0e3b8a6f8fcc73b014c4dde0822c7ff3",
+          "size": 213422
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-18/part.parquet",
+          "sha256": "6517bcfb28bd81fcdb3523752992a667b647019ef351c55b143548155c391cd9",
+          "size": 212918
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-19/part.parquet",
+          "sha256": "fe1975949372a6eeb4be3a991337ab9de73c4efbb59127c6b0fb2ad230856435",
+          "size": 212760
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-20/part.parquet",
+          "sha256": "1b1192729e69b7739c3ff308190b91286c89740175fc12b67b5a4b9840590faa",
+          "size": 212860
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-23/part.parquet",
+          "sha256": "207671fa653ad39b60d86bee1e009c0f75c2da7d777d5c32d373521fb89ef601",
+          "size": 212543
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-24/part.parquet",
+          "sha256": "fa707f7d388ff9dab23fcba83aba48d6d61d240627e71b18abb438af00a55870",
+          "size": 212233
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-25/part.parquet",
+          "sha256": "3baa439505fbb345e06da170a71597a52e612e2cdda4250f3ec90154c177fc51",
+          "size": 213123
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-26/part.parquet",
+          "sha256": "ab5ae758bfdaf82f1c5b732ebdd1bebc1dcab41361dc63ea57751e745ad88a54",
+          "size": 212497
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-27/part.parquet",
+          "sha256": "16ccd6035b347218031ddb05c45a0b0c4e2f612950dab9b548c783ec5410e19f",
+          "size": 211836
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-30/part.parquet",
+          "sha256": "d5673a37e11f6b635069ee64cad09f2d6885d19e6a0d97ad32d8be7877e5fcc4",
+          "size": 212271
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-03-31/part.parquet",
+          "sha256": "cb47d6d2686708e862a487eba0e5b34e16a26f2a9685e0b23532f6cfd7f51686",
+          "size": 212491
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-01/part.parquet",
+          "sha256": "db61c69fc9afa9b73a6e904e00ad2023b617db1c814d6c7a2b97122f1852c507",
+          "size": 212610
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-02/part.parquet",
+          "sha256": "48a40800a7b321241dc08ca9696c28fa691da601b1aa99b8cf1831a9cd33bb4f",
+          "size": 212277
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-03/part.parquet",
+          "sha256": "cd65fd586637ef96dfd65a96585679025887eed4dd2b2507d46cfca00104a8d8",
+          "size": 212106
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-07/part.parquet",
+          "sha256": "a8e9cdfe50766ad787c1955ee47e84c60578b13aca80166e395aaa682ea1d1ea",
+          "size": 211924
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-08/part.parquet",
+          "sha256": "e8b54d45869de3fc0d0221aa1515504f4ddbdabc2dd8df056202b435b7140db7",
+          "size": 213469
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-09/part.parquet",
+          "sha256": "5f4e5983e55ccd5ac1c1ff409b0bbbae1177c59f7faf255e0ddeb6cb92ac41a7",
+          "size": 213285
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-10/part.parquet",
+          "sha256": "3f465ab180c0a1afdd60baff276184fd922cc897d69f7b1f67a3991ccb0f8d51",
+          "size": 213549
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-13/part.parquet",
+          "sha256": "4fd0914e323321a2d5ad13d48ad096fc9fc92f1f3ad4e0ba8ba270f9b95a8321",
+          "size": 213513
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-14/part.parquet",
+          "sha256": "42481ac804ff0e4a3612744f98e80d7328296090f5374d2f19f35aaf9b270fd1",
+          "size": 213495
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-15/part.parquet",
+          "sha256": "d17bf2a1c8ebbb9f4974799dc727e8a161460f47b0feb8e9020054e9758ce4a1",
+          "size": 214307
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-16/part.parquet",
+          "sha256": "d39149b625d00f9bc66a2e941a9eb3ae833bb9ca71e9baf5b0f4d3a64ee12ecc",
+          "size": 214352
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-17/part.parquet",
+          "sha256": "bbf0121e6cf7989e7295ce31319344210dea1a0cce6dbabac3c5af88cd9c283d",
+          "size": 214409
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-20/part.parquet",
+          "sha256": "0aa2f82478c9ac50faac713657f68fe7563eeff80d777fe964924fa4f1620738",
+          "size": 214630
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-21/part.parquet",
+          "sha256": "b6f93c863576745434ff7bd6cb0a07d2ce4ca9f4bf6ac86a5d73df397e9cd980",
+          "size": 214564
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-22/part.parquet",
+          "sha256": "c52ef36061b36081c554670801fe525399cea832e84e1220d65c1ad5d9a7c2c3",
+          "size": 214672
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-23/part.parquet",
+          "sha256": "8f5bec296a6e4f47ed43d4600fb582031a4bcb672c6a415f3d8e4bfb1aa6fc11",
+          "size": 214670
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-24/part.parquet",
+          "sha256": "dbe733c1c952bda0e94292cad29e33bdee3b012ef771c762961a38b486c69b51",
+          "size": 214687
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-27/part.parquet",
+          "sha256": "12ac6786df936a5a5061fe6a5b2eb06214dd07c1d18829adf45e0ddecdb3530a",
+          "size": 214691
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-28/part.parquet",
+          "sha256": "791c68278480b6439255a3cca2e9faa9395d1bc28c2caf2e23acd0fbbb807c60",
+          "size": 213987
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-29/part.parquet",
+          "sha256": "3f1ea0ed59b9e047cb8c1baa52b600b5cee60653fd336289cc739fa5a5e9d35a",
+          "size": 213541
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-04-30/part.parquet",
+          "sha256": "bb27a39f057ea5d2ce440cb3f7e8ff3e16e965f385cbdac1b280d0e9dab79bf5",
+          "size": 213926
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-05-06/part.parquet",
+          "sha256": "906e5305dc607f31bcc9293fbdb29f86f2bb06e43b5571c0943728ab300aee51",
+          "size": 215649
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-05-07/part.parquet",
+          "sha256": "4cc158d9934ec0cc72bf129e77f2992f4457afb46bacd29436d3f548d5450c46",
+          "size": 216300
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-05-08/part.parquet",
+          "sha256": "9e73bfd2648a7f87dd102924305eb63e4eb95cccf525fb8019f498e698f0aa42",
+          "size": 216043
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-05-11/part.parquet",
+          "sha256": "2e7ba96fd5933abecbe75753f6ab23327af4d99d1befc3a988354b37e7720e8e",
+          "size": 216669
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-05-12/part.parquet",
+          "sha256": "859009f440e8ddf713416d9a93c296c887d8de6bfa063079caee0b0cd35439c3",
+          "size": 216053
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-05-13/part.parquet",
+          "sha256": "cbe3c14544aee2740da0d16c8eb7cf003c7820ddd3cad62fe70e4fefb1537fdf",
+          "size": 216573
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-05-14/part.parquet",
+          "sha256": "7d1d951892135c1c8910feafc27e3243b0b51d9cde0a0c1b1b32df6bda383e6a",
+          "size": 216349
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-05-15/part.parquet",
+          "sha256": "a6263833cf0fcd91b611ef5babcd552b3784a99cc34b338ed7ba72778ecde900",
+          "size": 216363
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-05-18/part.parquet",
+          "sha256": "c139cd777d41431d6c80f2679ee6e66ab315a0eebf04b0f2a9272ee3d96840e5",
+          "size": 215963
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-05-19/part.parquet",
+          "sha256": "2af83f5336118aec1b8f927046fbb752548664439ccc8899835ebdd13ef5e298",
+          "size": 215788
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-05-20/part.parquet",
+          "sha256": "e86d4395c888a8f2f5177d74f46dedf95f914810bef636fbf968e4bd574d22ee",
+          "size": 216296
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-05-21/part.parquet",
+          "sha256": "c0fcaf004dabacb53f07fc5efcb804b1929e305c1c0045bd7e32f7c67fadfdda",
+          "size": 216523
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-05-22/part.parquet",
+          "sha256": "90280e839eebd724ec412d757e6eae30829d8abf710748b702e1f16e7ee862a8",
+          "size": 216037
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-05-25/part.parquet",
+          "sha256": "db369340d462aeea56fdb5413d59e51f5c9dc5bfa1a9cdbbfe942ba161ff263d",
+          "size": 216269
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-05-26/part.parquet",
+          "sha256": "50309ea3d46b55215ca8e8ce5d870467716d71bc2608d701209e2dc94b9dc2e7",
+          "size": 215963
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-05-27/part.parquet",
+          "sha256": "1f866c60729509a5b1684b5f99752413eb53983cb840ff7e0e9f5ff1507f20b6",
+          "size": 216043
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-05-28/part.parquet",
+          "sha256": "6b894a118eeda994d5f8eb0ba5070ce1d3c6d5f1651980b32386e7ef38daeee7",
+          "size": 215816
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-05-29/part.parquet",
+          "sha256": "dc4a509b55dda813f733396d5ce4e6c9a50c9eb81791c039a0182049d0897995",
+          "size": 215982
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-01/part.parquet",
+          "sha256": "44911c50be81ac72a8d82a31bd2ef5dffd550ee881817bd8f4cfc4ee7b8c8e7e",
+          "size": 215401
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-02/part.parquet",
+          "sha256": "569397c94a97d3e5a3e7562082ce5bc4be62477c46897a02d06160fecaf11195",
+          "size": 214977
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-03/part.parquet",
+          "sha256": "94caa146170ee424be15e2695809ba510022f2339c159dc32bee1380a3fc7a31",
+          "size": 215046
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-04/part.parquet",
+          "sha256": "078dbb883f440e73b0ea95830ccd9b909f8a446a6015084ba11c0a65e0aa1bb4",
+          "size": 214754
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-05/part.parquet",
+          "sha256": "f410da352577cae8d0148af5508a8a9058917f7efa48b45cd9e5fbebbaf829b4",
+          "size": 215621
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-08/part.parquet",
+          "sha256": "fa679c10f2e74295a43b59697626e1e62864036ac80e3a3e3b044e62c6c844f1",
+          "size": 214766
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-09/part.parquet",
+          "sha256": "b09edfb71b1435f986f7dab871b05768c6ea3293418aa7604937a012435fb38e",
+          "size": 214439
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-10/part.parquet",
+          "sha256": "49fc297ed03ab422f6c1dc9d2aabd1a92227bc62a32c0a0f50c45add7d2722db",
+          "size": 214457
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-11/part.parquet",
+          "sha256": "d529daae00e4288f9c7b4e26dc6dbbffab3f5b9f579d6ae864cd50235aaca992",
+          "size": 214288
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-12/part.parquet",
+          "sha256": "3b09d80e339ccc4639892fc1e7283bf231c59deb0c982f2ae999b7f85b3b4cc8",
+          "size": 215044
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-15/part.parquet",
+          "sha256": "7196740ba684582f8c43fd8fb97014783e813448b906f43d10696a36e3585e03",
+          "size": 215237
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-16/part.parquet",
+          "sha256": "19942249345193946e23f157bc14f1189ff3c32530319e4bc9c47b68c5212788",
+          "size": 215633
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-17/part.parquet",
+          "sha256": "bd3417ecbd4bd604c47181c0f1c76bdb3e9b1a9234603aae9c73bd2a8d93a336",
+          "size": 214948
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-18/part.parquet",
+          "sha256": "a9a8ec5fbfd058571552f556d699cd3d55f8d5fccb0aada80fadb2fdd815bf3b",
+          "size": 215454
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-22/part.parquet",
+          "sha256": "7fef4a0901a43ba0d944921edf4d4880c3dc26c4b4e86594ef2d0f5f0677b288",
+          "size": 215797
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-23/part.parquet",
+          "sha256": "7c8e332a972f891a8719508402b2cbb5873824ac20413231dfa1016f31104812",
+          "size": 215852
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-24/part.parquet",
+          "sha256": "e234806a9bc796d6408ca8ede15b582ecc4372783ac468ed6f5e9c1673104585",
+          "size": 215796
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-25/part.parquet",
+          "sha256": "dc9fb2e6cc6fc318fdea207796e1de8e23cad28b69821f397873cae08b8afaa8",
+          "size": 215645
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-26/part.parquet",
+          "sha256": "5bc2ed438a67b43e86ecb960f89d8f50c7e809e007c67a4242a30429f2579512",
+          "size": 214996
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-29/part.parquet",
+          "sha256": "5823816dee31a431ec871e16e1f1317b01c5ae9676438b956b6918e486b6850b",
+          "size": 215391
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-06-30/part.parquet",
+          "sha256": "b06b4ab1440ef800f50feebb661ea0fbefb07f203d4a2d673f5059d7e29ac166",
+          "size": 214992
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-01/part.parquet",
+          "sha256": "a86d6e42a6767946a54706020034936c6431d5b514403c92a600464950d3265d",
+          "size": 215889
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-02/part.parquet",
+          "sha256": "6c1ae5e4ca3c0e9f3977a209dcfb789eb78fcb3f45bed90336e9159921460e3b",
+          "size": 215825
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-03/part.parquet",
+          "sha256": "3ba2d74f4b33b26e236a570ee94dfcd53c60f2d8d30e292c8b861ed4bfd2ce2b",
+          "size": 215651
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-06/part.parquet",
+          "sha256": "e9116beea206db8f65d33d8fe6e917d10ec9e4689bcf53e8f2adc5b6b98c8391",
+          "size": 215492
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-07/part.parquet",
+          "sha256": "adba33fc8f2acd7ca0b6eaf66476e394c337c09640ed1767962a1b9f3a355552",
+          "size": 214620
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-08/part.parquet",
+          "sha256": "a6e0dc331248aacc981b3c92fb9e261c0cb5e28cbf54b6b54f0978425ffa31d9",
+          "size": 214519
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-09/part.parquet",
+          "sha256": "1fe9eff8652398316c306dd01ea726bda57df02ff242b5b890d17e9ee92b604f",
+          "size": 214573
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-10/part.parquet",
+          "sha256": "b5c04a2b3dabe547ef3a66000feed1a3648f865148147df74478f46719cde01c",
+          "size": 214960
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-13/part.parquet",
+          "sha256": "0d66434c02ec375e6ba4843f864569f0403d1307f6500bd3d382bf268a8dcca1",
+          "size": 214361
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-14/part.parquet",
+          "sha256": "5d73b9e1e1a1c0cf87b894a0121915099cdd1799c6f5b1761eb6df240a279f7a",
+          "size": 214094
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-15/part.parquet",
+          "sha256": "50622fbd9ceecb4561f443bfff724cc4aa18e238c96dddf35364367a717ba51f",
+          "size": 213620
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-16/part.parquet",
+          "sha256": "58298b343335bd7d5b4ca037ec7d8f014547103e9af92287bceadaeb6bf79421",
+          "size": 213324
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-17/part.parquet",
+          "sha256": "e348c86e4cf106c4fc54c552326dd11556906c22739aa83b4a3dbd714d4bcb23",
+          "size": 213766
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-20/part.parquet",
+          "sha256": "8845a522f7e4441fa2c68c8c17fdaf4b292b7f68f9fa45beab5e79ff0acc371d",
+          "size": 213173
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-21/part.parquet",
+          "sha256": "b9420662c99fbb9d0929dd8f0fd4392702e098c2260a1bbc257ea1ebaf37ebda",
+          "size": 208986
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-22/part.parquet",
+          "sha256": "78f38e499015cc5ac9cbda4b78cc504f386053cf3448e69d9cc387e90e09e187",
+          "size": 216422
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-23/part.parquet",
+          "sha256": "a43f2bc3c5e30555315c44ea812e05fb5ea824bf9271017a5b86af4bcf910a71",
+          "size": 208860
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-24/part.parquet",
+          "sha256": "0b0eecbca97ce3d0dec61fbf8bdfa36bd9a1f44193f14e666074c55aee5e6395",
+          "size": 215475
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-27/part.parquet",
+          "sha256": "f59cc242d02bc7e6724661b64c703a3106c9a84c998584fa8f148ccbc5dd25e3",
+          "size": 213661
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-28/part.parquet",
+          "sha256": "e3677f6dd1aff3412c96875f44e99de0d2e3e604cd9f3be2013806d75d59261c",
+          "size": 213405
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-29/part.parquet",
+          "sha256": "53391bc58a6f34b2285e6034b3ce1ae3d55e6a9293579b3281b9cf3fd49c412d",
+          "size": 213255
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-30/part.parquet",
+          "sha256": "95a7fb033aee646707924cf1885da651d56f39f5e6f2d42c4fab0e231f03e346",
+          "size": 212787
+        },
+        {
+          "path": "kline_daily_enriched/date=2026-07-31/part.parquet",
+          "sha256": "28d2d02ddd160f934a99d7e229a7b8a62e0e8b4a4e48fb3ff2ac78865d7d2531",
+          "size": 212323
+        }
+      ]
+    },
+    "raw": {
+      "aggregate_sha256": "4fd9f74299533d78a1be695319e827a68de6ffe491403fa8d52af2682555f5a4",
+      "file_count": 251,
+      "files": [
+        {
+          "path": "kline_daily/date=2025-07-21/part.parquet",
+          "sha256": "020d73c02d9e664da157cab133efd306d657d9c0e8325757e4a14fb88d07d5ee",
+          "size": 115183
+        },
+        {
+          "path": "kline_daily/date=2025-07-22/part.parquet",
+          "sha256": "c6039913820b5b4115811bd3ba051ef763c3364c0b52e2e3cb24f7fefd47b605",
+          "size": 115759
+        },
+        {
+          "path": "kline_daily/date=2025-07-23/part.parquet",
+          "sha256": "0d650e623ac9341b5eef501f2e4e444ee38182252206ee370420f2ad872af90d",
+          "size": 115644
+        },
+        {
+          "path": "kline_daily/date=2025-07-24/part.parquet",
+          "sha256": "5cc8a9bbfdc4cd9c13738dba2c41a8a125754c8c336ca464ec8089b724cefc95",
+          "size": 115462
+        },
+        {
+          "path": "kline_daily/date=2025-07-25/part.parquet",
+          "sha256": "e72598f7ce0aeee6e2136810bcfdde90d0907cf5ef7b4c859f261bb623a614e8",
+          "size": 115436
+        },
+        {
+          "path": "kline_daily/date=2025-07-28/part.parquet",
+          "sha256": "e0ba541b18a61b581f4dccf78b4f250b7e6205c02f1ae7f5d710b7d4909376ab",
+          "size": 115524
+        },
+        {
+          "path": "kline_daily/date=2025-07-29/part.parquet",
+          "sha256": "ede34f9d2b76728ad366b9ff1343610dca3196310cded7bf4c085922ac036117",
+          "size": 115804
+        },
+        {
+          "path": "kline_daily/date=2025-07-30/part.parquet",
+          "sha256": "86068390004e4ec49cbb32a658c7c743448382f5b141de2cc6d2fb7d3f19bcbc",
+          "size": 115692
+        },
+        {
+          "path": "kline_daily/date=2025-07-31/part.parquet",
+          "sha256": "b167142a9f9fb6f6361bfc0373f0194058c7e14d9803d94752d83ef2cd6d2cc1",
+          "size": 115750
+        },
+        {
+          "path": "kline_daily/date=2025-08-01/part.parquet",
+          "sha256": "43303b26c4584b0fe2c74b2344f590d104dec25ffe3cf65365e09f968d4cb98d",
+          "size": 115290
+        },
+        {
+          "path": "kline_daily/date=2025-08-04/part.parquet",
+          "sha256": "355f5473c3326504999fe7e6e27b107380cd11930c701466ce6d1db30baf89f9",
+          "size": 115040
+        },
+        {
+          "path": "kline_daily/date=2025-08-05/part.parquet",
+          "sha256": "8245d118c4b081af0f062407b16962814f61c0b27147c8ec9a7dad8abadbbe8a",
+          "size": 115348
+        },
+        {
+          "path": "kline_daily/date=2025-08-06/part.parquet",
+          "sha256": "731a5fd6e62dc496c84df04f9b577faa3b0202d7c042e8c503b64b94bdc8cc84",
+          "size": 115733
+        },
+        {
+          "path": "kline_daily/date=2025-08-07/part.parquet",
+          "sha256": "b964cd914b61c9c23164d6ca3dceae92b381f1da6e02e34517aabeca606a290a",
+          "size": 115816
+        },
+        {
+          "path": "kline_daily/date=2025-08-08/part.parquet",
+          "sha256": "a43a5f5a06155e29a7a48dfe20befb160441559dd861e92fc434f76e7558fae2",
+          "size": 115579
+        },
+        {
+          "path": "kline_daily/date=2025-08-11/part.parquet",
+          "sha256": "bcca70e8fbc816ae6eca28662f87561f362de6f65232c11d08c4481816789fcd",
+          "size": 115938
+        },
+        {
+          "path": "kline_daily/date=2025-08-12/part.parquet",
+          "sha256": "7c0766d3c4e1597d62f3b28f46c4872396dce556ec1eccf9a0757ea2b3439f83",
+          "size": 116090
+        },
+        {
+          "path": "kline_daily/date=2025-08-13/part.parquet",
+          "sha256": "1d3a5903ea769f6882ed243eb7e847da216368984bfefc71da855dfa46b9874e",
+          "size": 116442
+        },
+        {
+          "path": "kline_daily/date=2025-08-14/part.parquet",
+          "sha256": "dbe6a4f1375a3a4381853c8bed5f5b60c91efdff832d8d6c77fac262f5b96037",
+          "size": 116563
+        },
+        {
+          "path": "kline_daily/date=2025-08-15/part.parquet",
+          "sha256": "a2749aa59faec8d9bfc91db84d75ae28da20e45ebf4267f3f5f740b126b97e20",
+          "size": 116633
+        },
+        {
+          "path": "kline_daily/date=2025-08-18/part.parquet",
+          "sha256": "321cc00ec4575e4e95231ebf10448443f49c1fb28151644ac1763115bf18ba3d",
+          "size": 117303
+        },
+        {
+          "path": "kline_daily/date=2025-08-19/part.parquet",
+          "sha256": "182c07bd11f263648fbcc1e6641bd5efc5bf4ee46ebca838fc52f7b8029c796b",
+          "size": 117051
+        },
+        {
+          "path": "kline_daily/date=2025-08-20/part.parquet",
+          "sha256": "79601d4b3626f4d345eb0148b876ee37078635b9f5732d331ebbff2cb55d2e5d",
+          "size": 116921
+        },
+        {
+          "path": "kline_daily/date=2025-08-21/part.parquet",
+          "sha256": "2a68021657f5d951b56f262ef19fb6980f730f4bfc781b66d670df7eb6a7c360",
+          "size": 117082
+        },
+        {
+          "path": "kline_daily/date=2025-08-22/part.parquet",
+          "sha256": "44143af7ec2c0e3d3387fad04828cfe1da17249336449b2cfaf96ec3f4d3dc1d",
+          "size": 117106
+        },
+        {
+          "path": "kline_daily/date=2025-08-25/part.parquet",
+          "sha256": "3234a9883305aa383fb3acdaf559bfcacd68b0e64f7441e0ce873a93cef9c3f4",
+          "size": 117798
+        },
+        {
+          "path": "kline_daily/date=2025-08-26/part.parquet",
+          "sha256": "ef7cf0cca14bae8bf254c3c15bf994d0f8257d58e96c053b781b98aee8e081b1",
+          "size": 117237
+        },
+        {
+          "path": "kline_daily/date=2025-08-27/part.parquet",
+          "sha256": "14dc07a588759a828242d87d1adc4231f19c2c251714a98e69ce6e5f9e44e292",
+          "size": 117633
+        },
+        {
+          "path": "kline_daily/date=2025-08-28/part.parquet",
+          "sha256": "9c01ca52142b2b35f6ea1229ebdad9d062319265ffa08be4525b591710084960",
+          "size": 117195
+        },
+        {
+          "path": "kline_daily/date=2025-08-29/part.parquet",
+          "sha256": "c9374e6f4c0817dcd5c8785344fd5592312ddfcba42c1acdf7c80d7d1a6ab277",
+          "size": 117293
+        },
+        {
+          "path": "kline_daily/date=2025-09-01/part.parquet",
+          "sha256": "40ce8b24875b03147ba5f751c5696b3d668ff9136753d0e055be67888e1ac028",
+          "size": 117290
+        },
+        {
+          "path": "kline_daily/date=2025-09-02/part.parquet",
+          "sha256": "2fe385a3ad86b390671ed16e5de8662b1102484fb7af82e17b55a77d2a29c8a6",
+          "size": 117341
+        },
+        {
+          "path": "kline_daily/date=2025-09-03/part.parquet",
+          "sha256": "7208149aea6483e61af4fc1106e08627c00d207d2c5de2132f186f8da7c901bc",
+          "size": 116612
+        },
+        {
+          "path": "kline_daily/date=2025-09-04/part.parquet",
+          "sha256": "0ab9e2f597d1497f04bbe7d5f43236a4d4844baf8d8e45d689fc59ae0914ca05",
+          "size": 116851
+        },
+        {
+          "path": "kline_daily/date=2025-09-05/part.parquet",
+          "sha256": "519427d0ab1630af036a01c2efb1d050da6aa8204ed8b32cb85929c390cccf72",
+          "size": 116552
+        },
+        {
+          "path": "kline_daily/date=2025-09-08/part.parquet",
+          "sha256": "fed3e39f7eb9dd9572c0abe82237510fca941ded567de30be43c918d55185ecb",
+          "size": 116757
+        },
+        {
+          "path": "kline_daily/date=2025-09-09/part.parquet",
+          "sha256": "1170d428c35059300340127b0268fe387d5147e8a5816141a681ab54466c6fdf",
+          "size": 116674
+        },
+        {
+          "path": "kline_daily/date=2025-09-10/part.parquet",
+          "sha256": "daf6191c8d21fdce658300599128b0ff64ffbf0aa18bf41bcdc2698282987755",
+          "size": 116449
+        },
+        {
+          "path": "kline_daily/date=2025-09-11/part.parquet",
+          "sha256": "82c3fc07cec5cf2cb44c0b4cbad1e97f91ed2b3e42935b01ecfba014b6bd8a96",
+          "size": 116998
+        },
+        {
+          "path": "kline_daily/date=2025-09-12/part.parquet",
+          "sha256": "399a02c3d07161eff66f76a0bb49467cf5b89941f514fc2cf3725279bf30b008",
+          "size": 117223
+        },
+        {
+          "path": "kline_daily/date=2025-09-15/part.parquet",
+          "sha256": "337ea8121cad04e0c2e92ac14d44b9470e632f8df08e5512b71da0721aa642a0",
+          "size": 117097
+        },
+        {
+          "path": "kline_daily/date=2025-09-16/part.parquet",
+          "sha256": "ca3b20340ad965c1b03732154eb736759eff1b67324f18b3aad52b9ca3d52935",
+          "size": 117115
+        },
+        {
+          "path": "kline_daily/date=2025-09-17/part.parquet",
+          "sha256": "bbbbe10cfe095639e7df79a1269ddac9ede7983cd04c72af22b4dccb2fe4d809",
+          "size": 116856
+        },
+        {
+          "path": "kline_daily/date=2025-09-18/part.parquet",
+          "sha256": "ace95dea0a48285a72fa9ed0ee36469025dd5268760d2fd41f8c31b64e5a8238",
+          "size": 117787
+        },
+        {
+          "path": "kline_daily/date=2025-09-19/part.parquet",
+          "sha256": "2a0e952f132b143026ac0f77d015ada67713bb100eee70c493a34f1460044af5",
+          "size": 116808
+        },
+        {
+          "path": "kline_daily/date=2025-09-22/part.parquet",
+          "sha256": "f022432ff52d9eb3566f11caa12ec48e874577af558e2244e1e97657313d495c",
+          "size": 116569
+        },
+        {
+          "path": "kline_daily/date=2025-09-23/part.parquet",
+          "sha256": "3ae7958a1803096bcccf74ea9dc55f04292324235a672c40cb1724ebd088e854",
+          "size": 117053
+        },
+        {
+          "path": "kline_daily/date=2025-09-24/part.parquet",
+          "sha256": "84d32d871eb6258c71d2706d7b51ac3da0d4eb30f0de83a13cb7d1bdb391bcf9",
+          "size": 116670
+        },
+        {
+          "path": "kline_daily/date=2025-09-25/part.parquet",
+          "sha256": "659ca0d1e019013a7fa460c398b7628530aa6f0a6755e82dfa87d284f2ec5b96",
+          "size": 116984
+        },
+        {
+          "path": "kline_daily/date=2025-09-26/part.parquet",
+          "sha256": "2b923d1da1e4508b140e9087266c81373b35beff95875903d69a8dc62656235d",
+          "size": 116602
+        },
+        {
+          "path": "kline_daily/date=2025-09-29/part.parquet",
+          "sha256": "0ecb8d321cab1a47a55b2aa6cfc3c1d8eda1a6b2cbfc47f78ee8cff307703970",
+          "size": 116438
+        },
+        {
+          "path": "kline_daily/date=2025-09-30/part.parquet",
+          "sha256": "59bde30c608c6fc188d1e48f38b55cc9e09b4902716e925ccc34cf9b959475a7",
+          "size": 116517
+        },
+        {
+          "path": "kline_daily/date=2025-10-09/part.parquet",
+          "sha256": "6b82e964c8f39a810bf3c7c4ffb5ab74c3e6459b71d3c5a3da893a771c965693",
+          "size": 117323
+        },
+        {
+          "path": "kline_daily/date=2025-10-10/part.parquet",
+          "sha256": "f946f50a319dd4a7a809a1bb68a1b39c64c6b982e14c154e1dbca41deb08befc",
+          "size": 116944
+        },
+        {
+          "path": "kline_daily/date=2025-10-13/part.parquet",
+          "sha256": "f615bcac7dc62bb93c30cc1b09ce811b8dadf9bb4aa6adb7660a3de94f820e7b",
+          "size": 116282
+        },
+        {
+          "path": "kline_daily/date=2025-10-14/part.parquet",
+          "sha256": "7360787f881536842ad93f98162a2593621e58c00bf5df84b77e9d4e2263a1b1",
+          "size": 116954
+        },
+        {
+          "path": "kline_daily/date=2025-10-15/part.parquet",
+          "sha256": "b70b9dbec9eb719407238aa2031e9ff2f89849862723af2b7193d22705c1711d",
+          "size": 116747
+        },
+        {
+          "path": "kline_daily/date=2025-10-16/part.parquet",
+          "sha256": "f4b63346b4f6b51f004719cf5b9645b710183be08ed2a8757ddccc91831bc064",
+          "size": 116442
+        },
+        {
+          "path": "kline_daily/date=2025-10-17/part.parquet",
+          "sha256": "67f8951b6e35b2d88b452011f62c73bbb43c055ce6dcf4cb24adc4b976c35f6f",
+          "size": 116363
+        },
+        {
+          "path": "kline_daily/date=2025-10-20/part.parquet",
+          "sha256": "976b1aa5cdc45aec43489048b42b5fb8dcaeb9691eaded2bd52e01b0838a07f3",
+          "size": 116066
+        },
+        {
+          "path": "kline_daily/date=2025-10-21/part.parquet",
+          "sha256": "1c0d165be80967fd3bb9736cdb9d76114717d73654e967c9ca4550df5c84e97a",
+          "size": 116372
+        },
+        {
+          "path": "kline_daily/date=2025-10-22/part.parquet",
+          "sha256": "0b5c7cf98cb51ff5907701d7e28d3b9fc18cbfae33bdf5625f8578620dba39b2",
+          "size": 116137
+        },
+        {
+          "path": "kline_daily/date=2025-10-23/part.parquet",
+          "sha256": "fbf0b87890f467891fefc58063b33da2b2b2efe9ac4be48413c23458b71156b5",
+          "size": 115888
+        },
+        {
+          "path": "kline_daily/date=2025-10-24/part.parquet",
+          "sha256": "f955ea886b3d2552af5d0b98912e1cee8b18ac9268657134101f007ca749408e",
+          "size": 116431
+        },
+        {
+          "path": "kline_daily/date=2025-10-27/part.parquet",
+          "sha256": "7fc836d59f630b8a42ee7d2b35196eaa7c60106561884914126b7c2d1a1c4ea6",
+          "size": 116995
+        },
+        {
+          "path": "kline_daily/date=2025-10-28/part.parquet",
+          "sha256": "efcaeb7da85b311ea7c0c94fc008360fe7eb2da1c2a837de121ed13b2d252370",
+          "size": 116902
+        },
+        {
+          "path": "kline_daily/date=2025-10-29/part.parquet",
+          "sha256": "b24b917f5267386e659d6b052f5c9107295c69b5feb125ee3bd4374ec41888f5",
+          "size": 117129
+        },
+        {
+          "path": "kline_daily/date=2025-10-30/part.parquet",
+          "sha256": "9589ae519e340b71cb4f0fef24c6a407392e9fb00c4934c7d68c1fb2528143e9",
+          "size": 117516
+        },
+        {
+          "path": "kline_daily/date=2025-10-31/part.parquet",
+          "sha256": "8c87158d7b955d9f26904138821f3441ff2f8054290f821d8c2c38cd446a8779",
+          "size": 117469
+        },
+        {
+          "path": "kline_daily/date=2025-11-03/part.parquet",
+          "sha256": "b47cb30c11033e3f38fb141211cb22281a1e61793a590f0c0ee34bfbc6408a8f",
+          "size": 117285
+        },
+        {
+          "path": "kline_daily/date=2025-11-04/part.parquet",
+          "sha256": "823068908c40f20b14be6e45da14ca7a7da0871a5e625209b2aa744baa5dbadb",
+          "size": 116870
+        },
+        {
+          "path": "kline_daily/date=2025-11-05/part.parquet",
+          "sha256": "0215bd68113ab7c48910dca9012ceb399281a6466c8a5295dcb8fa62f53e0f72",
+          "size": 116535
+        },
+        {
+          "path": "kline_daily/date=2025-11-06/part.parquet",
+          "sha256": "c5763b15e7e97f085301fd9c8c52d8537abe13483e2fb4dbb436af0761d7f244",
+          "size": 117090
+        },
+        {
+          "path": "kline_daily/date=2025-11-07/part.parquet",
+          "sha256": "5d796895204d23e5bf0efd06eb0a16340dfd9ad78684b18d2b3497a8844a672c",
+          "size": 116923
+        },
+        {
+          "path": "kline_daily/date=2025-11-10/part.parquet",
+          "sha256": "b18e0e5a567975ef16266431c93746c4fd6a5f5d14ae6303883c826cbde8e80f",
+          "size": 117154
+        },
+        {
+          "path": "kline_daily/date=2025-11-11/part.parquet",
+          "sha256": "001288298e8103dacdadfab6214490ede4605b51fae5877989ae46fe4065828e",
+          "size": 117000
+        },
+        {
+          "path": "kline_daily/date=2025-11-12/part.parquet",
+          "sha256": "c28b4ed9bf257fe582ff172ffbfda9c2b3bc477cf2edf5851e83305dd5284d99",
+          "size": 116957
+        },
+        {
+          "path": "kline_daily/date=2025-11-13/part.parquet",
+          "sha256": "76cee77e2cc2065dae03af3f8da1599885d7ebef8a06ff9b7a2510ebae9a76b8",
+          "size": 117290
+        },
+        {
+          "path": "kline_daily/date=2025-11-14/part.parquet",
+          "sha256": "4a912f9036b1279ec5438b3d99ba353c1855cb85e73cea3632fff9528e897f27",
+          "size": 116964
+        },
+        {
+          "path": "kline_daily/date=2025-11-17/part.parquet",
+          "sha256": "4ff573e79311a6294e4e0c4f1002e6651e5d60fb0a49300ba86299117b186ef0",
+          "size": 116830
+        },
+        {
+          "path": "kline_daily/date=2025-11-18/part.parquet",
+          "sha256": "81d5fbe44c0db4289e485d001199fb8b0753425f81e413b08836d21237c0a0c1",
+          "size": 116920
+        },
+        {
+          "path": "kline_daily/date=2025-11-19/part.parquet",
+          "sha256": "e2678f9228d3ee812a558624ce48845c12879b194c6d1ee5ae7b9860df6141f6",
+          "size": 116524
+        },
+        {
+          "path": "kline_daily/date=2025-11-20/part.parquet",
+          "sha256": "d3ca4a52cf0282adfac86d2a0948561b8bf81611a32196f47df217f29ca047b8",
+          "size": 116348
+        },
+        {
+          "path": "kline_daily/date=2025-11-21/part.parquet",
+          "sha256": "a6fef440ff775d43f2160ef729d580df801230795ad54859b3e29b5805ff7c80",
+          "size": 116566
+        },
+        {
+          "path": "kline_daily/date=2025-11-24/part.parquet",
+          "sha256": "464c628d0073b79cf8194cba21b8a8fec2ad8c956b547900b0e6ca88e10d7ffb",
+          "size": 116205
+        },
+        {
+          "path": "kline_daily/date=2025-11-25/part.parquet",
+          "sha256": "aa7213939720e13c8d4ee67b3227997266afa161d104d057115039a13ec732ea",
+          "size": 116469
+        },
+        {
+          "path": "kline_daily/date=2025-11-26/part.parquet",
+          "sha256": "ce0ff2f6a7fcb0191be2f472971cc29c1e9df1c383918f0f38c9da8b4d8cba89",
+          "size": 116243
+        },
+        {
+          "path": "kline_daily/date=2025-11-27/part.parquet",
+          "sha256": "4074a6b2d5d9f044daec27a12415e7877a251400390be0e0e3f20caaaff47b4f",
+          "size": 116325
+        },
+        {
+          "path": "kline_daily/date=2025-11-28/part.parquet",
+          "sha256": "87aafb6db2168e92337a82dec76148454157a80dba5d6645c44d571bcdb86042",
+          "size": 116191
+        },
+        {
+          "path": "kline_daily/date=2025-12-01/part.parquet",
+          "sha256": "88178cda0a225dd048c368be70f165fc85a24b4cf45dc8808eb30a7c303cc7b0",
+          "size": 116341
+        },
+        {
+          "path": "kline_daily/date=2025-12-02/part.parquet",
+          "sha256": "44d1c61b986fc32b91d86f6c2444d74a6f136a8033b559d4bba071598b828e50",
+          "size": 116055
+        },
+        {
+          "path": "kline_daily/date=2025-12-03/part.parquet",
+          "sha256": "d42c0f1592b0c4c3a8c747a50399245497657647b5615f54be332377696de5e5",
+          "size": 116572
+        },
+        {
+          "path": "kline_daily/date=2025-12-04/part.parquet",
+          "sha256": "a8a6972b42bb46612f0c960bafdc0e10ff1fcd4f419c676f3236bd2c8ef1f561",
+          "size": 116034
+        },
+        {
+          "path": "kline_daily/date=2025-12-05/part.parquet",
+          "sha256": "a7f301efe5164d7be46af6d07ba35e919a6bfbca276ec4c1370ec6d5cac3b538",
+          "size": 116441
+        },
+        {
+          "path": "kline_daily/date=2025-12-08/part.parquet",
+          "sha256": "aabf9a9b04261c6f36bb3cda8f638dca2d602c1e487d1284765105c0a6d95b4f",
+          "size": 116979
+        },
+        {
+          "path": "kline_daily/date=2025-12-09/part.parquet",
+          "sha256": "9428de2b808166cedc56f3fc453f356d1b1731e2d64299898c7414c1f01493e1",
+          "size": 116795
+        },
+        {
+          "path": "kline_daily/date=2025-12-10/part.parquet",
+          "sha256": "ee46b1b9ebb5ebf56a6f128439e57427bf539286e72e0a2f66573eaec5e9a095",
+          "size": 116515
+        },
+        {
+          "path": "kline_daily/date=2025-12-11/part.parquet",
+          "sha256": "2ac2b22f1672a60a34be88cca60327837089aeecf231d84269c02becea8962a9",
+          "size": 116780
+        },
+        {
+          "path": "kline_daily/date=2025-12-12/part.parquet",
+          "sha256": "7c4b2306aaedba06ff8b4d436c3511d5c4728f6e213fea0c2e6bb61bbf122fc5",
+          "size": 117173
+        },
+        {
+          "path": "kline_daily/date=2025-12-15/part.parquet",
+          "sha256": "7211a3e0a4f103df45a3e52d1faebc0327d584e52dec3ad172fb6c14573236ff",
+          "size": 116569
+        },
+        {
+          "path": "kline_daily/date=2025-12-16/part.parquet",
+          "sha256": "0808ba2d9b6d694cdead43d4aeb60781fde4eac434b77711078916c6213fff75",
+          "size": 116461
+        },
+        {
+          "path": "kline_daily/date=2025-12-17/part.parquet",
+          "sha256": "56d02da4da88254a26cb7a4ab354129cd1934e273cb7c8bba1eecdf135b3d4ff",
+          "size": 116394
+        },
+        {
+          "path": "kline_daily/date=2025-12-18/part.parquet",
+          "sha256": "b0ba6ef569dca52e3805690145844bedc8abf7ec5e962b2a63f7999fec0dbe1b",
+          "size": 116447
+        },
+        {
+          "path": "kline_daily/date=2025-12-19/part.parquet",
+          "sha256": "3220e1e5684cee50e3b986cf6966d355e9f93b2afc973fa2e86bacb527463728",
+          "size": 116691
+        },
+        {
+          "path": "kline_daily/date=2025-12-22/part.parquet",
+          "sha256": "61b1cb42cd4286a0fa72ac42ca15a4534b93408329058d9df498f4593e6124ce",
+          "size": 117161
+        },
+        {
+          "path": "kline_daily/date=2025-12-23/part.parquet",
+          "sha256": "6bb7fa0513e2b09fb43b160fd8543625dbee0ac9eff4896c10dd76982d994501",
+          "size": 117076
+        },
+        {
+          "path": "kline_daily/date=2025-12-24/part.parquet",
+          "sha256": "5385f6b100075901037595562c5743c6c9187973dd7666020d4c28f676532344",
+          "size": 117140
+        },
+        {
+          "path": "kline_daily/date=2025-12-25/part.parquet",
+          "sha256": "a61feaca8206dc9a27f044059ad09b1dc82ed6f2fe5ea8b1819ae5b4c1920f6f",
+          "size": 117530
+        },
+        {
+          "path": "kline_daily/date=2025-12-26/part.parquet",
+          "sha256": "444cb28db7591cb56e0cf2bc3ba99b7d72be8292b7253721586696f021e4ac29",
+          "size": 117545
+        },
+        {
+          "path": "kline_daily/date=2025-12-29/part.parquet",
+          "sha256": "4e0ea6d78d3ad852cd2aea2ffeed3a54f16dbc35ab7d07cc06095f900eceb9ca",
+          "size": 117608
+        },
+        {
+          "path": "kline_daily/date=2025-12-30/part.parquet",
+          "sha256": "4a58fba903a7dbe0bd5bacc7d2289eac06b5a3b2ac4f25d52c9a712f8f462407",
+          "size": 117553
+        },
+        {
+          "path": "kline_daily/date=2025-12-31/part.parquet",
+          "sha256": "f1e23fd29867951b051a40e0dd0f7c5de526bc8222f0e6e885199db5b1353259",
+          "size": 117340
+        },
+        {
+          "path": "kline_daily/date=2026-01-05/part.parquet",
+          "sha256": "8c2856c2baf898016e4114090a942334cb14604f099c6a7308ea6e8c7fdcea0b",
+          "size": 118192
+        },
+        {
+          "path": "kline_daily/date=2026-01-06/part.parquet",
+          "sha256": "79e8f2d1da68a3c741af1fd0e12f2afc6dc410a4c96d7b8d0d305db9c6c27e4e",
+          "size": 118779
+        },
+        {
+          "path": "kline_daily/date=2026-01-07/part.parquet",
+          "sha256": "4c94a4f66d453561010782529f4fd94ed27286d5ec8455aa1aa69cc8b4246a61",
+          "size": 118940
+        },
+        {
+          "path": "kline_daily/date=2026-01-08/part.parquet",
+          "sha256": "7723af1db485685dee70d0dd5c16f0436658df532e8c35cd0fd7f9844ffa6935",
+          "size": 118672
+        },
+        {
+          "path": "kline_daily/date=2026-01-09/part.parquet",
+          "sha256": "956f617b88285b9888d0571bae9c114e618346fc8a297c5d78c3721999651d4b",
+          "size": 119361
+        },
+        {
+          "path": "kline_daily/date=2026-01-12/part.parquet",
+          "sha256": "2f2d63014d6f7f2999ea3db71a6c247dae70b2f008741f7f5550cae193d3d2e9",
+          "size": 119867
+        },
+        {
+          "path": "kline_daily/date=2026-01-13/part.parquet",
+          "sha256": "973bde0a71d9d868d138c0fa8f3f69ccefcd3c18f5e4c7689d465c3f4f2d0797",
+          "size": 119587
+        },
+        {
+          "path": "kline_daily/date=2026-01-14/part.parquet",
+          "sha256": "89b761d06131b07a1f02cec3e68abc8cd8bd957fde8d088ca0c2a46261a133cb",
+          "size": 119973
+        },
+        {
+          "path": "kline_daily/date=2026-01-15/part.parquet",
+          "sha256": "aea02c5d97000ec7555378cb2c6ac40d443de45030b85f95bdb7266ac189b11c",
+          "size": 118883
+        },
+        {
+          "path": "kline_daily/date=2026-01-16/part.parquet",
+          "sha256": "5585022b0a7d84ab497794bf4ae6c5c06b7bc3608d9b54d1fb7bebadb4ab0d8e",
+          "size": 119074
+        },
+        {
+          "path": "kline_daily/date=2026-01-19/part.parquet",
+          "sha256": "3690c3fb3c211600876640e49afe73b2d95ddf15bc6b8c77c6b8d4a27f9eabb8",
+          "size": 118851
+        },
+        {
+          "path": "kline_daily/date=2026-01-20/part.parquet",
+          "sha256": "ba833965347ea4370e11b4241376ebc79785d660295677daf5ae61fa7633dbf7",
+          "size": 119233
+        },
+        {
+          "path": "kline_daily/date=2026-01-21/part.parquet",
+          "sha256": "42d61cc359fbb37613865851c7baf7550481f7aec75f146fdfb10f5fd4df393e",
+          "size": 119175
+        },
+        {
+          "path": "kline_daily/date=2026-01-22/part.parquet",
+          "sha256": "118010c2e4c23beacbbf718d36f5902e0c911599c2988e2e402f49e876361c8b",
+          "size": 119224
+        },
+        {
+          "path": "kline_daily/date=2026-01-23/part.parquet",
+          "sha256": "8e7d80a098965d2ca880a8e287727aeca93b50113e1754f038d577d84dd2848a",
+          "size": 119833
+        },
+        {
+          "path": "kline_daily/date=2026-01-26/part.parquet",
+          "sha256": "243c290ddaba00ecba3419022cc448e91684014ef88300a2da1735bd57134963",
+          "size": 119722
+        },
+        {
+          "path": "kline_daily/date=2026-01-27/part.parquet",
+          "sha256": "e2ac7166f95eca1a3d08bf5cd2c53c8939f22bb443562cd362945c2af37eddc2",
+          "size": 119235
+        },
+        {
+          "path": "kline_daily/date=2026-01-28/part.parquet",
+          "sha256": "4efb71352e4c9b8f4d1b096f727325fa75258a6facbc6288d349d9a7186fa7c0",
+          "size": 119492
+        },
+        {
+          "path": "kline_daily/date=2026-01-29/part.parquet",
+          "sha256": "e868f9e7c572d1689a0e02d7985700c71a73abf394ef5dc3ab9c7600af44589d",
+          "size": 119489
+        },
+        {
+          "path": "kline_daily/date=2026-01-30/part.parquet",
+          "sha256": "e5e87ed17908e3cee8b13ff234d0c7b1651373ec7618ed3b5354e61f9ab3bcfc",
+          "size": 119165
+        },
+        {
+          "path": "kline_daily/date=2026-02-02/part.parquet",
+          "sha256": "5553a92d1c86e4492a41dbcbf7cf4ea18956bcbae1287a295be0fb83497f6bae",
+          "size": 118713
+        },
+        {
+          "path": "kline_daily/date=2026-02-03/part.parquet",
+          "sha256": "8efe0b1af5fea3262564efd30af44280583c1a8300aae97c6de234f1afb44ba9",
+          "size": 118786
+        },
+        {
+          "path": "kline_daily/date=2026-02-04/part.parquet",
+          "sha256": "a10dcb88dfef120ef961930733625f93a269c6493006f1eec05a66764f3121d7",
+          "size": 118920
+        },
+        {
+          "path": "kline_daily/date=2026-02-05/part.parquet",
+          "sha256": "5f5dc430b7ae3a9a87324f1c35f85d104d9a91962ef866d7c801f5831160cfee",
+          "size": 118346
+        },
+        {
+          "path": "kline_daily/date=2026-02-06/part.parquet",
+          "sha256": "31e6850937c4db2412db8d063c79f988ac2f79a6d0214f99c2b2a24fda93c519",
+          "size": 118317
+        },
+        {
+          "path": "kline_daily/date=2026-02-09/part.parquet",
+          "sha256": "0f881bac7b36b09e09485db2f2e4975030357378c29f235be5518b72dce73b63",
+          "size": 118515
+        },
+        {
+          "path": "kline_daily/date=2026-02-10/part.parquet",
+          "sha256": "1d81d5340799321d7d9414d1764f91e2b92c0f5a98806800f93d7859311b942b",
+          "size": 118487
+        },
+        {
+          "path": "kline_daily/date=2026-02-11/part.parquet",
+          "sha256": "40e87570e3cf11041b9b665bf33225e2afc42858c8c7d9051ffdd67b43de186f",
+          "size": 118234
+        },
+        {
+          "path": "kline_daily/date=2026-02-12/part.parquet",
+          "sha256": "44e38884ef6899af95a15afc4d1c1008d4edf46775833b10799ba4d78a50e5ff",
+          "size": 118559
+        },
+        {
+          "path": "kline_daily/date=2026-02-13/part.parquet",
+          "sha256": "f24c2391098c545c0b977dbeb14655cb8a62ce215f465609c997f5faf1b30f0c",
+          "size": 118401
+        },
+        {
+          "path": "kline_daily/date=2026-02-24/part.parquet",
+          "sha256": "c6a90c92b92822b81b9b862c499494877c452fbb947433931578f8027e036843",
+          "size": 118795
+        },
+        {
+          "path": "kline_daily/date=2026-02-25/part.parquet",
+          "sha256": "c37c82c90c42be87d02cdcfb1ce746f63ee27e510f4b1adc05ca5fe1e3c90682",
+          "size": 119282
+        },
+        {
+          "path": "kline_daily/date=2026-02-26/part.parquet",
+          "sha256": "bc5529e10b2ce73ed93abc555f1a73a19b28966ee3102a5e1ae1f0aadda34413",
+          "size": 119352
+        },
+        {
+          "path": "kline_daily/date=2026-02-27/part.parquet",
+          "sha256": "4e9e0b575c58ac4257fd5ac9e07515121c4839d75fcecc50aaf5cf0d5b7503fc",
+          "size": 119139
+        },
+        {
+          "path": "kline_daily/date=2026-03-02/part.parquet",
+          "sha256": "25b9397548561226535623da7dec9a144066015c09c8904e5720e9db8aebdfdb",
+          "size": 119352
+        },
+        {
+          "path": "kline_daily/date=2026-03-03/part.parquet",
+          "sha256": "039ea5bcf050997854b00d8f0913d85795ddd9474de740ebe60a1c9915978666",
+          "size": 119766
+        },
+        {
+          "path": "kline_daily/date=2026-03-04/part.parquet",
+          "sha256": "98e2bc850b032f91263fd2121105178edc9aff5186871107084306c46bcaa87e",
+          "size": 118513
+        },
+        {
+          "path": "kline_daily/date=2026-03-05/part.parquet",
+          "sha256": "48cd75c94b2767337d48cde18ab6cdb6f414a9363aa0df6dce94b6dcb7446b28",
+          "size": 118783
+        },
+        {
+          "path": "kline_daily/date=2026-03-06/part.parquet",
+          "sha256": "6d553f34f550bc73ed3c13ba06122201ee96d80f9c34387dc37905de9f4a7f49",
+          "size": 118791
+        },
+        {
+          "path": "kline_daily/date=2026-03-09/part.parquet",
+          "sha256": "3f844d3a7a47a0754d5757f3a1aab0f2d2822a0b02f1d6dac97f0f958bea96e2",
+          "size": 119355
+        },
+        {
+          "path": "kline_daily/date=2026-03-10/part.parquet",
+          "sha256": "5355d008531ab00fbb99ef7b40325ced73c949ce579a9f1ff70ac7202d616fb5",
+          "size": 119040
+        },
+        {
+          "path": "kline_daily/date=2026-03-11/part.parquet",
+          "sha256": "aa6388562bb60c4ce30bf39536c367ee847e721aa57013c7fee30f11cfb33d0d",
+          "size": 119490
+        },
+        {
+          "path": "kline_daily/date=2026-03-12/part.parquet",
+          "sha256": "21b4aa4b8e59a3db31adee70fa1425c8db7e5d26b547fd39ee67c6c0f7a9b864",
+          "size": 119180
+        },
+        {
+          "path": "kline_daily/date=2026-03-13/part.parquet",
+          "sha256": "5eea4f65f04f9d0a03fd5f1dd2e1f3876a8deaeef3c1a21ceae01d26b8dad46f",
+          "size": 118989
+        },
+        {
+          "path": "kline_daily/date=2026-03-16/part.parquet",
+          "sha256": "17244b014dd34ad7b55a6700dddc33e557c05f87b67104012c6f00f3f3fba51a",
+          "size": 118947
+        },
+        {
+          "path": "kline_daily/date=2026-03-17/part.parquet",
+          "sha256": "2b4d6f8082f7850629bbfb98502aa331c5c906c7846283b599abef7aada45f11",
+          "size": 118759
+        },
+        {
+          "path": "kline_daily/date=2026-03-18/part.parquet",
+          "sha256": "8495770ebc30229160471e3bad23272a5431a3374c55ff3c9946a5f4cdb90b8a",
+          "size": 118343
+        },
+        {
+          "path": "kline_daily/date=2026-03-19/part.parquet",
+          "sha256": "6553bf73cbd610a52ce98d11c4b2722119cefcdc41673f695c43b9ca966bd581",
+          "size": 118292
+        },
+        {
+          "path": "kline_daily/date=2026-03-20/part.parquet",
+          "sha256": "2b71b95088fd3b595652eb6ae6ae70bba1ceae973406f20d5dd0bd9e2b5bed0c",
+          "size": 118425
+        },
+        {
+          "path": "kline_daily/date=2026-03-23/part.parquet",
+          "sha256": "009ab29ed07f5cfa6d6499b1a98ad3500ffd5dd309bd1ad8129c59166820f7c2",
+          "size": 118281
+        },
+        {
+          "path": "kline_daily/date=2026-03-24/part.parquet",
+          "sha256": "5d88782b6671a59e3bdc606f7fad671a44eac862b787210aabca2dba5ef33b04",
+          "size": 117941
+        },
+        {
+          "path": "kline_daily/date=2026-03-25/part.parquet",
+          "sha256": "123ce9016f411099402ed1575e5a0c52466d0b27f28ae2dd191b806d7611f56b",
+          "size": 118484
+        },
+        {
+          "path": "kline_daily/date=2026-03-26/part.parquet",
+          "sha256": "cf6eeea9a3b2c7644d1a07a8a59e42d16407468493ea9ba3d78622d6e6c934ee",
+          "size": 118083
+        },
+        {
+          "path": "kline_daily/date=2026-03-27/part.parquet",
+          "sha256": "87776ef6667c3df5b6f8f675276604f25ee35e03cd3ec0e7c9a1b9f9fc51f6cd",
+          "size": 117549
+        },
+        {
+          "path": "kline_daily/date=2026-03-30/part.parquet",
+          "sha256": "e0393fc8c12408928d8e67cf92702c255feb035db45957cad64dec8de343a86f",
+          "size": 117923
+        },
+        {
+          "path": "kline_daily/date=2026-03-31/part.parquet",
+          "sha256": "e85d76c3160c035018fb8af7da7669c98d2d1b07a8d14be068f6be38d71d2976",
+          "size": 118082
+        },
+        {
+          "path": "kline_daily/date=2026-04-01/part.parquet",
+          "sha256": "968d667dca08df69762c3a2fda134df235d93776c0986c44b6b37d011beb078e",
+          "size": 118176
+        },
+        {
+          "path": "kline_daily/date=2026-04-02/part.parquet",
+          "sha256": "adee671a7f37bdc746c39804d2bf6a9c3ed1badd9588164a9524a8459d637f65",
+          "size": 117852
+        },
+        {
+          "path": "kline_daily/date=2026-04-03/part.parquet",
+          "sha256": "de6e7b125b49f9b1cbb2ca1cf8c91017513c8505f8f7e1480cb9f75832ab2e7e",
+          "size": 117655
+        },
+        {
+          "path": "kline_daily/date=2026-04-07/part.parquet",
+          "sha256": "f8c3c6811bd3ba36f1473e5c49188dff1252874403cdc1111301be3216a1d1dc",
+          "size": 117502
+        },
+        {
+          "path": "kline_daily/date=2026-04-08/part.parquet",
+          "sha256": "4b9dd2c5348da8a9dc83f11d175f679a1282ba6178d373648aa831b045cd6f94",
+          "size": 118732
+        },
+        {
+          "path": "kline_daily/date=2026-04-09/part.parquet",
+          "sha256": "64356443642330753ce56ac9f8ebefd2efe2ebcceb6bd4ad3cd4ba3b40612c95",
+          "size": 118543
+        },
+        {
+          "path": "kline_daily/date=2026-04-10/part.parquet",
+          "sha256": "8e9d159c7edc1847802dc58a4e9c50533182a620894d7036516b542626340c41",
+          "size": 118809
+        },
+        {
+          "path": "kline_daily/date=2026-04-13/part.parquet",
+          "sha256": "0261f41a627568a586e0f335dcfd8c3f854b8e6be1ea39273b7437c847daab8b",
+          "size": 118690
+        },
+        {
+          "path": "kline_daily/date=2026-04-14/part.parquet",
+          "sha256": "ca11a43b026423e16a6baefa2eef55d2180d00d3439ab7f3864c710b5d9ccf32",
+          "size": 118755
+        },
+        {
+          "path": "kline_daily/date=2026-04-15/part.parquet",
+          "sha256": "a80c4e1f21373b8a07971d82652cd1b54dfcac7665a98abcc92236d053010f30",
+          "size": 119262
+        },
+        {
+          "path": "kline_daily/date=2026-04-16/part.parquet",
+          "sha256": "5f6d2fcbdd742f560a1372b5e1f3a20f5b9d9b3770c1d4e5676fe9a701351825",
+          "size": 119253
+        },
+        {
+          "path": "kline_daily/date=2026-04-17/part.parquet",
+          "sha256": "7eeced58c60ed31a7c03be848e2396c33b75f1a0179f89ba8db63d3997d914ab",
+          "size": 119343
+        },
+        {
+          "path": "kline_daily/date=2026-04-20/part.parquet",
+          "sha256": "24468e0dbd2b7ea5b685a300560114faf4959e833ea8bda6cbb1ba38f2f8e670",
+          "size": 119605
+        },
+        {
+          "path": "kline_daily/date=2026-04-21/part.parquet",
+          "sha256": "f4108eed285ccd9394edd305a09f5cb24d551bcc6841b95dcee050561a7358aa",
+          "size": 119394
+        },
+        {
+          "path": "kline_daily/date=2026-04-22/part.parquet",
+          "sha256": "4c6a424daa145884130492c79a47f8eb5cf700956f96274d42a9523bea133444",
+          "size": 119589
+        },
+        {
+          "path": "kline_daily/date=2026-04-23/part.parquet",
+          "sha256": "77bcf2363c5108f8f459e63ea3a7008cb6f7571365d333e48b945a4ac7550d05",
+          "size": 119650
+        },
+        {
+          "path": "kline_daily/date=2026-04-24/part.parquet",
+          "sha256": "f00374f6a3a683716d32714bcdfb809400a81ea957a4ae0f0c8becd4f488ce54",
+          "size": 119572
+        },
+        {
+          "path": "kline_daily/date=2026-04-27/part.parquet",
+          "sha256": "cc5746bb98fccca150bac6617f26fa17261a1993d11dc9c9fa4a3f57b5a59642",
+          "size": 119456
+        },
+        {
+          "path": "kline_daily/date=2026-04-28/part.parquet",
+          "sha256": "88b58942bd32d32105db5f37d92306a180d713f2e2641acf5c7b823355b9f569",
+          "size": 119126
+        },
+        {
+          "path": "kline_daily/date=2026-04-29/part.parquet",
+          "sha256": "b912224df4f15d1f8b1e2f93f2283c9456c015631698324c871990ac0768fee7",
+          "size": 118878
+        },
+        {
+          "path": "kline_daily/date=2026-04-30/part.parquet",
+          "sha256": "d41ef5f4e0c5dafff923842a4acbfb1fd82b2b557893277fff1b4f9cc618c638",
+          "size": 119167
+        },
+        {
+          "path": "kline_daily/date=2026-05-06/part.parquet",
+          "sha256": "dfbdfe14a096001a8da63ebf841be47289c25873bbd639f75be7e21590665b71",
+          "size": 120229
+        },
+        {
+          "path": "kline_daily/date=2026-05-07/part.parquet",
+          "sha256": "58bc8f0c5a5d8ea92a9ea27618d3bcb181b99c8db51491afc02e8416e6ddf708",
+          "size": 120673
+        },
+        {
+          "path": "kline_daily/date=2026-05-08/part.parquet",
+          "sha256": "f071462edb3ea08f77460d0756bb08c79064d5b3e403000ec4cba53b64b086e7",
+          "size": 120426
+        },
+        {
+          "path": "kline_daily/date=2026-05-11/part.parquet",
+          "sha256": "da5756be172304864958fec3875aac92b781b651bea63ed9a372737f014e068f",
+          "size": 121015
+        },
+        {
+          "path": "kline_daily/date=2026-05-12/part.parquet",
+          "sha256": "931ba8b04fb029f76737e3b5a862e32af646e0382eea1b54391452b0479349e7",
+          "size": 120573
+        },
+        {
+          "path": "kline_daily/date=2026-05-13/part.parquet",
+          "sha256": "5fc0139480ba10801aba7f5b8ce03b545b715a73386ef3f9bd95a58605ee6345",
+          "size": 120873
+        },
+        {
+          "path": "kline_daily/date=2026-05-14/part.parquet",
+          "sha256": "41e4a967eff4ad2deeb81cc676d0e80e53d03ac3e550d45e69f33897bdf58c0a",
+          "size": 120827
+        },
+        {
+          "path": "kline_daily/date=2026-05-15/part.parquet",
+          "sha256": "5e813217fcebc39616e391bf1d261c258c10dcfe27e8a68815f045a81e8f4f28",
+          "size": 120749
+        },
+        {
+          "path": "kline_daily/date=2026-05-18/part.parquet",
+          "sha256": "c74a6190f3185e5492c0656801f4ca424a21c4859f8c5529a7cb58eec2fc4827",
+          "size": 120258
+        },
+        {
+          "path": "kline_daily/date=2026-05-19/part.parquet",
+          "sha256": "5099ebb600b0f309c2135ec0e63d6700f87028e3b7bca2756f41ea18b89cfcef",
+          "size": 120241
+        },
+        {
+          "path": "kline_daily/date=2026-05-20/part.parquet",
+          "sha256": "15d8a68fced5d0d7462946fe30d83a047bfd4ef2dc932b41501afd9d0f9bbcac",
+          "size": 120523
+        },
+        {
+          "path": "kline_daily/date=2026-05-21/part.parquet",
+          "sha256": "cf3086a907450208cdf71dc5def62ae055b8fc9eaeb760830d33b703c1b2a892",
+          "size": 121029
+        },
+        {
+          "path": "kline_daily/date=2026-05-22/part.parquet",
+          "sha256": "aadffc4d195d116a8880fdb825887749938ae9d8a9b5fffe1ebd6cf4b68849f4",
+          "size": 120436
+        },
+        {
+          "path": "kline_daily/date=2026-05-25/part.parquet",
+          "sha256": "a2e5d631719f76a8738feeaf37f7a6f6abbb4ae9d04d8efe12c5941132010886",
+          "size": 120579
+        },
+        {
+          "path": "kline_daily/date=2026-05-26/part.parquet",
+          "sha256": "3ef661e3265d3347517d533319a74dd49d47cb8b6ca15475fd7d873091d1a3da",
+          "size": 120472
+        },
+        {
+          "path": "kline_daily/date=2026-05-27/part.parquet",
+          "sha256": "4ff8c6e7d7597fed063a29e33d60db596f5447be86e47c9dccc4fe9d0f50edf7",
+          "size": 120539
+        },
+        {
+          "path": "kline_daily/date=2026-05-28/part.parquet",
+          "sha256": "3c7137fa6066d4299857617674e8db9931a6a3115b27b288249dc2c70140c300",
+          "size": 120237
+        },
+        {
+          "path": "kline_daily/date=2026-05-29/part.parquet",
+          "sha256": "40a233a8018d0d8bfe5a375ae4f9a1d21b36a18a5fba9b3fcf5afa34e79113b1",
+          "size": 120526
+        },
+        {
+          "path": "kline_daily/date=2026-06-01/part.parquet",
+          "sha256": "f9912135a9b5bc05d101a415ad626bb30810af6f39ab894d967da1b3c12e9157",
+          "size": 119931
+        },
+        {
+          "path": "kline_daily/date=2026-06-02/part.parquet",
+          "sha256": "bbb885a089046a996c37a27df274670f8901fb779a4d12c32518d332bd165d5e",
+          "size": 119799
+        },
+        {
+          "path": "kline_daily/date=2026-06-03/part.parquet",
+          "sha256": "65e1c34de0d4e49487fa4fc6006fb71f31e946577da448e49898b31d85abb69d",
+          "size": 119768
+        },
+        {
+          "path": "kline_daily/date=2026-06-04/part.parquet",
+          "sha256": "a409543e8412b812615872174d3425a6890f7a438469a2e2b74a4767ef037728",
+          "size": 119493
+        },
+        {
+          "path": "kline_daily/date=2026-06-05/part.parquet",
+          "sha256": "fb274581a7785a0feb555dd90c3839e673767b8fccc6dcf1fa12ed9566c32d9a",
+          "size": 120233
+        },
+        {
+          "path": "kline_daily/date=2026-06-08/part.parquet",
+          "sha256": "5635c8f382a6328c796f8a2a7a719e7afbdf55d0664bb5299c043968276357c3",
+          "size": 119481
+        },
+        {
+          "path": "kline_daily/date=2026-06-09/part.parquet",
+          "sha256": "ff371ffc7d56a26bc7635e17a9778acfde8c13fc3b6ef4cb4a6568deaf3e303f",
+          "size": 119307
+        },
+        {
+          "path": "kline_daily/date=2026-06-10/part.parquet",
+          "sha256": "1acb892f38faab008205cd706f86a26c5f8314a4db6a3742a4421e3dfbe017f0",
+          "size": 119309
+        },
+        {
+          "path": "kline_daily/date=2026-06-11/part.parquet",
+          "sha256": "d619fe415c2ffda51429b76427515ef3e4f026ebb4dcbff95870818d9fbc94df",
+          "size": 119133
+        },
+        {
+          "path": "kline_daily/date=2026-06-12/part.parquet",
+          "sha256": "f85326e4251239a5ae22c18309d8e3cf7ea2a863bcf2f068993e706013572d2f",
+          "size": 119833
+        },
+        {
+          "path": "kline_daily/date=2026-06-15/part.parquet",
+          "sha256": "bdabf439edd0dfffd5c63ba2507636749d3cb54863ce7040d96c684d35b1103c",
+          "size": 119954
+        },
+        {
+          "path": "kline_daily/date=2026-06-16/part.parquet",
+          "sha256": "7e45e370c915ddc0c3b53f235321e1253fc4c8ef3de328c11564311c1cdc2c10",
+          "size": 120259
+        },
+        {
+          "path": "kline_daily/date=2026-06-17/part.parquet",
+          "sha256": "511133277e603a228571229209814a5c024e7c970da08cfe9b6616b3384d7537",
+          "size": 119781
+        },
+        {
+          "path": "kline_daily/date=2026-06-18/part.parquet",
+          "sha256": "fb35d8ccc1c8bbb9746cf59c82e4d1ca4f134052749827b3141c1dc07834aa3d",
+          "size": 120077
+        },
+        {
+          "path": "kline_daily/date=2026-06-22/part.parquet",
+          "sha256": "29795e95f572736a1b518d80cae64a650a3379c269b8407c277cab334f689f73",
+          "size": 120384
+        },
+        {
+          "path": "kline_daily/date=2026-06-23/part.parquet",
+          "sha256": "266238a5a01042cb8c72e084cf1eb166ca0b2e47182882a4d632117c43b17f42",
+          "size": 120352
+        },
+        {
+          "path": "kline_daily/date=2026-06-24/part.parquet",
+          "sha256": "4e7bc649c2e5bf5c59e3800f215f194ec953ad2f5aef94eb653609e664d61fac",
+          "size": 120292
+        },
+        {
+          "path": "kline_daily/date=2026-06-25/part.parquet",
+          "sha256": "f0593ac516159f8d5451dd8fb3301b89b40b357e147c14882c5c7ac6cb99218e",
+          "size": 120218
+        },
+        {
+          "path": "kline_daily/date=2026-06-26/part.parquet",
+          "sha256": "16d227ccf8dc5535024d0698b1e2c06679997a4cc0b3fd9ed6a02d9061f4d570",
+          "size": 119898
+        },
+        {
+          "path": "kline_daily/date=2026-06-29/part.parquet",
+          "sha256": "9acc41ab6d7ba11f0c6b228d7b7b5820786afca65b7377b5ecfc5670a6a175cd",
+          "size": 120103
+        },
+        {
+          "path": "kline_daily/date=2026-06-30/part.parquet",
+          "sha256": "aad4cb1086dc7b8130b5425154b734a79af33a256b971b7c9021e2b6fe35d5de",
+          "size": 119638
+        },
+        {
+          "path": "kline_daily/date=2026-07-01/part.parquet",
+          "sha256": "df75b7a93da1657ac0156c6021820dca1e0acbba631887c6bd7dce07a2a61c54",
+          "size": 120445
+        },
+        {
+          "path": "kline_daily/date=2026-07-02/part.parquet",
+          "sha256": "01e456a6d561b1ab2bc50e9060621ccd8ce3dce97aadf2a22d17afb520672c78",
+          "size": 120333
+        },
+        {
+          "path": "kline_daily/date=2026-07-03/part.parquet",
+          "sha256": "92f17f1e23d7e1da7c3f0229e01709191140afdc0e653885698e8fc5845e19ae",
+          "size": 120170
+        },
+        {
+          "path": "kline_daily/date=2026-07-06/part.parquet",
+          "sha256": "adc2b4690ba8a44a0ab8118707c392282b56127abd72553ad72a555efcb40f77",
+          "size": 120106
+        },
+        {
+          "path": "kline_daily/date=2026-07-07/part.parquet",
+          "sha256": "51f33d01097d3825dff5b1f3f96048ada5420baca67b5c88263e552a08c64a7b",
+          "size": 119428
+        },
+        {
+          "path": "kline_daily/date=2026-07-08/part.parquet",
+          "sha256": "7ec070f3da364abc8e7f5c72d8f669c94595c71e3cbd65ecd80085fb8fa95e1c",
+          "size": 119266
+        },
+        {
+          "path": "kline_daily/date=2026-07-09/part.parquet",
+          "sha256": "1224168bd8939267efabbcd26cf2358c0951a144e273274680edcf28dea901b1",
+          "size": 119457
+        },
+        {
+          "path": "kline_daily/date=2026-07-10/part.parquet",
+          "sha256": "34531a2e56f3ad118a480769c9727c5277ba9efa66917077f4499b2658578dea",
+          "size": 119885
+        },
+        {
+          "path": "kline_daily/date=2026-07-13/part.parquet",
+          "sha256": "6db5f46cf08083d0006209db29fa5fa64746bd5387cfdba3af0849f64d96a4bc",
+          "size": 119297
+        },
+        {
+          "path": "kline_daily/date=2026-07-14/part.parquet",
+          "sha256": "e947b4707235b92be61a1e4c2a45c5a9ed7be54c3b5df4fa7f1de532c819a14c",
+          "size": 119006
+        },
+        {
+          "path": "kline_daily/date=2026-07-15/part.parquet",
+          "sha256": "55ab16c273cb42b89ca8946325d42c93f3a687ac08807b3e60ebec60a2287c6e",
+          "size": 118720
+        },
+        {
+          "path": "kline_daily/date=2026-07-16/part.parquet",
+          "sha256": "5f5e5d411c1969f416bc40813ac55f6a2a24e80ef9138a7f0e5ad204f09a8d7f",
+          "size": 118468
+        },
+        {
+          "path": "kline_daily/date=2026-07-17/part.parquet",
+          "sha256": "07c2fa21cf7e18afcb634f39fc3d03f3e29f7db1cb0c5c7eb1fd3f38d4b144c4",
+          "size": 118899
+        },
+        {
+          "path": "kline_daily/date=2026-07-20/part.parquet",
+          "sha256": "7415c9ab18e7590389329446cdce23c0d55beb5415dba2273500d1f88c64565d",
+          "size": 118503
+        },
+        {
+          "path": "kline_daily/date=2026-07-21/part.parquet",
+          "sha256": "42dd7f0f6df49d993fe7096f5724190f6fa852072dc7c14745f28c41ed1d6a77",
+          "size": 120982
+        },
+        {
+          "path": "kline_daily/date=2026-07-22/part.parquet",
+          "sha256": "fbd50b967f506c498546e96385ecc83277c8779a1000746455fe8687257ad22c",
+          "size": 120491
+        },
+        {
+          "path": "kline_daily/date=2026-07-23/part.parquet",
+          "sha256": "fcbedec2dd999531d4c365c282afa2c6bbbcb161e82ce20235e9ffe74ba97489",
+          "size": 120469
+        },
+        {
+          "path": "kline_daily/date=2026-07-24/part.parquet",
+          "sha256": "d0374a05aad28f4ff7fcb184ac6e61ced1fa0a58a0e16e98c99843132fc58cd4",
+          "size": 119981
+        },
+        {
+          "path": "kline_daily/date=2026-07-27/part.parquet",
+          "sha256": "f155eed6884d1b143c8dbf0c34ce5988a7676d87c8dd9942ab8b4a1983252525",
+          "size": 119909
+        },
+        {
+          "path": "kline_daily/date=2026-07-28/part.parquet",
+          "sha256": "613af2054cb1fe85d995a44111f530626a3efa8a6f8217ddbaae168b8c94f2b3",
+          "size": 119878
+        },
+        {
+          "path": "kline_daily/date=2026-07-29/part.parquet",
+          "sha256": "d5112f4790c50992aa9f3d2a43dbabf04cbe1ad8652503f2481af22acdd893d0",
+          "size": 120337
+        },
+        {
+          "path": "kline_daily/date=2026-07-30/part.parquet",
+          "sha256": "549c2e6fa226c2f7feae33babc347f621ae10bc697ab50c2d04f6e46a11c8b8c",
+          "size": 120211
+        },
+        {
+          "path": "kline_daily/date=2026-07-31/part.parquet",
+          "sha256": "01de607b0a8b8d085b77f37d6889ae5c3bc0972f3d0f407e82dabfcf5d3310cc",
+          "size": 118443
+        }
+      ]
+    }
+  },
+  "source_store_alias": "tickflow_cloud_primary",
+  "source_type": "existing_cloud_store_snapshot",
+  "symbols": [
+    {
+      "name": "派林生物",
+      "qfq": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "normalized_sha256": "715c29d20a0b0edc051272afe64f7135450b7a2d28f759e007595ab5eae59fac",
+        "output_sha256": "feaabde8b16e2ecbefab0582ca1a13bba32921358af194c55a5cbf213720a9dc",
+        "row_count": 251
+      },
+      "raw": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "normalized_sha256": "fea29c0a7bf09e1c3c39c234ad5ff115b9127bc403fbb05541fb32a453504aef",
+        "output_sha256": "b29045903c38a81ca1d08e4d07311e926bd4ee82c8ea9113eae3dd571a19625a",
+        "row_count": 251
+      },
+      "symbol": "000403.SZ"
+    },
+    {
+      "name": "中金黄金",
+      "qfq": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "normalized_sha256": "bc536e0ce67e6edecb32b70d4d33ddfbf9a233249e28896f2b87d498c0c48cd9",
+        "output_sha256": "3123e985408fa74975f7c7662a80c6beeb4f3e46eb276865389291047fb2a45d",
+        "row_count": 251
+      },
+      "raw": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "normalized_sha256": "401b4ee3debefccc04161ba7cc1f4c9aa16257703e4eb1a365a60f690531329f",
+        "output_sha256": "73f16fcee9325fbeb79a370fc2d647fdfc42735ad9afa09e5d34cf3502492586",
+        "row_count": 251
+      },
+      "symbol": "600489.SH"
+    },
+    {
+      "name": "东方财富",
+      "qfq": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "normalized_sha256": "b4113e18263e2ccd9cea6ae277d8bbfb7f9f4bda07a0c3250d55d0fe9d837d90",
+        "output_sha256": "3131306d481c3fc7818b3a28595a3d9dccf35e5a398309dbaadc5c58a6854e05",
+        "row_count": 251
+      },
+      "raw": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "normalized_sha256": "d7ae689c07e67997651e3bf2de7bb8055fcbe0a83c4d6dbe2e96a5f06c5c9024",
+        "output_sha256": "1c7c040e6dcc5cf73e788d34c4b5caf8ad86d36ebe6953ec21fac64053e0b95c",
+        "row_count": 251
+      },
+      "symbol": "300059.SZ"
+    }
+  ],
+  "tickflow_api_request_count": 0
+}

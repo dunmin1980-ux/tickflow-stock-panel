@@ -1,0 +1,2523 @@
+{
+  "adjustment": "none",
+  "as_of_trade_date": "2026-07-31",
+  "name": "中金黄金",
+  "phase1_byte_equivalent": false,
+  "phase1_original_payload_recovered": false,
+  "rows": [
+    {
+      "amount": 876518289.0,
+      "close": 15.3,
+      "high": 15.4,
+      "low": 15.05,
+      "open": 15.2,
+      "symbol": "600489.SH",
+      "trade_date": "2025-07-21",
+      "volume": 575235.0
+    },
+    {
+      "amount": 1432892176.0,
+      "close": 15.78,
+      "high": 16.04,
+      "low": 15.48,
+      "open": 15.49,
+      "symbol": "600489.SH",
+      "trade_date": "2025-07-22",
+      "volume": 908076.0
+    },
+    {
+      "amount": 1068214820.0,
+      "close": 15.89,
+      "high": 16.1,
+      "low": 15.82,
+      "open": 16.0,
+      "symbol": "600489.SH",
+      "trade_date": "2025-07-23",
+      "volume": 670559.0
+    },
+    {
+      "amount": 5024665289.0,
+      "close": 15.19,
+      "high": 15.27,
+      "low": 14.61,
+      "open": 15.11,
+      "symbol": "600489.SH",
+      "trade_date": "2025-07-24",
+      "volume": 3370640.0
+    },
+    {
+      "amount": 2322235282.0,
+      "close": 14.92,
+      "high": 15.09,
+      "low": 14.85,
+      "open": 14.9,
+      "symbol": "600489.SH",
+      "trade_date": "2025-07-25",
+      "volume": 1552355.0
+    },
+    {
+      "amount": 1155281098.0,
+      "close": 14.81,
+      "high": 14.92,
+      "low": 14.73,
+      "open": 14.85,
+      "symbol": "600489.SH",
+      "trade_date": "2025-07-28",
+      "volume": 781071.0
+    },
+    {
+      "amount": 942919803.0,
+      "close": 14.68,
+      "high": 14.76,
+      "low": 14.56,
+      "open": 14.73,
+      "symbol": "600489.SH",
+      "trade_date": "2025-07-29",
+      "volume": 643954.0
+    },
+    {
+      "amount": 961753971.0,
+      "close": 14.73,
+      "high": 14.85,
+      "low": 14.62,
+      "open": 14.75,
+      "symbol": "600489.SH",
+      "trade_date": "2025-07-30",
+      "volume": 651368.0
+    },
+    {
+      "amount": 1208638546.0,
+      "close": 14.32,
+      "high": 14.56,
+      "low": 14.25,
+      "open": 14.55,
+      "symbol": "600489.SH",
+      "trade_date": "2025-07-31",
+      "volume": 840375.0
+    },
+    {
+      "amount": 673729107.0,
+      "close": 14.45,
+      "high": 14.5,
+      "low": 14.31,
+      "open": 14.34,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-01",
+      "volume": 467267.0
+    },
+    {
+      "amount": 1771695037.0,
+      "close": 14.88,
+      "high": 14.91,
+      "low": 14.62,
+      "open": 14.71,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-04",
+      "volume": 1197363.0
+    },
+    {
+      "amount": 1091939705.0,
+      "close": 14.78,
+      "high": 15.03,
+      "low": 14.76,
+      "open": 14.91,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-05",
+      "volume": 733876.0
+    },
+    {
+      "amount": 787319591.0,
+      "close": 14.83,
+      "high": 14.92,
+      "low": 14.78,
+      "open": 14.85,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-06",
+      "volume": 530441.0
+    },
+    {
+      "amount": 930539572.0,
+      "close": 14.97,
+      "high": 14.99,
+      "low": 14.75,
+      "open": 14.9,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-07",
+      "volume": 626270.0
+    },
+    {
+      "amount": 1135024560.0,
+      "close": 15.03,
+      "high": 15.14,
+      "low": 14.96,
+      "open": 15.04,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-08",
+      "volume": 754305.0
+    },
+    {
+      "amount": 1384431129.0,
+      "close": 14.62,
+      "high": 14.82,
+      "low": 14.6,
+      "open": 14.81,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-11",
+      "volume": 943333.0
+    },
+    {
+      "amount": 690552714.0,
+      "close": 14.57,
+      "high": 14.68,
+      "low": 14.55,
+      "open": 14.6,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-12",
+      "volume": 472957.0
+    },
+    {
+      "amount": 1175983110.0,
+      "close": 14.76,
+      "high": 14.76,
+      "low": 14.57,
+      "open": 14.59,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-13",
+      "volume": 802527.0
+    },
+    {
+      "amount": 1233885490.0,
+      "close": 14.66,
+      "high": 14.88,
+      "low": 14.59,
+      "open": 14.76,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-14",
+      "volume": 838234.0
+    },
+    {
+      "amount": 995091884.0,
+      "close": 14.62,
+      "high": 14.69,
+      "low": 14.46,
+      "open": 14.52,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-15",
+      "volume": 680729.0
+    },
+    {
+      "amount": 1349773203.0,
+      "close": 14.5,
+      "high": 14.64,
+      "low": 14.44,
+      "open": 14.61,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-18",
+      "volume": 929944.0
+    },
+    {
+      "amount": 1030045926.0,
+      "close": 14.36,
+      "high": 14.49,
+      "low": 14.33,
+      "open": 14.45,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-19",
+      "volume": 716314.0
+    },
+    {
+      "amount": 925112058.0,
+      "close": 14.43,
+      "high": 14.43,
+      "low": 14.2,
+      "open": 14.28,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-20",
+      "volume": 644130.0
+    },
+    {
+      "amount": 1102495754.0,
+      "close": 14.52,
+      "high": 14.65,
+      "low": 14.44,
+      "open": 14.49,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-21",
+      "volume": 756904.0
+    },
+    {
+      "amount": 696716605.0,
+      "close": 14.5,
+      "high": 14.57,
+      "low": 14.42,
+      "open": 14.51,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-22",
+      "volume": 481452.0
+    },
+    {
+      "amount": 2545425483.0,
+      "close": 15.15,
+      "high": 15.15,
+      "low": 14.66,
+      "open": 14.68,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-25",
+      "volume": 1698528.0
+    },
+    {
+      "amount": 1225769479.0,
+      "close": 15.27,
+      "high": 15.32,
+      "low": 15.04,
+      "open": 15.15,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-26",
+      "volume": 806208.0
+    },
+    {
+      "amount": 1557504507.0,
+      "close": 15.09,
+      "high": 15.47,
+      "low": 15.08,
+      "open": 15.4,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-27",
+      "volume": 1018904.0
+    },
+    {
+      "amount": 1209017948.0,
+      "close": 15.27,
+      "high": 15.45,
+      "low": 14.99,
+      "open": 15.21,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-28",
+      "volume": 793710.0
+    },
+    {
+      "amount": 2888460094.0,
+      "close": 15.97,
+      "high": 16.03,
+      "low": 15.61,
+      "open": 15.75,
+      "symbol": "600489.SH",
+      "trade_date": "2025-08-29",
+      "volume": 1818016.0
+    },
+    {
+      "amount": 3899725395.0,
+      "close": 17.57,
+      "high": 17.57,
+      "low": 16.28,
+      "open": 16.4,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-01",
+      "volume": 2290244.0
+    },
+    {
+      "amount": 4078202977.0,
+      "close": 17.76,
+      "high": 18.12,
+      "low": 17.56,
+      "open": 18.07,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-02",
+      "volume": 2287156.0
+    },
+    {
+      "amount": 3565642648.0,
+      "close": 18.17,
+      "high": 18.75,
+      "low": 17.93,
+      "open": 18.53,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-03",
+      "volume": 1947576.0
+    },
+    {
+      "amount": 2924804061.0,
+      "close": 17.59,
+      "high": 18.45,
+      "low": 17.32,
+      "open": 18.16,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-04",
+      "volume": 1642605.0
+    },
+    {
+      "amount": 2433937438.0,
+      "close": 18.15,
+      "high": 18.45,
+      "low": 17.52,
+      "open": 17.59,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-05",
+      "volume": 1353860.0
+    },
+    {
+      "amount": 2329726954.0,
+      "close": 18.17,
+      "high": 18.49,
+      "low": 17.93,
+      "open": 18.4,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-08",
+      "volume": 1279100.0
+    },
+    {
+      "amount": 4562946737.0,
+      "close": 19.1,
+      "high": 19.58,
+      "low": 18.46,
+      "open": 18.55,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-09",
+      "volume": 2386777.0
+    },
+    {
+      "amount": 2781131840.0,
+      "close": 19.09,
+      "high": 19.21,
+      "low": 18.35,
+      "open": 18.54,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-10",
+      "volume": 1474128.0
+    },
+    {
+      "amount": 2021888514.0,
+      "close": 18.99,
+      "high": 19.42,
+      "low": 18.71,
+      "open": 19.13,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-11",
+      "volume": 1069524.0
+    },
+    {
+      "amount": 2837508585.0,
+      "close": 19.3,
+      "high": 19.68,
+      "low": 18.82,
+      "open": 18.95,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-12",
+      "volume": 1468364.0
+    },
+    {
+      "amount": 1574794020.0,
+      "close": 19.06,
+      "high": 19.36,
+      "low": 18.98,
+      "open": 19.06,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-15",
+      "volume": 822388.0
+    },
+    {
+      "amount": 2365809778.0,
+      "close": 19.25,
+      "high": 19.73,
+      "low": 18.64,
+      "open": 19.68,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-16",
+      "volume": 1241065.0
+    },
+    {
+      "amount": 1964043388.0,
+      "close": 18.68,
+      "high": 19.08,
+      "low": 18.54,
+      "open": 19.0,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-17",
+      "volume": 1049831.0
+    },
+    {
+      "amount": 2040857030.0,
+      "close": 18.05,
+      "high": 18.64,
+      "low": 17.89,
+      "open": 18.41,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-18",
+      "volume": 1115088.0
+    },
+    {
+      "amount": 1114874124.0,
+      "close": 18.26,
+      "high": 18.42,
+      "low": 18.13,
+      "open": 18.21,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-19",
+      "volume": 609387.0
+    },
+    {
+      "amount": 3342287326.0,
+      "close": 19.98,
+      "high": 19.99,
+      "low": 18.78,
+      "open": 18.9,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-22",
+      "volume": 1728232.0
+    },
+    {
+      "amount": 3106244220.0,
+      "close": 20.37,
+      "high": 20.82,
+      "low": 19.87,
+      "open": 20.37,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-23",
+      "volume": 1532240.0
+    },
+    {
+      "amount": 2007123201.0,
+      "close": 20.51,
+      "high": 20.57,
+      "low": 19.95,
+      "open": 20.24,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-24",
+      "volume": 990059.0
+    },
+    {
+      "amount": 2174815146.0,
+      "close": 20.44,
+      "high": 20.88,
+      "low": 20.29,
+      "open": 20.37,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-25",
+      "volume": 1060472.0
+    },
+    {
+      "amount": 1363392443.0,
+      "close": 20.55,
+      "high": 20.7,
+      "low": 20.3,
+      "open": 20.6,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-26",
+      "volume": 664011.0
+    },
+    {
+      "amount": 2439345638.0,
+      "close": 21.12,
+      "high": 21.2,
+      "low": 20.41,
+      "open": 20.89,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-29",
+      "volume": 1169494.0
+    },
+    {
+      "amount": 2602699143.0,
+      "close": 21.93,
+      "high": 22.15,
+      "low": 21.16,
+      "open": 21.22,
+      "symbol": "600489.SH",
+      "trade_date": "2025-09-30",
+      "volume": 1196884.0
+    },
+    {
+      "amount": 3393377837.0,
+      "close": 24.12,
+      "high": 24.12,
+      "low": 23.18,
+      "open": 23.5,
+      "symbol": "600489.SH",
+      "trade_date": "2025-10-09",
+      "volume": 1421118.0
+    },
+    {
+      "amount": 2815906585.0,
+      "close": 23.6,
+      "high": 24.12,
+      "low": 23.2,
+      "open": 23.48,
+      "symbol": "600489.SH",
+      "trade_date": "2025-10-10",
+      "volume": 1191509.0
+    },
+    {
+      "amount": 4144189646.0,
+      "close": 25.5,
+      "high": 25.88,
+      "low": 23.31,
+      "open": 24.1,
+      "symbol": "600489.SH",
+      "trade_date": "2025-10-13",
+      "volume": 1703271.0
+    },
+    {
+      "amount": 4943820692.0,
+      "close": 24.76,
+      "high": 26.8,
+      "low": 24.06,
+      "open": 26.79,
+      "symbol": "600489.SH",
+      "trade_date": "2025-10-14",
+      "volume": 1936212.0
+    },
+    {
+      "amount": 3223916740.0,
+      "close": 25.2,
+      "high": 25.5,
+      "low": 24.27,
+      "open": 25.32,
+      "symbol": "600489.SH",
+      "trade_date": "2025-10-15",
+      "volume": 1294666.0
+    },
+    {
+      "amount": 3094439289.0,
+      "close": 24.42,
+      "high": 25.76,
+      "low": 24.22,
+      "open": 25.35,
+      "symbol": "600489.SH",
+      "trade_date": "2025-10-16",
+      "volume": 1239793.0
+    },
+    {
+      "amount": 3139653092.0,
+      "close": 24.96,
+      "high": 25.5,
+      "low": 24.57,
+      "open": 25.22,
+      "symbol": "600489.SH",
+      "trade_date": "2025-10-17",
+      "volume": 1254661.0
+    },
+    {
+      "amount": 3194969313.0,
+      "close": 23.63,
+      "high": 24.56,
+      "low": 23.41,
+      "open": 23.85,
+      "symbol": "600489.SH",
+      "trade_date": "2025-10-20",
+      "volume": 1338995.0
+    },
+    {
+      "amount": 2597594556.0,
+      "close": 23.48,
+      "high": 24.4,
+      "low": 23.42,
+      "open": 24.38,
+      "symbol": "600489.SH",
+      "trade_date": "2025-10-21",
+      "volume": 1091296.0
+    },
+    {
+      "amount": 3526307631.0,
+      "close": 22.9,
+      "high": 22.97,
+      "low": 21.5,
+      "open": 21.5,
+      "symbol": "600489.SH",
+      "trade_date": "2025-10-22",
+      "volume": 1582280.0
+    },
+    {
+      "amount": 2110649359.0,
+      "close": 22.61,
+      "high": 23.11,
+      "low": 21.93,
+      "open": 22.48,
+      "symbol": "600489.SH",
+      "trade_date": "2025-10-23",
+      "volume": 945940.0
+    },
+    {
+      "amount": 1715072689.0,
+      "close": 22.33,
+      "high": 22.85,
+      "low": 22.13,
+      "open": 22.8,
+      "symbol": "600489.SH",
+      "trade_date": "2025-10-24",
+      "volume": 765405.0
+    },
+    {
+      "amount": 1941227459.0,
+      "close": 22.93,
+      "high": 23.1,
+      "low": 22.17,
+      "open": 22.19,
+      "symbol": "600489.SH",
+      "trade_date": "2025-10-27",
+      "volume": 855029.0
+    },
+    {
+      "amount": 1843968958.0,
+      "close": 22.13,
+      "high": 22.85,
+      "low": 22.0,
+      "open": 22.5,
+      "symbol": "600489.SH",
+      "trade_date": "2025-10-28",
+      "volume": 821793.0
+    },
+    {
+      "amount": 1497009925.0,
+      "close": 22.75,
+      "high": 22.8,
+      "low": 22.29,
+      "open": 22.36,
+      "symbol": "600489.SH",
+      "trade_date": "2025-10-29",
+      "volume": 664046.0
+    },
+    {
+      "amount": 2346545206.0,
+      "close": 22.3,
+      "high": 22.7,
+      "low": 21.98,
+      "open": 22.11,
+      "symbol": "600489.SH",
+      "trade_date": "2025-10-30",
+      "volume": 1053123.0
+    },
+    {
+      "amount": 1899866930.0,
+      "close": 22.17,
+      "high": 22.74,
+      "low": 21.93,
+      "open": 22.69,
+      "symbol": "600489.SH",
+      "trade_date": "2025-10-31",
+      "volume": 855040.0
+    },
+    {
+      "amount": 1683086000.0,
+      "close": 21.83,
+      "high": 21.9,
+      "low": 21.26,
+      "open": 21.7,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-03",
+      "volume": 778533.0
+    },
+    {
+      "amount": 2057618308.0,
+      "close": 20.7,
+      "high": 21.6,
+      "low": 20.54,
+      "open": 21.4,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-04",
+      "volume": 981056.0
+    },
+    {
+      "amount": 1664471199.0,
+      "close": 20.85,
+      "high": 20.95,
+      "low": 20.05,
+      "open": 20.06,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-05",
+      "volume": 806994.0
+    },
+    {
+      "amount": 1014786002.0,
+      "close": 21.07,
+      "high": 21.08,
+      "low": 20.72,
+      "open": 20.73,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-06",
+      "volume": 484172.0
+    },
+    {
+      "amount": 927859609.0,
+      "close": 21.08,
+      "high": 21.38,
+      "low": 20.98,
+      "open": 21.06,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-07",
+      "volume": 438710.0
+    },
+    {
+      "amount": 1450217750.0,
+      "close": 21.47,
+      "high": 21.59,
+      "low": 21.22,
+      "open": 21.39,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-10",
+      "volume": 677415.0
+    },
+    {
+      "amount": 1774129961.0,
+      "close": 21.41,
+      "high": 22.06,
+      "low": 21.25,
+      "open": 21.9,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-11",
+      "volume": 820963.0
+    },
+    {
+      "amount": 986984944.0,
+      "close": 21.27,
+      "high": 21.63,
+      "low": 21.06,
+      "open": 21.4,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-12",
+      "volume": 462164.0
+    },
+    {
+      "amount": 2195229319.0,
+      "close": 22.02,
+      "high": 22.31,
+      "low": 21.57,
+      "open": 21.63,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-13",
+      "volume": 998875.0
+    },
+    {
+      "amount": 1501717191.0,
+      "close": 21.81,
+      "high": 22.31,
+      "low": 21.43,
+      "open": 21.67,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-14",
+      "volume": 685575.0
+    },
+    {
+      "amount": 1216048444.0,
+      "close": 21.65,
+      "high": 21.81,
+      "low": 21.32,
+      "open": 21.5,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-17",
+      "volume": 564849.0
+    },
+    {
+      "amount": 1107148159.0,
+      "close": 20.89,
+      "high": 21.48,
+      "low": 20.68,
+      "open": 21.45,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-18",
+      "volume": 526061.0
+    },
+    {
+      "amount": 2397129064.0,
+      "close": 22.72,
+      "high": 22.98,
+      "low": 21.03,
+      "open": 21.05,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-19",
+      "volume": 1086613.0
+    },
+    {
+      "amount": 1599646723.0,
+      "close": 22.35,
+      "high": 23.0,
+      "low": 22.22,
+      "open": 22.49,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-20",
+      "volume": 709404.0
+    },
+    {
+      "amount": 1474375632.0,
+      "close": 21.44,
+      "high": 22.28,
+      "low": 21.41,
+      "open": 21.97,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-21",
+      "volume": 678594.0
+    },
+    {
+      "amount": 992727132.0,
+      "close": 21.19,
+      "high": 21.59,
+      "low": 21.02,
+      "open": 21.43,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-24",
+      "volume": 466815.0
+    },
+    {
+      "amount": 1477404772.0,
+      "close": 22.07,
+      "high": 22.5,
+      "low": 21.77,
+      "open": 21.83,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-25",
+      "volume": 668639.0
+    },
+    {
+      "amount": 1061402636.0,
+      "close": 22.18,
+      "high": 22.53,
+      "low": 22.03,
+      "open": 22.11,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-26",
+      "volume": 476645.0
+    },
+    {
+      "amount": 959950058.0,
+      "close": 22.14,
+      "high": 22.52,
+      "low": 22.09,
+      "open": 22.29,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-27",
+      "volume": 431541.0
+    },
+    {
+      "amount": 1257277385.0,
+      "close": 22.48,
+      "high": 22.87,
+      "low": 22.35,
+      "open": 22.42,
+      "symbol": "600489.SH",
+      "trade_date": "2025-11-28",
+      "volume": 557015.0
+    },
+    {
+      "amount": 1731304805.0,
+      "close": 22.87,
+      "high": 23.33,
+      "low": 22.66,
+      "open": 23.01,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-01",
+      "volume": 752266.0
+    },
+    {
+      "amount": 824105214.0,
+      "close": 22.48,
+      "high": 22.69,
+      "low": 22.35,
+      "open": 22.51,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-02",
+      "volume": 366546.0
+    },
+    {
+      "amount": 1014492880.0,
+      "close": 22.37,
+      "high": 22.78,
+      "low": 22.3,
+      "open": 22.55,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-03",
+      "volume": 450348.0
+    },
+    {
+      "amount": 1090628135.0,
+      "close": 22.13,
+      "high": 22.75,
+      "low": 21.94,
+      "open": 22.5,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-04",
+      "volume": 488114.0
+    },
+    {
+      "amount": 1404488636.0,
+      "close": 22.85,
+      "high": 22.96,
+      "low": 22.0,
+      "open": 22.05,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-05",
+      "volume": 620596.0
+    },
+    {
+      "amount": 1556014471.0,
+      "close": 22.35,
+      "high": 22.8,
+      "low": 22.16,
+      "open": 22.71,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-08",
+      "volume": 697333.0
+    },
+    {
+      "amount": 1833964670.0,
+      "close": 21.31,
+      "high": 22.14,
+      "low": 21.22,
+      "open": 22.12,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-09",
+      "volume": 851186.0
+    },
+    {
+      "amount": 1106112772.0,
+      "close": 21.81,
+      "high": 21.83,
+      "low": 21.52,
+      "open": 21.57,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-10",
+      "volume": 509761.0
+    },
+    {
+      "amount": 1337996031.0,
+      "close": 21.8,
+      "high": 22.56,
+      "low": 21.74,
+      "open": 22.13,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-11",
+      "volume": 602872.0
+    },
+    {
+      "amount": 1904773027.0,
+      "close": 22.6,
+      "high": 22.85,
+      "low": 22.24,
+      "open": 22.41,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-12",
+      "volume": 846112.0
+    },
+    {
+      "amount": 1769840442.0,
+      "close": 23.16,
+      "high": 23.18,
+      "low": 22.51,
+      "open": 22.51,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-15",
+      "volume": 769863.0
+    },
+    {
+      "amount": 1785305255.0,
+      "close": 21.88,
+      "high": 22.89,
+      "low": 21.7,
+      "open": 22.81,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-16",
+      "volume": 805374.0
+    },
+    {
+      "amount": 1626810332.0,
+      "close": 22.62,
+      "high": 22.78,
+      "low": 22.02,
+      "open": 22.1,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-17",
+      "volume": 724641.0
+    },
+    {
+      "amount": 1197835798.0,
+      "close": 22.72,
+      "high": 22.9,
+      "low": 22.33,
+      "open": 22.59,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-18",
+      "volume": 528055.0
+    },
+    {
+      "amount": 1154116262.0,
+      "close": 22.87,
+      "high": 22.93,
+      "low": 22.11,
+      "open": 22.5,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-19",
+      "volume": 511481.0
+    },
+    {
+      "amount": 1844949311.0,
+      "close": 23.85,
+      "high": 24.1,
+      "low": 23.22,
+      "open": 23.22,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-22",
+      "volume": 776394.0
+    },
+    {
+      "amount": 2031969683.0,
+      "close": 24.13,
+      "high": 24.65,
+      "low": 23.95,
+      "open": 24.38,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-23",
+      "volume": 837571.0
+    },
+    {
+      "amount": 1673590798.0,
+      "close": 23.95,
+      "high": 24.5,
+      "low": 23.66,
+      "open": 24.45,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-24",
+      "volume": 699966.0
+    },
+    {
+      "amount": 1623028784.0,
+      "close": 23.2,
+      "high": 23.58,
+      "low": 22.99,
+      "open": 23.58,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-25",
+      "volume": 699828.0
+    },
+    {
+      "amount": 1484846970.0,
+      "close": 23.44,
+      "high": 23.62,
+      "low": 23.2,
+      "open": 23.5,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-26",
+      "volume": 632689.0
+    },
+    {
+      "amount": 1732365453.0,
+      "close": 22.88,
+      "high": 23.59,
+      "low": 22.84,
+      "open": 23.52,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-29",
+      "volume": 746963.0
+    },
+    {
+      "amount": 2013884025.0,
+      "close": 23.37,
+      "high": 23.57,
+      "low": 22.1,
+      "open": 22.14,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-30",
+      "volume": 873933.0
+    },
+    {
+      "amount": 1110116582.0,
+      "close": 23.36,
+      "high": 23.95,
+      "low": 23.1,
+      "open": 23.22,
+      "symbol": "600489.SH",
+      "trade_date": "2025-12-31",
+      "volume": 473056.0
+    },
+    {
+      "amount": 1743665424.0,
+      "close": 24.22,
+      "high": 24.32,
+      "low": 23.6,
+      "open": 23.98,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-05",
+      "volume": 726306.0
+    },
+    {
+      "amount": 1871419579.0,
+      "close": 24.72,
+      "high": 24.93,
+      "low": 24.23,
+      "open": 24.3,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-06",
+      "volume": 759927.0
+    },
+    {
+      "amount": 1598168165.0,
+      "close": 24.57,
+      "high": 25.09,
+      "low": 24.31,
+      "open": 24.72,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-07",
+      "volume": 647681.0
+    },
+    {
+      "amount": 1603563144.0,
+      "close": 24.25,
+      "high": 25.15,
+      "low": 23.93,
+      "open": 24.45,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-08",
+      "volume": 655822.0
+    },
+    {
+      "amount": 1775223771.0,
+      "close": 24.93,
+      "high": 25.15,
+      "low": 24.27,
+      "open": 24.31,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-09",
+      "volume": 714921.0
+    },
+    {
+      "amount": 2200576350.0,
+      "close": 25.02,
+      "high": 25.95,
+      "low": 24.91,
+      "open": 25.7,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-12",
+      "volume": 870129.0
+    },
+    {
+      "amount": 2276427134.0,
+      "close": 25.64,
+      "high": 26.26,
+      "low": 25.03,
+      "open": 25.12,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-13",
+      "volume": 883106.0
+    },
+    {
+      "amount": 2199736754.0,
+      "close": 26.15,
+      "high": 26.35,
+      "low": 25.71,
+      "open": 25.98,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-14",
+      "volume": 843994.0
+    },
+    {
+      "amount": 2306996538.0,
+      "close": 26.2,
+      "high": 27.06,
+      "low": 25.77,
+      "open": 26.01,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-15",
+      "volume": 874327.0
+    },
+    {
+      "amount": 2216731040.0,
+      "close": 25.61,
+      "high": 26.74,
+      "low": 25.47,
+      "open": 26.08,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-16",
+      "volume": 856602.0
+    },
+    {
+      "amount": 2343996855.0,
+      "close": 26.95,
+      "high": 27.06,
+      "low": 25.86,
+      "open": 26.07,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-19",
+      "volume": 883483.0
+    },
+    {
+      "amount": 2812475826.0,
+      "close": 27.56,
+      "high": 27.66,
+      "low": 25.88,
+      "open": 27.0,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-20",
+      "volume": 1048062.0
+    },
+    {
+      "amount": 4325624860.0,
+      "close": 29.9,
+      "high": 30.3,
+      "low": 28.1,
+      "open": 28.18,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-21",
+      "volume": 1486716.0
+    },
+    {
+      "amount": 2971128992.0,
+      "close": 29.18,
+      "high": 29.65,
+      "low": 28.51,
+      "open": 28.8,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-22",
+      "volume": 1024248.0
+    },
+    {
+      "amount": 3119609233.0,
+      "close": 30.0,
+      "high": 30.98,
+      "low": 29.72,
+      "open": 30.97,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-23",
+      "volume": 1026476.0
+    },
+    {
+      "amount": 4153619724.0,
+      "close": 33.0,
+      "high": 33.0,
+      "low": 31.3,
+      "open": 31.31,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-26",
+      "volume": 1274827.0
+    },
+    {
+      "amount": 6145620161.0,
+      "close": 34.28,
+      "high": 35.03,
+      "low": 32.29,
+      "open": 32.3,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-27",
+      "volume": 1816343.0
+    },
+    {
+      "amount": 6715332968.0,
+      "close": 37.71,
+      "high": 37.71,
+      "low": 34.39,
+      "open": 35.0,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-28",
+      "volume": 1838971.0
+    },
+    {
+      "amount": 10833777183.0,
+      "close": 41.0,
+      "high": 41.48,
+      "low": 37.82,
+      "open": 39.99,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-29",
+      "volume": 2698669.0
+    },
+    {
+      "amount": 4289637268.0,
+      "close": 36.9,
+      "high": 38.1,
+      "low": 36.9,
+      "open": 36.9,
+      "symbol": "600489.SH",
+      "trade_date": "2026-01-30",
+      "volume": 1153593.0
+    },
+    {
+      "amount": 207851427.0,
+      "close": 33.21,
+      "high": 33.21,
+      "low": 33.21,
+      "open": 33.21,
+      "symbol": "600489.SH",
+      "trade_date": "2026-02-02",
+      "volume": 62587.0
+    },
+    {
+      "amount": 10617765535.0,
+      "close": 32.95,
+      "high": 34.31,
+      "low": 29.89,
+      "open": 30.5,
+      "symbol": "600489.SH",
+      "trade_date": "2026-02-03",
+      "volume": 3433445.0
+    },
+    {
+      "amount": 5776637440.0,
+      "close": 31.56,
+      "high": 33.05,
+      "low": 31.03,
+      "open": 33.01,
+      "symbol": "600489.SH",
+      "trade_date": "2026-02-04",
+      "volume": 1821037.0
+    },
+    {
+      "amount": 5337911072.0,
+      "close": 29.92,
+      "high": 31.39,
+      "low": 29.41,
+      "open": 30.36,
+      "symbol": "600489.SH",
+      "trade_date": "2026-02-05",
+      "volume": 1769315.0
+    },
+    {
+      "amount": 3845721556.0,
+      "close": 29.55,
+      "high": 30.14,
+      "low": 28.1,
+      "open": 28.1,
+      "symbol": "600489.SH",
+      "trade_date": "2026-02-06",
+      "volume": 1310251.0
+    },
+    {
+      "amount": 2530974155.0,
+      "close": 30.18,
+      "high": 30.45,
+      "low": 29.81,
+      "open": 30.26,
+      "symbol": "600489.SH",
+      "trade_date": "2026-02-09",
+      "volume": 840477.0
+    },
+    {
+      "amount": 1998779797.0,
+      "close": 29.97,
+      "high": 30.69,
+      "low": 29.82,
+      "open": 30.3,
+      "symbol": "600489.SH",
+      "trade_date": "2026-02-10",
+      "volume": 662126.0
+    },
+    {
+      "amount": 2665459376.0,
+      "close": 30.67,
+      "high": 31.09,
+      "low": 29.88,
+      "open": 29.95,
+      "symbol": "600489.SH",
+      "trade_date": "2026-02-11",
+      "volume": 874197.0
+    },
+    {
+      "amount": 2401779410.0,
+      "close": 30.61,
+      "high": 31.5,
+      "low": 30.36,
+      "open": 30.45,
+      "symbol": "600489.SH",
+      "trade_date": "2026-02-12",
+      "volume": 775871.0
+    },
+    {
+      "amount": 2506244557.0,
+      "close": 29.51,
+      "high": 30.32,
+      "low": 29.43,
+      "open": 29.99,
+      "symbol": "600489.SH",
+      "trade_date": "2026-02-13",
+      "volume": 841022.0
+    },
+    {
+      "amount": 3338769502.0,
+      "close": 31.1,
+      "high": 31.44,
+      "low": 30.51,
+      "open": 30.98,
+      "symbol": "600489.SH",
+      "trade_date": "2026-02-24",
+      "volume": 1076611.0
+    },
+    {
+      "amount": 2835518889.0,
+      "close": 31.49,
+      "high": 31.88,
+      "low": 30.71,
+      "open": 31.0,
+      "symbol": "600489.SH",
+      "trade_date": "2026-02-25",
+      "volume": 904720.0
+    },
+    {
+      "amount": 2224592796.0,
+      "close": 31.07,
+      "high": 31.49,
+      "low": 30.83,
+      "open": 31.3,
+      "symbol": "600489.SH",
+      "trade_date": "2026-02-26",
+      "volume": 715242.0
+    },
+    {
+      "amount": 2933122640.0,
+      "close": 31.84,
+      "high": 31.98,
+      "low": 30.92,
+      "open": 31.0,
+      "symbol": "600489.SH",
+      "trade_date": "2026-02-27",
+      "volume": 927392.0
+    },
+    {
+      "amount": 7469192323.0,
+      "close": 35.02,
+      "high": 35.02,
+      "low": 31.85,
+      "open": 33.8,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-02",
+      "volume": 2246839.0
+    },
+    {
+      "amount": 5541816343.0,
+      "close": 33.66,
+      "high": 35.5,
+      "low": 33.39,
+      "open": 34.01,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-03",
+      "volume": 1618113.0
+    },
+    {
+      "amount": 3267704254.0,
+      "close": 32.29,
+      "high": 33.0,
+      "low": 31.78,
+      "open": 31.78,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-04",
+      "volume": 1011714.0
+    },
+    {
+      "amount": 2665554139.0,
+      "close": 31.9,
+      "high": 32.64,
+      "low": 31.2,
+      "open": 32.61,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-05",
+      "volume": 838348.0
+    },
+    {
+      "amount": 2044112631.0,
+      "close": 31.52,
+      "high": 31.76,
+      "low": 30.67,
+      "open": 31.05,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-06",
+      "volume": 652311.0
+    },
+    {
+      "amount": 2535021657.0,
+      "close": 31.4,
+      "high": 31.98,
+      "low": 30.16,
+      "open": 30.51,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-09",
+      "volume": 819360.0
+    },
+    {
+      "amount": 1712974033.0,
+      "close": 31.81,
+      "high": 32.19,
+      "low": 31.39,
+      "open": 31.88,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-10",
+      "volume": 537879.0
+    },
+    {
+      "amount": 1700641631.0,
+      "close": 32.03,
+      "high": 32.36,
+      "low": 31.68,
+      "open": 32.16,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-11",
+      "volume": 531442.0
+    },
+    {
+      "amount": 2044130487.0,
+      "close": 31.34,
+      "high": 32.08,
+      "low": 30.95,
+      "open": 31.6,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-12",
+      "volume": 650018.0
+    },
+    {
+      "amount": 2072814281.0,
+      "close": 30.77,
+      "high": 32.08,
+      "low": 30.67,
+      "open": 30.88,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-13",
+      "volume": 660797.0
+    },
+    {
+      "amount": 2441574409.0,
+      "close": 29.37,
+      "high": 30.39,
+      "low": 28.77,
+      "open": 30.0,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-16",
+      "volume": 830114.0
+    },
+    {
+      "amount": 1760761535.0,
+      "close": 29.33,
+      "high": 30.05,
+      "low": 29.21,
+      "open": 29.37,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-17",
+      "volume": 595549.0
+    },
+    {
+      "amount": 1636213868.0,
+      "close": 28.96,
+      "high": 29.4,
+      "low": 28.5,
+      "open": 29.25,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-18",
+      "volume": 566109.0
+    },
+    {
+      "amount": 3325260352.0,
+      "close": 26.7,
+      "high": 27.96,
+      "low": 26.52,
+      "open": 27.39,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-19",
+      "volume": 1222523.0
+    },
+    {
+      "amount": 2336463694.0,
+      "close": 26.08,
+      "high": 27.39,
+      "low": 26.08,
+      "open": 26.7,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-20",
+      "volume": 877918.0
+    },
+    {
+      "amount": 3593214908.0,
+      "close": 23.91,
+      "high": 24.98,
+      "low": 23.67,
+      "open": 24.68,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-23",
+      "volume": 1475982.0
+    },
+    {
+      "amount": 2386558823.0,
+      "close": 24.63,
+      "high": 24.63,
+      "low": 23.65,
+      "open": 24.39,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-24",
+      "volume": 987728.0
+    },
+    {
+      "amount": 3108091589.0,
+      "close": 25.52,
+      "high": 26.37,
+      "low": 25.42,
+      "open": 25.6,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-25",
+      "volume": 1201151.0
+    },
+    {
+      "amount": 1594890859.0,
+      "close": 25.04,
+      "high": 25.78,
+      "low": 24.88,
+      "open": 25.47,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-26",
+      "volume": 630615.0
+    },
+    {
+      "amount": 1588058934.0,
+      "close": 25.54,
+      "high": 25.67,
+      "low": 24.6,
+      "open": 24.6,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-27",
+      "volume": 627235.0
+    },
+    {
+      "amount": 2389658845.0,
+      "close": 26.75,
+      "high": 26.75,
+      "low": 25.49,
+      "open": 25.5,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-30",
+      "volume": 910748.0
+    },
+    {
+      "amount": 2254249432.0,
+      "close": 26.71,
+      "high": 27.47,
+      "low": 26.5,
+      "open": 27.17,
+      "symbol": "600489.SH",
+      "trade_date": "2026-03-31",
+      "volume": 834291.0
+    },
+    {
+      "amount": 2067955807.0,
+      "close": 27.26,
+      "high": 27.95,
+      "low": 26.93,
+      "open": 27.5,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-01",
+      "volume": 756116.0
+    },
+    {
+      "amount": 1967001731.0,
+      "close": 26.4,
+      "high": 26.99,
+      "low": 26.01,
+      "open": 26.99,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-02",
+      "volume": 742584.0
+    },
+    {
+      "amount": 982134687.0,
+      "close": 26.68,
+      "high": 26.85,
+      "low": 26.31,
+      "open": 26.75,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-03",
+      "volume": 369409.0
+    },
+    {
+      "amount": 995343837.0,
+      "close": 26.25,
+      "high": 26.84,
+      "low": 26.14,
+      "open": 26.63,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-07",
+      "volume": 378158.0
+    },
+    {
+      "amount": 3221481838.0,
+      "close": 28.4,
+      "high": 28.78,
+      "low": 27.4,
+      "open": 27.57,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-08",
+      "volume": 1146506.0
+    },
+    {
+      "amount": 1551890615.0,
+      "close": 27.78,
+      "high": 28.05,
+      "low": 27.35,
+      "open": 27.44,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-09",
+      "volume": 560610.0
+    },
+    {
+      "amount": 1437423437.0,
+      "close": 27.42,
+      "high": 28.15,
+      "low": 27.4,
+      "open": 28.15,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-10",
+      "volume": 518981.0
+    },
+    {
+      "amount": 1115185584.0,
+      "close": 26.94,
+      "high": 27.33,
+      "low": 26.84,
+      "open": 27.01,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-13",
+      "volume": 412956.0
+    },
+    {
+      "amount": 1700214698.0,
+      "close": 26.84,
+      "high": 27.49,
+      "low": 26.45,
+      "open": 27.35,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-14",
+      "volume": 631764.0
+    },
+    {
+      "amount": 1798874184.0,
+      "close": 26.74,
+      "high": 27.66,
+      "low": 26.65,
+      "open": 27.41,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-15",
+      "volume": 661392.0
+    },
+    {
+      "amount": 1298473078.0,
+      "close": 27.07,
+      "high": 27.16,
+      "low": 26.74,
+      "open": 26.88,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-16",
+      "volume": 481955.0
+    },
+    {
+      "amount": 1246079692.0,
+      "close": 26.9,
+      "high": 27.25,
+      "low": 26.6,
+      "open": 26.61,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-17",
+      "volume": 462633.0
+    },
+    {
+      "amount": 1340380706.0,
+      "close": 27.05,
+      "high": 27.64,
+      "low": 26.93,
+      "open": 26.93,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-20",
+      "volume": 491915.0
+    },
+    {
+      "amount": 1220633530.0,
+      "close": 27.26,
+      "high": 27.28,
+      "low": 26.58,
+      "open": 27.06,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-21",
+      "volume": 452906.0
+    },
+    {
+      "amount": 1205384979.0,
+      "close": 27.2,
+      "high": 27.39,
+      "low": 26.87,
+      "open": 26.95,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-22",
+      "volume": 444000.0
+    },
+    {
+      "amount": 1969742645.0,
+      "close": 25.83,
+      "high": 27.21,
+      "low": 25.6,
+      "open": 27.05,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-23",
+      "volume": 754366.0
+    },
+    {
+      "amount": 1603724074.0,
+      "close": 25.53,
+      "high": 25.8,
+      "low": 24.9,
+      "open": 25.62,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-24",
+      "volume": 634282.0
+    },
+    {
+      "amount": 1140498767.0,
+      "close": 25.73,
+      "high": 25.97,
+      "low": 25.35,
+      "open": 25.4,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-27",
+      "volume": 443263.0
+    },
+    {
+      "amount": 1070002729.0,
+      "close": 25.27,
+      "high": 25.79,
+      "low": 25.09,
+      "open": 25.58,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-28",
+      "volume": 421135.0
+    },
+    {
+      "amount": 1666339485.0,
+      "close": 26.07,
+      "high": 26.15,
+      "low": 25.28,
+      "open": 25.35,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-29",
+      "volume": 645731.0
+    },
+    {
+      "amount": 1584643690.0,
+      "close": 25.96,
+      "high": 26.25,
+      "low": 25.36,
+      "open": 25.75,
+      "symbol": "600489.SH",
+      "trade_date": "2026-04-30",
+      "volume": 614399.0
+    },
+    {
+      "amount": 2095701117.0,
+      "close": 27.04,
+      "high": 27.1,
+      "low": 26.07,
+      "open": 26.22,
+      "symbol": "600489.SH",
+      "trade_date": "2026-05-06",
+      "volume": 786795.0
+    },
+    {
+      "amount": 2350561881.0,
+      "close": 27.75,
+      "high": 27.86,
+      "low": 27.09,
+      "open": 27.49,
+      "symbol": "600489.SH",
+      "trade_date": "2026-05-07",
+      "volume": 854786.0
+    },
+    {
+      "amount": 2123904433.0,
+      "close": 28.22,
+      "high": 28.48,
+      "low": 27.45,
+      "open": 27.5,
+      "symbol": "600489.SH",
+      "trade_date": "2026-05-08",
+      "volume": 758878.0
+    },
+    {
+      "amount": 2266757405.0,
+      "close": 27.05,
+      "high": 27.94,
+      "low": 26.81,
+      "open": 27.8,
+      "symbol": "600489.SH",
+      "trade_date": "2026-05-11",
+      "volume": 831810.0
+    },
+    {
+      "amount": 1752083008.0,
+      "close": 26.83,
+      "high": 27.84,
+      "low": 26.8,
+      "open": 27.59,
+      "symbol": "600489.SH",
+      "trade_date": "2026-05-12",
+      "volume": 643431.0
+    },
+    {
+      "amount": 1432428949.0,
+      "close": 26.82,
+      "high": 27.34,
+      "low": 26.46,
+      "open": 26.86,
+      "symbol": "600489.SH",
+      "trade_date": "2026-05-13",
+      "volume": 535014.0
+    },
+    {
+      "amount": 1399098123.0,
+      "close": 26.02,
+      "high": 26.66,
+      "low": 25.83,
+      "open": 26.61,
+      "symbol": "600489.SH",
+      "trade_date": "2026-05-14",
+      "volume": 533322.0
+    },
+    {
+      "amount": 2413427324.0,
+      "close": 24.36,
+      "high": 25.5,
+      "low": 24.12,
+      "open": 25.44,
+      "symbol": "600489.SH",
+      "trade_date": "2026-05-15",
+      "volume": 979323.0
+    },
+    {
+      "amount": 1577939616.0,
+      "close": 23.79,
+      "high": 24.0,
+      "low": 23.55,
+      "open": 23.62,
+      "symbol": "600489.SH",
+      "trade_date": "2026-05-18",
+      "volume": 664956.0
+    },
+    {
+      "amount": 1107673755.0,
+      "close": 23.58,
+      "high": 23.85,
+      "low": 23.25,
+      "open": 23.75,
+      "symbol": "600489.SH",
+      "trade_date": "2026-05-19",
+      "volume": 471472.0
+    },
+    {
+      "amount": 1337830874.0,
+      "close": 23.31,
+      "high": 23.34,
+      "low": 22.64,
+      "open": 23.0,
+      "symbol": "600489.SH",
+      "trade_date": "2026-05-20",
+      "volume": 581705.0
+    },
+    {
+      "amount": 1339923819.0,
+      "close": 22.78,
+      "high": 24.0,
+      "low": 22.78,
+      "open": 23.7,
+      "symbol": "600489.SH",
+      "trade_date": "2026-05-21",
+      "volume": 571398.0
+    },
+    {
+      "amount": 1139308210.0,
+      "close": 23.29,
+      "high": 23.43,
+      "low": 22.62,
+      "open": 22.9,
+      "symbol": "600489.SH",
+      "trade_date": "2026-05-22",
+      "volume": 493707.0
+    },
+    {
+      "amount": 1328355610.0,
+      "close": 23.78,
+      "high": 24.16,
+      "low": 23.47,
+      "open": 23.7,
+      "symbol": "600489.SH",
+      "trade_date": "2026-05-25",
+      "volume": 559404.0
+    },
+    {
+      "amount": 1983591714.0,
+      "close": 24.66,
+      "high": 24.78,
+      "low": 23.21,
+      "open": 23.5,
+      "symbol": "600489.SH",
+      "trade_date": "2026-05-26",
+      "volume": 819885.0
+    },
+    {
+      "amount": 1450176113.0,
+      "close": 23.48,
+      "high": 24.68,
+      "low": 23.38,
+      "open": 24.29,
+      "symbol": "600489.SH",
+      "trade_date": "2026-05-27",
+      "volume": 609353.0
+    },
+    {
+      "amount": 1969628868.0,
+      "close": 22.39,
+      "high": 22.97,
+      "low": 21.92,
+      "open": 22.9,
+      "symbol": "600489.SH",
+      "trade_date": "2026-05-28",
+      "volume": 882307.0
+    },
+    {
+      "amount": 1729859536.0,
+      "close": 22.42,
+      "high": 23.28,
+      "low": 22.25,
+      "open": 22.99,
+      "symbol": "600489.SH",
+      "trade_date": "2026-05-29",
+      "volume": 764536.0
+    },
+    {
+      "amount": 1154666433.0,
+      "close": 22.56,
+      "high": 22.88,
+      "low": 22.39,
+      "open": 22.39,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-01",
+      "volume": 509677.0
+    },
+    {
+      "amount": 1622186448.0,
+      "close": 23.18,
+      "high": 23.32,
+      "low": 22.03,
+      "open": 22.49,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-02",
+      "volume": 712790.0
+    },
+    {
+      "amount": 1428301873.0,
+      "close": 23.13,
+      "high": 23.47,
+      "low": 22.47,
+      "open": 22.74,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-03",
+      "volume": 618691.0
+    },
+    {
+      "amount": 1237987738.0,
+      "close": 22.55,
+      "high": 23.15,
+      "low": 22.35,
+      "open": 22.99,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-04",
+      "volume": 547353.0
+    },
+    {
+      "amount": 1160393136.0,
+      "close": 22.2,
+      "high": 22.84,
+      "low": 22.09,
+      "open": 22.36,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-05",
+      "volume": 517597.0
+    },
+    {
+      "amount": 1807007524.0,
+      "close": 20.77,
+      "high": 21.38,
+      "low": 20.55,
+      "open": 20.8,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-08",
+      "volume": 863570.0
+    },
+    {
+      "amount": 1238868120.0,
+      "close": 21.07,
+      "high": 21.12,
+      "low": 20.48,
+      "open": 20.99,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-09",
+      "volume": 596035.0
+    },
+    {
+      "amount": 1695448161.0,
+      "close": 20.48,
+      "high": 20.72,
+      "low": 20.02,
+      "open": 20.11,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-10",
+      "volume": 833576.0
+    },
+    {
+      "amount": 1467617255.0,
+      "close": 20.64,
+      "high": 20.74,
+      "low": 20.11,
+      "open": 20.27,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-11",
+      "volume": 717791.0
+    },
+    {
+      "amount": 2278888793.0,
+      "close": 21.51,
+      "high": 22.16,
+      "low": 21.01,
+      "open": 21.3,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-12",
+      "volume": 1056960.0
+    },
+    {
+      "amount": 2379255435.0,
+      "close": 22.58,
+      "high": 22.94,
+      "low": 22.21,
+      "open": 22.39,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-15",
+      "volume": 1055063.0
+    },
+    {
+      "amount": 1428110116.0,
+      "close": 22.52,
+      "high": 22.85,
+      "low": 22.17,
+      "open": 22.5,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-16",
+      "volume": 633405.0
+    },
+    {
+      "amount": 1071243202.0,
+      "close": 22.7,
+      "high": 22.85,
+      "low": 22.27,
+      "open": 22.79,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-17",
+      "volume": 475284.0
+    },
+    {
+      "amount": 1629847220.0,
+      "close": 21.92,
+      "high": 22.78,
+      "low": 21.6,
+      "open": 22.4,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-18",
+      "volume": 734734.0
+    },
+    {
+      "amount": 1789836545.0,
+      "close": 22.26,
+      "high": 22.29,
+      "low": 21.1,
+      "open": 21.22,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-22",
+      "volume": 826965.0
+    },
+    {
+      "amount": 2489389258.0,
+      "close": 20.03,
+      "high": 22.17,
+      "low": 20.03,
+      "open": 22.1,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-23",
+      "volume": 1208832.0
+    },
+    {
+      "amount": 1629930014.0,
+      "close": 19.88,
+      "high": 20.1,
+      "low": 19.46,
+      "open": 19.79,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-24",
+      "volume": 825032.0
+    },
+    {
+      "amount": 2209624084.0,
+      "close": 18.89,
+      "high": 19.42,
+      "low": 18.79,
+      "open": 19.18,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-25",
+      "volume": 1159770.0
+    },
+    {
+      "amount": 1548892278.0,
+      "close": 18.3,
+      "high": 19.23,
+      "low": 18.05,
+      "open": 19.2,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-26",
+      "volume": 840577.0
+    },
+    {
+      "amount": 1488074585.0,
+      "close": 18.39,
+      "high": 18.68,
+      "low": 18.11,
+      "open": 18.58,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-29",
+      "volume": 810326.0
+    },
+    {
+      "amount": 1572551820.0,
+      "close": 18.05,
+      "high": 18.1,
+      "low": 17.56,
+      "open": 17.85,
+      "symbol": "600489.SH",
+      "trade_date": "2026-06-30",
+      "volume": 883737.0
+    },
+    {
+      "amount": 1495655319.0,
+      "close": 17.96,
+      "high": 18.42,
+      "low": 17.7,
+      "open": 17.8,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-01",
+      "volume": 831069.0
+    },
+    {
+      "amount": 2903218202.0,
+      "close": 19.09,
+      "high": 19.28,
+      "low": 18.3,
+      "open": 18.39,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-02",
+      "volume": 1538372.0
+    },
+    {
+      "amount": 3603128005.0,
+      "close": 20.34,
+      "high": 20.75,
+      "low": 19.71,
+      "open": 19.9,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-03",
+      "volume": 1767532.0
+    },
+    {
+      "amount": 3119960880.0,
+      "close": 20.6,
+      "high": 21.49,
+      "low": 19.88,
+      "open": 19.88,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-06",
+      "volume": 1494718.0
+    },
+    {
+      "amount": 1407526735.0,
+      "close": 19.75,
+      "high": 20.41,
+      "low": 19.72,
+      "open": 20.12,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-07",
+      "volume": 703827.0
+    },
+    {
+      "amount": 1570355337.0,
+      "close": 19.88,
+      "high": 20.45,
+      "low": 19.28,
+      "open": 19.41,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-08",
+      "volume": 788957.0
+    },
+    {
+      "amount": 1606210540.0,
+      "close": 19.95,
+      "high": 20.01,
+      "low": 19.04,
+      "open": 19.23,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-09",
+      "volume": 821170.0
+    },
+    {
+      "amount": 1747419555.0,
+      "close": 20.34,
+      "high": 21.06,
+      "low": 19.71,
+      "open": 20.1,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-10",
+      "volume": 859075.0
+    },
+    {
+      "amount": 1316363826.0,
+      "close": 19.67,
+      "high": 20.09,
+      "low": 19.52,
+      "open": 19.81,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-13",
+      "volume": 666164.0
+    },
+    {
+      "amount": 1845782316.0,
+      "close": 20.47,
+      "high": 20.62,
+      "low": 18.95,
+      "open": 19.09,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-14",
+      "volume": 931885.0
+    },
+    {
+      "amount": 1475626088.0,
+      "close": 20.12,
+      "high": 20.65,
+      "low": 19.9,
+      "open": 20.39,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-15",
+      "volume": 728778.0
+    },
+    {
+      "amount": 1561469931.0,
+      "close": 19.99,
+      "high": 20.57,
+      "low": 19.84,
+      "open": 19.99,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-16",
+      "volume": 773828.0
+    },
+    {
+      "amount": 2002379696.0,
+      "close": 19.06,
+      "high": 19.63,
+      "low": 18.69,
+      "open": 19.5,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-17",
+      "volume": 1048644.0
+    },
+    {
+      "amount": 1768286715.0,
+      "close": 19.53,
+      "high": 19.83,
+      "low": 19.0,
+      "open": 19.09,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-20",
+      "volume": 909321.0
+    },
+    {
+      "amount": 2236722832.0,
+      "close": 20.78,
+      "high": 20.85,
+      "low": 19.75,
+      "open": 19.83,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-21",
+      "volume": 1102571.0
+    },
+    {
+      "amount": 3314812351.0,
+      "close": 22.11,
+      "high": 22.58,
+      "low": 21.22,
+      "open": 21.28,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-22",
+      "volume": 1499323.0
+    },
+    {
+      "amount": 2542713179.0,
+      "close": 22.45,
+      "high": 23.17,
+      "low": 21.91,
+      "open": 22.3,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-23",
+      "volume": 1127073.0
+    },
+    {
+      "amount": 1870763403.0,
+      "close": 21.36,
+      "high": 22.18,
+      "low": 21.3,
+      "open": 21.4,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-24",
+      "volume": 864164.0
+    },
+    {
+      "amount": 1688929787.0,
+      "close": 21.54,
+      "high": 22.09,
+      "low": 21.16,
+      "open": 22.0,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-27",
+      "volume": 781327.0
+    },
+    {
+      "amount": 1183392664.0,
+      "close": 21.34,
+      "high": 21.48,
+      "low": 20.87,
+      "open": 21.1,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-28",
+      "volume": 558264.0
+    },
+    {
+      "amount": 1516566199.0,
+      "close": 21.74,
+      "high": 21.96,
+      "low": 20.98,
+      "open": 21.1,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-29",
+      "volume": 703875.0
+    },
+    {
+      "amount": 2105066321.0,
+      "close": 21.9,
+      "high": 22.8,
+      "low": 21.75,
+      "open": 22.1,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-30",
+      "volume": 945728.0
+    },
+    {
+      "amount": 2433954100.0,
+      "close": 23.01,
+      "high": 23.28,
+      "low": 22.14,
+      "open": 22.18,
+      "symbol": "600489.SH",
+      "trade_date": "2026-07-31",
+      "volume": 1063929.0
+    }
+  ],
+  "snapshot_series_schema_version": 1,
+  "source_store_alias": "tickflow_cloud_primary",
+  "source_type": "existing_cloud_store_snapshot",
+  "symbol": "600489.SH"
+}

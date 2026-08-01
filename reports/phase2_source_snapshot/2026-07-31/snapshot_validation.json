@@ -1,0 +1,36 @@
+{
+  "errors": [],
+  "manifest_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f",
+  "metrics": {
+    "cloud_mutation_count": 0,
+    "non_finite_numbers": 0,
+    "qfq_series_valid": 3,
+    "raw_series_valid": 3,
+    "secret_hits": 0,
+    "symbol_count": 3,
+    "tickflow_api_request_count": 0,
+    "trading_field_hits": 0
+  },
+  "normalized_business_sha256": "b61bf121fcc998e2f0bfa49c8b4e8b9abfdb81e8e7ae081b625bf12bd2321095",
+  "repeat_export": {
+    "capture_timestamps_differ": true,
+    "document_hashes_match": true,
+    "document_sha256": {
+      "000403SZ_qfq_daily.json": "feaabde8b16e2ecbefab0582ca1a13bba32921358af194c55a5cbf213720a9dc",
+      "000403SZ_raw_daily.json": "b29045903c38a81ca1d08e4d07311e926bd4ee82c8ea9113eae3dd571a19625a",
+      "300059SZ_qfq_daily.json": "3131306d481c3fc7818b3a28595a3d9dccf35e5a398309dbaadc5c58a6854e05",
+      "300059SZ_raw_daily.json": "1c7c040e6dcc5cf73e788d34c4b5caf8ad86d36ebe6953ec21fac64053e0b95c",
+      "600489SH_qfq_daily.json": "3123e985408fa74975f7c7662a80c6beeb4f3e46eb276865389291047fb2a45d",
+      "600489SH_raw_daily.json": "73f16fcee9325fbeb79a370fc2d647fdfc42735ad9afa09e5d34cf3502492586"
+    },
+    "normalized_business_hash_match": true,
+    "normalized_business_sha256": "b61bf121fcc998e2f0bfa49c8b4e8b9abfdb81e8e7ae081b625bf12bd2321095",
+    "source_partition_hashes_match": true,
+    "source_partition_sha256": {
+      "qfq": "755862c8daba3bbc3d9d4cec4aa1a1e80d02db6a4984d85870c5c737b5eff8c8",
+      "raw": "4fd9f74299533d78a1be695319e827a68de6ffe491403fa8d52af2682555f5a4"
+    },
+    "status": "IDEMPOTENT"
+  },
+  "status": "SNAPSHOT_VALID"
+}
