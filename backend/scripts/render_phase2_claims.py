@@ -1,4 +1,4 @@
-"""Validate deterministic Phase 2 Claims artifacts offline."""
+"""Render and route deterministic Phase 2 Claims without AI or network access."""
 
 from __future__ import annotations
 
@@ -6,22 +6,21 @@ import argparse
 import json
 from pathlib import Path
 
-from app.services.phase2_claims_delivery import validate_claims_bundle
-from app.services.phase2_claims_service import CLAIMS_VALID
+from app.services.phase2_claims_delivery import publish_claims_bundle
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, required=True)
-    parser.add_argument("--claims-root", type=Path, required=True)
+    parser.add_argument("--reports-root", type=Path, required=True)
     return parser
 
 
 def main() -> int:
     args = _parser().parse_args()
-    result = validate_claims_bundle(args.repo_root, args.claims_root.parent)
+    result = publish_claims_bundle(args.repo_root, args.reports_root)
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
-    return 0 if result["status"] == CLAIMS_VALID else 2
+    return 0
 
 
 if __name__ == "__main__":

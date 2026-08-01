@@ -180,7 +180,7 @@ JSON summary with zero external-action counters.
 Require the test file, fixture builder dry output, validator, compileall, and
 Ruff F821 to pass before committing.
 
-- [ ] **Step 9: Commit the Claims contract**
+- [x] **Step 9: Commit the Claims contract**
 
 ```bash
 git add backend/app/schemas backend/app/services/phase2_claims_service.py \
@@ -207,7 +207,7 @@ git commit -m "feat: add typed phase2 claims contract"
 - Consumes: a `CLAIMS_VALID` document and `PREDICATE_RULES`.
 - Produces: `render_claims_document(document, validation) -> str`, `validate_rendered_document(...)`, `route_claims_preview(...)`, and `publish_claims_bundle(repo_root, reports_root)`.
 
-- [ ] **Step 1: Write failing renderer and route tests**
+- [x] **Step 1: Write failing renderer and route tests**
 
 Require exact seven headings, exact safe frontmatter, no arbitrary Markdown,
 HTML/comments/links/zero-width characters, HTML/Markdown escaping, stable bytes
@@ -224,18 +224,18 @@ def test_renderer_is_byte_idempotent():
     assert sha256(first.encode()).hexdigest() == sha256(second.encode()).hexdigest()
 ```
 
-- [ ] **Step 2: Run tests and confirm RED**
+- [x] **Step 2: Run tests and confirm RED**
 
 Expected: renderer import fails.
 
-- [ ] **Step 3: Implement the fixed renderer**
+- [x] **Step 3: Implement the fixed renderer**
 
 Use a closed `template_id -> section/callable` registry. Render values only
 from typed objects; escape dynamic labels; generate frontmatter and seven
 sections in fixed order; append the fixed non-investment-advice disclaimer.
 The renderer module must not import `Path`, HTTP clients, subprocess, or socket.
 
-- [ ] **Step 4: Implement deterministic bundle publication**
+- [x] **Step 4: Implement deterministic bundle publication**
 
 Build schema, fixtures, rendered files, and index in a staging tree and publish
 the `phase2_claims` directory atomically. Copy valid files to
@@ -244,12 +244,12 @@ files and `os.replace`. Never replace the existing preview tree and never touch
 historical rejected files. Invalid test documents route under a `typed_` name
 to rejected.
 
-- [ ] **Step 5: Implement render CLI and idempotency check**
+- [x] **Step 5: Implement render CLI and idempotency check**
 
 The CLI rerenders only from Claims fixtures, never from AI. Run it twice and
 require identical fixture, rendered, index, schema, and preview hashes.
 
-- [ ] **Step 6: Run renderer tests and offline validation**
+- [x] **Step 6: Run renderer tests and offline validation**
 
 Also rerun the legacy freeform delivery validator and require the same expected
 `PHASE2_AI_OUTPUT_BLOCKED` with `errors=[]`; typed inbox files must not create a

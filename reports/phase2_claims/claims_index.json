@@ -1,0 +1,67 @@
+{
+  "can_publish": false,
+  "claims_schema_version": 1,
+  "cloud_mutation_count": 0,
+  "entries": [
+    {
+      "claim_count": 42,
+      "fixture_file": "fixtures/000403SZ_claims.json",
+      "fixture_sha256": "66f7ef471b293a4d5453ca53fd91668f217176915e6e88f2ce88f4f037559183",
+      "name": "派林生物",
+      "normalized_sha256": "66f7ef471b293a4d5453ca53fd91668f217176915e6e88f2ce88f4f037559183",
+      "preview_file": "inbox/typed_000403SZ_派林生物.md",
+      "preview_route": "inbox",
+      "render_status": "RENDERED_VALID",
+      "rendered_file": "rendered/000403SZ_派林生物.md",
+      "rendered_sha256": "63482087ca33cb7a0ea4767c9b4f41e9176b7abd0f5ac5516bb14b11fc9514e8",
+      "symbol": "000403.SZ",
+      "validation_status": "CLAIMS_VALID"
+    },
+    {
+      "claim_count": 42,
+      "fixture_file": "fixtures/600489SH_claims.json",
+      "fixture_sha256": "fb09664d48733f188ff2cc7d0670e235d89de7ce717c3c21cfb233d726753bee",
+      "name": "中金黄金",
+      "normalized_sha256": "fb09664d48733f188ff2cc7d0670e235d89de7ce717c3c21cfb233d726753bee",
+      "preview_file": "inbox/typed_600489SH_中金黄金.md",
+      "preview_route": "inbox",
+      "render_status": "RENDERED_VALID",
+      "rendered_file": "rendered/600489SH_中金黄金.md",
+      "rendered_sha256": "b62b729897a607c5eb51156e7f21310c1ad74444f6b97cdd0e1f6412c6af937f",
+      "symbol": "600489.SH",
+      "validation_status": "CLAIMS_VALID"
+    },
+    {
+      "claim_count": 42,
+      "fixture_file": "fixtures/300059SZ_claims.json",
+      "fixture_sha256": "a0a993a42fe81a2122920d46738fc3d019be2a0ec8066852cc85b9ce7829f3c3",
+      "name": "东方财富",
+      "normalized_sha256": "a0a993a42fe81a2122920d46738fc3d019be2a0ec8066852cc85b9ce7829f3c3",
+      "preview_file": "inbox/typed_300059SZ_东方财富.md",
+      "preview_route": "inbox",
+      "render_status": "RENDERED_VALID",
+      "rendered_file": "rendered/300059SZ_东方财富.md",
+      "rendered_sha256": "cc625649c54fc2cb8ffd00fba00926ee9bd8756c0b8589c2e14d5d3811dd7951",
+      "symbol": "300059.SZ",
+      "validation_status": "CLAIMS_VALID"
+    }
+  ],
+  "external_send_count": 0,
+  "integrated_gold_enabled": false,
+  "new_ai_call_count": 0,
+  "new_provider_attempt_count": 0,
+  "new_tickflow_api_request_count": 0,
+  "obsidian_real_vault_write": false,
+  "paper_trading_started": false,
+  "rendering_status": "RENDERED_VALID",
+  "reviewed_auto_write": false,
+  "schema_file": "schema/phase2_claims.schema.json",
+  "schema_sha256": "9a78c1ddb751f8854f58d6f2266cc18907ab4dbfb44ea104d724930ed0e45a83",
+  "status": "CLAIMS_VALID",
+  "symbol_scope": [
+    "000403.SZ",
+    "600489.SH",
+    "300059.SZ"
+  ],
+  "trading_advice": false
+}

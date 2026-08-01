@@ -1,0 +1,1101 @@
+{
+  "$defs": {
+    "BooleanStateClaim": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "pattern": "^\\d{6}(?:SZ|SH|BJ)-\\d{8}-\\d{3}-[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "claim_type": {
+          "const": "BOOLEAN_STATE",
+          "title": "Claim Type",
+          "type": "string"
+        },
+        "object": {
+          "$ref": "#/$defs/BooleanValue"
+        },
+        "predicate": {
+          "enum": [
+            "adjustment_repeat_stable",
+            "adjustment_second_adjustment_detected",
+            "minute_30m_first_bucket_mechanically_explained"
+          ],
+          "title": "Predicate",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/ClaimProvenance"
+        },
+        "rendering": {
+          "$ref": "#/$defs/RenderingSpec"
+        },
+        "scope": {
+          "$ref": "#/$defs/ClaimScope"
+        },
+        "subject": {
+          "$ref": "#/$defs/StockSubject"
+        },
+        "validation_status": {
+          "const": "VALIDATED",
+          "title": "Validation Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim_id",
+        "subject",
+        "provenance",
+        "rendering",
+        "scope",
+        "validation_status",
+        "claim_type",
+        "predicate",
+        "object"
+      ],
+      "title": "BooleanStateClaim",
+      "type": "object"
+    },
+    "BooleanValue": {
+      "additionalProperties": false,
+      "properties": {
+        "unit": {
+          "const": "none",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "boolean"
+        },
+        "value_type": {
+          "const": "boolean",
+          "title": "Value Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value_type",
+        "value",
+        "unit"
+      ],
+      "title": "BooleanValue",
+      "type": "object"
+    },
+    "ClaimProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "calculation_ref": {
+          "anyOf": [
+            {
+              "enum": [
+                "compare_numbers_v1",
+                "ordered_relation_v1",
+                "difference_v1",
+                "percentage_difference_v1",
+                "threshold_compare_v1",
+                "normalize_scope_v1"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Calculation Ref"
+        },
+        "fact_refs": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Fact Refs",
+          "type": "array"
+        },
+        "facts_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Facts Sha256",
+          "type": "string"
+        },
+        "price_basis": {
+          "enum": [
+            "raw",
+            "qfq",
+            "none"
+          ],
+          "title": "Price Basis",
+          "type": "string"
+        }
+      },
+      "required": [
+        "facts_sha256",
+        "fact_refs",
+        "calculation_ref",
+        "price_basis"
+      ],
+      "title": "ClaimProvenance",
+      "type": "object"
+    },
+    "ClaimScope": {
+      "additionalProperties": false,
+      "properties": {
+        "as_of": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "As Of",
+          "type": "string"
+        },
+        "timeframe": {
+          "enum": [
+            "1d",
+            "1m",
+            "30m",
+            "cross_timeframe",
+            "none"
+          ],
+          "title": "Timeframe",
+          "type": "string"
+        }
+      },
+      "required": [
+        "timeframe",
+        "as_of"
+      ],
+      "title": "ClaimScope",
+      "type": "object"
+    },
+    "ComparisonValue": {
+      "additionalProperties": false,
+      "properties": {
+        "left": {
+          "$ref": "#/$defs/NumericOperand"
+        },
+        "relation": {
+          "enum": [
+            "ABOVE",
+            "BELOW",
+            "EQUAL_WITHIN_EPSILON"
+          ],
+          "title": "Relation",
+          "type": "string"
+        },
+        "right": {
+          "$ref": "#/$defs/NumericOperand"
+        },
+        "value_type": {
+          "const": "comparison",
+          "title": "Value Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value_type",
+        "left",
+        "relation",
+        "right"
+      ],
+      "title": "ComparisonValue",
+      "type": "object"
+    },
+    "DataQualityStateClaim": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "pattern": "^\\d{6}(?:SZ|SH|BJ)-\\d{8}-\\d{3}-[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "claim_type": {
+          "const": "DATA_QUALITY_STATE",
+          "title": "Claim Type",
+          "type": "string"
+        },
+        "object": {
+          "$ref": "#/$defs/NumericValue"
+        },
+        "predicate": {
+          "enum": [
+            "minute_1m_duplicate_timestamp_count",
+            "minute_1m_lunch_break_bar_count",
+            "minute_1m_material_ohlc_anomaly_count",
+            "minute_1m_material_negative_amount_count",
+            "minute_30m_duplicate_timestamp_count",
+            "minute_30m_lunch_break_bar_count",
+            "minute_30m_ohlc_mismatch_count",
+            "minute_30m_non_first_bucket_volume_amount_mismatch_count",
+            "minute_30m_material_ohlc_anomaly_count",
+            "minute_30m_material_negative_amount_count"
+          ],
+          "title": "Predicate",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/ClaimProvenance"
+        },
+        "rendering": {
+          "$ref": "#/$defs/RenderingSpec"
+        },
+        "scope": {
+          "$ref": "#/$defs/ClaimScope"
+        },
+        "subject": {
+          "$ref": "#/$defs/StockSubject"
+        },
+        "validation_status": {
+          "const": "VALIDATED",
+          "title": "Validation Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim_id",
+        "subject",
+        "provenance",
+        "rendering",
+        "scope",
+        "validation_status",
+        "claim_type",
+        "predicate",
+        "object"
+      ],
+      "title": "DataQualityStateClaim",
+      "type": "object"
+    },
+    "DataScope": {
+      "additionalProperties": false,
+      "properties": {
+        "financial_scope": {
+          "const": "unavailable",
+          "title": "Financial Scope",
+          "type": "string"
+        },
+        "industry_scope": {
+          "const": "unavailable",
+          "title": "Industry Scope",
+          "type": "string"
+        },
+        "market_scope": {
+          "const": "incomplete",
+          "title": "Market Scope",
+          "type": "string"
+        },
+        "news_scope": {
+          "const": "unavailable",
+          "title": "News Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "market_scope",
+        "financial_scope",
+        "news_scope",
+        "industry_scope"
+      ],
+      "title": "DataScope",
+      "type": "object"
+    },
+    "EnumStateClaim": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "pattern": "^\\d{6}(?:SZ|SH|BJ)-\\d{8}-\\d{3}-[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "claim_type": {
+          "const": "ENUM_STATE",
+          "title": "Claim Type",
+          "type": "string"
+        },
+        "object": {
+          "$ref": "#/$defs/StateValue"
+        },
+        "predicate": {
+          "enum": [
+            "daily_contract_status",
+            "minute_1m_contract_status",
+            "minute_30m_contract_status",
+            "adjustment_factor_status",
+            "data_freshness"
+          ],
+          "title": "Predicate",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/ClaimProvenance"
+        },
+        "rendering": {
+          "$ref": "#/$defs/RenderingSpec"
+        },
+        "scope": {
+          "$ref": "#/$defs/ClaimScope"
+        },
+        "subject": {
+          "$ref": "#/$defs/StockSubject"
+        },
+        "validation_status": {
+          "const": "VALIDATED",
+          "title": "Validation Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim_id",
+        "subject",
+        "provenance",
+        "rendering",
+        "scope",
+        "validation_status",
+        "claim_type",
+        "predicate",
+        "object"
+      ],
+      "title": "EnumStateClaim",
+      "type": "object"
+    },
+    "FactsBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "facts_file": {
+          "pattern": "^reports/phase2_facts/\\d{6}(?:SZ|SH|BJ)_facts\\.json$",
+          "title": "Facts File",
+          "type": "string"
+        },
+        "facts_schema_version": {
+          "const": 1,
+          "title": "Facts Schema Version",
+          "type": "integer"
+        },
+        "facts_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Facts Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "facts_file",
+        "facts_sha256",
+        "facts_schema_version"
+      ],
+      "title": "FactsBinding",
+      "type": "object"
+    },
+    "NumericObservationClaim": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "pattern": "^\\d{6}(?:SZ|SH|BJ)-\\d{8}-\\d{3}-[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "claim_type": {
+          "const": "NUMERIC_OBSERVATION",
+          "title": "Claim Type",
+          "type": "string"
+        },
+        "object": {
+          "$ref": "#/$defs/NumericValue"
+        },
+        "predicate": {
+          "enum": [
+            "daily_close",
+            "daily_open_to_close_percent",
+            "ma5",
+            "ma10",
+            "ma20",
+            "ma60",
+            "macd_dif",
+            "macd_dea",
+            "macd_hist",
+            "rsi6",
+            "rsi14",
+            "boll_upper",
+            "boll_middle",
+            "boll_lower",
+            "atr14",
+            "minute_1m_bar_count",
+            "minute_30m_bar_count"
+          ],
+          "title": "Predicate",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/ClaimProvenance"
+        },
+        "rendering": {
+          "$ref": "#/$defs/RenderingSpec"
+        },
+        "scope": {
+          "$ref": "#/$defs/ClaimScope"
+        },
+        "subject": {
+          "$ref": "#/$defs/StockSubject"
+        },
+        "validation_status": {
+          "const": "VALIDATED",
+          "title": "Validation Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim_id",
+        "subject",
+        "provenance",
+        "rendering",
+        "scope",
+        "validation_status",
+        "claim_type",
+        "predicate",
+        "object"
+      ],
+      "title": "NumericObservationClaim",
+      "type": "object"
+    },
+    "NumericOperand": {
+      "additionalProperties": false,
+      "properties": {
+        "fact_ref": {
+          "pattern": "^/",
+          "title": "Fact Ref",
+          "type": "string"
+        },
+        "label_id": {
+          "enum": [
+            "daily_open",
+            "daily_close",
+            "ma5",
+            "ma10",
+            "ma20",
+            "ma60",
+            "macd_dif",
+            "macd_dea",
+            "rsi6",
+            "rsi14"
+          ],
+          "title": "Label Id",
+          "type": "string"
+        },
+        "price_basis": {
+          "enum": [
+            "raw",
+            "qfq",
+            "none"
+          ],
+          "title": "Price Basis",
+          "type": "string"
+        },
+        "unit": {
+          "enum": [
+            "raw_price",
+            "qfq_price",
+            "percent",
+            "dimensionless",
+            "count",
+            "none"
+          ],
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "label_id",
+        "fact_ref",
+        "value",
+        "unit",
+        "price_basis"
+      ],
+      "title": "NumericOperand",
+      "type": "object"
+    },
+    "NumericValue": {
+      "additionalProperties": false,
+      "properties": {
+        "unit": {
+          "enum": [
+            "raw_price",
+            "qfq_price",
+            "percent",
+            "dimensionless",
+            "count",
+            "none"
+          ],
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Value"
+        },
+        "value_type": {
+          "const": "number",
+          "title": "Value Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value_type",
+        "value",
+        "unit"
+      ],
+      "title": "NumericValue",
+      "type": "object"
+    },
+    "OrderedRelationClaim": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "pattern": "^\\d{6}(?:SZ|SH|BJ)-\\d{8}-\\d{3}-[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "claim_type": {
+          "const": "ORDERED_RELATION",
+          "title": "Claim Type",
+          "type": "string"
+        },
+        "object": {
+          "$ref": "#/$defs/OrderedValue"
+        },
+        "predicate": {
+          "const": "ma_value_order",
+          "title": "Predicate",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/ClaimProvenance"
+        },
+        "rendering": {
+          "$ref": "#/$defs/RenderingSpec"
+        },
+        "scope": {
+          "$ref": "#/$defs/ClaimScope"
+        },
+        "subject": {
+          "$ref": "#/$defs/StockSubject"
+        },
+        "validation_status": {
+          "const": "VALIDATED",
+          "title": "Validation Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim_id",
+        "subject",
+        "provenance",
+        "rendering",
+        "scope",
+        "validation_status",
+        "claim_type",
+        "predicate",
+        "object"
+      ],
+      "title": "OrderedRelationClaim",
+      "type": "object"
+    },
+    "OrderedValue": {
+      "additionalProperties": false,
+      "properties": {
+        "operands": {
+          "items": {
+            "$ref": "#/$defs/NumericOperand"
+          },
+          "minItems": 2,
+          "title": "Operands",
+          "type": "array"
+        },
+        "relation": {
+          "enum": [
+            "DESCENDING",
+            "ASCENDING"
+          ],
+          "title": "Relation",
+          "type": "string"
+        },
+        "value_type": {
+          "const": "ordered_relation",
+          "title": "Value Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value_type",
+        "operands",
+        "relation"
+      ],
+      "title": "OrderedValue",
+      "type": "object"
+    },
+    "RenderingSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "display_precision": {
+          "anyOf": [
+            {
+              "maximum": 8,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Precision"
+        },
+        "template_id": {
+          "enum": [
+            "daily_close_v1",
+            "daily_open_to_close_percent_v1",
+            "indicator_numeric_v1",
+            "contract_state_v1",
+            "boolean_state_v1",
+            "same_basis_comparison_v1",
+            "ordered_relation_v1",
+            "scope_notice_v1",
+            "vendor_pending_v1",
+            "data_quality_count_v1"
+          ],
+          "title": "Template Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "template_id"
+      ],
+      "title": "RenderingSpec",
+      "type": "object"
+    },
+    "SameBasisComparisonClaim": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "pattern": "^\\d{6}(?:SZ|SH|BJ)-\\d{8}-\\d{3}-[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "claim_type": {
+          "const": "SAME_BASIS_COMPARISON",
+          "title": "Claim Type",
+          "type": "string"
+        },
+        "object": {
+          "$ref": "#/$defs/ComparisonValue"
+        },
+        "predicate": {
+          "const": "macd_dif_vs_dea",
+          "title": "Predicate",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/ClaimProvenance"
+        },
+        "rendering": {
+          "$ref": "#/$defs/RenderingSpec"
+        },
+        "scope": {
+          "$ref": "#/$defs/ClaimScope"
+        },
+        "subject": {
+          "$ref": "#/$defs/StockSubject"
+        },
+        "validation_status": {
+          "const": "VALIDATED",
+          "title": "Validation Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim_id",
+        "subject",
+        "provenance",
+        "rendering",
+        "scope",
+        "validation_status",
+        "claim_type",
+        "predicate",
+        "object"
+      ],
+      "title": "SameBasisComparisonClaim",
+      "type": "object"
+    },
+    "ScopeNoticeClaim": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "pattern": "^\\d{6}(?:SZ|SH|BJ)-\\d{8}-\\d{3}-[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "claim_type": {
+          "const": "SCOPE_NOTICE",
+          "title": "Claim Type",
+          "type": "string"
+        },
+        "object": {
+          "$ref": "#/$defs/ScopeValue"
+        },
+        "predicate": {
+          "enum": [
+            "market_scope",
+            "financial_scope",
+            "news_scope",
+            "industry_scope"
+          ],
+          "title": "Predicate",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/ClaimProvenance"
+        },
+        "rendering": {
+          "$ref": "#/$defs/RenderingSpec"
+        },
+        "scope": {
+          "$ref": "#/$defs/ClaimScope"
+        },
+        "subject": {
+          "$ref": "#/$defs/StockSubject"
+        },
+        "validation_status": {
+          "const": "VALIDATED",
+          "title": "Validation Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim_id",
+        "subject",
+        "provenance",
+        "rendering",
+        "scope",
+        "validation_status",
+        "claim_type",
+        "predicate",
+        "object"
+      ],
+      "title": "ScopeNoticeClaim",
+      "type": "object"
+    },
+    "ScopeValue": {
+      "additionalProperties": false,
+      "properties": {
+        "scope_key": {
+          "enum": [
+            "market_scope",
+            "financial_scope",
+            "news_scope",
+            "industry_scope"
+          ],
+          "title": "Scope Key",
+          "type": "string"
+        },
+        "value": {
+          "enum": [
+            "incomplete",
+            "unavailable"
+          ],
+          "title": "Value",
+          "type": "string"
+        },
+        "value_type": {
+          "const": "scope",
+          "title": "Value Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value_type",
+        "scope_key",
+        "value"
+      ],
+      "title": "ScopeValue",
+      "type": "object"
+    },
+    "StateValue": {
+      "additionalProperties": false,
+      "properties": {
+        "unit": {
+          "const": "none",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "enum": [
+            "ABOVE",
+            "BELOW",
+            "EQUAL_WITHIN_EPSILON",
+            "POSITIVE",
+            "NEGATIVE",
+            "NEUTRAL",
+            "INCOMPLETE",
+            "UNAVAILABLE",
+            "PENDING_CONFIRMATION",
+            "AVAILABLE",
+            "PASSED",
+            "FRESH",
+            "fresh"
+          ],
+          "title": "Value",
+          "type": "string"
+        },
+        "value_type": {
+          "const": "enum",
+          "title": "Value Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value_type",
+        "value",
+        "unit"
+      ],
+      "title": "StateValue",
+      "type": "object"
+    },
+    "StockSubject": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_type": {
+          "const": "stock",
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "symbol": {
+          "pattern": "^\\d{6}\\.(?:SZ|SH|BJ)$",
+          "title": "Symbol",
+          "type": "string"
+        }
+      },
+      "required": [
+        "entity_type",
+        "symbol"
+      ],
+      "title": "StockSubject",
+      "type": "object"
+    },
+    "VendorPendingNoticeClaim": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "pattern": "^\\d{6}(?:SZ|SH|BJ)-\\d{8}-\\d{3}-[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "claim_type": {
+          "const": "VENDOR_PENDING_NOTICE",
+          "title": "Claim Type",
+          "type": "string"
+        },
+        "object": {
+          "$ref": "#/$defs/VendorPendingValue"
+        },
+        "predicate": {
+          "const": "vendor_pending",
+          "title": "Predicate",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/ClaimProvenance"
+        },
+        "rendering": {
+          "$ref": "#/$defs/RenderingSpec"
+        },
+        "scope": {
+          "$ref": "#/$defs/ClaimScope"
+        },
+        "subject": {
+          "$ref": "#/$defs/StockSubject"
+        },
+        "validation_status": {
+          "const": "VALIDATED",
+          "title": "Validation Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim_id",
+        "subject",
+        "provenance",
+        "rendering",
+        "scope",
+        "validation_status",
+        "claim_type",
+        "predicate",
+        "object"
+      ],
+      "title": "VendorPendingNoticeClaim",
+      "type": "object"
+    },
+    "VendorPendingValue": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "enum": [
+              "intraday_batch_entitlement",
+              "first_30m_bucket_includes_09_30",
+              "volume_unit",
+              "amount_unit"
+            ],
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "title": "Items",
+          "type": "array"
+        },
+        "value_type": {
+          "const": "vendor_pending",
+          "title": "Value Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value_type",
+        "items"
+      ],
+      "title": "VendorPendingValue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "claims": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "BOOLEAN_STATE": "#/$defs/BooleanStateClaim",
+            "DATA_QUALITY_STATE": "#/$defs/DataQualityStateClaim",
+            "ENUM_STATE": "#/$defs/EnumStateClaim",
+            "NUMERIC_OBSERVATION": "#/$defs/NumericObservationClaim",
+            "ORDERED_RELATION": "#/$defs/OrderedRelationClaim",
+            "SAME_BASIS_COMPARISON": "#/$defs/SameBasisComparisonClaim",
+            "SCOPE_NOTICE": "#/$defs/ScopeNoticeClaim",
+            "VENDOR_PENDING_NOTICE": "#/$defs/VendorPendingNoticeClaim"
+          },
+          "propertyName": "claim_type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/NumericObservationClaim"
+          },
+          {
+            "$ref": "#/$defs/BooleanStateClaim"
+          },
+          {
+            "$ref": "#/$defs/EnumStateClaim"
+          },
+          {
+            "$ref": "#/$defs/SameBasisComparisonClaim"
+          },
+          {
+            "$ref": "#/$defs/OrderedRelationClaim"
+          },
+          {
+            "$ref": "#/$defs/ScopeNoticeClaim"
+          },
+          {
+            "$ref": "#/$defs/VendorPendingNoticeClaim"
+          },
+          {
+            "$ref": "#/$defs/DataQualityStateClaim"
+          }
+        ]
+      },
+      "minItems": 1,
+      "title": "Claims",
+      "type": "array"
+    },
+    "claims_schema_version": {
+      "const": 1,
+      "title": "Claims Schema Version",
+      "type": "integer"
+    },
+    "facts_binding": {
+      "$ref": "#/$defs/FactsBinding"
+    },
+    "name": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "scope": {
+      "$ref": "#/$defs/DataScope"
+    },
+    "source_system": {
+      "const": "tickflow-stock-panel",
+      "title": "Source System",
+      "type": "string"
+    },
+    "symbol": {
+      "pattern": "^\\d{6}\\.(?:SZ|SH|BJ)$",
+      "title": "Symbol",
+      "type": "string"
+    },
+    "timezone": {
+      "const": "Asia/Shanghai",
+      "title": "Timezone",
+      "type": "string"
+    },
+    "trade_date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Trade Date",
+      "type": "string"
+    },
+    "trading_advice": {
+      "const": false,
+      "title": "Trading Advice",
+      "type": "boolean"
+    },
+    "vendor_pending": {
+      "items": {
+        "enum": [
+          "intraday_batch_entitlement",
+          "first_30m_bucket_includes_09_30",
+          "volume_unit",
+          "amount_unit"
+        ],
+        "type": "string"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "title": "Vendor Pending",
+      "type": "array"
+    }
+  },
+  "required": [
+    "claims_schema_version",
+    "source_system",
+    "symbol",
+    "name",
+    "trade_date",
+    "timezone",
+    "facts_binding",
+    "scope",
+    "claims",
+    "vendor_pending",
+    "trading_advice"
+  ],
+  "title": "ClaimsDocument",
+  "type": "object"
+}
