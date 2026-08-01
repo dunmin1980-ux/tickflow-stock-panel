@@ -1,14 +1,29 @@
 from __future__ import annotations
 
+import hashlib
+import importlib.util
 import json
+import subprocess
 import uuid
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
+from app.services.phase2_ai_worker_protocol import FakeClaimsWorker
+from app.services.phase2_claims_service import canonical_json_bytes
+from app.services.phase2_provider_relay_protocol import (
+    Phase2ProviderRelayError,
+    build_relay_request,
+    parse_single_json_object,
+    validate_relay_response,
+)
 from app.services.phase2_provider_relay_runner import (
+    PHASE2B_PROVIDER_RELAY_E2E_BLOCKED,
+    PHASE2B_PROVIDER_RELAY_READY,
     MockRuntimePaths,
     Phase2ProviderRelayRuntimeError,
+    ProviderRelayResult,
     ProxyRuntimePaths,
     RelayRuntimePaths,
     build_mock_create_command,
@@ -16,14 +31,20 @@ from app.services.phase2_provider_relay_runner import (
     build_network_create_command,
     build_proxy_create_command,
     build_relay_create_command,
+    run_mock_provider_relay,
     validate_container_inspect,
     validate_network_topology,
     validate_secret_boundary,
 )
+from scripts.run_phase2_mock_provider_relay import parse_args as parse_run_args
+from scripts.validate_phase2_provider_relay import parse_args as parse_validate_args
+from scripts.validate_phase2_provider_relay import validate_provider_relay_artifacts
 
 RELAY_IMAGE = "tickflow-phase2-provider-relay:runtime-v1"
 PROXY_IMAGE = "tickflow-phase2-egress-proxy:runtime-v1"
 MOCK_IMAGE = "tickflow-phase2-mock-provider:runtime-v1"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+MOCK_PROVIDER_PATH = REPO_ROOT / "docker/phase2-mock-provider/mock_provider.py"
 
 
 def _file(path: Path, value: bytes = b"{}\n", mode: int = 0o600) -> Path:
@@ -520,6 +541,32 @@ def test_container_inspect_rejects_nonzero_exited_state(tmp_path: Path) -> None:
     assert "runtime_state_invalid" in evidence.errors
 
 
+def test_container_inspect_accepts_explicit_rejected_exit_code(tmp_path: Path) -> None:
+    relay_paths, _, _ = _paths(tmp_path)
+    network = "phase2-relay-proxy-a1b2c3"
+    payload = _inspect_payload(
+        "relay",
+        relay_paths,
+        primary_network=network,
+        networks={network},
+        state="exited",
+    )
+    payload[0]["State"]["ExitCode"] = 2
+
+    evidence = validate_container_inspect(
+        payload,
+        component="relay",
+        paths=relay_paths,
+        expected_primary_network=network,
+        expected_networks={network},
+        expected_state="exited",
+        expected_exit_code=2,
+    )
+
+    assert evidence.contract_valid is True
+    assert evidence.state_valid is True
+
+
 def _network_payload(name: str, members: list[str]) -> list[dict]:
     return [
         {
@@ -721,3 +768,603 @@ def test_secret_boundary_rejects_nested_secret_digest_metadata(
     assert evidence.secret_digest_recorded is True
     assert "secret_digest_recorded" in evidence.errors
     assert evidence.boundary_valid is False
+
+
+def _load_module(path: Path, prefix: str) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(
+        f"{prefix}_{uuid.uuid4().hex}",
+        path,
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _parse_mounts(command: list[str]) -> dict[str, tuple[Path, bool]]:
+    mounts: dict[str, tuple[Path, bool]] = {}
+    for index, value in enumerate(command):
+        if value != "--mount":
+            continue
+        parts = command[index + 1].split(",")
+        fields = {
+            part.partition("=")[0]: part.partition("=")[2]
+            for part in parts
+            if "=" in part
+        }
+        mounts[fields["dst"]] = (
+            Path(fields["src"]),
+            "readonly" in parts,
+        )
+    return mounts
+
+
+class FakeProviderRelayDocker:
+    def __init__(self, *, fail_when: str | None = None) -> None:
+        self.fail_when = fail_when
+        self.failed = False
+        self.commands: list[list[str]] = []
+        self.networks: dict[str, dict] = {}
+        self.containers: dict[str, dict] = {}
+        self.provider_attempt_count = 0
+        self.mock_provider = _load_module(
+            MOCK_PROVIDER_PATH,
+            "fake_runtime_mock_provider",
+        )
+
+    @property
+    def residual_container_count(self) -> int:
+        return len(self.containers)
+
+    @property
+    def residual_network_count(self) -> int:
+        return len(self.networks)
+
+    def _completed(
+        self,
+        command: list[str],
+        returncode: int = 0,
+        stdout: str = "",
+        stderr: str = "",
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, returncode, stdout, stderr)
+
+    def _inspect(self, name: str) -> list[dict]:
+        container = self.containers[name]
+        mounts = [
+            {
+                "Type": "bind",
+                "Source": str(source),
+                "Destination": destination,
+                "RW": not readonly,
+            }
+            for destination, (source, readonly) in container["mounts"].items()
+        ]
+        return [
+            {
+                "Config": {
+                    "User": "65532:65532",
+                    "Image": container["image"],
+                    "Env": ["PYTHONDONTWRITEBYTECODE=1", "PYTHONHASHSEED=0"],
+                    "Labels": {},
+                },
+                "HostConfig": {
+                    "NetworkMode": container["primary_network"],
+                    "ReadonlyRootfs": True,
+                    "CapDrop": ["ALL"],
+                    "SecurityOpt": ["no-new-privileges:true"],
+                    "PidsLimit": 16,
+                    "Memory": 134_217_728,
+                    "NanoCpus": 500_000_000,
+                    "IpcMode": "none",
+                    "RestartPolicy": {"Name": "no", "MaximumRetryCount": 0},
+                    "Privileged": False,
+                    "PortBindings": {},
+                    "Devices": [],
+                },
+                "Mounts": mounts,
+                "NetworkSettings": {
+                    "Networks": {
+                        network: {} for network in container["networks"]
+                    },
+                    "Ports": {},
+                },
+                "State": {
+                    "Status": container["state"],
+                    "ExitCode": container["exit_code"],
+                },
+            }
+        ]
+
+    def _network_inspect(self, name: str) -> list[dict]:
+        members = [
+            container_name
+            for container_name, container in self.containers.items()
+            if name in container["networks"]
+        ]
+        return _network_payload(name, members)
+
+    def _write_ready(self, container: dict) -> None:
+        receipt_path = container["mounts"]["/output/receipt.json"][0]
+        receipt_path.write_bytes(
+            canonical_json_bytes(
+                {
+                    "receipt_schema_version": 1,
+                    "status": "READY",
+                    "auth_present": True,
+                }
+            )
+        )
+
+    def _current_mock(self) -> dict:
+        return next(
+            container
+            for container in self.containers.values()
+            if container["image"] == MOCK_IMAGE
+        )
+
+    def _current_proxy(self) -> dict:
+        return next(
+            container
+            for container in self.containers.values()
+            if container["image"] == PROXY_IMAGE
+        )
+
+    def _write_relay_result(self, relay: dict) -> int:
+        mounts = relay["mounts"]
+        response_path = mounts["/output/response.json"][0]
+        receipt_path = mounts["/output/receipt.json"][0]
+        request = json.loads(mounts["/input/request.json"][0].read_bytes())
+        projection = json.loads(mounts["/input/projection.json"][0].read_bytes())
+        if relay["mode"] == "probe":
+            self.provider_attempt_count += 1
+            mock = self._current_mock()
+            proxy = self._current_proxy()
+            output = {
+                "probe_schema_version": 1,
+                "results": {
+                    "proxy_exact": "ALLOWED",
+                    "direct_provider": "NOT_REACHABLE",
+                    "arbitrary_hostname": "NOT_REACHABLE",
+                    "public_test_ip": "NOT_REACHABLE",
+                    "host_gateway": "NOT_REACHABLE",
+                    "docker_control_file": "BLOCKED",
+                    "docker_control_tcp": "NOT_REACHABLE",
+                    "proxy_wrong_path": "BLOCKED",
+                    "proxy_wrong_method": "BLOCKED",
+                },
+            }
+            raw = canonical_json_bytes(output)
+            response_path.write_bytes(raw)
+            receipt_path.write_bytes(
+                canonical_json_bytes(
+                    {
+                        "receipt_schema_version": 1,
+                        "status": "SUCCEEDED",
+                        "error_category": None,
+                        "provider_http_status": 200,
+                        "provider_attempt_count": 1,
+                        "retry_count": 0,
+                        "response_size": len(raw),
+                        "response_sha256": hashlib.sha256(raw).hexdigest(),
+                        "started_at": "2026-08-01T08:00:00Z",
+                        "completed_at": "2026-08-01T08:00:01Z",
+                    }
+                )
+            )
+            proxy["mounts"]["/output/receipt.json"][0].write_bytes(
+                canonical_json_bytes(
+                    {
+                        "receipt_schema_version": 1,
+                        "method_allowed": False,
+                        "path_allowed": True,
+                        "upstream_attempt_count": 0,
+                        "response_category": "METHOD_BLOCKED",
+                        "response_size": 0,
+                        "auth_present": False,
+                    }
+                )
+            )
+            mock["mounts"]["/output/receipt.json"][0].write_bytes(
+                canonical_json_bytes(
+                    {
+                        "receipt_schema_version": 1,
+                        "request_count": 1,
+                        "method_allowed": True,
+                        "path_allowed": True,
+                        "auth_valid": True,
+                        "envelope_valid": True,
+                        "scenario": "valid_typed_candidate",
+                        "response_category": "SCENARIO_RESPONSE",
+                        "http_status": 200,
+                        "response_size": 1024,
+                    }
+                )
+            )
+            return 0
+
+        mock = self._current_mock()
+        proxy = self._current_proxy()
+        scenario = json.loads(
+            mock["mounts"]["/input/scenario.json"][0].read_bytes()
+        )["scenario"]
+        envelope = {
+            "request": request,
+            "projection": projection,
+            "generation": {
+                "temperature": 0,
+                "response_format": "typed_claims_json",
+                "tool_use": False,
+                "web_browsing": False,
+                "file_tools": False,
+                "function_calling": False,
+                "streaming": False,
+                "retry_count": 0,
+                "maximum_output_bytes": 1_048_576,
+                "timeout_seconds": 2,
+            },
+        }
+        result = self.mock_provider.build_scenario_response(
+            envelope,
+            scenario,
+            lambda value: json.loads(FakeClaimsWorker().run(value)),
+        )
+        self.provider_attempt_count += 1
+        status = result["status"]
+        body = result["body"]
+        error_category: str | None = None
+        if result["delay_seconds"] > 2:
+            error_category = "TIMEOUT"
+        elif 300 <= status < 400:
+            error_category = "REDIRECT_REJECTED"
+        elif not 200 <= status < 300:
+            error_category = "HTTP_REJECTED"
+        elif not body:
+            error_category = "EMPTY_RESPONSE"
+        elif len(body) > 1_048_576:
+            error_category = "RESPONSE_TOO_LARGE"
+        else:
+            try:
+                parsed = parse_single_json_object(body, maximum_bytes=1_048_576)
+                validate_relay_response(
+                    parsed,
+                    build_relay_request(
+                        projection,
+                        request_id=request["request_id"],
+                    ),
+                )
+            except Phase2ProviderRelayError as exc:
+                error_category = (
+                    "STRICT_JSON_REJECTED"
+                    if exc.code == "strict_json_invalid"
+                    else "BINDING_REJECTED"
+                )
+        exit_code = 0 if error_category is None else 2
+        if exit_code == 0:
+            response_path.write_bytes(body)
+        else:
+            response_path.write_bytes(b"\n")
+        receipt = {
+            "receipt_schema_version": 1,
+            "status": "SUCCEEDED" if exit_code == 0 else "REJECTED",
+            "error_category": error_category,
+            "provider_http_status": None if error_category == "TIMEOUT" else status,
+            "provider_attempt_count": 1,
+            "retry_count": 0,
+            "response_size": len(body) if body and len(body) <= 1_048_576 else None,
+            "response_sha256": (
+                hashlib.sha256(body).hexdigest()
+                if body and len(body) <= 1_048_576
+                else None
+            ),
+            "started_at": "2026-08-01T08:00:00Z",
+            "completed_at": "2026-08-01T08:00:01Z",
+        }
+        receipt_path.write_bytes(canonical_json_bytes(receipt))
+        proxy["mounts"]["/output/receipt.json"][0].write_bytes(
+            canonical_json_bytes(
+                {
+                    "receipt_schema_version": 1,
+                    "method_allowed": True,
+                    "path_allowed": True,
+                    "upstream_attempt_count": 1,
+                    "response_category": "FORWARDED",
+                    "response_size": len(body),
+                    "auth_present": True,
+                }
+            )
+        )
+        mock["mounts"]["/output/receipt.json"][0].write_bytes(
+            canonical_json_bytes(
+                {
+                    "receipt_schema_version": 1,
+                    "request_count": 1,
+                    "method_allowed": True,
+                    "path_allowed": True,
+                    "auth_valid": True,
+                    "envelope_valid": True,
+                    "scenario": scenario,
+                    "response_category": "SCENARIO_RESPONSE",
+                    "http_status": status,
+                    "response_size": len(body),
+                }
+            )
+        )
+        return exit_code
+
+    def __call__(self, command: list[str]) -> subprocess.CompletedProcess[str]:
+        self.commands.append(list(command))
+        joined = " ".join(command)
+        if (
+            self.fail_when
+            and not self.failed
+            and self.fail_when in joined
+            and command[:2] != ["docker", "rm"]
+            and command[:3] != ["docker", "network", "rm"]
+        ):
+            self.failed = True
+            return self._completed(command, 1, stderr="sanitized failure")
+        if command[:2] == ["docker", "version"]:
+            return self._completed(
+                command,
+                stdout=json.dumps(
+                    {"Version": "29.3.1", "Os": "linux", "Arch": "amd64"}
+                ),
+            )
+        if command[:3] == ["docker", "image", "inspect"]:
+            image = command[3]
+            index = {RELAY_IMAGE: "1", PROXY_IMAGE: "2", MOCK_IMAGE: "3"}[image]
+            entrypoint = {
+                RELAY_IMAGE: ["/usr/bin/python3", "/relay/relay.py"],
+                PROXY_IMAGE: ["/usr/bin/python3", "/proxy/proxy.py"],
+                MOCK_IMAGE: ["/usr/bin/python3", "/app/mock_provider.py"],
+            }[image]
+            return self._completed(
+                command,
+                stdout=json.dumps(
+                    [
+                        {
+                            "Id": f"sha256:{index * 64}",
+                            "Config": {
+                                "User": "65532:65532",
+                                "Entrypoint": entrypoint,
+                                "Env": [
+                                    "PYTHONDONTWRITEBYTECODE=1",
+                                    "PYTHONHASHSEED=0",
+                                ],
+                                "Labels": {
+                                    "org.tickflow.phase2.base-image-digest": (
+                                        "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccd"
+                                        "ac572511d5e09bda4435c89c5"
+                                    )
+                                },
+                            },
+                        }
+                    ]
+                ),
+            )
+        if command[:3] == ["docker", "network", "create"]:
+            self.networks[command[-1]] = {}
+            return self._completed(command, stdout="network-id\n")
+        if command[:3] == ["docker", "network", "connect"]:
+            self.containers[command[4]]["networks"].add(command[3])
+            return self._completed(command)
+        if command[:3] == ["docker", "network", "inspect"]:
+            return self._completed(
+                command,
+                stdout=json.dumps(self._network_inspect(command[3])),
+            )
+        if command[:3] == ["docker", "network", "rm"]:
+            self.networks.pop(command[3], None)
+            return self._completed(command)
+        if command[:2] == ["docker", "create"]:
+            name = command[command.index("--name") + 1]
+            network = command[command.index("--network") + 1]
+            image = next(
+                value
+                for value in (RELAY_IMAGE, PROXY_IMAGE, MOCK_IMAGE)
+                if value in command
+            )
+            self.containers[name] = {
+                "image": image,
+                "primary_network": network,
+                "networks": {network},
+                "mounts": _parse_mounts(command),
+                "state": "created",
+                "exit_code": 0,
+                "mode": command[-1] if image == RELAY_IMAGE else None,
+            }
+            return self._completed(command, stdout="container-id\n")
+        if command[:2] == ["docker", "inspect"]:
+            return self._completed(
+                command,
+                stdout=json.dumps(self._inspect(command[2])),
+            )
+        if command[:2] == ["docker", "start"]:
+            name = command[-1]
+            container = self.containers[name]
+            if "--attach" in command:
+                exit_code = self._write_relay_result(container)
+                container["state"] = "exited"
+                container["exit_code"] = exit_code
+                return self._completed(command, exit_code)
+            container["state"] = "running"
+            self._write_ready(container)
+            return self._completed(command)
+        if command[:3] == ["docker", "rm", "-f"]:
+            self.containers.pop(command[3], None)
+            return self._completed(command)
+        raise AssertionError(f"unexpected command: {command}")
+
+
+def _tree_hash(path: Path) -> str:
+    entries = []
+    for item in sorted(candidate for candidate in path.rglob("*") if candidate.is_file()):
+        entries.append(
+            {
+                "path": item.relative_to(path).as_posix(),
+                "sha256": hashlib.sha256(item.read_bytes()).hexdigest(),
+            }
+        )
+    return hashlib.sha256(canonical_json_bytes(entries)).hexdigest()
+
+
+def _request_ids():
+    counter = 0
+
+    def next_id() -> str:
+        nonlocal counter
+        counter += 1
+        return f"{counter:032x}"
+
+    return next_id
+
+
+def test_mock_orchestrator_runs_every_scenario_once_and_publishes_atomically(
+    tmp_path: Path,
+) -> None:
+    reports_root = tmp_path / "reports"
+    reports_root.mkdir()
+    fake = FakeProviderRelayDocker()
+    canary = uuid.uuid4().hex + uuid.uuid4().hex
+    protected_before = _tree_hash(REPO_ROOT / "reports/phase2_claims")
+
+    result = run_mock_provider_relay(
+        REPO_ROOT,
+        reports_root,
+        _executor=fake,
+        _allow_test_output_root=True,
+        _secret_factory=lambda: canary,
+        _request_id_factory=_request_ids(),
+    )
+
+    assert isinstance(result, ProviderRelayResult)
+    assert result.status == PHASE2B_PROVIDER_RELAY_READY
+    assert result.errors == []
+    assert result.cleanup_complete is True
+    assert fake.residual_container_count == 0
+    assert fake.residual_network_count == 0
+    assert fake.provider_attempt_count == 24
+    assert sum(command[:3] == ["docker", "start", "--attach"] for command in fake.commands) == 24
+    assert all("--env" not in command and "--env-file" not in command for command in fake.commands)
+
+    output = reports_root / "phase2_provider_relay"
+    inbox = list((output / "mock_preview/inbox").glob("*.md"))
+    rejected = list((output / "mock_preview/rejected").glob("*.json"))
+    receipts = list((output / "mock_preview/receipts").glob("*.json"))
+    assert len(inbox) == 1
+    assert len(rejected) == 21
+    assert len(receipts) == 24
+    assert not (reports_root / "phase2_obsidian_preview").exists()
+    assert protected_before == _tree_hash(REPO_ROOT / "reports/phase2_claims")
+    evidence_bytes = (output / "runtime_evidence.json").read_bytes()
+    evidence = json.loads(evidence_bytes)
+    assert canary.encode() not in evidence_bytes
+    assert evidence["status"] == PHASE2B_PROVIDER_RELAY_READY
+    assert evidence["mock_matrix"]["valid_run_count"] == 2
+    assert evidence["mock_matrix"]["invalid_rejected_count"] == 21
+    assert evidence["mock_matrix"]["invalid_accepted_count"] == 0
+    assert evidence["determinism"]["candidate_hash_match"] is True
+    assert evidence["determinism"]["renderer_hash_match"] is True
+    assert evidence["secret_boundary"]["secret_value_hit_count"] == 0
+    assert evidence["cleanup"]["container_residue_count"] == 0
+    assert evidence["cleanup"]["network_residue_count"] == 0
+    assert evidence["external_actions"] == {
+        "tickflow_api_request_count": 0,
+        "real_ai_call_count": 0,
+        "real_provider_attempt_count": 0,
+        "real_public_network_success_count": 0,
+        "cloud_mutation_count": 0,
+        "obsidian_real_vault_write": False,
+        "external_send_count": 0,
+        "integrated_gold_enabled": False,
+        "paper_trading_started": False,
+    }
+    validation = validate_provider_relay_artifacts(output)
+    assert validation.status == PHASE2B_PROVIDER_RELAY_READY
+    assert validation.errors == []
+
+
+@pytest.mark.parametrize(
+    "failure_boundary",
+    [
+        "docker network create",
+        "docker create --name phase2-mock",
+        "docker start phase2-proxy",
+        "docker network connect",
+        "docker start --attach phase2-relay",
+        "docker inspect phase2-relay",
+    ],
+)
+def test_mock_orchestrator_cleans_every_created_resource_on_failure(
+    tmp_path: Path,
+    failure_boundary: str,
+) -> None:
+    reports_root = tmp_path / "reports"
+    reports_root.mkdir()
+    fake = FakeProviderRelayDocker(fail_when=failure_boundary)
+
+    result = run_mock_provider_relay(
+        REPO_ROOT,
+        reports_root,
+        _executor=fake,
+        _allow_test_output_root=True,
+        _secret_factory=lambda: uuid.uuid4().hex + uuid.uuid4().hex,
+        _request_id_factory=_request_ids(),
+    )
+
+    assert result.status == PHASE2B_PROVIDER_RELAY_E2E_BLOCKED
+    assert result.errors
+    assert fake.residual_container_count == 0
+    assert fake.residual_network_count == 0
+    assert result.cleanup_complete is True
+
+
+def test_atomic_publication_failure_preserves_previous_output(
+    tmp_path: Path,
+) -> None:
+    reports_root = tmp_path / "reports"
+    destination = reports_root / "phase2_provider_relay"
+    destination.mkdir(parents=True)
+    marker = destination / "previous.json"
+    marker.write_text('{"previous":true}\n', encoding="utf-8")
+    previous_hash = _tree_hash(destination)
+    fake = FakeProviderRelayDocker()
+
+    def fail_publication(_staging: Path, _destination: Path) -> None:
+        raise OSError("injected atomic publication failure")
+
+    result = run_mock_provider_relay(
+        REPO_ROOT,
+        reports_root,
+        _executor=fake,
+        _allow_test_output_root=True,
+        _publisher=fail_publication,
+        _secret_factory=lambda: uuid.uuid4().hex + uuid.uuid4().hex,
+        _request_id_factory=_request_ids(),
+    )
+
+    assert result.status == PHASE2B_PROVIDER_RELAY_E2E_BLOCKED
+    assert "atomic_publication_failed" in result.errors
+    assert previous_hash == _tree_hash(destination)
+    assert marker.is_file()
+    assert fake.residual_container_count == 0
+    assert fake.residual_network_count == 0
+
+
+def test_provider_relay_cli_exposes_no_runtime_or_retry_overrides() -> None:
+    run_args = parse_run_args(
+        ["--repo-root", str(REPO_ROOT), "--reports-root", str(REPO_ROOT / "reports")]
+    )
+    validate_args = parse_validate_args(
+        [
+            "--artifact-root",
+            str(REPO_ROOT / "reports/phase2_provider_relay"),
+        ]
+    )
+
+    assert set(vars(run_args)) == {"repo_root", "reports_root"}
+    assert set(vars(validate_args)) == {"artifact_root"}
+    for forbidden in ("--retry", "--endpoint", "--image", "--network", "--secret"):
+        with pytest.raises(SystemExit):
+            parse_run_args([forbidden, "value"])
