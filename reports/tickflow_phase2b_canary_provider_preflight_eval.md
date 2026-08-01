@@ -3,131 +3,130 @@
 ## 1. 结论
 
 ```text
-PHASE2B_CANARY_EGRESS_BLOCKED
+PHASE2B_PROXY_ARTIFACT_APPROVAL_REQUIRED
 ```
 
-本轮仅执行纯离线预门禁，没有读取 Keychain Secret 内容，没有发起 Provider、AI、TickFlow 或其他公网请求。
+独立 OpenAI Proxy 已完成纯离线实现、无网络构建、不可变镜像校验和独立代码复审。当前只缺用户对本报告所列精确工件哈希的明确批准；本轮未安装本地批准文件，也未执行 Provider Canary。
 
-阻断原因不是用户审批配置或 Keychain 缺失，而是当前实际运行时 Proxy 仍是 Mock-only HTTP 实现，不是已审核、已锁定的 OpenAI HTTPS 适配器。因此不得标记 `CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL`，也不得发起单次真实请求。
+本轮没有读取 Keychain Secret 内容，没有记录 Secret 长度、前后缀或哈希，没有发起 Provider、AI、TickFlow 或其他公网请求。
 
-## 2. 配置与 Secret 门禁
+## 2. 固定合同
 
-| 项目 | 结果 |
+| 项目 | 固定值 / 结果 |
 |---|---|
 | Provider | `openai` |
 | Exact Model | `gpt-5.6-terra` |
-| Endpoint Alias | `openai_responses_v1` |
-| 审批 Endpoint | `POST https://api.openai.com:443/v1/responses` |
+| Endpoint | `POST https://api.openai.com:443/v1/responses` |
+| Symbol | `000403.SZ` |
+| TLS verification | `true`，最低 `TLSv1.2` |
+| Redirect | `disabled` |
+| Streaming | `false` |
+| Tools / Web / Files | `disabled` |
+| Retry | `0` |
+| Maximum attempts | `1` |
+| Timeout | `60 seconds` |
+| Maximum response | `1,048,576 bytes` |
+| Response contract | strict JSON Schema |
+| Can publish | `false` |
+
+Proxy 只接受严格 `application/json`，可选参数仅允许单个 UTF-8 charset；其他媒体类型、额外参数、重定向、超限响应、非 JSON 响应和 schema 不合格响应均按 fail-closed 处理。
+
+## 3. 精确工件哈希
+
+以下值来自 `approval_candidate.json`，必须作为一个整体批准，不允许只批准镜像标签或部分文件：
+
+| 工件 | SHA-256 / 不可变标识 |
+|---|---|
+| Base image digest | `sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5` |
+| Dockerfile | `31202e8be3e091282b8351086a4d3250b2002ca12632bc2769a9e2133a4c07dd` |
+| Proxy source | `b17ce80c480576c36ee81764ce51154720e6834de9c11a6186b99e80ff8021f0` |
+| Responses contract | `6fab15c902e310f299a5a2545c3d84428ab6bf69052a37ca7dee367baa67ac06` |
+| Proxy policy | `46c8b4aef0f775b31b5da0843fd56791e0ad87c25067f6ba603f291ac93b4093` |
+| Launcher source | `43eaf09a31cdcf94c0d4d6e60eef8c41a6531f6dc48a90dd554cedfb5fa49e9c` |
+| Image ID | `sha256:083cd22cd8fac6e6de1051ef78e62033711783a50a5b4a1c0d49c5b8908754d4` |
+| Approval candidate file | `437c51a7afda22f54fb9fa4160e696dabbf5b2e5334efd6abe317a9179d6105a` |
+
+运行身份固定为 `65532:65532`，入口固定为 `/usr/bin/python3 /proxy/proxy.py`。后续运行门禁必须使用不可变 Image ID；可变标签不能作为执行身份。
+
+## 4. 离线构建与镜像校验
+
+| 项目 | 结果 |
+|---|---|
+| Fresh build | `PASSED` |
+| Build network | `none` |
+| Pull | `disabled` |
+| No cache | `true` |
+| IID file | `VERIFIED` |
+| Base RootFS prefix | `VERIFIED` |
+| Input hashes before / after build | `STABLE` |
+| Image identity | `VERIFIED` |
+| Image history | `CLEAN` |
+| Image contents | `VERIFIED` |
+| Cleanup | `COMPLETE` |
+| Independent review | `PASSED / NO ACTIONABLE FINDINGS` |
+
+独立复审覆盖精确 Endpoint、TLS context、重定向和重试关闭、响应解析、schema 校验、Secret 生命周期、镜像与源码绑定、Docker 命令限制、外部批准信任边界、异常脱敏和 false-READY 路径。复审提出的可变标签执行、构建来源证明、遗留 `--build` 路径和 Content-Type 参数过宽问题均已修复并重新验证。
+
+## 5. Secret 与运行边界
+
+| 项目 | 结果 |
+|---|---|
 | Provider 配置 | `VALID` |
-| 目录 / 文件权限 | `0700 / 0600`，`PASSED` |
-| 配置 Secret 形态扫描 | `CLEAN` |
-| Keychain Secret | `PRESENT` |
+| Keychain Secret | `PRESENT`，仅检查存在性 |
 | Secret 内容读取 | `NO` |
 | Secret 哈希记录 | `NO` |
 | 临时只读单文件注入预演 | `PASSED` |
 | Secret 日志命中 | `0` |
 | Secret 产物命中 | `0` |
 | Secret 临时残留 | `0` |
+| Proxy container residue | `0` |
+| Proxy network residue | `0` |
+| Proxy process residue | `0` |
+| 本地工件批准文件 | `NOT_INSTALLED` |
 
-存在性检查只使用 `security find-generic-password` 的非输出模式；未使用 `-w`，也未记录长度、前后缀或哈希。
+存在性检查只允许使用不输出 Secret 的 Keychain 查询方式。真实执行仍被精确工件批准门禁阻断。
 
-## 3. Responses 合同
-
-| 项目 | 结果 |
-|---|---|
-| 严格 JSON Schema | `READY` |
-| Schema 来源 | `WorkerClaimsCandidate` |
-| Streaming | `false` |
-| Tools / Web / Files | `disabled` |
-| Retry | `0` |
-| Max Provider Attempts | `1` |
-| Symbol | `000403.SZ` |
-| Can Publish | `false` |
-
-请求合同只在内存中构建并校验，未序列化为真实 Provider 请求，未打开 socket。
-
-## 4. 实际 Proxy 阻断证据
-
-| 项目 | 实际值 |
-|---|---|
-| Runtime status | `MOCK_ONLY` |
-| Connection | `HTTPConnection` |
-| Host | `phase2-mock-provider` |
-| Port | `8081` |
-| Path | `/v1/typed-claims` |
-| TLS verification | `false` |
-| Redirect | `disabled` |
-| Retry | `0` |
-| Proxy source SHA-256 | `abe567151bfe8321bd5a65e1d043ad5f180647c00b7e5b84b17e32214f6c4df6` |
-| Source hash approved | `false` |
-| Image ID approved | `false` |
-| Image/source label binding | `false` |
-| Egress allowlist | `FAILED` |
-
-预门禁的 `READY` 路径必须同时满足：
-
-1. Proxy 源码结构精确强制 `POST https://api.openai.com:443/v1/responses`；
-2. Proxy 源码 SHA-256 与独立审核值一致；
-3. 本地运行镜像 ID 与独立审核值一致；
-4. 镜像中的源码哈希标签与实际 Proxy 源文件一致。
-
-当前没有获批的真实 Proxy 源码哈希和镜像 ID，所以即使出现看似正确的 HTTPS 常量，也只能进入 `UNPINNED` 或 `IMAGE_UNVERIFIED`，不能自证通过。
-
-## 5. Facts 与历史证据
-
-| 项目 | 结果 / SHA-256 |
-|---|---|
-| Facts | `VALID` / `adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956` |
-| Trade date | `2026-07-31` |
-| Projection | `VALID`, repeated generation stable |
-| Projection self SHA | `0ffe5b7fbd57d6b16af073db12d826c940c88b43547870f6b9513401eb49fb1f` |
-| Projection bytes SHA | `5db35e91eabce452e5be3a3020b5c10711797941431df9bd5bb52f67625b42e1` |
-| Claims Schema SHA | `5988b34ad5bb1703e3795e9b54a18c7dcdb0009c65ee55662f7e71facebc43c3` |
-| Renderer SHA | `53d94e60fce7914582c85beea977ca65f7a6713c7066ee65df2c84a8ec6c361e` |
-| Provider Relay | `PHASE2B_PROVIDER_RELAY_READY` |
-| Canary output | `EMPTY` |
-| 九组受保护证据 | `UNCHANGED` |
-
-受保护集合包括 Phase 1 观察、Phase 1 请求审计、Phase 2 Facts、Typed Claims、Typed Inbox、历史 AI Markdown、历史 rejected、Isolation Runtime Evidence 和 Provider Relay Evidence。
-
-## 6. 外部行为与残留
+## 6. 历史证据与外部行为
 
 | 项目 | 结果 |
 |---|---:|
+| Facts / Projection / Relay | `VALID` |
+| 九组受保护历史证据 | `UNCHANGED` |
 | Provider attempts | 0 |
 | AI calls | 0 |
-| Retry | 0 |
 | Provider HTTP | `NOT_RUN` |
 | TickFlow API requests | 0 |
 | Real public network successes | 0 |
-| Provider container residue | 0 |
-| Provider network residue | 0 |
-| Provider process residue | 0 |
 | Obsidian real vault writes | 0 |
 | Paper Trading | `NOT_STARTED` |
 | Cloud redeploy | `NO` |
 | Integrated Gold | `DISABLED / external_send_count=0` |
 | Three-symbol real batch | `NOT_APPROVED` |
 
-零计数证据来自未变的 Phase 1 请求审计、未变的 Provider Relay 运行证据、空 Canary 输出目录和本地残留检查。
-
-## 7. 验证
+## 7. 验证结果
 
 | 校验 | 结果 |
 |---|---|
-| Provider 安全预门禁专项 | `61 passed` |
-| 后端全量 | `1878 passed, 13 warnings` |
-| `compileall app scripts` | `PASSED` |
+| Proxy / Runner / Artifact / Preflight 专项 | `309 passed` |
+| 后端全量 | `2126 passed, 13 warnings` |
+| `compileall app scripts proxy` | `PASSED` |
 | Ruff F821 | `PASSED` |
-| 新增文件聚焦 Ruff | `PASSED` |
-| `git diff --check` | `PASSED` |
-| 新增产物敏感形态扫描 | `CLEAN` |
+| 聚焦 Ruff | `PASSED` |
+| Proxy contract deterministic check | `PASSED` |
+| Immutable artifact verify | `PASSED` |
+| 高置信敏感形态扫描 | `CLEAN` |
 | 独立安全代码复审 | `NO ACTIONABLE FINDINGS` |
 
-## 8. 下一动作
+## 8. 当前停止点
 
 ```text
-IMPLEMENT_AND_AUDIT_REAL_OPENAI_HTTPS_PROXY_OFFLINE
+status=PHASE2B_PROXY_ARTIFACT_APPROVAL_REQUIRED
+provider_attempt_count=0
+ai_call_count=0
+provider_http=NOT_RUN
+tickflow_api_request_count=0
+real_public_network_success_count=0
+next_action=APPROVE_EXACT_PROXY_ARTIFACT_HASHES
 ```
 
-下一阶段必须作为单独的纯离线开发与审核任务：实现真实 OpenAI Responses HTTPS 适配器，完成严格 Endpoint/TLS/重定向/超时/响应大小策略测试，构建带源码哈希标签的镜像，独立审核后锁定源码与镜像哈希。在该任务完成且用户再次明确批准前，不得请求最终单次真实 Canary 执行。
+在用户明确批准第 3 节完整哈希集合之前，不得安装 `proxy-artifact-approval.json`，不得进入最终 READY，也不得执行单票真实 Provider Canary。

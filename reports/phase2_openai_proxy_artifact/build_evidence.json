@@ -1,11 +1,13 @@
 {
   "ai_call_count": 0,
+  "approval_candidate_sha256": "437c51a7afda22f54fb9fa4160e696dabbf5b2e5334efd6abe317a9179d6105a",
   "base_rootfs_prefix_verified": true,
   "build_network": "none",
   "cleanup_complete": true,
   "evidence_schema_version": 1,
   "fresh_offline_build": true,
   "iidfile_verified": true,
+  "independent_review": "PASSED",
   "image_contents_valid": true,
   "image_history_clean": true,
   "image_id": "sha256:083cd22cd8fac6e6de1051ef78e62033711783a50a5b4a1c0d49c5b8908754d4",
@@ -17,6 +19,6 @@
   "provider_attempt_count": 0,
   "public_network_request_count": 0,
   "pull_allowed": false,
-  "status": "PHASE2B_PROXY_ARTIFACT_READY_FOR_REVIEW",
+  "status": "PHASE2B_PROXY_ARTIFACT_APPROVAL_REQUIRED",
   "tickflow_request_count": 0
 }
