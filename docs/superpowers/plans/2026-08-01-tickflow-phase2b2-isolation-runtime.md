@@ -34,7 +34,7 @@
 - Consumes: Phase 2B-1 projection JSON shape and the fixed predicate order.
 - Produces: `generate_candidate(projection: Mapping[str, Any]) -> dict[str, Any]`, `run_probe() -> dict[str, Any]`, and a shell-less image whose entrypoint accepts only `candidate` or `probe`.
 
-- [ ] **Step 1: Write failing worker contract tests**
+- [x] **Step 1: Write failing worker contract tests**
 
 Import `worker.py` by exact path and assert:
 
@@ -54,7 +54,7 @@ def test_worker_is_stdlib_only_and_paths_are_fixed():
 
 Also assert deterministic output, exact root fields, zero freeform fields, no trading types, candidate/probe mode allowlist, and a one-megabyte input/output limit.
 
-- [ ] **Step 2: Run worker tests and require RED**
+- [x] **Step 2: Run worker tests and require RED**
 
 ```bash
 cd backend
@@ -64,7 +64,7 @@ PYTHONPATH=. .venv/bin/pytest \
 
 Expected: collection or import failure because the worker and runtime module do not exist.
 
-- [ ] **Step 3: Implement the standard-library Fake Provider**
+- [x] **Step 3: Implement the standard-library Fake Provider**
 
 Implement a data-driven generator with fixed claim IDs and predicates. The worker must:
 
@@ -85,17 +85,17 @@ ALLOWED_MODES = {"candidate", "probe"}
 - input-file overwrite;
 - rootfs, worker source, `/tmp`, `/etc`, and extra `/output` writes.
 
-- [ ] **Step 4: Create the fixed mount placeholders**
+- [x] **Step 4: Create the fixed mount placeholders**
 
 Write `{}` plus a newline to `projection.placeholder.json` and a single newline
 to `candidate.placeholder.json`. Tests must require both files to be regular,
 smaller than 128 bytes, and free of sensitive patterns.
 
-- [ ] **Step 5: Run worker tests and require GREEN**
+- [x] **Step 5: Run worker tests and require GREEN**
 
 Run the Task 1 focused tests. Require candidate validation for the fixed projection, byte idempotency, zero network-library imports, and Dockerfile static-policy success.
 
-- [ ] **Step 6: Commit Task 1**
+- [x] **Step 6: Commit Task 1**
 
 ```bash
 git add docker/phase2-ai-worker/worker.py \
@@ -117,7 +117,7 @@ git commit -m "feat: add isolated phase2 fake worker image"
 - Consumes: image reference, exact temporary projection/output paths, Docker inspect JSON, candidate bytes, and the Phase 2B-1 projection.
 - Produces: `build_container_create_command(...) -> list[str]`, `validate_container_inspect(...) -> RuntimeContractEvidence`, `candidate_to_claims_document(...) -> ClaimsDocument`, and `validate_isolated_candidate(...) -> CandidateHostEvidence`.
 
-- [ ] **Step 1: Write failing command and inspect tests**
+- [x] **Step 1: Write failing command and inspect tests**
 
 Assert the command contains every required flag exactly once, has exactly two `--mount` values, and contains none of:
 
@@ -145,7 +145,7 @@ runtime_projection_mount_not_readonly
 runtime_output_mount_not_writable
 ```
 
-- [ ] **Step 2: Write failing host adapter tests**
+- [x] **Step 2: Write failing host adapter tests**
 
 ```python
 def test_host_adapter_revalidates_candidate_and_renderer():
@@ -160,11 +160,11 @@ def test_host_adapter_revalidates_candidate_and_renderer():
 
 Tamper Facts SHA, pointer, operand label, raw/qfq basis, value, claim ID, freeform key, and trading type. Every mutation must fail before rendering.
 
-- [ ] **Step 3: Run focused tests and require RED**
+- [x] **Step 3: Run focused tests and require RED**
 
 Run only the new command/inspect/adapter tests and confirm missing interfaces cause failure.
 
-- [ ] **Step 4: Implement immutable command construction and inspect validation**
+- [x] **Step 4: Implement immutable command construction and inspect validation**
 
 Use argument lists only; never `shell=True`. Normalize expected host paths before command construction, reject symlinks/non-regular files, and return sanitized evidence without mount sources, environment values, container IDs, or command strings.
 
@@ -180,15 +180,15 @@ EXPECTED_MOUNTS = {
 }
 ```
 
-- [ ] **Step 5: Implement the Host Claims adapter**
+- [x] **Step 5: Implement the Host Claims adapter**
 
 Parse `WorkerClaimsCandidate`, bind it to the committed Facts file and SHA, construct a strict `ClaimsDocument`, run `validate_worker_candidate`, `validate_claims_document`, and `validate_rendered_document`, and compute only candidate/rendered SHA-256 for evidence.
 
-- [ ] **Step 6: Run Task 2 tests and require GREEN**
+- [x] **Step 6: Run Task 2 tests and require GREEN**
 
 Require every mutated inspect field and candidate field to fail closed while the fixed candidate passes all Host validators.
 
-- [ ] **Step 7: Commit Task 2**
+- [x] **Step 7: Commit Task 2**
 
 ```bash
 git add backend/app/services/phase2_isolation_runtime.py \
@@ -209,7 +209,7 @@ git commit -m "feat: add phase2 isolation runtime contract"
 - Consumes: repository root, reports root, pinned image context, Docker CLI responses.
 - Produces: `run_runtime_validation(repo_root: Path, reports_root: Path) -> RuntimeValidationResult` and a CLI that exits 0 only for `PHASE2B_ISOLATION_RUNTIME_VERIFIED`.
 
-- [ ] **Step 1: Write failing orchestration tests with a fake Docker executor**
+- [x] **Step 1: Write failing orchestration tests with a fake Docker executor**
 
 Cover this exact lifecycle:
 
@@ -225,7 +225,7 @@ docker rm -f
 
 Run it once for `candidate` and once for `probe`. Assert no retries, cleanup in `finally`, a cleanup failure blocks success, and candidate/projection temp files are removed even on validation failure.
 
-- [ ] **Step 2: Write failing evidence-schema tests**
+- [x] **Step 2: Write failing evidence-schema tests**
 
 The evidence JSON must include only fixed status, image digests, contract booleans, probe booleans, Host validator counts/hashes, zero external counters, and cleanup status. Recursively reject keys or values containing:
 
@@ -242,17 +242,17 @@ api_key
 docker.sock
 ```
 
-- [ ] **Step 3: Run orchestration tests and require RED**
+- [x] **Step 3: Run orchestration tests and require RED**
 
 Confirm the missing orchestrator and evidence types are the reason for failure.
 
-- [ ] **Step 4: Implement the no-retry Docker lifecycle**
+- [x] **Step 4: Implement the no-retry Docker lifecycle**
 
 Use `subprocess.run(..., shell=False, check=False, capture_output=True, text=True)` through a small injected executor. Never print raw stderr/stdout into reports. Hash unexpected output before returning a sanitized error code.
 
 Create temporary files with no symlinks, set the projection read-only, make only the empty output file writable to UID 65532, and rehash the projection before and after each container.
 
-- [ ] **Step 5: Implement atomic evidence publication**
+- [x] **Step 5: Implement atomic evidence publication**
 
 Write a staging directory under `reports`, fsync files, and atomically publish:
 
@@ -273,11 +273,11 @@ paper_trading_started=false
 integrated_gold_enabled=false
 ```
 
-- [ ] **Step 6: Implement the CLI and run Task 3 tests**
+- [x] **Step 6: Implement the CLI and run Task 3 tests**
 
 The CLI takes only `--repo-root` and `--reports-root`. It must not accept `--force`, credentials, alternate mounts, alternate network modes, or image overrides.
 
-- [ ] **Step 7: Commit Task 3**
+- [x] **Step 7: Commit Task 3**
 
 ```bash
 git add backend/app/services/phase2_isolation_runtime.py \
@@ -299,7 +299,7 @@ git commit -m "feat: orchestrate phase2 isolation validation"
 - Consumes: a running Docker Desktop daemon and the committed worker build context.
 - Produces: actual candidate/probe container evidence; no mock result may satisfy this task.
 
-- [ ] **Step 1: Start Docker Desktop and verify the daemon**
+- [x] **Step 1: Start Docker Desktop and verify the daemon**
 
 ```bash
 open -a Docker
@@ -308,7 +308,7 @@ docker version
 
 Wait with bounded polling. If the daemon does not become ready, report the blocker; do not install another runtime or change Docker settings.
 
-- [ ] **Step 2: Resolve the distroless digest and write the Dockerfile**
+- [x] **Step 2: Resolve the distroless digest and write the Dockerfile**
 
 Pull only `gcr.io/distroless/python3-debian12:nonroot`, then run:
 
@@ -319,7 +319,7 @@ docker image inspect \
 ```
 
 Copy the returned complete `gcr.io/distroless/python3-debian12@sha256:...`
-reference verbatim into `FROM`. Add four `COPY --chown=65532:65532`
+reference verbatim into `FROM`. Add three `COPY --chown=65532:65532`
 instructions for the worker and placeholders, followed by:
 
 ```dockerfile
@@ -334,7 +334,7 @@ Add and run a static policy test that rejects `:debug`, tag-only `FROM`,
 shell installation, package-manager commands, `RUN`, `ADD`, secrets, and URLs
 outside the pinned `FROM` line.
 
-- [ ] **Step 3: Build the dedicated image**
+- [x] **Step 3: Build the dedicated image**
 
 ```bash
 docker build --network none --pull=false \
@@ -344,7 +344,7 @@ docker build --network none --pull=false \
 
 Inspect the built image. Require `User=65532:65532`, the fixed entrypoint, no secret env, and a content-addressed image ID.
 
-- [ ] **Step 4: Run the real validation CLI once**
+- [x] **Step 4: Run the real validation CLI once**
 
 ```bash
 cd backend
@@ -356,11 +356,11 @@ PYTHONPATH=. .venv/bin/python \
 
 No automatic retry is allowed. Require one candidate container and one probe container, exact inspect contracts, all OS-negative probes blocked, all Host validators valid, and cleanup complete.
 
-- [ ] **Step 5: Inspect residual runtime state**
+- [x] **Step 5: Inspect residual runtime state**
 
 Verify no validation container remains and the report tree has no staging, temporary, candidate, projection, raw inspect, or command-log files. The dedicated local image may remain cached.
 
-- [ ] **Step 6: Commit the pinned digest and evidence**
+- [x] **Step 6: Commit the pinned digest and evidence**
 
 ```bash
 git add docker/phase2-ai-worker/Dockerfile \
@@ -380,7 +380,7 @@ git commit -m "test: verify phase2 worker runtime isolation"
 - Consumes: committed runtime evidence and immutable preflight hashes.
 - Produces: final status `PHASE2B_ISOLATION_RUNTIME_VERIFIED` or the honest blocked status.
 
-- [ ] **Step 1: Run focused tests**
+- [x] **Step 1: Run focused tests**
 
 ```bash
 cd backend
@@ -391,7 +391,7 @@ PYTHONPATH=. .venv/bin/pytest \
   tests/test_phase2_claims_renderer.py -q
 ```
 
-- [ ] **Step 2: Run backend full and static tests**
+- [x] **Step 2: Run backend full and static tests**
 
 ```bash
 PYTHONPATH=. .venv/bin/pytest -q
@@ -399,11 +399,11 @@ PYTHONPATH=. .venv/bin/pytest -q
 .venv/bin/ruff check app scripts --select F821
 ```
 
-- [ ] **Step 3: Revalidate Phase 2B-1 artifacts**
+- [x] **Step 3: Revalidate Phase 2B-1 artifacts**
 
 Run `validate_phase2_claims.py` and the legacy freeform validator. Require `CLAIMS_VALID` for typed Claims and the expected fail-closed `PHASE2_AI_OUTPUT_BLOCKED` for historical freeform output.
 
-- [ ] **Step 4: Recompute immutable hashes**
+- [x] **Step 4: Recompute immutable hashes**
 
 Require exact equality with:
 
@@ -416,15 +416,15 @@ Provider audit: 7996c13681e248b2a9932cdd7428949f1317719589234a7087b8ab019e4274f9
 
 Also require all historical AI sample and rejected-preview hashes from the Phase 2B-1 report to remain unchanged.
 
-- [ ] **Step 5: Run sensitive and runtime-residue scans**
+- [x] **Step 5: Run sensitive and runtime-residue scans**
 
 Require no credentials, absolute Home/Vault paths, raw inspect, container ID, command string, candidate/projection copy, transaction marker, staging path, or temporary output in committed reports.
 
-- [ ] **Step 6: Write the final report**
+- [x] **Step 6: Write the final report**
 
 Record the real Docker version, pinned base digest, built image ID, exact runtime controls, mount count, probe results, Host contract results, tests, hashes, zero external actions, and cleanup result. Do not claim more than the evidence proves.
 
-- [ ] **Step 7: Commit the report and completed plan**
+- [x] **Step 7: Commit the report and completed plan**
 
 ```bash
 git add reports/tickflow_phase2b_isolation_runtime_eval.md \
