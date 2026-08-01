@@ -1,0 +1,17 @@
+{
+  "ai_call_count": 0,
+  "build_network": "none",
+  "cleanup_complete": true,
+  "evidence_schema_version": 1,
+  "image_contents_valid": true,
+  "image_history_clean": true,
+  "image_id": "sha256:bfdcbbe5d6b8a96cdecd994aec4d9af05079a97d2ca48e90416c9d6fe90c037f",
+  "image_identity_valid": true,
+  "image_name": "tickflow-phase2-openai-egress-proxy:canary-v1",
+  "offline_build": true,
+  "provider_attempt_count": 0,
+  "public_network_request_count": 0,
+  "pull_allowed": false,
+  "status": "PHASE2B_PROXY_ARTIFACT_READY_FOR_REVIEW",
+  "tickflow_request_count": 0
+}

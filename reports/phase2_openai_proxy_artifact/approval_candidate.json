@@ -1,0 +1,16 @@
+{
+  "approval_schema_version": 1,
+  "base_image_digest": "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5",
+  "dockerfile_sha256": "31202e8be3e091282b8351086a4d3250b2002ca12632bc2769a9e2133a4c07dd",
+  "entrypoint": [
+    "/usr/bin/python3",
+    "/proxy/proxy.py"
+  ],
+  "image_id": "sha256:bfdcbbe5d6b8a96cdecd994aec4d9af05079a97d2ca48e90416c9d6fe90c037f",
+  "image_name": "tickflow-phase2-openai-egress-proxy:canary-v1",
+  "launcher_source_sha256": "db8dfab2e7ffb209e36cfbb854deab7271ab1afc5bffa2646459ebc65ae42602",
+  "proxy_policy_sha256": "46c8b4aef0f775b31b5da0843fd56791e0ad87c25067f6ba603f291ac93b4093",
+  "proxy_source_sha256": "7484f216937699d70651525187e70c6aa2752c8c48cc7e07299a3af7d217cf3f",
+  "responses_contract_sha256": "6fab15c902e310f299a5a2545c3d84428ab6bf69052a37ca7dee367baa67ac06",
+  "runtime_user": "65532:65532"
+}
