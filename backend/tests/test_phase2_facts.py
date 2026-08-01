@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import hashlib
 import importlib
 import importlib.util
 import json
@@ -14,6 +15,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+SNAPSHOT_ROOT = REPO_ROOT / "reports/phase2_source_snapshot/2026-07-31"
 SYMBOLS = {
     "000403.SZ": "派林生物",
     "600489.SH": "中金黄金",
@@ -43,6 +45,104 @@ INDICATORS = {
     "volume_ma10",
     "volume_ratio",
 }
+EXPECTED_DAILY = {
+    "000403.SZ": {
+        "open": 10.36,
+        "high": 10.47,
+        "low": 10.25,
+        "close": 10.43,
+        "volume": 107884.0,
+        "amount": 111975400.0,
+    },
+    "600489.SH": {
+        "open": 22.18,
+        "high": 23.28,
+        "low": 22.14,
+        "close": 23.01,
+        "volume": 1063929.0,
+        "amount": 2433954100.0,
+    },
+    "300059.SZ": {
+        "open": 19.98,
+        "high": 20.52,
+        "low": 19.91,
+        "close": 20.17,
+        "volume": 3424840.0,
+        "amount": 6938438000.0,
+    },
+}
+EXPECTED_INDICATORS = {
+    "000403.SZ": {
+        "ma5": 10.136,
+        "ma10": 9.866,
+        "ma20": 9.6425,
+        "ma60": 10.683,
+        "macd_dif": -0.007465131240531164,
+        "macd_dea": -0.18656732410368454,
+        "macd_hist": 0.35820438572630675,
+        "rsi6": 76.21830812329453,
+        "rsi14": 58.59950492944132,
+        "boll_upper": 10.501063672039606,
+        "boll_middle": 9.6425,
+        "boll_lower": 8.783936327960394,
+        "atr14": 0.429555321578577,
+        "volume_ma5": 122719.2,
+        "volume_ma10": 137735.6,
+        "volume_ratio": 0.8720365355858223,
+    },
+    "600489.SH": {
+        "ma5": 21.906,
+        "ma10": 21.576,
+        "ma20": 20.779500000000002,
+        "ma60": 21.82283333333333,
+        "macd_dif": 0.36503679211833884,
+        "macd_dea": 0.042592094253742524,
+        "macd_hist": 0.6448893957291926,
+        "rsi6": 74.95739861741134,
+        "rsi14": 62.358731346228076,
+        "boll_upper": 22.962153865077298,
+        "boll_middle": 20.779500000000002,
+        "boll_lower": 18.596846134922707,
+        "atr14": 1.1134470901367544,
+        "volume_ma5": 810624.6,
+        "volume_ma10": 955557.5,
+        "volume_ratio": 1.3805218720918222,
+    },
+    "300059.SZ": {
+        "ma5": 19.826,
+        "ma10": 19.936,
+        "ma20": 20.042,
+        "ma60": 19.782666666666668,
+        "macd_dif": -0.013730564457485883,
+        "macd_dea": 0.012188214888996223,
+        "macd_hist": -0.05183755869296421,
+        "rsi6": 57.77034061172677,
+        "rsi14": 52.28308759960673,
+        "boll_upper": 20.86650878518162,
+        "boll_middle": 20.042,
+        "boll_lower": 19.217491214818384,
+        "atr14": 0.6825505771218069,
+        "volume_ma5": 2627315.8,
+        "volume_ma10": 2972586.1,
+        "volume_ratio": 1.3376076287424494,
+    },
+}
+
+
+def _load_json(path: Path) -> dict[str, object]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _directory_bytes(path: Path) -> dict[str, bytes]:
+    return {
+        item.relative_to(path).as_posix(): item.read_bytes()
+        for item in sorted(path.rglob("*"))
+        if item.is_file()
+    }
 
 
 def test_phase2_facts_service_exposes_required_contract() -> None:
@@ -55,11 +155,13 @@ def test_phase2_facts_service_exposes_required_contract() -> None:
     assert callable(module.canonical_json_bytes)
 
 
-def test_build_symbol_facts_uses_only_retained_phase1_contracts() -> None:
+def test_build_symbol_facts_separates_snapshot_and_phase1_evidence() -> None:
     module = importlib.import_module("app.services.phase2_facts")
 
     for symbol, name in SYMBOLS.items():
         facts = module.build_symbol_facts(REPO_ROOT, symbol)
+        indicator_source = facts["source_evidence"]["indicator_source"]
+        phase1 = facts["source_evidence"]["phase1_contract_evidence"]
 
         assert facts["facts_schema_version"] == 1
         assert facts["source_system"] == "tickflow-stock-panel"
@@ -68,76 +170,131 @@ def test_build_symbol_facts_uses_only_retained_phase1_contracts() -> None:
         assert facts["trade_date"] == "2026-07-31"
         assert facts["timezone"] == "Asia/Shanghai"
         assert facts["data_freshness"] == "fresh"
-        assert facts["content_readiness"] == "BLOCKED_SOURCE_EVIDENCE"
-        assert facts["missing_source_inputs"] == [
-            "retained_raw_daily_ohlcv_values",
-            "retained_qfq_daily_ohlcv_series",
-        ]
-        assert facts["source_evidence"]["phase1_status"] == "PHASE1_OBSERVATION_PASSED"
-        assert facts["source_evidence"]["observation_days"] == 5
-        assert len(facts["source_evidence"]["source_files"]) == 7
-        assert all(
-            len(item["sha256"]) == 64
-            for item in facts["source_evidence"]["source_files"]
+        assert facts["content_readiness"] == "READY_FOR_AI_REVIEW"
+        assert facts["missing_source_inputs"] == []
+
+        assert indicator_source["source_type"] == "existing_cloud_store_snapshot"
+        assert indicator_source["source_snapshot_manifest"] == (
+            "reports/phase2_source_snapshot/2026-07-31/manifest.json"
         )
+        assert indicator_source["phase1_original_payload_recovered"] is False
+        assert indicator_source["phase1_byte_equivalent"] is False
+        assert indicator_source["request_mode"] == "offline_existing_cloud_evidence"
+        assert indicator_source["cloud_access_mode"] == "read_only"
+        assert indicator_source["cloud_mutation_count"] == 0
+        assert indicator_source["tickflow_api_request_count"] == 0
+        assert indicator_source["row_count"] == 251
+        assert indicator_source["last_trade_date"] == "2026-07-31"
+        assert set(indicator_source["source_hashes"]) == {
+            "manifest",
+            "raw_daily",
+            "qfq_daily",
+            "indicator_implementation",
+        }
+        assert all(len(value) == 64 for value in indicator_source["source_hashes"].values())
+
+        assert phase1["phase1_status"] == "PHASE1_OBSERVATION_PASSED"
+        assert phase1["observation_days"] == 5
+        assert len(phase1["source_files"]) == 7
+        assert all(len(item["sha256"]) == 64 for item in phase1["source_files"])
 
         assert facts["price_basis"] == {
-            "daily_ohlcv": "none",
+            "daily_ohlcv": "raw",
             "indicator_prices": "qfq",
-            "indicator_volume": "none",
+            "indicator_volume": "raw",
             "minute": "none",
         }
-        assert facts["daily"]["status"] == "UNAVAILABLE_SOURCE_EVIDENCE"
-        assert facts["daily"]["contract_status"] == "PASSED"
-        assert facts["daily"]["latest_raw_trade_date"] == "2026-07-31"
-        assert facts["daily"]["latest_qfq_trade_date"] == "2026-07-31"
-        assert all(
-            facts["daily"][field] is None
-            for field in ("open", "high", "low", "close", "volume", "amount")
-        )
+        assert facts["units"] == {
+            "volume": "VENDOR_CONFIRMATION_PENDING",
+            "amount": "VENDOR_CONFIRMATION_PENDING",
+        }
+        assert facts["daily"]["status"] == "AVAILABLE"
+        assert facts["daily"]["price_basis"] == "raw"
+        assert facts["daily"]["trade_date"] == "2026-07-31"
+        for field, expected in EXPECTED_DAILY[symbol].items():
+            assert facts["daily"][field] == expected
 
         assert facts["minute_1m"]["bar_count"] == 241
         assert facts["minute_1m"]["material_ohlc_anomaly_count"] == 0
-        assert facts["minute_1m"]["material_negative_amount_count"] == 0
         assert facts["minute_30m"]["bar_count"] == 8
         assert facts["minute_30m"]["ohlc_mismatch_count"] == 0
-        assert facts["adjustment_factors"]["factor_count"] > 0
         assert facts["adjustment_factors"]["qfq_relation_match_rate"] == 1.0
 
         assert set(facts["indicators"]) == INDICATORS
         for indicator, item in facts["indicators"].items():
-            assert item["status"] == "NOT_IMPLEMENTED"
-            assert item["value"] is None
-            expected_basis = "none" if indicator.startswith("volume_") else "qfq"
-            assert item["price_basis"] == expected_basis
-        assert facts["scope"] == {
-            "market_scope": "incomplete",
-            "financial_scope": "unavailable",
-            "news_scope": "unavailable",
-            "industry_scope": "manual_verification_required",
+            assert item["status"] == "VALID"
+            assert isinstance(item["value"], float)
+            assert math.isfinite(item["value"])
+            assert item["implementation"] == {
+                "module": "app.indicators.pipeline",
+                "function": "compute_indicators",
+                "output_column": module.INDICATOR_COLUMNS[indicator],
+            }
+            assert item["history_window"] == {
+                "row_count": 251,
+                "first_trade_date": indicator_source["first_trade_date"],
+                "last_trade_date": "2026-07-31",
+            }
+            assert item["result_precision"] == "float64_unrounded"
+            assert item["data_basis"] == (
+                "raw" if indicator.startswith("volume_") else "qfq"
+            )
+
+        assert facts["indicators"]["volume_ma5"]["volume_unit"] == (
+            "VENDOR_CONFIRMATION_PENDING"
+        )
+        assert facts["indicators"]["volume_ma10"]["source_unit_unconfirmed"] is True
+        assert facts["indicators"]["volume_ratio"]["dimensionless"] is True
+        assert facts["indicators"]["volume_ratio"]["source_unit_unconfirmed"] is True
+        assert facts["key_levels"] == {
+            "status": "NOT_IMPLEMENTED",
+            "observed_supports": [],
+            "observed_resistances": [],
+            "calculation_method": None,
+            "reason": "No approved deterministic key-level algorithm",
         }
         assert facts["vendor_pending"] == VENDOR_PENDING
         assert facts["trading"] is False
-        assert facts["generation"]["new_tickflow_api_request_count"] == 0
+        assert facts["generation"] == {
+            "mode": "offline_existing_cloud_evidence",
+            "new_tickflow_api_request_count": 0,
+            "cloud_mutation_count": 0,
+            "ai_calls": 0,
+        }
 
-        numeric_paths = set(facts["numeric_provenance"])
-        assert "/facts_schema_version" in numeric_paths
-        assert "/source_evidence/observation_days" in numeric_paths
-        assert "/minute_1m/bar_count" in numeric_paths
-        assert "/minute_30m/bar_count" in numeric_paths
-        assert "/generation/new_tickflow_api_request_count" in numeric_paths
-        for provenance in facts["numeric_provenance"].values():
-            assert provenance["calculation_function"] in {
-                "identity",
-                "schema_constant",
-            }
-            assert "price_basis" in provenance
-            if provenance["calculation_function"] == "identity":
-                assert provenance["source_file"]
-                assert provenance["source_json_path"]
-                assert provenance["source_sha256"]
-            else:
-                assert provenance["constant"]
+
+@pytest.mark.parametrize("symbol", SYMBOLS)
+def test_indicator_values_match_the_approved_pipeline_snapshot(symbol: str) -> None:
+    module = importlib.import_module("app.services.phase2_facts")
+    facts = module.build_symbol_facts(REPO_ROOT, symbol)
+
+    for indicator, expected in EXPECTED_INDICATORS[symbol].items():
+        assert facts["indicators"][indicator]["value"] == pytest.approx(
+            expected, rel=0, abs=1e-12
+        )
+
+
+def test_builder_calls_official_pipeline_once_with_qfq_prices_and_raw_volume(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = importlib.import_module("app.services.phase2_facts")
+    real_compute = module.compute_indicators
+    calls: list[set[str]] = []
+    raw = _load_json(SNAPSHOT_ROOT / "000403SZ_raw_daily.json")["rows"]
+    qfq = _load_json(SNAPSHOT_ROOT / "000403SZ_qfq_daily.json")["rows"]
+
+    def spy(frame, needed=None):
+        calls.append(set(needed or set()))
+        latest = frame.sort("date").tail(1).to_dicts()[0]
+        assert latest["close"] == qfq[-1]["close"]
+        assert latest["volume"] == raw[-1]["volume"]
+        return real_compute(frame, needed=needed)
+
+    monkeypatch.setattr(module, "compute_indicators", spy)
+
+    module.build_symbol_facts(REPO_ROOT, "000403.SZ")
+
+    assert calls == [set(module.INDICATOR_COLUMNS.values())]
 
 
 def test_validate_facts_accepts_the_builder_output() -> None:
@@ -152,36 +309,50 @@ def test_validate_facts_accepts_the_builder_output() -> None:
     ("mutation", "expected_error"),
     [
         (
-            lambda facts: facts["source_evidence"]["source_files"][0].__setitem__(
-                "sha256", "0" * 64
-            ),
+            lambda facts: facts["source_evidence"]["indicator_source"][
+                "source_hashes"
+            ].__setitem__("raw_daily", "0" * 64),
             "source_hash_mismatch",
         ),
         (
-            lambda facts: facts["numeric_provenance"].pop("/minute_1m/bar_count"),
-            "numeric_provenance_missing:/minute_1m/bar_count",
-        ),
-        (
-            lambda facts: facts["numeric_provenance"]["/minute_1m/bar_count"].pop(
-                "calculation_function"
+            lambda facts: facts["source_evidence"]["indicator_source"].__setitem__(
+                "source_type", "phase1_source_evidence"
             ),
-            "numeric_provenance_calculation_invalid:/minute_1m/bar_count",
+            "indicator_source_type_invalid",
         ),
         (
-            lambda facts: facts["minute_1m"].__setitem__("bar_count", 240),
-            "numeric_provenance_value_mismatch:/minute_1m/bar_count",
+            lambda facts: facts["source_evidence"]["indicator_source"].__setitem__(
+                "phase1_byte_equivalent", True
+            ),
+            "phase1_byte_equivalent_must_be_false",
+        ),
+        (
+            lambda facts: facts["source_evidence"]["indicator_source"].__setitem__(
+                "cloud_mutation_count", 1
+            ),
+            "cloud_mutation_count_nonzero",
+        ),
+        (
+            lambda facts: facts["source_evidence"]["indicator_source"].__setitem__(
+                "tickflow_api_request_count", 1
+            ),
+            "tickflow_api_request_count_nonzero",
+        ),
+        (
+            lambda facts: facts["numeric_provenance"].pop("/daily/close"),
+            "numeric_provenance_missing:/daily/close",
         ),
         (
             lambda facts: facts["daily"].__setitem__("close", 10.25),
-            "daily_value_without_retained_source:/daily/close",
+            "numeric_provenance_value_mismatch:/daily/close",
         ),
         (
             lambda facts: facts["indicators"]["ma5"].__setitem__("value", 10.2),
-            "indicator_value_without_retained_source:ma5",
+            "indicator_value_mismatch:ma5",
         ),
         (
-            lambda facts: facts["minute_1m"].__setitem__("bar_count", math.nan),
-            "non_finite_number:/minute_1m/bar_count",
+            lambda facts: facts["indicators"]["ma5"].__setitem__("value", math.nan),
+            "non_finite_number:/indicators/ma5/value",
         ),
         (
             lambda facts: facts.__setitem__("api_key", "tf-secret-canary-value"),
@@ -196,7 +367,7 @@ def test_validate_facts_accepts_the_builder_output() -> None:
                 "price_basis",
                 {
                     "daily_ohlcv": "qfq",
-                    "indicator_prices": "none",
+                    "indicator_prices": "raw",
                     "indicator_volume": "qfq",
                     "minute": "none",
                 },
@@ -204,12 +375,22 @@ def test_validate_facts_accepts_the_builder_output() -> None:
             "raw_qfq_basis_invalid",
         ),
         (
+            lambda facts: facts["units"].__setitem__("volume", "shares"),
+            "volume_unit_invalid",
+        ),
+        (
+            lambda facts: facts["indicators"]["volume_ratio"].__setitem__(
+                "dimensionless", False
+            ),
+            "volume_ratio_dimensionless_invalid",
+        ),
+        (
             lambda facts: facts["vendor_pending"].remove("amount_unit"),
             "vendor_pending_invalid",
         ),
         (
-            lambda facts: facts["scope"].__setitem__("financial_scope", "available"),
-            "scope_invalid",
+            lambda facts: facts["key_levels"]["observed_supports"].append(10.0),
+            "key_levels_invalid",
         ),
     ],
 )
@@ -226,6 +407,18 @@ def test_validate_facts_rejects_untraceable_or_unsafe_content(
     assert expected_error in errors
 
 
+def test_every_numeric_value_has_provenance() -> None:
+    module = importlib.import_module("app.services.phase2_facts")
+    facts = module.build_symbol_facts(REPO_ROOT, "000403.SZ")
+
+    assert set(module.numeric_paths(facts)) == set(facts["numeric_provenance"])
+    assert not [
+        entry
+        for entry in facts["numeric_provenance"].values()
+        if not entry.get("calculation_function") or not entry.get("price_basis")
+    ]
+
+
 def test_canonical_json_rejects_nan_and_is_byte_stable() -> None:
     module = importlib.import_module("app.services.phase2_facts")
     facts = module.build_symbol_facts(REPO_ROOT, "000403.SZ")
@@ -235,30 +428,24 @@ def test_canonical_json_rejects_nan_and_is_byte_stable() -> None:
         module.canonical_json_bytes({"invalid": math.inf})
 
 
-def _copy_phase1_sources(destination: Path) -> None:
+def _copy_all_facts_inputs(destination: Path) -> None:
     module = importlib.import_module("app.services.phase2_facts")
-    seen: set[str] = set()
+    paths: set[str] = set()
     for symbol in SYMBOLS:
         facts = module.build_symbol_facts(REPO_ROOT, symbol)
-        for item in facts["source_evidence"]["source_files"]:
-            relative = item["path"]
-            if relative in seen:
-                continue
-            seen.add(relative)
-            target = destination / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(REPO_ROOT / relative, target)
+        for domain in facts["source_evidence"].values():
+            for item in domain.get("source_files", []):
+                paths.add(item["path"])
+    for relative in sorted(paths):
+        source = REPO_ROOT / relative
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
 
 
-def _directory_bytes(path: Path) -> dict[str, bytes]:
-    return {
-        item.relative_to(path).as_posix(): item.read_bytes()
-        for item in sorted(path.rglob("*"))
-        if item.is_file()
-    }
-
-
-def test_build_facts_directory_is_idempotent_and_records_zero_requests(tmp_path: Path) -> None:
+def test_build_facts_directory_is_idempotent_and_records_zero_requests(
+    tmp_path: Path,
+) -> None:
     builder = importlib.import_module("scripts.build_phase2_facts")
     validator = importlib.import_module("scripts.validate_phase2_facts")
     output_dir = tmp_path / "phase2_facts"
@@ -272,8 +459,11 @@ def test_build_facts_directory_is_idempotent_and_records_zero_requests(tmp_path:
     assert first_bytes == second_bytes
     assert first["status"] == "FACTS_VALID"
     assert first["new_tickflow_api_request_count"] == 0
+    assert first["cloud_mutation_count"] == 0
     assert first["ai_calls"] == 0
-    assert first["content_readiness"] == "BLOCKED_SOURCE_EVIDENCE"
+    assert first["content_readiness"] == "READY_FOR_AI_REVIEW"
+    assert first["source_type"] == "existing_cloud_store_snapshot"
+    assert first["build_mode"] == "offline_existing_cloud_evidence"
     assert set(first["output_hashes"]) == {
         "000403SZ_facts.json",
         "600489SH_facts.json",
@@ -294,13 +484,13 @@ def test_failed_rebuild_preserves_the_previous_facts_directory(tmp_path: Path) -
     builder = importlib.import_module("scripts.build_phase2_facts")
     module = importlib.import_module("app.services.phase2_facts")
     fixture_root = tmp_path / "repo"
-    _copy_phase1_sources(fixture_root)
-    output_dir = fixture_root / "reports" / "phase2_facts"
+    _copy_all_facts_inputs(fixture_root)
+    output_dir = fixture_root / "reports/phase2_facts"
     builder.build_facts_directory(fixture_root, output_dir)
     before = _directory_bytes(output_dir)
 
     summary_path = fixture_root / "reports/phase1_observation/2026-07-31/daily_summary.json"
-    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    summary = _load_json(summary_path)
     summary["status"] = "DAY_BLOCKED"
     summary_path.write_text(json.dumps(summary), encoding="utf-8")
 
@@ -318,17 +508,71 @@ def test_validate_facts_directory_rejects_a_tampered_document(tmp_path: Path) ->
     output_dir = tmp_path / "phase2_facts"
     builder.build_facts_directory(REPO_ROOT, output_dir)
     path = output_dir / "000403SZ_facts.json"
-    facts = json.loads(path.read_text(encoding="utf-8"))
-    facts["minute_1m"]["bar_count"] = 240
+    facts = _load_json(path)
+    facts["indicators"]["ma5"]["value"] = 0.0
     path.write_text(json.dumps(facts, ensure_ascii=False), encoding="utf-8")
 
     result = validator.validate_facts_directory(REPO_ROOT, output_dir)
 
     assert result["status"] == "FACTS_INVALID"
     assert result["symbols"]["000403.SZ"] == "INVALID"
-    assert "numeric_provenance_value_mismatch:/minute_1m/bar_count" in result["errors"][
-        "000403.SZ"
-    ]
+    assert "indicator_value_mismatch:ma5" in result["errors"]["000403.SZ"]
+
+
+def test_validate_facts_directory_rejects_forged_aggregate_source_manifest(
+    tmp_path: Path,
+) -> None:
+    builder = importlib.import_module("scripts.build_phase2_facts")
+    validator = importlib.import_module("scripts.validate_phase2_facts")
+    output_dir = tmp_path / "phase2_facts"
+    builder.build_facts_directory(REPO_ROOT, output_dir)
+    manifest_path = output_dir / "build_manifest.json"
+    manifest = _load_json(manifest_path)
+    manifest["source_files"] = []
+    manifest["source_set_sha256"] = hashlib.sha256(b"[]").hexdigest()
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+
+    result = validator.validate_facts_directory(REPO_ROOT, output_dir)
+
+    assert result["status"] == "FACTS_INVALID"
+    assert "manifest_source_files_mismatch" in result["errors"]["directory"]
+
+
+def test_validate_facts_directory_rejects_symlinked_directory(tmp_path: Path) -> None:
+    builder = importlib.import_module("scripts.build_phase2_facts")
+    validator = importlib.import_module("scripts.validate_phase2_facts")
+    real_dir = tmp_path / "real-facts"
+    link_dir = tmp_path / "linked-facts"
+    builder.build_facts_directory(REPO_ROOT, real_dir)
+    link_dir.symlink_to(real_dir, target_is_directory=True)
+
+    result = validator.validate_facts_directory(REPO_ROOT, link_dir)
+
+    assert result["status"] == "FACTS_INVALID"
+    assert "facts_directory_is_symlink" in result["errors"]["directory"]
+
+
+def test_source_evidence_is_unchanged_by_repeated_facts_builds(tmp_path: Path) -> None:
+    builder = importlib.import_module("scripts.build_phase2_facts")
+    protected = {
+        path.relative_to(REPO_ROOT).as_posix(): _sha256(path)
+        for root in (
+            REPO_ROOT / "reports/phase1_observation",
+            REPO_ROOT / "reports/phase2_source_snapshot/2026-07-31",
+        )
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+    protected["reports/phase1_tickflow_request_audit.json"] = _sha256(
+        REPO_ROOT / "reports/phase1_tickflow_request_audit.json"
+    )
+
+    builder.build_facts_directory(REPO_ROOT, tmp_path / "facts")
+    builder.build_facts_directory(REPO_ROOT, tmp_path / "facts")
+
+    assert {
+        relative: _sha256(REPO_ROOT / relative) for relative in protected
+    } == protected
 
 
 def test_builder_rejects_symbols_outside_the_fixed_scope() -> None:
@@ -340,7 +584,7 @@ def test_builder_rejects_symbols_outside_the_fixed_scope() -> None:
 def test_builder_rejects_symlinked_source_evidence(tmp_path: Path) -> None:
     module = importlib.import_module("app.services.phase2_facts")
     fixture_root = tmp_path / "repo"
-    _copy_phase1_sources(fixture_root)
+    _copy_all_facts_inputs(fixture_root)
     source = fixture_root / "reports/phase1_observation/observation_index.json"
     outside = tmp_path / "outside.json"
     shutil.copy2(source, outside)
@@ -348,6 +592,23 @@ def test_builder_rejects_symlinked_source_evidence(tmp_path: Path) -> None:
     source.symlink_to(outside)
 
     with pytest.raises(module.Phase2FactsError, match="symlink"):
+        module.build_symbol_facts(fixture_root, "000403.SZ")
+
+
+def test_builder_rejects_symlinked_snapshot_document(tmp_path: Path) -> None:
+    module = importlib.import_module("app.services.phase2_facts")
+    fixture_root = tmp_path / "repo"
+    _copy_all_facts_inputs(fixture_root)
+    source = (
+        fixture_root
+        / "reports/phase2_source_snapshot/2026-07-31/000403SZ_raw_daily.json"
+    )
+    outside = tmp_path / "outside.json"
+    shutil.copy2(source, outside)
+    source.unlink()
+    source.symlink_to(outside)
+
+    with pytest.raises(module.Phase2FactsError, match="snapshot"):
         module.build_symbol_facts(fixture_root, "000403.SZ")
 
 
@@ -403,7 +664,14 @@ def test_cli_entrypoints_build_and_validate_without_network(tmp_path: Path) -> N
 
 
 def test_phase2a_modules_do_not_import_network_ai_or_provider_clients() -> None:
-    forbidden_imports = {"httpx", "openai", "requests", "tickflow"}
+    forbidden_imports = {
+        "aiohttp",
+        "anthropic",
+        "httpx",
+        "openai",
+        "requests",
+        "tickflow",
+    }
     paths = [
         REPO_ROOT / "backend/app/services/phase2_facts.py",
         REPO_ROOT / "backend/scripts/build_phase2_facts.py",

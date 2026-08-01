@@ -11,10 +11,11 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from app.services.atomic_directory import atomic_publish_directory
 from app.services.phase2_facts import (
     FACTS_SCHEMA_VERSION,
     FIXED_SYMBOLS,
-    MISSING_SOURCE_INPUTS,
+    SNAPSHOT_MANIFEST,
     TRADE_DATE,
     Phase2FactsError,
     build_symbol_facts,
@@ -54,21 +55,7 @@ def _publish_directory(staging: Path, output_dir: Path) -> None:
     if output_dir.exists() and not output_dir.is_dir():
         raise Phase2FactsError(f"output path is not a directory: {output_dir}")
 
-    backup: Path | None = None
-    if output_dir.exists():
-        backup = Path(
-            tempfile.mkdtemp(prefix=f".{output_dir.name}.backup-", dir=output_dir.parent)
-        )
-        backup.rmdir()
-        os.replace(output_dir, backup)
-    try:
-        os.replace(staging, output_dir)
-    except BaseException:
-        if backup is not None and backup.exists() and not output_dir.exists():
-            os.replace(backup, output_dir)
-        raise
-    if backup is not None:
-        shutil.rmtree(backup)
+    atomic_publish_directory(staging, output_dir)
 
 
 def build_facts_directory(repo_root: Path, output_dir: Path) -> dict[str, Any]:
@@ -91,10 +78,11 @@ def build_facts_directory(repo_root: Path, output_dir: Path) -> dict[str, Any]:
         filename = _facts_filename(symbol)
         encoded_facts[filename] = canonical_json_bytes(facts)
         symbol_status[symbol] = "VALID"
-        for item in facts["source_evidence"]["source_files"]:
-            previous = all_sources.setdefault(item["path"], item["sha256"])
-            if previous != item["sha256"]:
-                raise Phase2FactsError(f"source hash conflict: {item['path']}")
+        for domain in facts["source_evidence"].values():
+            for item in domain.get("source_files", []):
+                previous = all_sources.setdefault(item["path"], item["sha256"])
+                if previous != item["sha256"]:
+                    raise Phase2FactsError(f"source hash conflict: {item['path']}")
 
     source_files = [
         {"path": path, "sha256": sha256}
@@ -108,14 +96,17 @@ def build_facts_directory(repo_root: Path, output_dir: Path) -> dict[str, Any]:
         "facts_schema_version": FACTS_SCHEMA_VERSION,
         "trade_date": TRADE_DATE,
         "symbols": symbol_status,
-        "content_readiness": "BLOCKED_SOURCE_EVIDENCE",
-        "missing_source_inputs": list(MISSING_SOURCE_INPUTS),
+        "content_readiness": "READY_FOR_AI_REVIEW",
+        "missing_source_inputs": [],
+        "source_type": "existing_cloud_store_snapshot",
+        "source_snapshot_manifest": SNAPSHOT_MANIFEST,
         "source_files": source_files,
         "source_set_sha256": _source_set_hash(source_files),
         "output_hashes": output_hashes,
         "new_tickflow_api_request_count": 0,
+        "cloud_mutation_count": 0,
         "ai_calls": 0,
-        "build_mode": "offline_phase1_evidence_only",
+        "build_mode": "offline_existing_cloud_evidence",
     }
 
     staging = Path(

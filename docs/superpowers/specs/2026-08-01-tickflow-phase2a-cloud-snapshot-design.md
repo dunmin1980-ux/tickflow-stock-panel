@@ -106,7 +106,10 @@ domain is relabeled as the other.
 Any provider, job, hash, date, row, numeric, provenance, source-unit, safety, or
 idempotency failure blocks publication and prevents `PHASE2A_FACTS_READY`.
 Snapshot and Facts directories are staged and atomically replaced only after
-validation. Phase 1 evidence and request audits are read-only throughout.
+validation. First publication uses one same-filesystem rename; replacement of
+an existing directory uses macOS `renamex_np(RENAME_SWAP)` or Linux
+`renameat2(RENAME_EXCHANGE)`, so the canonical path is never absent between two
+renames. Phase 1 evidence and request audits are read-only throughout.
 
 ## Out Of Scope
 

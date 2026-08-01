@@ -354,6 +354,28 @@ def test_source_partition_aggregate_hash_is_independently_checked(
     assert "source_partition_aggregate_hash_mismatch:raw" in errors
 
 
+def test_source_partition_path_must_match_the_exact_allowlist_shape(
+    snapshot_bundle: dict[str, object],
+) -> None:
+    module = importlib.import_module("app.services.phase2_snapshot")
+    bundle = copy.deepcopy(snapshot_bundle)
+    raw_partition = bundle["manifest"]["source_partitions"]["raw"]
+    raw_partition["files"][0]["path"] = (
+        "kline_daily/date=2026-07-31/../../user_data/preferences.json"
+    )
+    raw_partition["files"].sort(key=lambda item: item["path"])
+    raw_partition["aggregate_sha256"] = hashlib.sha256(
+        module.canonical_json_bytes(raw_partition["files"])
+    ).hexdigest()
+    bundle["manifest"]["normalized_business_sha256"] = module._business_hash(
+        bundle["manifest"], bundle["documents"]
+    )
+
+    errors = module.validate_snapshot_bundle(bundle)
+
+    assert "source_partition_paths_invalid:raw" in errors
+
+
 def test_raw_qfq_date_set_mismatch_is_rejected(
     snapshot_bundle: dict[str, object],
 ) -> None:
@@ -449,6 +471,49 @@ def test_source_store_rejects_symlinked_preferences(tmp_path: Path) -> None:
 
     with pytest.raises(module.SnapshotError, match="must not be a symlink"):
         module.hash_source_store(data_dir)
+
+
+def test_source_reader_rejects_future_rows_instead_of_silently_dropping_them(
+    tmp_path: Path,
+) -> None:
+    module = importlib.import_module("app.services.phase2_snapshot")
+    path = tmp_path / "date=2026-08-03" / "part.parquet"
+    path.parent.mkdir()
+    pl.DataFrame(
+        [
+            {
+                "symbol": "000403.SZ",
+                "date": date(2026, 8, 3),
+                "open": 10.0,
+                "high": 10.2,
+                "low": 9.9,
+                "close": 10.1,
+                "volume": 100.0,
+                "amount": 1010.0,
+            }
+        ]
+    ).write_parquet(path)
+
+    with pytest.raises(module.SnapshotError, match="future trade date"):
+        module._read_series([path])
+
+
+def test_atomic_directory_publisher_swaps_existing_directory_without_gap(
+    tmp_path: Path,
+) -> None:
+    module = importlib.import_module("app.services.atomic_directory")
+    destination = tmp_path / "evidence"
+    staging = tmp_path / ".evidence.staging-test"
+    destination.mkdir()
+    staging.mkdir()
+    (destination / "version.txt").write_text("old", encoding="utf-8")
+    (staging / "version.txt").write_text("new", encoding="utf-8")
+
+    module.atomic_publish_directory(staging, destination)
+
+    assert destination.is_dir()
+    assert (destination / "version.txt").read_text(encoding="utf-8") == "new"
+    assert not staging.exists()
 
 
 def test_export_cli_source_mode_emits_bundle_without_source_mutation(

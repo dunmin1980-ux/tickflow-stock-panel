@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -254,7 +255,9 @@ def _read_series(files: Sequence[Path]) -> dict[str, list[dict[str, Any]]]:
         symbol = str(row["symbol"])
         trade_date = _normalize_trade_date(row["date"])
         if trade_date > TRADE_DATE:
-            continue
+            raise SnapshotError(
+                f"future trade date in approved symbol scope: {trade_date}"
+            )
         rows_by_symbol[symbol].append(
             {
                 "symbol": symbol,
@@ -643,8 +646,28 @@ def validate_snapshot_bundle(bundle: Mapping[str, Any]) -> list[str]:
                 errors.append(f"source_partition_files_invalid:{basis}")
                 continue
             paths = [item.get("path") for item in files]
-            if paths != sorted(set(paths)) or not all(
-                isinstance(path, str) and path.startswith(prefix) for path in paths
+            pattern = re.compile(
+                rf"{re.escape(prefix)}(\d{{4}}-\d{{2}}-\d{{2}})/part\.parquet"
+            )
+            path_dates: list[str] = []
+            paths_valid = True
+            for path in paths:
+                match = pattern.fullmatch(path) if isinstance(path, str) else None
+                if match is None:
+                    paths_valid = False
+                    continue
+                try:
+                    parsed = date.fromisoformat(match.group(1))
+                except ValueError:
+                    paths_valid = False
+                    continue
+                path_dates.append(parsed.isoformat())
+                if parsed > date.fromisoformat(TRADE_DATE):
+                    paths_valid = False
+            if (
+                paths != sorted(set(paths))
+                or not paths_valid
+                or path_dates != sorted(path_dates)
             ):
                 errors.append(f"source_partition_paths_invalid:{basis}")
             for index, item in enumerate(files):
@@ -890,7 +913,6 @@ def materialize_snapshot_bundle(
     output_dir = parent / output_dir.name
 
     staging = Path(tempfile.mkdtemp(prefix=f".{output_dir.name}.staging-", dir=parent))
-    backup = parent / f".{output_dir.name}.backup-{os.getpid()}"
     validation = _validation_result(bundle)
     try:
         _write_fsynced(staging / "manifest.json", bundle["manifest"])
@@ -899,21 +921,11 @@ def materialize_snapshot_bundle(
         _write_fsynced(staging / "snapshot_validation.json", validation)
         _fsync_directory(staging)
 
-        if backup.exists():
-            shutil.rmtree(backup)
-        if output_dir.exists():
-            if not output_dir.is_dir():
-                raise SnapshotError("snapshot output exists and is not a directory")
-            output_dir.rename(backup)
-        try:
-            staging.rename(output_dir)
-            _fsync_directory(parent)
-        except Exception:
-            if backup.exists() and not output_dir.exists():
-                backup.rename(output_dir)
-            raise
-        if backup.exists():
-            shutil.rmtree(backup)
+        if output_dir.exists() and not output_dir.is_dir():
+            raise SnapshotError("snapshot output exists and is not a directory")
+        from app.services.atomic_directory import atomic_publish_directory
+
+        atomic_publish_directory(staging, output_dir)
         return validation
     finally:
         if staging.exists():

@@ -11,7 +11,7 @@ from typing import Any
 from app.services.phase2_facts import (
     FACTS_SCHEMA_VERSION,
     FIXED_SYMBOLS,
-    MISSING_SOURCE_INPUTS,
+    SNAPSHOT_MANIFEST,
     TRADE_DATE,
     Phase2FactsError,
     validate_facts_document,
@@ -78,6 +78,17 @@ def _validation_metrics(errors: dict[str, list[str]]) -> dict[str, int]:
 
 def validate_facts_directory(repo_root: Path, facts_dir: Path) -> dict[str, Any]:
     repo_root = repo_root.resolve(strict=True)
+    if facts_dir.is_symlink():
+        errors = {"directory": ["facts_directory_is_symlink"]}
+        return {
+            "status": "FACTS_INVALID",
+            "symbols": {symbol: "INVALID" for symbol in FIXED_SYMBOLS},
+            "errors": errors,
+            "metrics": _validation_metrics(errors),
+            "new_tickflow_api_request_count": 0,
+            "cloud_mutation_count": 0,
+            "ai_calls": 0,
+        }
     facts_dir = facts_dir.resolve(strict=True)
     expected_fact_files = {
         f"{symbol.replace('.', '')}_facts.json": symbol for symbol in FIXED_SYMBOLS
@@ -87,8 +98,6 @@ def validate_facts_directory(repo_root: Path, facts_dir: Path) -> dict[str, Any]
     top_level_non_files = [path.name for path in facts_dir.iterdir() if not path.is_file()]
 
     directory_errors: list[str] = []
-    if facts_dir.is_symlink():
-        directory_errors.append("facts_directory_is_symlink")
     if actual_files != expected_files or top_level_non_files:
         directory_errors.append("artifact_file_set_invalid")
 
@@ -109,14 +118,22 @@ def validate_facts_directory(repo_root: Path, facts_dir: Path) -> dict[str, Any]
         directory_errors.append("manifest_schema_version_invalid")
     if manifest.get("trade_date") != TRADE_DATE:
         directory_errors.append("manifest_trade_date_invalid")
-    if manifest.get("content_readiness") != "BLOCKED_SOURCE_EVIDENCE":
+    if manifest.get("content_readiness") != "READY_FOR_AI_REVIEW":
         directory_errors.append("manifest_content_readiness_invalid")
-    if manifest.get("missing_source_inputs") != MISSING_SOURCE_INPUTS:
+    if manifest.get("missing_source_inputs") != []:
         directory_errors.append("manifest_missing_source_inputs_invalid")
+    if manifest.get("source_type") != "existing_cloud_store_snapshot":
+        directory_errors.append("manifest_source_type_invalid")
+    if manifest.get("source_snapshot_manifest") != SNAPSHOT_MANIFEST:
+        directory_errors.append("manifest_snapshot_source_invalid")
     if manifest.get("new_tickflow_api_request_count") != 0:
         directory_errors.append("manifest_tickflow_request_count_nonzero")
+    if manifest.get("cloud_mutation_count") != 0:
+        directory_errors.append("manifest_cloud_mutation_count_nonzero")
     if manifest.get("ai_calls") != 0:
         directory_errors.append("manifest_ai_call_count_nonzero")
+    if manifest.get("build_mode") != "offline_existing_cloud_evidence":
+        directory_errors.append("manifest_build_mode_invalid")
     source_files = manifest.get("source_files")
     if not isinstance(source_files, list):
         directory_errors.append("manifest_source_files_invalid")
@@ -130,6 +147,7 @@ def validate_facts_directory(repo_root: Path, facts_dir: Path) -> dict[str, Any]
 
     symbol_status: dict[str, str] = {}
     symbol_errors: dict[str, list[str]] = {}
+    observed_sources: dict[str, str] = {}
     for filename, symbol in expected_fact_files.items():
         path = facts_dir / filename
         errors: list[str] = []
@@ -141,12 +159,50 @@ def validate_facts_directory(repo_root: Path, facts_dir: Path) -> dict[str, Any]
             errors.extend(validate_facts_document(repo_root, facts))
             if output_hashes.get(filename) != _sha256_file(path):
                 errors.append("output_hash_mismatch")
+            source_evidence = facts.get("source_evidence")
+            if isinstance(source_evidence, dict):
+                for domain in source_evidence.values():
+                    if not isinstance(domain, dict):
+                        continue
+                    for item in domain.get("source_files", []):
+                        if not isinstance(item, dict):
+                            errors.append("source_manifest_entry_invalid")
+                            continue
+                        relative = item.get("path")
+                        digest = item.get("sha256")
+                        if not isinstance(relative, str) or not isinstance(digest, str):
+                            errors.append("source_manifest_entry_invalid")
+                            continue
+                        previous = observed_sources.setdefault(relative, digest)
+                        if previous != digest:
+                            errors.append("source_manifest_hash_conflict")
         symbol_status[symbol] = "VALID" if not errors else "INVALID"
         if errors:
             symbol_errors[symbol] = sorted(set(errors))
 
     if manifest.get("symbols") != symbol_status:
         directory_errors.append("manifest_symbol_status_invalid")
+    expected_sources = [
+        {"path": path, "sha256": digest}
+        for path, digest in sorted(observed_sources.items())
+    ]
+    if source_files != expected_sources:
+        directory_errors.append("manifest_source_files_mismatch")
+    for item in expected_sources:
+        candidate = repo_root / item["path"]
+        try:
+            if candidate.is_symlink():
+                raise ValueError
+            resolved = candidate.resolve(strict=True)
+            resolved.relative_to(repo_root)
+            if not resolved.is_file():
+                raise ValueError
+        except (FileNotFoundError, ValueError):
+            directory_errors.append(f"manifest_source_path_invalid:{item['path']}")
+            continue
+        if _sha256_file(resolved) != item["sha256"]:
+            directory_errors.append("source_hash_mismatch")
+            directory_errors.append(f"manifest_source_hash_mismatch:{item['path']}")
     if directory_errors:
         symbol_errors["directory"] = sorted(set(directory_errors))
     status = "FACTS_VALID" if not symbol_errors else "FACTS_INVALID"
@@ -156,6 +212,7 @@ def validate_facts_directory(repo_root: Path, facts_dir: Path) -> dict[str, Any]
         "errors": symbol_errors,
         "metrics": _validation_metrics(symbol_errors),
         "new_tickflow_api_request_count": 0,
+        "cloud_mutation_count": 0,
         "ai_calls": 0,
     }
 

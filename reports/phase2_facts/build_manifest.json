@@ -1,19 +1,21 @@
 {
   "ai_calls": 0,
-  "build_mode": "offline_phase1_evidence_only",
-  "content_readiness": "BLOCKED_SOURCE_EVIDENCE",
+  "build_mode": "offline_existing_cloud_evidence",
+  "cloud_mutation_count": 0,
+  "content_readiness": "READY_FOR_AI_REVIEW",
   "facts_schema_version": 1,
-  "missing_source_inputs": [
-    "retained_raw_daily_ohlcv_values",
-    "retained_qfq_daily_ohlcv_series"
-  ],
+  "missing_source_inputs": [],
   "new_tickflow_api_request_count": 0,
   "output_hashes": {
-    "000403SZ_facts.json": "6320c5230062c67837033c5d1468a0366c00119d3f08b91d131c409272eac93a",
-    "300059SZ_facts.json": "50fb96dd8e5135b4cc1e43ca9bd90272e017f180446894b68dbfeb55a10f986d",
-    "600489SH_facts.json": "8528801d8bc2f4f5df8b6f89d78271bff35dccc8555c3fc7733c7284d6fca98a"
+    "000403SZ_facts.json": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+    "300059SZ_facts.json": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+    "600489SH_facts.json": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409"
   },
   "source_files": [
+    {
+      "path": "backend/app/indicators/pipeline.py",
+      "sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
     {
       "path": "reports/phase1_observation/2026-07-31/000403SZ_contract.json",
       "sha256": "5b34b51873e1af4020bd6c12edb33043beae30224268ab46ef89213a94fe5f06"
@@ -47,11 +49,45 @@
       "sha256": "4b804ef218d5b7ac936e12814c300230f5cbcf1c691b62800f6d00a9edf3cf0e"
     },
     {
+      "path": "reports/phase2_source_snapshot/2026-07-31/000403SZ_qfq_daily.json",
+      "sha256": "feaabde8b16e2ecbefab0582ca1a13bba32921358af194c55a5cbf213720a9dc"
+    },
+    {
+      "path": "reports/phase2_source_snapshot/2026-07-31/000403SZ_raw_daily.json",
+      "sha256": "b29045903c38a81ca1d08e4d07311e926bd4ee82c8ea9113eae3dd571a19625a"
+    },
+    {
+      "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_qfq_daily.json",
+      "sha256": "3131306d481c3fc7818b3a28595a3d9dccf35e5a398309dbaadc5c58a6854e05"
+    },
+    {
+      "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_raw_daily.json",
+      "sha256": "1c7c040e6dcc5cf73e788d34c4b5caf8ad86d36ebe6953ec21fac64053e0b95c"
+    },
+    {
+      "path": "reports/phase2_source_snapshot/2026-07-31/600489SH_qfq_daily.json",
+      "sha256": "3123e985408fa74975f7c7662a80c6beeb4f3e46eb276865389291047fb2a45d"
+    },
+    {
+      "path": "reports/phase2_source_snapshot/2026-07-31/600489SH_raw_daily.json",
+      "sha256": "73f16fcee9325fbeb79a370fc2d647fdfc42735ad9afa09e5d34cf3502492586"
+    },
+    {
+      "path": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    {
+      "path": "reports/phase2_source_snapshot/2026-07-31/snapshot_validation.json",
+      "sha256": "fd77c4ef5dfd064d83f41c56e5e4d052e1f96afc400c3922db467e8d045e96e6"
+    },
+    {
       "path": "reports/tickflow_phase1_observation_final.md",
       "sha256": "8a335eeced7d60ce1cb33ba42a9b24aadd4b637fae32a677570e727dd6eae463"
     }
   ],
-  "source_set_sha256": "302111ca829458dc0d90ad3223bad45bdd07761666f8461a6e641057dec05d1f",
+  "source_set_sha256": "eb9b721dff7348e164ceeb3f33267dc1b86fcff4e23212ebdc892639ac9b35df",
+  "source_snapshot_manifest": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+  "source_type": "existing_cloud_store_snapshot",
   "status": "FACTS_VALID",
   "symbols": {
     "000403.SZ": "VALID",

@@ -6,162 +6,473 @@
     "second_adjustment_detected": false,
     "status": "PASSED"
   },
-  "content_readiness": "BLOCKED_SOURCE_EVIDENCE",
+  "content_readiness": "READY_FOR_AI_REVIEW",
   "daily": {
-    "amount": null,
-    "close": null,
+    "amount": 6938438000.0,
+    "close": 20.17,
     "contract_status": "PASSED",
-    "high": null,
-    "latest_qfq_trade_date": "2026-07-31",
-    "latest_raw_trade_date": "2026-07-31",
-    "low": null,
-    "open": null,
-    "reason": "Retained Phase 1 evidence does not include the Day 5 OHLCV values",
-    "status": "UNAVAILABLE_SOURCE_EVIDENCE",
-    "volume": null
+    "high": 20.52,
+    "low": 19.91,
+    "open": 19.98,
+    "price_basis": "raw",
+    "status": "AVAILABLE",
+    "trade_date": "2026-07-31",
+    "volume": 3424840.0
   },
   "data_freshness": "fresh",
   "facts_schema_version": 1,
   "generation": {
     "ai_calls": 0,
-    "mode": "offline_phase1_evidence_only",
+    "cloud_mutation_count": 0,
+    "mode": "offline_existing_cloud_evidence",
     "new_tickflow_api_request_count": 0
   },
   "indicators": {
     "atr14": {
-      "implementation": "app.indicators.pipeline.compute_indicators:atr_14",
+      "data_basis": "qfq",
+      "dimensionless": false,
+      "history_window": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "row_count": 251
+      },
+      "implementation": {
+        "function": "compute_indicators",
+        "module": "app.indicators.pipeline",
+        "output_column": "atr_14"
+      },
+      "input_fields": [
+        "high",
+        "low",
+        "close"
+      ],
+      "parameters": {
+        "ema_adjust": false,
+        "period": 14,
+        "smoothing": "wilder_ewm"
+      },
       "price_basis": "qfq",
-      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
-      "required_input": "retained_qfq_daily_ohlcv_series",
-      "status": "NOT_IMPLEMENTED",
-      "value": null
+      "result_precision": "float64_unrounded",
+      "status": "VALID",
+      "unit": "qfq_price",
+      "value": 0.6825505771218069
     },
     "boll_lower": {
-      "implementation": "app.indicators.pipeline.compute_indicators:boll_lower",
+      "data_basis": "qfq",
+      "dimensionless": false,
+      "history_window": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "row_count": 251
+      },
+      "implementation": {
+        "function": "compute_indicators",
+        "module": "app.indicators.pipeline",
+        "output_column": "boll_lower"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "parameters": {
+        "standard_deviation_ddof": 1,
+        "standard_deviations": 2,
+        "window": 20
+      },
       "price_basis": "qfq",
-      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
-      "required_input": "retained_qfq_daily_ohlcv_series",
-      "status": "NOT_IMPLEMENTED",
-      "value": null
+      "result_precision": "float64_unrounded",
+      "status": "VALID",
+      "unit": "qfq_price",
+      "value": 19.217491214818384
     },
     "boll_middle": {
-      "implementation": "app.indicators.pipeline.compute_indicators:ma20",
+      "data_basis": "qfq",
+      "dimensionless": false,
+      "history_window": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "row_count": 251
+      },
+      "implementation": {
+        "function": "compute_indicators",
+        "module": "app.indicators.pipeline",
+        "output_column": "ma20"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "parameters": {
+        "standard_deviation_ddof": 1,
+        "standard_deviations": 2,
+        "window": 20
+      },
       "price_basis": "qfq",
-      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
-      "required_input": "retained_qfq_daily_ohlcv_series",
-      "status": "NOT_IMPLEMENTED",
-      "value": null
+      "result_precision": "float64_unrounded",
+      "status": "VALID",
+      "unit": "qfq_price",
+      "value": 20.042
     },
     "boll_upper": {
-      "implementation": "app.indicators.pipeline.compute_indicators:boll_upper",
+      "data_basis": "qfq",
+      "dimensionless": false,
+      "history_window": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "row_count": 251
+      },
+      "implementation": {
+        "function": "compute_indicators",
+        "module": "app.indicators.pipeline",
+        "output_column": "boll_upper"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "parameters": {
+        "standard_deviation_ddof": 1,
+        "standard_deviations": 2,
+        "window": 20
+      },
       "price_basis": "qfq",
-      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
-      "required_input": "retained_qfq_daily_ohlcv_series",
-      "status": "NOT_IMPLEMENTED",
-      "value": null
+      "result_precision": "float64_unrounded",
+      "status": "VALID",
+      "unit": "qfq_price",
+      "value": 20.86650878518162
     },
     "ma10": {
-      "implementation": "app.indicators.pipeline.compute_indicators:ma10",
+      "data_basis": "qfq",
+      "dimensionless": false,
+      "history_window": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "row_count": 251
+      },
+      "implementation": {
+        "function": "compute_indicators",
+        "module": "app.indicators.pipeline",
+        "output_column": "ma10"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "parameters": {
+        "method": "simple",
+        "window": 10
+      },
       "price_basis": "qfq",
-      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
-      "required_input": "retained_qfq_daily_ohlcv_series",
-      "status": "NOT_IMPLEMENTED",
-      "value": null
+      "result_precision": "float64_unrounded",
+      "status": "VALID",
+      "unit": "qfq_price",
+      "value": 19.936
     },
     "ma20": {
-      "implementation": "app.indicators.pipeline.compute_indicators:ma20",
+      "data_basis": "qfq",
+      "dimensionless": false,
+      "history_window": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "row_count": 251
+      },
+      "implementation": {
+        "function": "compute_indicators",
+        "module": "app.indicators.pipeline",
+        "output_column": "ma20"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "parameters": {
+        "method": "simple",
+        "window": 20
+      },
       "price_basis": "qfq",
-      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
-      "required_input": "retained_qfq_daily_ohlcv_series",
-      "status": "NOT_IMPLEMENTED",
-      "value": null
+      "result_precision": "float64_unrounded",
+      "status": "VALID",
+      "unit": "qfq_price",
+      "value": 20.042
     },
     "ma5": {
-      "implementation": "app.indicators.pipeline.compute_indicators:ma5",
+      "data_basis": "qfq",
+      "dimensionless": false,
+      "history_window": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "row_count": 251
+      },
+      "implementation": {
+        "function": "compute_indicators",
+        "module": "app.indicators.pipeline",
+        "output_column": "ma5"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "parameters": {
+        "method": "simple",
+        "window": 5
+      },
       "price_basis": "qfq",
-      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
-      "required_input": "retained_qfq_daily_ohlcv_series",
-      "status": "NOT_IMPLEMENTED",
-      "value": null
+      "result_precision": "float64_unrounded",
+      "status": "VALID",
+      "unit": "qfq_price",
+      "value": 19.826
     },
     "ma60": {
-      "implementation": "app.indicators.pipeline.compute_indicators:ma60",
+      "data_basis": "qfq",
+      "dimensionless": false,
+      "history_window": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "row_count": 251
+      },
+      "implementation": {
+        "function": "compute_indicators",
+        "module": "app.indicators.pipeline",
+        "output_column": "ma60"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "parameters": {
+        "method": "simple",
+        "window": 60
+      },
       "price_basis": "qfq",
-      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
-      "required_input": "retained_qfq_daily_ohlcv_series",
-      "status": "NOT_IMPLEMENTED",
-      "value": null
+      "result_precision": "float64_unrounded",
+      "status": "VALID",
+      "unit": "qfq_price",
+      "value": 19.782666666666668
     },
     "macd_dea": {
-      "implementation": "app.indicators.pipeline.compute_indicators:macd_dea",
+      "data_basis": "qfq",
+      "dimensionless": false,
+      "history_window": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "row_count": 251
+      },
+      "implementation": {
+        "function": "compute_indicators",
+        "module": "app.indicators.pipeline",
+        "output_column": "macd_dea"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "parameters": {
+        "ema_adjust": false,
+        "fast_period": 12,
+        "histogram_multiplier": 2,
+        "signal_period": 9,
+        "slow_period": 26
+      },
       "price_basis": "qfq",
-      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
-      "required_input": "retained_qfq_daily_ohlcv_series",
-      "status": "NOT_IMPLEMENTED",
-      "value": null
+      "result_precision": "float64_unrounded",
+      "status": "VALID",
+      "unit": "qfq_price",
+      "value": 0.012188214888996223
     },
     "macd_dif": {
-      "implementation": "app.indicators.pipeline.compute_indicators:macd_dif",
+      "data_basis": "qfq",
+      "dimensionless": false,
+      "history_window": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "row_count": 251
+      },
+      "implementation": {
+        "function": "compute_indicators",
+        "module": "app.indicators.pipeline",
+        "output_column": "macd_dif"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "parameters": {
+        "ema_adjust": false,
+        "fast_period": 12,
+        "histogram_multiplier": 2,
+        "signal_period": 9,
+        "slow_period": 26
+      },
       "price_basis": "qfq",
-      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
-      "required_input": "retained_qfq_daily_ohlcv_series",
-      "status": "NOT_IMPLEMENTED",
-      "value": null
+      "result_precision": "float64_unrounded",
+      "status": "VALID",
+      "unit": "qfq_price",
+      "value": -0.013730564457485883
     },
     "macd_hist": {
-      "implementation": "app.indicators.pipeline.compute_indicators:macd_hist",
+      "data_basis": "qfq",
+      "dimensionless": false,
+      "history_window": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "row_count": 251
+      },
+      "implementation": {
+        "function": "compute_indicators",
+        "module": "app.indicators.pipeline",
+        "output_column": "macd_hist"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "parameters": {
+        "ema_adjust": false,
+        "fast_period": 12,
+        "histogram_multiplier": 2,
+        "signal_period": 9,
+        "slow_period": 26
+      },
       "price_basis": "qfq",
-      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
-      "required_input": "retained_qfq_daily_ohlcv_series",
-      "status": "NOT_IMPLEMENTED",
-      "value": null
+      "result_precision": "float64_unrounded",
+      "status": "VALID",
+      "unit": "qfq_price",
+      "value": -0.05183755869296421
     },
     "rsi14": {
-      "implementation": "app.indicators.pipeline.compute_indicators:rsi_14",
+      "data_basis": "qfq",
+      "dimensionless": true,
+      "history_window": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "row_count": 251
+      },
+      "implementation": {
+        "function": "compute_indicators",
+        "module": "app.indicators.pipeline",
+        "output_column": "rsi_14"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "parameters": {
+        "period": 14,
+        "smoothing": "ewm_alpha_1_over_period",
+        "zero_loss_floor": "1e-12"
+      },
       "price_basis": "qfq",
-      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
-      "required_input": "retained_qfq_daily_ohlcv_series",
-      "status": "NOT_IMPLEMENTED",
-      "value": null
+      "result_precision": "float64_unrounded",
+      "status": "VALID",
+      "unit": "dimensionless",
+      "value": 52.28308759960673
     },
     "rsi6": {
-      "implementation": "app.indicators.pipeline.compute_indicators:rsi_6",
+      "data_basis": "qfq",
+      "dimensionless": true,
+      "history_window": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "row_count": 251
+      },
+      "implementation": {
+        "function": "compute_indicators",
+        "module": "app.indicators.pipeline",
+        "output_column": "rsi_6"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "parameters": {
+        "period": 6,
+        "smoothing": "ewm_alpha_1_over_period",
+        "zero_loss_floor": "1e-12"
+      },
       "price_basis": "qfq",
-      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
-      "required_input": "retained_qfq_daily_ohlcv_series",
-      "status": "NOT_IMPLEMENTED",
-      "value": null
+      "result_precision": "float64_unrounded",
+      "status": "VALID",
+      "unit": "dimensionless",
+      "value": 57.77034061172677
     },
     "volume_ma10": {
-      "implementation": "app.indicators.pipeline.compute_indicators:vol_ma10",
-      "price_basis": "none",
-      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
-      "required_input": "retained_qfq_daily_ohlcv_series",
-      "status": "NOT_IMPLEMENTED",
-      "value": null
+      "data_basis": "raw",
+      "dimensionless": false,
+      "history_window": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "row_count": 251
+      },
+      "implementation": {
+        "function": "compute_indicators",
+        "module": "app.indicators.pipeline",
+        "output_column": "vol_ma10"
+      },
+      "input_fields": [
+        "volume"
+      ],
+      "parameters": {
+        "method": "simple",
+        "window": 10
+      },
+      "price_basis": "not_applicable",
+      "result_precision": "float64_unrounded",
+      "source_unit_unconfirmed": true,
+      "status": "VALID",
+      "unit": "VENDOR_CONFIRMATION_PENDING",
+      "value": 2972586.1,
+      "volume_unit": "VENDOR_CONFIRMATION_PENDING"
     },
     "volume_ma5": {
-      "implementation": "app.indicators.pipeline.compute_indicators:vol_ma5",
-      "price_basis": "none",
-      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
-      "required_input": "retained_qfq_daily_ohlcv_series",
-      "status": "NOT_IMPLEMENTED",
-      "value": null
+      "data_basis": "raw",
+      "dimensionless": false,
+      "history_window": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "row_count": 251
+      },
+      "implementation": {
+        "function": "compute_indicators",
+        "module": "app.indicators.pipeline",
+        "output_column": "vol_ma5"
+      },
+      "input_fields": [
+        "volume"
+      ],
+      "parameters": {
+        "method": "simple",
+        "window": 5
+      },
+      "price_basis": "not_applicable",
+      "result_precision": "float64_unrounded",
+      "source_unit_unconfirmed": true,
+      "status": "VALID",
+      "unit": "VENDOR_CONFIRMATION_PENDING",
+      "value": 2627315.8,
+      "volume_unit": "VENDOR_CONFIRMATION_PENDING"
     },
     "volume_ratio": {
-      "implementation": "app.indicators.pipeline.compute_indicators:vol_ratio_5d",
-      "price_basis": "none",
-      "reason": "Phase 1 retained contracts do not contain the qfq OHLCV input series",
-      "required_input": "retained_qfq_daily_ohlcv_series",
-      "status": "NOT_IMPLEMENTED",
-      "value": null
+      "data_basis": "raw",
+      "dimensionless": true,
+      "history_window": {
+        "first_trade_date": "2025-07-21",
+        "last_trade_date": "2026-07-31",
+        "row_count": 251
+      },
+      "implementation": {
+        "function": "compute_indicators",
+        "module": "app.indicators.pipeline",
+        "output_column": "vol_ratio_5d"
+      },
+      "input_fields": [
+        "volume"
+      ],
+      "parameters": {
+        "denominator": "previous_period_mean_excluding_current",
+        "lookback": 5
+      },
+      "price_basis": "not_applicable",
+      "result_precision": "float64_unrounded",
+      "source_unit_unconfirmed": true,
+      "status": "VALID",
+      "unit": "dimensionless",
+      "value": 1.3376076287424494,
+      "volume_unit": "VENDOR_CONFIRMATION_PENDING"
     }
   },
   "key_levels": {
     "calculation_method": null,
     "observed_resistances": [],
     "observed_supports": [],
-    "reason": "No approved deterministic key-level method has retained input data",
+    "reason": "No approved deterministic key-level algorithm",
     "status": "NOT_IMPLEMENTED"
   },
   "minute_1m": {
@@ -191,10 +502,7 @@
     "status": "PASSED",
     "vendor_contract_confirmed": false
   },
-  "missing_source_inputs": [
-    "retained_raw_daily_ohlcv_values",
-    "retained_qfq_daily_ohlcv_series"
-  ],
+  "missing_source_inputs": [],
   "name": "东方财富",
   "numeric_provenance": {
     "/adjustment_factors/factor_count": {
@@ -213,6 +521,54 @@
       "source_json_path": "/ex_factors/qfq_relation_match_rate",
       "source_sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
     },
+    "/daily/amount": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "raw_unconfirmed_unit",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/300059SZ_raw_daily.json",
+      "source_json_path": "/rows/250/amount",
+      "source_sha256": "1c7c040e6dcc5cf73e788d34c4b5caf8ad86d36ebe6953ec21fac64053e0b95c"
+    },
+    "/daily/close": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "raw",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/300059SZ_raw_daily.json",
+      "source_json_path": "/rows/250/close",
+      "source_sha256": "1c7c040e6dcc5cf73e788d34c4b5caf8ad86d36ebe6953ec21fac64053e0b95c"
+    },
+    "/daily/high": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "raw",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/300059SZ_raw_daily.json",
+      "source_json_path": "/rows/250/high",
+      "source_sha256": "1c7c040e6dcc5cf73e788d34c4b5caf8ad86d36ebe6953ec21fac64053e0b95c"
+    },
+    "/daily/low": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "raw",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/300059SZ_raw_daily.json",
+      "source_json_path": "/rows/250/low",
+      "source_sha256": "1c7c040e6dcc5cf73e788d34c4b5caf8ad86d36ebe6953ec21fac64053e0b95c"
+    },
+    "/daily/open": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "raw",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/300059SZ_raw_daily.json",
+      "source_json_path": "/rows/250/open",
+      "source_sha256": "1c7c040e6dcc5cf73e788d34c4b5caf8ad86d36ebe6953ec21fac64053e0b95c"
+    },
+    "/daily/volume": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "raw_unconfirmed_unit",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/300059SZ_raw_daily.json",
+      "source_json_path": "/rows/250/volume",
+      "source_sha256": "1c7c040e6dcc5cf73e788d34c4b5caf8ad86d36ebe6953ec21fac64053e0b95c"
+    },
     "/facts_schema_version": {
       "calculation_function": "schema_constant",
       "constant": "FACTS_SCHEMA_VERSION",
@@ -225,11 +581,846 @@
       "kind": "schema_constant",
       "price_basis": "not_applicable"
     },
+    "/generation/cloud_mutation_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "not_applicable",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/cloud_mutation_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
     "/generation/new_tickflow_api_request_count": {
-      "calculation_function": "schema_constant",
-      "constant": "OFFLINE_BUILD_ZERO_REQUESTS",
-      "kind": "schema_constant",
-      "price_basis": "not_applicable"
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "not_applicable",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/tickflow_api_request_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/indicators/atr14/history_window/row_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "qfq",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/symbols/2/raw/row_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/indicators/atr14/parameters/period": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "atr_14",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/atr14/value": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "data_basis": "qfq",
+      "implementation_column": "atr_14",
+      "implementation_source": {
+        "path": "backend/app/indicators/pipeline.py",
+        "sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+      },
+      "input_fields": [
+        "high",
+        "low",
+        "close"
+      ],
+      "kind": "deterministic_calculation",
+      "parameters": {
+        "ema_adjust": false,
+        "period": 14,
+        "smoothing": "wilder_ewm"
+      },
+      "price_basis": "qfq",
+      "result_precision": "float64_unrounded",
+      "source_files": [
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_qfq_daily.json",
+          "role": "qfq_daily",
+          "sha256": "3131306d481c3fc7818b3a28595a3d9dccf35e5a398309dbaadc5c58a6854e05",
+          "source_json_path": "/rows"
+        }
+      ]
+    },
+    "/indicators/boll_lower/history_window/row_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "qfq",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/symbols/2/raw/row_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/indicators/boll_lower/parameters/standard_deviation_ddof": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "boll_lower",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/boll_lower/parameters/standard_deviations": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "boll_lower",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/boll_lower/parameters/window": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "boll_lower",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/boll_lower/value": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "data_basis": "qfq",
+      "implementation_column": "boll_lower",
+      "implementation_source": {
+        "path": "backend/app/indicators/pipeline.py",
+        "sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "kind": "deterministic_calculation",
+      "parameters": {
+        "standard_deviation_ddof": 1,
+        "standard_deviations": 2,
+        "window": 20
+      },
+      "price_basis": "qfq",
+      "result_precision": "float64_unrounded",
+      "source_files": [
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_qfq_daily.json",
+          "role": "qfq_daily",
+          "sha256": "3131306d481c3fc7818b3a28595a3d9dccf35e5a398309dbaadc5c58a6854e05",
+          "source_json_path": "/rows"
+        }
+      ]
+    },
+    "/indicators/boll_middle/history_window/row_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "qfq",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/symbols/2/raw/row_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/indicators/boll_middle/parameters/standard_deviation_ddof": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "ma20",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/boll_middle/parameters/standard_deviations": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "ma20",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/boll_middle/parameters/window": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "ma20",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/boll_middle/value": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "data_basis": "qfq",
+      "implementation_column": "ma20",
+      "implementation_source": {
+        "path": "backend/app/indicators/pipeline.py",
+        "sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "kind": "deterministic_calculation",
+      "parameters": {
+        "standard_deviation_ddof": 1,
+        "standard_deviations": 2,
+        "window": 20
+      },
+      "price_basis": "qfq",
+      "result_precision": "float64_unrounded",
+      "source_files": [
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_qfq_daily.json",
+          "role": "qfq_daily",
+          "sha256": "3131306d481c3fc7818b3a28595a3d9dccf35e5a398309dbaadc5c58a6854e05",
+          "source_json_path": "/rows"
+        }
+      ]
+    },
+    "/indicators/boll_upper/history_window/row_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "qfq",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/symbols/2/raw/row_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/indicators/boll_upper/parameters/standard_deviation_ddof": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "boll_upper",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/boll_upper/parameters/standard_deviations": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "boll_upper",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/boll_upper/parameters/window": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "boll_upper",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/boll_upper/value": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "data_basis": "qfq",
+      "implementation_column": "boll_upper",
+      "implementation_source": {
+        "path": "backend/app/indicators/pipeline.py",
+        "sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "kind": "deterministic_calculation",
+      "parameters": {
+        "standard_deviation_ddof": 1,
+        "standard_deviations": 2,
+        "window": 20
+      },
+      "price_basis": "qfq",
+      "result_precision": "float64_unrounded",
+      "source_files": [
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_qfq_daily.json",
+          "role": "qfq_daily",
+          "sha256": "3131306d481c3fc7818b3a28595a3d9dccf35e5a398309dbaadc5c58a6854e05",
+          "source_json_path": "/rows"
+        }
+      ]
+    },
+    "/indicators/ma10/history_window/row_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "qfq",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/symbols/2/raw/row_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/indicators/ma10/parameters/window": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "ma10",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/ma10/value": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "data_basis": "qfq",
+      "implementation_column": "ma10",
+      "implementation_source": {
+        "path": "backend/app/indicators/pipeline.py",
+        "sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "kind": "deterministic_calculation",
+      "parameters": {
+        "method": "simple",
+        "window": 10
+      },
+      "price_basis": "qfq",
+      "result_precision": "float64_unrounded",
+      "source_files": [
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_qfq_daily.json",
+          "role": "qfq_daily",
+          "sha256": "3131306d481c3fc7818b3a28595a3d9dccf35e5a398309dbaadc5c58a6854e05",
+          "source_json_path": "/rows"
+        }
+      ]
+    },
+    "/indicators/ma20/history_window/row_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "qfq",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/symbols/2/raw/row_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/indicators/ma20/parameters/window": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "ma20",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/ma20/value": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "data_basis": "qfq",
+      "implementation_column": "ma20",
+      "implementation_source": {
+        "path": "backend/app/indicators/pipeline.py",
+        "sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "kind": "deterministic_calculation",
+      "parameters": {
+        "method": "simple",
+        "window": 20
+      },
+      "price_basis": "qfq",
+      "result_precision": "float64_unrounded",
+      "source_files": [
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_qfq_daily.json",
+          "role": "qfq_daily",
+          "sha256": "3131306d481c3fc7818b3a28595a3d9dccf35e5a398309dbaadc5c58a6854e05",
+          "source_json_path": "/rows"
+        }
+      ]
+    },
+    "/indicators/ma5/history_window/row_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "qfq",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/symbols/2/raw/row_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/indicators/ma5/parameters/window": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "ma5",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/ma5/value": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "data_basis": "qfq",
+      "implementation_column": "ma5",
+      "implementation_source": {
+        "path": "backend/app/indicators/pipeline.py",
+        "sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "kind": "deterministic_calculation",
+      "parameters": {
+        "method": "simple",
+        "window": 5
+      },
+      "price_basis": "qfq",
+      "result_precision": "float64_unrounded",
+      "source_files": [
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_qfq_daily.json",
+          "role": "qfq_daily",
+          "sha256": "3131306d481c3fc7818b3a28595a3d9dccf35e5a398309dbaadc5c58a6854e05",
+          "source_json_path": "/rows"
+        }
+      ]
+    },
+    "/indicators/ma60/history_window/row_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "qfq",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/symbols/2/raw/row_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/indicators/ma60/parameters/window": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "ma60",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/ma60/value": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "data_basis": "qfq",
+      "implementation_column": "ma60",
+      "implementation_source": {
+        "path": "backend/app/indicators/pipeline.py",
+        "sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "kind": "deterministic_calculation",
+      "parameters": {
+        "method": "simple",
+        "window": 60
+      },
+      "price_basis": "qfq",
+      "result_precision": "float64_unrounded",
+      "source_files": [
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_qfq_daily.json",
+          "role": "qfq_daily",
+          "sha256": "3131306d481c3fc7818b3a28595a3d9dccf35e5a398309dbaadc5c58a6854e05",
+          "source_json_path": "/rows"
+        }
+      ]
+    },
+    "/indicators/macd_dea/history_window/row_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "qfq",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/symbols/2/raw/row_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/indicators/macd_dea/parameters/fast_period": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "macd_dea",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/macd_dea/parameters/histogram_multiplier": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "macd_dea",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/macd_dea/parameters/signal_period": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "macd_dea",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/macd_dea/parameters/slow_period": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "macd_dea",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/macd_dea/value": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "data_basis": "qfq",
+      "implementation_column": "macd_dea",
+      "implementation_source": {
+        "path": "backend/app/indicators/pipeline.py",
+        "sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "kind": "deterministic_calculation",
+      "parameters": {
+        "ema_adjust": false,
+        "fast_period": 12,
+        "histogram_multiplier": 2,
+        "signal_period": 9,
+        "slow_period": 26
+      },
+      "price_basis": "qfq",
+      "result_precision": "float64_unrounded",
+      "source_files": [
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_qfq_daily.json",
+          "role": "qfq_daily",
+          "sha256": "3131306d481c3fc7818b3a28595a3d9dccf35e5a398309dbaadc5c58a6854e05",
+          "source_json_path": "/rows"
+        }
+      ]
+    },
+    "/indicators/macd_dif/history_window/row_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "qfq",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/symbols/2/raw/row_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/indicators/macd_dif/parameters/fast_period": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "macd_dif",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/macd_dif/parameters/histogram_multiplier": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "macd_dif",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/macd_dif/parameters/signal_period": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "macd_dif",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/macd_dif/parameters/slow_period": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "macd_dif",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/macd_dif/value": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "data_basis": "qfq",
+      "implementation_column": "macd_dif",
+      "implementation_source": {
+        "path": "backend/app/indicators/pipeline.py",
+        "sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "kind": "deterministic_calculation",
+      "parameters": {
+        "ema_adjust": false,
+        "fast_period": 12,
+        "histogram_multiplier": 2,
+        "signal_period": 9,
+        "slow_period": 26
+      },
+      "price_basis": "qfq",
+      "result_precision": "float64_unrounded",
+      "source_files": [
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_qfq_daily.json",
+          "role": "qfq_daily",
+          "sha256": "3131306d481c3fc7818b3a28595a3d9dccf35e5a398309dbaadc5c58a6854e05",
+          "source_json_path": "/rows"
+        }
+      ]
+    },
+    "/indicators/macd_hist/history_window/row_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "qfq",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/symbols/2/raw/row_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/indicators/macd_hist/parameters/fast_period": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "macd_hist",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/macd_hist/parameters/histogram_multiplier": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "macd_hist",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/macd_hist/parameters/signal_period": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "macd_hist",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/macd_hist/parameters/slow_period": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "macd_hist",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/macd_hist/value": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "data_basis": "qfq",
+      "implementation_column": "macd_hist",
+      "implementation_source": {
+        "path": "backend/app/indicators/pipeline.py",
+        "sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "kind": "deterministic_calculation",
+      "parameters": {
+        "ema_adjust": false,
+        "fast_period": 12,
+        "histogram_multiplier": 2,
+        "signal_period": 9,
+        "slow_period": 26
+      },
+      "price_basis": "qfq",
+      "result_precision": "float64_unrounded",
+      "source_files": [
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_qfq_daily.json",
+          "role": "qfq_daily",
+          "sha256": "3131306d481c3fc7818b3a28595a3d9dccf35e5a398309dbaadc5c58a6854e05",
+          "source_json_path": "/rows"
+        }
+      ]
+    },
+    "/indicators/rsi14/history_window/row_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "qfq",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/symbols/2/raw/row_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/indicators/rsi14/parameters/period": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "rsi_14",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/rsi14/value": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "data_basis": "qfq",
+      "implementation_column": "rsi_14",
+      "implementation_source": {
+        "path": "backend/app/indicators/pipeline.py",
+        "sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "kind": "deterministic_calculation",
+      "parameters": {
+        "period": 14,
+        "smoothing": "ewm_alpha_1_over_period",
+        "zero_loss_floor": "1e-12"
+      },
+      "price_basis": "qfq",
+      "result_precision": "float64_unrounded",
+      "source_files": [
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_qfq_daily.json",
+          "role": "qfq_daily",
+          "sha256": "3131306d481c3fc7818b3a28595a3d9dccf35e5a398309dbaadc5c58a6854e05",
+          "source_json_path": "/rows"
+        }
+      ]
+    },
+    "/indicators/rsi6/history_window/row_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "qfq",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/symbols/2/raw/row_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/indicators/rsi6/parameters/period": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "rsi_6",
+      "kind": "implementation_parameter",
+      "price_basis": "qfq",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/rsi6/value": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "data_basis": "qfq",
+      "implementation_column": "rsi_6",
+      "implementation_source": {
+        "path": "backend/app/indicators/pipeline.py",
+        "sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+      },
+      "input_fields": [
+        "close"
+      ],
+      "kind": "deterministic_calculation",
+      "parameters": {
+        "period": 6,
+        "smoothing": "ewm_alpha_1_over_period",
+        "zero_loss_floor": "1e-12"
+      },
+      "price_basis": "qfq",
+      "result_precision": "float64_unrounded",
+      "source_files": [
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_qfq_daily.json",
+          "role": "qfq_daily",
+          "sha256": "3131306d481c3fc7818b3a28595a3d9dccf35e5a398309dbaadc5c58a6854e05",
+          "source_json_path": "/rows"
+        }
+      ]
+    },
+    "/indicators/volume_ma10/history_window/row_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "not_applicable",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/symbols/2/raw/row_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/indicators/volume_ma10/parameters/window": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "vol_ma10",
+      "kind": "implementation_parameter",
+      "price_basis": "not_applicable",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/volume_ma10/value": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "data_basis": "raw",
+      "implementation_column": "vol_ma10",
+      "implementation_source": {
+        "path": "backend/app/indicators/pipeline.py",
+        "sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+      },
+      "input_fields": [
+        "volume"
+      ],
+      "kind": "deterministic_calculation",
+      "parameters": {
+        "method": "simple",
+        "window": 10
+      },
+      "price_basis": "not_applicable",
+      "result_precision": "float64_unrounded",
+      "source_files": [
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_raw_daily.json",
+          "role": "raw_daily",
+          "sha256": "1c7c040e6dcc5cf73e788d34c4b5caf8ad86d36ebe6953ec21fac64053e0b95c",
+          "source_json_path": "/rows"
+        }
+      ]
+    },
+    "/indicators/volume_ma5/history_window/row_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "not_applicable",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/symbols/2/raw/row_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/indicators/volume_ma5/parameters/window": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "vol_ma5",
+      "kind": "implementation_parameter",
+      "price_basis": "not_applicable",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/volume_ma5/value": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "data_basis": "raw",
+      "implementation_column": "vol_ma5",
+      "implementation_source": {
+        "path": "backend/app/indicators/pipeline.py",
+        "sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+      },
+      "input_fields": [
+        "volume"
+      ],
+      "kind": "deterministic_calculation",
+      "parameters": {
+        "method": "simple",
+        "window": 5
+      },
+      "price_basis": "not_applicable",
+      "result_precision": "float64_unrounded",
+      "source_files": [
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_raw_daily.json",
+          "role": "raw_daily",
+          "sha256": "1c7c040e6dcc5cf73e788d34c4b5caf8ad86d36ebe6953ec21fac64053e0b95c",
+          "source_json_path": "/rows"
+        }
+      ]
+    },
+    "/indicators/volume_ratio/history_window/row_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "not_applicable",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/symbols/2/raw/row_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/indicators/volume_ratio/parameters/lookback": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "implementation_column": "vol_ratio_5d",
+      "kind": "implementation_parameter",
+      "price_basis": "not_applicable",
+      "source_file": "backend/app/indicators/pipeline.py",
+      "source_sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+    },
+    "/indicators/volume_ratio/value": {
+      "calculation_function": "app.indicators.pipeline.compute_indicators",
+      "data_basis": "raw",
+      "implementation_column": "vol_ratio_5d",
+      "implementation_source": {
+        "path": "backend/app/indicators/pipeline.py",
+        "sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+      },
+      "input_fields": [
+        "volume"
+      ],
+      "kind": "deterministic_calculation",
+      "parameters": {
+        "denominator": "previous_period_mean_excluding_current",
+        "lookback": 5
+      },
+      "price_basis": "not_applicable",
+      "result_precision": "float64_unrounded",
+      "source_files": [
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_raw_daily.json",
+          "role": "raw_daily",
+          "sha256": "1c7c040e6dcc5cf73e788d34c4b5caf8ad86d36ebe6953ec21fac64053e0b95c",
+          "source_json_path": "/rows"
+        }
+      ]
     },
     "/minute_1m/bar_count": {
       "calculation_function": "identity",
@@ -343,7 +1534,31 @@
       "source_json_path": "/symbols/300059.SZ/ohlc_mismatches",
       "source_sha256": "7b03618ad9942fba33ebfe97a50e6ea8ee97762e168c178f70989879ea440dd9"
     },
-    "/source_evidence/observation_days": {
+    "/source_evidence/indicator_source/cloud_mutation_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "not_applicable",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/cloud_mutation_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/source_evidence/indicator_source/row_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "not_applicable",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/symbols/2/raw/row_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/source_evidence/indicator_source/tickflow_api_request_count": {
+      "calculation_function": "identity",
+      "kind": "direct_evidence",
+      "price_basis": "not_applicable",
+      "source_file": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_json_path": "/tickflow_api_request_count",
+      "source_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+    },
+    "/source_evidence/phase1_contract_evidence/observation_days": {
       "calculation_function": "identity",
       "kind": "direct_evidence",
       "price_basis": "not_applicable",
@@ -353,9 +1568,9 @@
     }
   },
   "price_basis": {
-    "daily_ohlcv": "none",
+    "daily_ohlcv": "raw",
     "indicator_prices": "qfq",
-    "indicator_volume": "none",
+    "indicator_volume": "raw",
     "minute": "none"
   },
   "scope": {
@@ -365,45 +1580,99 @@
     "news_scope": "unavailable"
   },
   "source_evidence": {
-    "observation_days": 5,
-    "phase1_status": "PHASE1_OBSERVATION_PASSED",
-    "source_files": [
-      {
-        "path": "reports/phase1_observation/observation_index.json",
-        "sha256": "d3b66743f5a37bcac25fa004c33909c45fb844961f6228d53f31df1f4efa2be0"
+    "indicator_source": {
+      "cloud_access_mode": "read_only",
+      "cloud_mutation_count": 0,
+      "first_trade_date": "2025-07-21",
+      "last_trade_date": "2026-07-31",
+      "manifest_sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f",
+      "normalized_business_sha256": "b61bf121fcc998e2f0bfa49c8b4e8b9abfdb81e8e7ae081b625bf12bd2321095",
+      "phase1_byte_equivalent": false,
+      "phase1_original_payload_recovered": false,
+      "request_mode": "offline_existing_cloud_evidence",
+      "row_count": 251,
+      "source_files": [
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+          "role": "manifest",
+          "sha256": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f"
+        },
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/snapshot_validation.json",
+          "role": "snapshot_validation",
+          "sha256": "fd77c4ef5dfd064d83f41c56e5e4d052e1f96afc400c3922db467e8d045e96e6"
+        },
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_raw_daily.json",
+          "role": "raw_daily",
+          "sha256": "1c7c040e6dcc5cf73e788d34c4b5caf8ad86d36ebe6953ec21fac64053e0b95c"
+        },
+        {
+          "path": "reports/phase2_source_snapshot/2026-07-31/300059SZ_qfq_daily.json",
+          "role": "qfq_daily",
+          "sha256": "3131306d481c3fc7818b3a28595a3d9dccf35e5a398309dbaadc5c58a6854e05"
+        },
+        {
+          "path": "backend/app/indicators/pipeline.py",
+          "role": "indicator_implementation",
+          "sha256": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4"
+        }
+      ],
+      "source_hashes": {
+        "indicator_implementation": "7a3ad98f7233a6f7dc663d36093d3c2c5e258a63950a2554f6826e7b9831e5c4",
+        "manifest": "769910e54393420a5ccb0ee7abb17eda9b08dd79b1b139f95edd7e99e2173e9f",
+        "qfq_daily": "3131306d481c3fc7818b3a28595a3d9dccf35e5a398309dbaadc5c58a6854e05",
+        "raw_daily": "1c7c040e6dcc5cf73e788d34c4b5caf8ad86d36ebe6953ec21fac64053e0b95c"
       },
-      {
-        "path": "reports/phase1_observation/2026-07-31/daily_summary.json",
-        "sha256": "4cc5ea990df205deb17923826df6df49fadd68539784e0c71efee331031cbb60"
-      },
-      {
-        "path": "reports/phase1_observation/2026-07-31/300059SZ_contract.json",
-        "sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
-      },
-      {
-        "path": "reports/phase1_observation/2026-07-31/minute_30m_comparison.json",
-        "sha256": "7b03618ad9942fba33ebfe97a50e6ea8ee97762e168c178f70989879ea440dd9"
-      },
-      {
-        "path": "reports/phase1_observation/2026-07-31/request_audit.json",
-        "sha256": "5b3e4622f9badd6f4033788aabb5fdd7fa65239274bf2a8eea2ed9b2c1380ad7"
-      },
-      {
-        "path": "reports/phase1_tickflow_request_audit.json",
-        "sha256": "4b804ef218d5b7ac936e12814c300230f5cbcf1c691b62800f6d00a9edf3cf0e"
-      },
-      {
-        "path": "reports/tickflow_phase1_observation_final.md",
-        "sha256": "8a335eeced7d60ce1cb33ba42a9b24aadd4b637fae32a677570e727dd6eae463"
-      }
-    ],
-    "source_set_sha256": "df225f4d84a3e7289e8b7f95fe81c62920f88514302534c3527f4f23ac2eb3dd"
+      "source_snapshot_manifest": "reports/phase2_source_snapshot/2026-07-31/manifest.json",
+      "source_type": "existing_cloud_store_snapshot",
+      "tickflow_api_request_count": 0
+    },
+    "phase1_contract_evidence": {
+      "observation_days": 5,
+      "phase1_status": "PHASE1_OBSERVATION_PASSED",
+      "source_files": [
+        {
+          "path": "reports/phase1_observation/observation_index.json",
+          "sha256": "d3b66743f5a37bcac25fa004c33909c45fb844961f6228d53f31df1f4efa2be0"
+        },
+        {
+          "path": "reports/phase1_observation/2026-07-31/daily_summary.json",
+          "sha256": "4cc5ea990df205deb17923826df6df49fadd68539784e0c71efee331031cbb60"
+        },
+        {
+          "path": "reports/phase1_observation/2026-07-31/300059SZ_contract.json",
+          "sha256": "4e0ec3f146aac9680c76f9aa2f5b1e74c4e5cbcb96890ad444769650ceca3d16"
+        },
+        {
+          "path": "reports/phase1_observation/2026-07-31/minute_30m_comparison.json",
+          "sha256": "7b03618ad9942fba33ebfe97a50e6ea8ee97762e168c178f70989879ea440dd9"
+        },
+        {
+          "path": "reports/phase1_observation/2026-07-31/request_audit.json",
+          "sha256": "5b3e4622f9badd6f4033788aabb5fdd7fa65239274bf2a8eea2ed9b2c1380ad7"
+        },
+        {
+          "path": "reports/phase1_tickflow_request_audit.json",
+          "sha256": "4b804ef218d5b7ac936e12814c300230f5cbcf1c691b62800f6d00a9edf3cf0e"
+        },
+        {
+          "path": "reports/tickflow_phase1_observation_final.md",
+          "sha256": "8a335eeced7d60ce1cb33ba42a9b24aadd4b637fae32a677570e727dd6eae463"
+        }
+      ],
+      "source_set_sha256": "df225f4d84a3e7289e8b7f95fe81c62920f88514302534c3527f4f23ac2eb3dd"
+    }
   },
   "source_system": "tickflow-stock-panel",
   "symbol": "300059.SZ",
   "timezone": "Asia/Shanghai",
   "trade_date": "2026-07-31",
   "trading": false,
+  "units": {
+    "amount": "VENDOR_CONFIRMATION_PENDING",
+    "volume": "VENDOR_CONFIRMATION_PENDING"
+  },
   "vendor_pending": [
     "intraday_batch_entitlement",
     "first_30m_bucket_includes_09_30",

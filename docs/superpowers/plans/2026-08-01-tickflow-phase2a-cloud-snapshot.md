@@ -24,6 +24,7 @@
 ### Task 1: Canonical Snapshot Contract
 
 **Files:**
+- Create: `backend/app/services/atomic_directory.py`
 - Create: `backend/app/services/phase2_snapshot.py`
 - Create: `backend/tests/test_phase2_snapshot.py`
 
@@ -140,14 +141,14 @@ git commit -m "feat: add existing cloud snapshot source for phase2 facts"
 - `build_symbol_facts(repo_root: Path, symbol: str) -> dict[str, Any]` remains
   the public Facts interface.
 
-- [ ] **Step 1: Replace blocked-value expectations with failing ready-state tests**
+- [x] **Step 1: Replace blocked-value expectations with failing ready-state tests**
 
 Assert daily OHLCVA, MA5/10/20/60, MACD, RSI6/14, BOLL, ATR14, volume MA/ratio,
 source separation, implementation metadata, parameters, input fields, price
 basis, precision, dimensionless ratio, pending units, and complete numeric
 provenance.
 
-- [ ] **Step 2: Verify red**
+- [x] **Step 2: Verify red**
 
 Run:
 
@@ -159,21 +160,21 @@ PYTHONPATH=. .venv/bin/pytest tests/test_phase2_facts.py -q
 Expected: failures because current Facts intentionally contain null indicators
 and `BLOCKED_SOURCE_EVIDENCE`.
 
-- [ ] **Step 3: Implement snapshot-backed calculation**
+- [x] **Step 3: Implement snapshot-backed calculation**
 
 Load canonical qfq OHLC and raw volume, call
 `app.indicators.pipeline.compute_indicators` with the exact required columns,
 and map the latest finite values into Facts. Record direct and deterministic
 provenance; keep key levels empty and units pending.
 
-- [ ] **Step 4: Extend independent validation**
+- [x] **Step 4: Extend independent validation**
 
 Recompute all values from the hashed snapshot and reject wrong source type,
 equivalence flags, manifest/file hashes, date sets, basis, parameters,
 provenance, units, nonfinite values, nonzero request/mutation counters, and
 trading fields.
 
-- [ ] **Step 5: Verify focused Facts tests and idempotency**
+- [x] **Step 5: Verify focused Facts tests and idempotency**
 
 Run the focused Facts suite, build twice, compare complete output hashes, and
 run the independent Facts directory validator.
@@ -187,12 +188,12 @@ run the independent Facts directory validator.
 **Interfaces:**
 - Produces final state `PHASE2A_FACTS_READY` only if every approved gate passes.
 
-- [ ] **Step 1: Verify Phase 1 immutability**
+- [x] **Step 1: Verify Phase 1 immutability**
 
 Recompute the established Phase 1 evidence and request-audit aggregate hashes;
 require exact equality with the pre-change values.
 
-- [ ] **Step 2: Run full verification**
+- [x] **Step 2: Run full verification**
 
 ```bash
 cd backend
@@ -205,13 +206,13 @@ PYTHONPATH=. .venv/bin/python -m compileall -q app
 Also run changed-file Ruff, both offline validators, idempotency checks, and
 targeted secret/trading scans.
 
-- [ ] **Step 3: Update the evaluation report**
+- [x] **Step 3: Update the evaluation report**
 
 Record the independent source decision, non-equivalence, read-only proof, task
 metadata, date ranges, counts, hashes, calculation metadata, pending units,
 test counts, zero external actions, and final status.
 
-- [ ] **Step 4: Commit indicator Facts**
+- [x] **Step 4: Commit indicator Facts**
 
 ```bash
 git add backend/app/services/phase2_facts.py \
