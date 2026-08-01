@@ -90,5 +90,5 @@
 - [x] Execute the validator against the local approval file and Keychain existence gate; print no configuration body and no credential metadata beyond presence.
 - [x] Recompute protected evidence hashes, verify no sensitive shape or placeholder residue, and confirm Provider/AI/TickFlow/public-network counters remain zero.
 - [x] Write a sanitized report containing only approved public identity, boolean gates, stable hashes, zero counters, limitations, and the next action `IMPLEMENT_AND_AUDIT_REAL_OPENAI_HTTPS_PROXY_OFFLINE` when the actual Proxy remains Mock-only.
-- [ ] Run `git diff --check`, inspect the exact diff, commit only code/tests/plan/report, and push `codex/tickflow-phase2-ai-review` to `fork`.
-- [ ] Stop before any real Provider request.
+- [x] Run `git diff --check`, inspect the exact diff, commit only code/tests/plan/report, and push `codex/tickflow-phase2-ai-review` to `fork`.
+- [x] Stop before any real Provider request.
