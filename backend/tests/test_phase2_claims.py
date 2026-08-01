@@ -274,6 +274,24 @@ def test_unknown_calculation_and_cross_basis_execution_are_rejected() -> None:
         )
 
 
+def test_calculation_registry_enforces_allowed_input_value_types() -> None:
+    with pytest.raises(ValueError, match="calculation input type is not allowed"):
+        execute_calculation(
+            "compare_numbers_v1",
+            ["10", "9"],
+            price_bases=["qfq", "qfq"],
+            units=["qfq_price", "qfq_price"],
+        )
+
+    with pytest.raises(ValueError, match="calculation input type is not allowed"):
+        execute_calculation(
+            "normalize_scope_v1",
+            [True],
+            price_bases=["none"],
+            units=["none"],
+        )
+
+
 @pytest.mark.parametrize("symbol", ["000403.SZ", "600489.SH", "300059.SZ"])
 def test_deterministic_fixture_is_fully_bound_and_valid(symbol: str) -> None:
     document = build_claims_document(REPO_ROOT, symbol)
@@ -397,6 +415,21 @@ def test_raw_qfq_comparison_is_rejected_with_explicit_status() -> None:
     assert result.raw_qfq_mismatch_count >= 1
 
 
+@pytest.mark.parametrize("predicate", ["macd_dif_vs_dea", "ma_value_order"])
+def test_operand_labels_must_match_their_facts_references(predicate: str) -> None:
+    payload = _built_payload()
+    claim = _claim(payload, predicate)
+    if predicate == "macd_dif_vs_dea":
+        claim["object"]["left"]["label_id"] = "daily_close"
+    else:
+        claim["object"]["operands"][0]["label_id"] = "daily_close"
+
+    result = validate_claims_document(REPO_ROOT, payload)
+
+    assert result.status == "CLAIMS_INVALID"
+    assert f"claim_operand_label_mismatch:{predicate}" in result.errors
+
+
 def test_duplicate_or_unsorted_claim_ids_fail_closed() -> None:
     duplicate = _built_payload()
     duplicate["claims"][1]["claim_id"] = duplicate["claims"][0]["claim_id"]
@@ -411,6 +444,39 @@ def test_duplicate_or_unsorted_claim_ids_fail_closed() -> None:
 
     assert "claim_id_duplicate" in duplicate_result.errors
     assert "claim_order_invalid" in unsorted_result.errors
+
+
+def test_publishable_document_requires_the_complete_predicate_set() -> None:
+    payload = _built_payload()
+    payload["claims"] = [
+        item for item in payload["claims"] if item["predicate"] == "daily_close"
+    ]
+
+    result = validate_claims_document(REPO_ROOT, payload)
+
+    assert result.status == "CLAIMS_INVALID"
+    assert "claim_predicate_set_invalid" in result.errors
+
+
+@pytest.mark.parametrize(
+    ("claim_index", "claim_id"),
+    [
+        (0, "600489SH-20260731-001-market-scope"),
+        (0, "000403SZ-20260730-001-market-scope"),
+        (0, "000403SZ-20260731-001-arbitrary-channel"),
+    ],
+)
+def test_claim_id_is_deterministically_bound_to_document_and_predicate(
+    claim_index: int,
+    claim_id: str,
+) -> None:
+    payload = _built_payload()
+    payload["claims"][claim_index]["claim_id"] = claim_id
+
+    result = validate_claims_document(REPO_ROOT, payload)
+
+    assert result.status == "CLAIMS_INVALID"
+    assert "claim_id_set_invalid" in result.errors
 
 
 def test_scope_and_vendor_pending_are_exact_and_complete() -> None:

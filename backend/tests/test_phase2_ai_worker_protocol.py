@@ -25,15 +25,19 @@ from app.services.phase2_claims_service import build_claims_document
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def _facts(symbol: str = "000403.SZ") -> tuple[dict, str]:
+def _facts(symbol: str = "000403.SZ") -> tuple[dict, bytes, str]:
     path = REPO_ROOT / "reports/phase2_facts" / f'{symbol.replace(".", "")}_facts.json'
     raw = path.read_bytes()
-    return json.loads(raw), hashlib.sha256(raw).hexdigest()
+    return json.loads(raw), raw, hashlib.sha256(raw).hexdigest()
 
 
 def _projection(symbol: str = "000403.SZ") -> dict:
-    facts, facts_sha256 = _facts(symbol)
-    return build_worker_projection(facts, facts_sha256)
+    facts, facts_bytes, facts_sha256 = _facts(symbol)
+    return build_worker_projection(
+        facts,
+        facts_sha256,
+        facts_bytes=facts_bytes,
+    )
 
 
 def _full_candidate(symbol: str = "000403.SZ") -> dict:
@@ -106,6 +110,25 @@ def test_projection_hash_changes_when_safe_value_changes() -> None:
     changed["safe_facts"]["daily"]["close"] += 0.01
 
     assert compute_projection_sha256(changed) != projection["projection_sha256"]
+
+
+def test_projection_builder_rejects_unproved_or_mismatched_facts_sha() -> None:
+    facts, facts_bytes, _ = _facts()
+    changed = deepcopy(facts)
+    changed["daily"]["close"] += 0.01
+
+    with pytest.raises(Phase2WorkerProtocolError, match="facts_sha256_mismatch"):
+        build_worker_projection(
+            facts,
+            "0" * 64,
+            facts_bytes=facts_bytes,
+        )
+    with pytest.raises(Phase2WorkerProtocolError, match="facts_bytes_mismatch"):
+        build_worker_projection(
+            changed,
+            hashlib.sha256(facts_bytes).hexdigest(),
+            facts_bytes=facts_bytes,
+        )
 
 
 def test_exact_projection_reader_uses_only_allowed_regular_file(tmp_path: Path) -> None:
@@ -191,6 +214,7 @@ def test_fake_worker_is_json_only_deterministic_and_has_zero_external_attempts()
     assert first == second
     assert "```" not in first
     assert parsed["projection_sha256"] == projection["projection_sha256"]
+    assert len(parsed["claims"]) == 42
     assert validate_worker_candidate(first, projection).status == WORKER_CANDIDATE_VALID
     assert worker.ai_call_count == 0
     assert worker.provider_attempt_count == 0
@@ -239,6 +263,22 @@ def test_candidate_rejects_projection_symbol_date_and_hash_mismatch() -> None:
         candidate[field] = value
         result = validate_worker_candidate(candidate, projection)
         assert result.status == WORKER_CANDIDATE_INVALID
+
+
+def test_candidate_requires_complete_predicates_and_deterministic_claim_ids() -> None:
+    projection = _projection()
+    incomplete = _full_candidate()
+    incomplete["claims"] = incomplete["claims"][:-1]
+    arbitrary_id = _full_candidate()
+    arbitrary_id["claims"][0]["claim_id"] = (
+        "000403SZ-20260731-001-arbitrary-channel"
+    )
+
+    incomplete_result = validate_worker_candidate(incomplete, projection)
+    id_result = validate_worker_candidate(arbitrary_id, projection)
+
+    assert "worker_candidate_predicate_set_invalid" in incomplete_result.errors
+    assert "worker_candidate_claim_ids_invalid" in id_result.errors
 
 
 def test_candidate_rejects_unexpected_fact_pointer() -> None:

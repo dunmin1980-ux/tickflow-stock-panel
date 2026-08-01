@@ -29,6 +29,8 @@ from app.services.phase2_claims_service import (
 from app.services.phase2_facts import FIXED_SYMBOLS
 
 RENDERED_VALID = "RENDERED_VALID"
+TRANSACTION_MARKER_NAME = ".phase2_claims_delivery_transaction.json"
+TYPED_PREVIEW_PREFIX = "typed_"
 
 
 class Phase2ClaimsDeliveryError(ValueError):
@@ -37,6 +39,14 @@ class Phase2ClaimsDeliveryError(ValueError):
 
 def _sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def _fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def _resolve_reports_root(
@@ -54,13 +64,23 @@ def _resolve_reports_root(
     return reports_root
 
 
-def _regular_file_hashes(root: Path) -> dict[str, str]:
+def _assert_regular_tree(root: Path, *, label: str) -> None:
     if root.is_symlink() or not root.is_dir():
-        raise Phase2ClaimsDeliveryError("preview_route_directory_invalid")
+        raise Phase2ClaimsDeliveryError(f"{label}_directory_invalid")
+    with os.scandir(root) as entries:
+        for entry in entries:
+            if entry.is_symlink():
+                raise Phase2ClaimsDeliveryError(f"{label}_symlink_forbidden")
+            if entry.is_dir(follow_symlinks=False):
+                _assert_regular_tree(Path(entry.path), label=label)
+            elif not entry.is_file(follow_symlinks=False):
+                raise Phase2ClaimsDeliveryError(f"{label}_entry_invalid")
+
+
+def _regular_file_hashes(root: Path) -> dict[str, str]:
+    _assert_regular_tree(root, label="preview_route")
     result: dict[str, str] = {}
     for path in sorted(root.rglob("*")):
-        if path.is_symlink():
-            raise Phase2ClaimsDeliveryError("preview_route_symlink_forbidden")
         if path.is_file():
             result[path.relative_to(root).as_posix()] = _sha256_bytes(path.read_bytes())
     return result
@@ -95,11 +115,96 @@ def _write_durable(path: Path, data: bytes) -> None:
         os.fsync(handle.fileno())
 
 
-def _atomic_write(path: Path, data: bytes) -> None:
+def _copy_regular_tree(source: Path, destination: Path) -> None:
+    _assert_regular_tree(source, label="publication_source")
+    for source_path in sorted(source.rglob("*")):
+        relative = source_path.relative_to(source)
+        destination_path = destination / relative
+        if source_path.is_dir():
+            destination_path.mkdir(parents=True, exist_ok=False)
+        else:
+            _write_durable(destination_path, source_path.read_bytes())
+
+
+def _snapshot_directory(source: Path, *, prefix: str) -> Path | None:
+    if not source.exists():
+        return None
+    _assert_regular_tree(source, label="publication_destination")
+    snapshot = Path(tempfile.mkdtemp(prefix=prefix, dir=source.parent))
+    try:
+        _copy_regular_tree(source, snapshot)
+        _fsync_directory(snapshot)
+        _fsync_directory(snapshot.parent)
+    except Exception:
+        shutil.rmtree(snapshot, ignore_errors=True)
+        raise
+    return snapshot
+
+
+def _restore_directory_snapshot(destination: Path, snapshot: Path | None) -> None:
+    parent = destination.parent
+    displaced: Path | None = None
+    if destination.exists():
+        if destination.is_symlink() or not destination.is_dir():
+            raise Phase2ClaimsDeliveryError("rollback_destination_invalid")
+        displaced = Path(
+            tempfile.mkdtemp(prefix=f".{destination.name}.rollback-", dir=parent)
+        )
+        displaced.rmdir()
+        os.replace(destination, displaced)
+        _fsync_directory(parent)
+    try:
+        if snapshot is not None:
+            if snapshot.is_symlink() or not snapshot.is_dir():
+                raise Phase2ClaimsDeliveryError("rollback_snapshot_invalid")
+            os.replace(snapshot, destination)
+            _fsync_directory(parent)
+    except Exception:
+        if displaced is not None and displaced.exists() and not destination.exists():
+            os.replace(displaced, destination)
+            _fsync_directory(parent)
+        raise
+    if displaced is not None:
+        shutil.rmtree(displaced)
+        _fsync_directory(parent)
+
+
+def _write_transaction_marker(reports_root: Path) -> Path:
+    marker = reports_root / TRANSACTION_MARKER_NAME
+    if marker.is_symlink() or marker.exists():
+        raise Phase2ClaimsDeliveryError("publication_transaction_already_active")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(marker, flags, 0o600)
+    try:
+        payload = canonical_json_bytes(
+            {
+                "version": 1,
+                "destinations": [
+                    "phase2_claims",
+                    "phase2_obsidian_preview/inbox",
+                ],
+            }
+        )
+        os.write(descriptor, payload)
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    _fsync_directory(reports_root)
+    return marker
+
+
+def _remove_transaction_marker(marker: Path) -> None:
+    marker.unlink()
+    _fsync_directory(marker.parent)
+
+
+def _atomic_replace_durable(path: Path, data: bytes) -> None:
     if path.parent.is_symlink() or not path.parent.is_dir():
-        raise Phase2ClaimsDeliveryError("preview_parent_invalid")
+        raise Phase2ClaimsDeliveryError("artifact_parent_invalid")
     if path.is_symlink():
-        raise Phase2ClaimsDeliveryError("preview_destination_symlink_forbidden")
+        raise Phase2ClaimsDeliveryError("artifact_destination_symlink_forbidden")
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{path.name}.",
         suffix=".tmp",
@@ -112,13 +217,36 @@ def _atomic_write(path: Path, data: bytes) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, path)
-        parent_descriptor = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(parent_descriptor)
-        finally:
-            os.close(parent_descriptor)
+        _fsync_directory(path.parent)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _stage_inbox(
+    preview_root: Path,
+    rendered_bytes: dict[str, bytes],
+) -> Path:
+    inbox = preview_root / "inbox"
+    _assert_regular_tree(inbox, label="preview_inbox")
+    staging = Path(tempfile.mkdtemp(prefix=".inbox.staging-", dir=preview_root))
+    try:
+        for source_path in sorted(inbox.iterdir()):
+            if source_path.name.startswith(TYPED_PREVIEW_PREFIX):
+                continue
+            destination_path = staging / source_path.name
+            if source_path.is_dir():
+                destination_path.mkdir()
+                _copy_regular_tree(source_path, destination_path)
+            else:
+                _write_durable(destination_path, source_path.read_bytes())
+        for filename, data in rendered_bytes.items():
+            _write_durable(staging / f"{TYPED_PREVIEW_PREFIX}{filename}", data)
+        _fsync_directory(staging)
+        _fsync_directory(preview_root)
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    return staging
 
 
 def route_claims_preview(
@@ -130,6 +258,71 @@ def route_claims_preview(
     if status == CLAIMS_INVALID:
         return "rejected"
     raise Phase2ClaimsDeliveryError("claims_status_unknown")
+
+
+def publish_invalid_claims_receipt(
+    repo_root: Path,
+    reports_root: Path,
+    *,
+    symbol: str,
+    candidate_bytes: bytes,
+    validation_errors: list[str],
+    _allow_test_output_root: bool = False,
+) -> Path:
+    """Publish a deterministic rejection receipt without candidate content."""
+    repo_root = repo_root.resolve(strict=True)
+    reports_root = _resolve_reports_root(
+        repo_root,
+        reports_root,
+        allow_test_output_root=_allow_test_output_root,
+    )
+    if not isinstance(candidate_bytes, bytes):
+        raise Phase2ClaimsDeliveryError("candidate_bytes_invalid")
+    if not validation_errors or any(
+        not isinstance(item, str) or not item for item in validation_errors
+    ):
+        raise Phase2ClaimsDeliveryError("validation_errors_invalid")
+    if route_claims_preview(CLAIMS_INVALID) != "rejected":  # pragma: no cover
+        raise Phase2ClaimsDeliveryError("invalid_route_not_closed")
+    preview_root = _ensure_preview_tree(reports_root)
+    rejected_root = preview_root / "rejected"
+    before = _regular_file_hashes(rejected_root)
+    name = FIXED_SYMBOLS.get(symbol)
+    if name is None:
+        raise Phase2ClaimsDeliveryError("symbol_name_outside_fixed_scope")
+    candidate_sha256 = _sha256_bytes(candidate_bytes)
+    errors_sha256 = _sha256_bytes(canonical_json_bytes(validation_errors))
+    receipt = (
+        "---\n"
+        "type: stock-typed-claims-rejection\n"
+        "source_system: tickflow-stock-panel\n"
+        "data_scope: single-symbol\n"
+        "can_publish: false\n"
+        "trading_advice: false\n"
+        "validation_status: rejected\n"
+        "---\n"
+        "# Typed Claims Rejection Receipt\n\n"
+        f"- symbol: `{symbol}`\n"
+        f"- candidate_sha256: `{candidate_sha256}`\n"
+        f"- validation_error_count: {len(validation_errors)}\n"
+        f"- validation_errors_sha256: `{errors_sha256}`\n"
+        "- candidate_content_persisted: false\n"
+    ).encode()
+    destination = (
+        rejected_root
+        / f'typed_{symbol.replace(".", "")}_{name}_rejected.md'
+    )
+    if destination.exists():
+        if destination.is_symlink() or not destination.is_file():
+            raise Phase2ClaimsDeliveryError("rejection_receipt_destination_invalid")
+        if destination.read_bytes() != receipt:
+            raise Phase2ClaimsDeliveryError("rejection_receipt_conflict")
+        return destination
+    _atomic_replace_durable(destination, receipt)
+    after = _regular_file_hashes(rejected_root)
+    if any(after.get(path) != digest for path, digest in before.items()):
+        raise Phase2ClaimsDeliveryError("historical_rejected_artifacts_mutated")
+    return destination
 
 
 def _rendered_filename(symbol: str, name: str) -> str:
@@ -210,25 +403,79 @@ def publish_claims_bundle(
         "external_send_count": 0,
         "entries": entries,
     }
-    staging = Path(
+    bundle_staging = Path(
         tempfile.mkdtemp(prefix=".phase2_claims.staging-", dir=reports_root)
     )
+    inbox_staging: Path | None = None
+    marker: Path | None = None
+    bundle_snapshot: Path | None = None
+    inbox_snapshot: Path | None = None
+    bundle_destination = reports_root / "phase2_claims"
+    inbox_destination = preview_root / "inbox"
     try:
-        _write_durable(staging / "schema/phase2_claims.schema.json", schema_bytes)
-        for filename, data in fixture_bytes.items():
-            _write_durable(staging / "fixtures" / filename, data)
-        for filename, data in rendered_bytes.items():
-            _write_durable(staging / "rendered" / filename, data)
         _write_durable(
-            staging / "claims_index.json",
+            bundle_staging / "schema/phase2_claims.schema.json",
+            schema_bytes,
+        )
+        for filename, data in fixture_bytes.items():
+            _write_durable(bundle_staging / "fixtures" / filename, data)
+        for filename, data in rendered_bytes.items():
+            _write_durable(bundle_staging / "rendered" / filename, data)
+        _write_durable(
+            bundle_staging / "claims_index.json",
             canonical_json_bytes(index),
         )
-        atomic_publish_directory(staging, reports_root / "phase2_claims")
+        inbox_staging = _stage_inbox(preview_root, rendered_bytes)
+        bundle_snapshot = _snapshot_directory(
+            bundle_destination,
+            prefix=".phase2_claims.backup-",
+        )
+        inbox_snapshot = _snapshot_directory(
+            inbox_destination,
+            prefix=".inbox.backup-",
+        )
+        marker = _write_transaction_marker(reports_root)
+        try:
+            atomic_publish_directory(bundle_staging, bundle_destination)
+            atomic_publish_directory(inbox_staging, inbox_destination)
+            if _regular_file_hashes(preview_root / "rejected") != rejected_before:
+                raise Phase2ClaimsDeliveryError(
+                    "historical_rejected_artifacts_mutated"
+                )
+            if any((preview_root / "reviewed").iterdir()):
+                raise Phase2ClaimsDeliveryError("reviewed_directory_must_be_empty")
+        except Exception as exc:
+            rollback_errors: list[str] = []
+            for destination, snapshot in (
+                (inbox_destination, inbox_snapshot),
+                (bundle_destination, bundle_snapshot),
+            ):
+                try:
+                    _restore_directory_snapshot(destination, snapshot)
+                except Exception as rollback_exc:  # pragma: no cover - fatal path
+                    rollback_errors.append(
+                        f"{destination.name}:{type(rollback_exc).__name__}"
+                    )
+            if rollback_errors:
+                raise Phase2ClaimsDeliveryError(
+                    "publication_failed_rollback_incomplete:"
+                    + ",".join(rollback_errors)
+                ) from exc
+            _remove_transaction_marker(marker)
+            marker = None
+            raise Phase2ClaimsDeliveryError("publication_failed") from exc
+        _remove_transaction_marker(marker)
+        marker = None
     finally:
-        shutil.rmtree(staging, ignore_errors=True)
+        shutil.rmtree(bundle_staging, ignore_errors=True)
+        if inbox_staging is not None:
+            shutil.rmtree(inbox_staging, ignore_errors=True)
+        if marker is None:
+            if bundle_snapshot is not None:
+                shutil.rmtree(bundle_snapshot, ignore_errors=True)
+            if inbox_snapshot is not None:
+                shutil.rmtree(inbox_snapshot, ignore_errors=True)
 
-    for filename, data in rendered_bytes.items():
-        _atomic_write(preview_root / "inbox" / f"typed_{filename}", data)
     if _regular_file_hashes(preview_root / "rejected") != rejected_before:
         raise Phase2ClaimsDeliveryError("historical_rejected_artifacts_mutated")
     if any((preview_root / "reviewed").iterdir()):
@@ -252,8 +499,28 @@ def validate_claims_bundle(repo_root: Path, reports_root: Path) -> dict[str, Any
     """Validate rendered artifacts and typed preview routes offline."""
     repo_root = repo_root.resolve(strict=True)
     reports_root = reports_root.resolve(strict=True)
+    marker = reports_root / TRANSACTION_MARKER_NAME
+    if marker.is_symlink() or marker.exists():
+        return {
+            "status": CLAIMS_INVALID,
+            "errors": ["publication_transaction_incomplete"],
+            "rendering_status": "RENDERED_INVALID",
+            "typed_preview_count": 0,
+            "reviewed_file_count": -1,
+        }
     claims_root = reports_root / "phase2_claims"
     preview_root = reports_root / "phase2_obsidian_preview"
+    try:
+        _assert_regular_tree(claims_root, label="claims_tree")
+        _assert_regular_tree(preview_root, label="preview_tree")
+    except Phase2ClaimsDeliveryError as exc:
+        return {
+            "status": CLAIMS_INVALID,
+            "errors": [str(exc)],
+            "rendering_status": "RENDERED_INVALID",
+            "typed_preview_count": 0,
+            "reviewed_file_count": -1,
+        }
     base = validate_claims_directory(repo_root, claims_root)
     errors = list(base.get("errors", []))
     try:

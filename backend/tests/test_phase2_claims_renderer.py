@@ -9,9 +9,11 @@ from pathlib import Path
 
 import pytest
 
+import app.services.phase2_claims_delivery as claims_delivery
 from app.services.phase2_claims_delivery import (
     Phase2ClaimsDeliveryError,
     publish_claims_bundle,
+    publish_invalid_claims_receipt,
     route_claims_preview,
     validate_claims_bundle,
 )
@@ -276,4 +278,146 @@ def test_bundle_validator_rejects_symlinked_rendered_artifact_before_read(
     result = validate_claims_bundle(REPO_ROOT, reports_root)
 
     assert result["status"] == "CLAIMS_INVALID"
-    assert "rendered_artifact_symlink_forbidden:000403.SZ" in result["errors"]
+    assert result["errors"] == ["claims_tree_symlink_forbidden"]
+
+
+@pytest.mark.parametrize("directory_name", ["schema", "fixtures", "rendered"])
+def test_bundle_validator_rejects_symlinked_claims_subtree_before_read(
+    tmp_path: Path,
+    directory_name: str,
+) -> None:
+    reports_root = tmp_path / "reports"
+    reports_root.mkdir()
+    publish_claims_bundle(
+        REPO_ROOT,
+        reports_root,
+        _allow_test_output_root=True,
+    )
+    target = reports_root / "phase2_claims" / directory_name
+    outside = tmp_path / f"outside_{directory_name}"
+    shutil.copytree(target, outside)
+    shutil.rmtree(target)
+    target.symlink_to(outside, target_is_directory=True)
+
+    result = validate_claims_bundle(REPO_ROOT, reports_root)
+
+    assert result["status"] == "CLAIMS_INVALID"
+    assert result["errors"] == ["claims_tree_symlink_forbidden"]
+
+
+def test_invalid_candidate_routes_only_a_sanitized_typed_rejection_receipt(
+    tmp_path: Path,
+) -> None:
+    reports_root = tmp_path / "reports"
+    reports_root.mkdir()
+    canary = b"Bearer SECRET-CANARY-SHOULD-NOT-BE-WRITTEN"
+
+    receipt = publish_invalid_claims_receipt(
+        REPO_ROOT,
+        reports_root,
+        symbol="000403.SZ",
+        candidate_bytes=canary,
+        validation_errors=["worker_candidate_schema_invalid:SECRET-CANARY"],
+        _allow_test_output_root=True,
+    )
+
+    assert receipt.parent.name == "rejected"
+    assert receipt.name == "typed_000403SZ_派林生物_rejected.md"
+    contents = receipt.read_text(encoding="utf-8")
+    assert "SECRET-CANARY" not in contents
+    assert "Bearer " not in contents
+    assert hashlib.sha256(canary).hexdigest() in contents
+    assert "can_publish: false" in contents
+    assert "trading_advice: false" in contents
+
+
+def test_bundle_publication_replaces_exact_typed_inbox_set(tmp_path: Path) -> None:
+    reports_root = tmp_path / "reports"
+    reports_root.mkdir()
+    inbox = reports_root / "phase2_obsidian_preview/inbox"
+    inbox.mkdir(parents=True)
+    (inbox / "typed_stale.md").write_text("stale", encoding="utf-8")
+    (inbox / "manual_note.md").write_text("preserve", encoding="utf-8")
+
+    publish_claims_bundle(
+        REPO_ROOT,
+        reports_root,
+        _allow_test_output_root=True,
+    )
+
+    assert not (inbox / "typed_stale.md").exists()
+    assert (inbox / "manual_note.md").read_text(encoding="utf-8") == "preserve"
+    assert sorted(path.name for path in inbox.glob("typed_*.md")) == [
+        "typed_000403SZ_派林生物.md",
+        "typed_300059SZ_东方财富.md",
+        "typed_600489SH_中金黄金.md",
+    ]
+
+
+def test_bundle_and_inbox_publication_roll_back_as_one_transaction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reports_root = tmp_path / "reports"
+    reports_root.mkdir()
+    publish_claims_bundle(
+        REPO_ROOT,
+        reports_root,
+        _allow_test_output_root=True,
+    )
+    index = reports_root / "phase2_claims/claims_index.json"
+    first_preview = (
+        reports_root
+        / "phase2_obsidian_preview/inbox/typed_000403SZ_派林生物.md"
+    )
+    index.write_text('{"old":"bundle"}\n', encoding="utf-8")
+    first_preview.write_text("old preview\n", encoding="utf-8")
+    bundle_before = _tree_hashes(reports_root / "phase2_claims")
+    inbox_before = _tree_hashes(reports_root / "phase2_obsidian_preview/inbox")
+    original_publish = claims_delivery.atomic_publish_directory
+
+    def fail_second_destination(staging: Path, destination: Path) -> None:
+        if destination.name == "inbox":
+            raise OSError("injected inbox publication failure")
+        original_publish(staging, destination)
+
+    monkeypatch.setattr(
+        claims_delivery,
+        "atomic_publish_directory",
+        fail_second_destination,
+    )
+
+    with pytest.raises(Phase2ClaimsDeliveryError, match="publication_failed"):
+        publish_claims_bundle(
+            REPO_ROOT,
+            reports_root,
+            _allow_test_output_root=True,
+        )
+
+    assert _tree_hashes(reports_root / "phase2_claims") == bundle_before
+    assert (
+        _tree_hashes(reports_root / "phase2_obsidian_preview/inbox")
+        == inbox_before
+    )
+    assert not (reports_root / ".phase2_claims_delivery_transaction.json").exists()
+
+
+def test_bundle_validator_fails_closed_while_transaction_marker_exists(
+    tmp_path: Path,
+) -> None:
+    reports_root = tmp_path / "reports"
+    reports_root.mkdir()
+    publish_claims_bundle(
+        REPO_ROOT,
+        reports_root,
+        _allow_test_output_root=True,
+    )
+    (reports_root / ".phase2_claims_delivery_transaction.json").write_text(
+        '{"version":1}\n',
+        encoding="utf-8",
+    )
+
+    result = validate_claims_bundle(REPO_ROOT, reports_root)
+
+    assert result["status"] == "CLAIMS_INVALID"
+    assert result["errors"] == ["publication_transaction_incomplete"]

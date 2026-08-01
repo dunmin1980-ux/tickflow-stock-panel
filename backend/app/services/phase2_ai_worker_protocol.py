@@ -17,11 +17,15 @@ from pydantic import ValidationError
 from app.schemas.phase2_claims import WorkerClaimsCandidate
 from app.services.phase2_claims_service import (
     CALCULATION_EPSILON,
+    EXPECTED_PREDICATE_ORDER,
+    OPERAND_LABEL_BY_REF,
     PREDICATE_RULES,
     RAW_QFQ_MISMATCH,
     Phase2ClaimsError,
+    build_claim_payloads,
     canonical_json_bytes,
     execute_calculation,
+    expected_claim_id,
 )
 from app.services.phase2_facts import FIXED_SYMBOLS
 
@@ -98,20 +102,6 @@ _SAFE_FACT_FIELDS = {
     "scope",
     "vendor_pending",
 }
-_OPERAND_LABEL_BY_REF = {
-    "/daily/open": "daily_open",
-    "/daily/close": "daily_close",
-    "/indicators/ma5/value": "ma5",
-    "/indicators/ma10/value": "ma10",
-    "/indicators/ma20/value": "ma20",
-    "/indicators/ma60/value": "ma60",
-    "/indicators/macd_dif/value": "macd_dif",
-    "/indicators/macd_dea/value": "macd_dea",
-    "/indicators/rsi6/value": "rsi6",
-    "/indicators/rsi14/value": "rsi14",
-}
-
-
 class Phase2WorkerProtocolError(ValueError):
     """Raised for a fail-closed worker projection boundary violation."""
 
@@ -152,6 +142,8 @@ def compute_projection_sha256(projection: Mapping[str, Any]) -> str:
 def build_worker_projection(
     facts: Mapping[str, Any],
     facts_sha256: str,
+    *,
+    facts_bytes: bytes,
 ) -> dict[str, Any]:
     """Build the only data shape a future isolated worker may read."""
     symbol = facts.get("symbol")
@@ -163,6 +155,20 @@ def build_worker_projection(
         or any(character not in "0123456789abcdef" for character in facts_sha256)
     ):
         raise Phase2WorkerProtocolError("facts_sha256_invalid")
+    if not isinstance(facts_bytes, bytes):
+        raise Phase2WorkerProtocolError("facts_bytes_invalid")
+    if _sha256_bytes(facts_bytes) != facts_sha256:
+        raise Phase2WorkerProtocolError("facts_sha256_mismatch")
+
+    def reject_constant(_value: str) -> None:
+        raise ValueError("non-finite constant")
+
+    try:
+        parsed_facts = json.loads(facts_bytes, parse_constant=reject_constant)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise Phase2WorkerProtocolError("facts_bytes_invalid") from exc
+    if parsed_facts != facts:
+        raise Phase2WorkerProtocolError("facts_bytes_mismatch")
     try:
         indicators = {
             name: {"value": facts["indicators"][name]["value"]}
@@ -436,7 +442,7 @@ def _rule_errors(claim: Any, safe_facts: Mapping[str, Any]) -> list[str]:
         for item, ref, value in zip(operands, refs, values, strict=True):
             unit, basis = _metadata_for_ref(ref)
             if (
-                item.label_id != _OPERAND_LABEL_BY_REF.get(ref)
+                item.label_id != OPERAND_LABEL_BY_REF.get(ref)
                 or item.unit != unit
                 or item.price_basis != basis
                 or not _same_value(item.value, value)
@@ -451,7 +457,7 @@ def _rule_errors(claim: Any, safe_facts: Mapping[str, Any]) -> list[str]:
         for item, ref, value in zip(operands, refs, values, strict=True):
             unit, basis = _metadata_for_ref(ref)
             if (
-                item.label_id != _OPERAND_LABEL_BY_REF.get(ref)
+                item.label_id != OPERAND_LABEL_BY_REF.get(ref)
                 or item.unit != unit
                 or item.price_basis != basis
                 or not _same_value(item.value, value)
@@ -516,10 +522,14 @@ def validate_worker_candidate(
             errors.append(f"worker_candidate_{field}_mismatch")
     claim_ids = [claim.claim_id for claim in candidate.claims]
     predicates = [claim.predicate for claim in candidate.claims]
-    if claim_ids != sorted(claim_ids) or len(claim_ids) != len(set(claim_ids)):
+    expected_ids = [
+        expected_claim_id(candidate.symbol, candidate.trade_date, index, predicate)
+        for index, predicate in enumerate(EXPECTED_PREDICATE_ORDER, start=1)
+    ]
+    if claim_ids != expected_ids or len(claim_ids) != len(set(claim_ids)):
         errors.append("worker_candidate_claim_ids_invalid")
-    if len(predicates) != len(set(predicates)):
-        errors.append("worker_candidate_predicates_duplicate")
+    if predicates != list(EXPECTED_PREDICATE_ORDER):
+        errors.append("worker_candidate_predicate_set_invalid")
     safe_facts = projection["safe_facts"]
     for claim in candidate.claims:
         if claim.subject.symbol != projection["symbol"]:
@@ -554,31 +564,12 @@ class FakeClaimsWorker:
             raise Phase2WorkerProtocolError("projection_contract_invalid")
         symbol = str(projection["symbol"])
         trade_date = str(projection["trade_date"])
-        claim = {
-            "claim_id": (
-                f'{symbol.replace(".", "")}-{trade_date.replace("-", "")}-001-daily-close'
-            ),
-            "claim_type": "NUMERIC_OBSERVATION",
-            "subject": {"entity_type": "stock", "symbol": symbol},
-            "predicate": "daily_close",
-            "object": {
-                "value_type": "number",
-                "value": projection["safe_facts"]["daily"]["close"],
-                "unit": "raw_price",
-            },
-            "provenance": {
-                "facts_sha256": projection["facts_sha256"],
-                "fact_refs": ["/daily/close"],
-                "calculation_ref": None,
-                "price_basis": "raw",
-            },
-            "rendering": {
-                "template_id": "daily_close_v1",
-                "display_precision": 2,
-            },
-            "scope": {"timeframe": "1d", "as_of": trade_date},
-            "validation_status": "VALIDATED",
-        }
+        claims = build_claim_payloads(
+            projection["safe_facts"],
+            symbol,
+            trade_date,
+            str(projection["facts_sha256"]),
+        )
         candidate = {
             "candidate_schema_version": 1,
             "projection_sha256": projection["projection_sha256"],
@@ -586,7 +577,7 @@ class FakeClaimsWorker:
             "name": projection["name"],
             "trade_date": trade_date,
             "timezone": projection["timezone"],
-            "claims": [claim],
+            "claims": claims,
             "trading_advice": False,
         }
         return canonical_json_bytes(candidate).decode("utf-8")

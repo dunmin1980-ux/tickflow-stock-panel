@@ -44,6 +44,18 @@ CLAIMS_VALID = "CLAIMS_VALID"
 CLAIMS_INVALID = "CLAIMS_INVALID"
 RAW_QFQ_MISMATCH = "CLAIM_REJECTED_RAW_QFQ_MISMATCH"
 CALCULATION_EPSILON = 1e-10
+OPERAND_LABEL_BY_REF = {
+    "/daily/open": "daily_open",
+    "/daily/close": "daily_close",
+    "/indicators/ma5/value": "ma5",
+    "/indicators/ma10/value": "ma10",
+    "/indicators/ma20/value": "ma20",
+    "/indicators/ma60/value": "ma60",
+    "/indicators/macd_dif/value": "macd_dif",
+    "/indicators/macd_dea/value": "macd_dea",
+    "/indicators/rsi6/value": "rsi6",
+    "/indicators/rsi14/value": "rsi14",
+}
 
 _FREE_TEXT_FIELDS = {
     "conclusion",
@@ -208,6 +220,27 @@ def execute_calculation(
         raise Phase2ClaimsError("calculation input count mismatch")
     if len(price_bases) != len(values) or len(units) != len(values):
         raise Phase2ClaimsError("calculation metadata count mismatch")
+    value_types = [
+        "boolean"
+        if isinstance(value, bool)
+        else "number"
+        if isinstance(value, (int, float))
+        else "string"
+        if isinstance(value, str)
+        else "null"
+        if value is None
+        else "array"
+        if isinstance(value, (list, tuple))
+        else "object"
+        for value in values
+    ]
+    if any(value_type not in spec.allowed_value_types for value_type in value_types):
+        raise Phase2ClaimsError("calculation input type is not allowed")
+    if any(
+        value_type == "number" and not math.isfinite(float(value))
+        for value, value_type in zip(values, value_types, strict=True)
+    ):
+        raise Phase2ClaimsError("calculation input value is not finite")
     if spec.same_price_basis_required:
         concrete_bases = {basis for basis in price_bases if basis != "none"}
         if len(concrete_bases) > 1:
@@ -422,6 +455,74 @@ PREDICATE_RULES.update(
     }
 )
 
+_DIRECT_PREDICATES = (
+    "ma5",
+    "ma10",
+    "ma20",
+    "ma60",
+    "macd_dif",
+    "macd_dea",
+    "macd_hist",
+    "rsi6",
+    "rsi14",
+    "boll_upper",
+    "boll_middle",
+    "boll_lower",
+    "atr14",
+    "minute_1m_bar_count",
+    "minute_30m_bar_count",
+    "daily_contract_status",
+    "minute_1m_contract_status",
+    "minute_30m_contract_status",
+    "adjustment_factor_status",
+    "data_freshness",
+    "adjustment_repeat_stable",
+    "adjustment_second_adjustment_detected",
+    "minute_30m_first_bucket_mechanically_explained",
+    "minute_1m_duplicate_timestamp_count",
+    "minute_1m_lunch_break_bar_count",
+    "minute_1m_material_ohlc_anomaly_count",
+    "minute_1m_material_negative_amount_count",
+    "minute_30m_duplicate_timestamp_count",
+    "minute_30m_lunch_break_bar_count",
+    "minute_30m_ohlc_mismatch_count",
+    "minute_30m_non_first_bucket_volume_amount_mismatch_count",
+    "minute_30m_material_ohlc_anomaly_count",
+    "minute_30m_material_negative_amount_count",
+)
+EXPECTED_PREDICATE_ORDER = (
+    "market_scope",
+    "financial_scope",
+    "news_scope",
+    "industry_scope",
+    "daily_close",
+    "daily_open_to_close_percent",
+    *_DIRECT_PREDICATES,
+    "macd_dif_vs_dea",
+    "ma_value_order",
+    "vendor_pending",
+)
+CLAIM_SLUG_BY_PREDICATE = {
+    predicate: predicate.replace("_", "-") for predicate in EXPECTED_PREDICATE_ORDER
+}
+CLAIM_SLUG_BY_PREDICATE["daily_open_to_close_percent"] = (
+    "daily-open-close-percent"
+)
+
+
+def expected_claim_id(
+    symbol: str,
+    trade_date: str,
+    sequence: int,
+    predicate: str,
+) -> str:
+    """Return the only valid identifier for a claim at a fixed sequence."""
+    slug = CLAIM_SLUG_BY_PREDICATE[predicate]
+    return (
+        f'{symbol.replace(".", "")}-{trade_date.replace("-", "")}-'
+        f"{sequence:03d}-{slug}"
+    )
+
 
 @dataclass(frozen=True)
 class ClaimsValidationResult:
@@ -569,11 +670,10 @@ def _claim_common(
     calculation_ref: str | None = None,
 ) -> dict[str, Any]:
     rule = PREDICATE_RULES[predicate]
+    if slug != CLAIM_SLUG_BY_PREDICATE[predicate]:
+        raise Phase2ClaimsError(f"claim slug is not deterministic: {predicate}")
     return {
-        "claim_id": (
-            f'{symbol.replace(".", "")}-{trade_date.replace("-", "")}-'
-            f"{sequence:03d}-{slug}"
-        ),
+        "claim_id": expected_claim_id(symbol, trade_date, sequence, predicate),
         "claim_type": rule.claim_type,
         "subject": {"entity_type": "stock", "symbol": symbol},
         "predicate": predicate,
@@ -592,12 +692,15 @@ def _claim_common(
     }
 
 
-def build_claims_document(repo_root: Path, symbol: str) -> ClaimsDocument:
-    """Build one deterministic typed Claims fixture from committed Facts."""
+def build_claim_payloads(
+    facts: Mapping[str, Any],
+    symbol: str,
+    trade_date: str,
+    facts_sha256: str,
+) -> list[dict[str, Any]]:
+    """Build the complete deterministic claim set from approved Facts values."""
     if symbol not in FIXED_SYMBOLS:
         raise Phase2ClaimsError(f"symbol is outside fixed scope: {symbol}")
-    facts, facts_path, facts_sha256 = _load_facts(repo_root, symbol)
-    trade_date = str(facts["trade_date"])
     claims: list[dict[str, Any]] = []
     sequence = 1
 
@@ -707,23 +810,7 @@ def build_claims_document(repo_root: Path, symbol: str) -> ClaimsDocument:
     claims.append(percent_claim)
     sequence += 1
 
-    for predicate in (
-        "ma5", "ma10", "ma20", "ma60", "macd_dif", "macd_dea", "macd_hist",
-        "rsi6", "rsi14", "boll_upper", "boll_middle", "boll_lower", "atr14",
-        "minute_1m_bar_count", "minute_30m_bar_count",
-        "daily_contract_status", "minute_1m_contract_status",
-        "minute_30m_contract_status", "adjustment_factor_status", "data_freshness",
-        "adjustment_repeat_stable", "adjustment_second_adjustment_detected",
-        "minute_30m_first_bucket_mechanically_explained",
-        "minute_1m_duplicate_timestamp_count", "minute_1m_lunch_break_bar_count",
-        "minute_1m_material_ohlc_anomaly_count",
-        "minute_1m_material_negative_amount_count",
-        "minute_30m_duplicate_timestamp_count", "minute_30m_lunch_break_bar_count",
-        "minute_30m_ohlc_mismatch_count",
-        "minute_30m_non_first_bucket_volume_amount_mismatch_count",
-        "minute_30m_material_ohlc_anomaly_count",
-        "minute_30m_material_negative_amount_count",
-    ):
+    for predicate in _DIRECT_PREDICATES:
         add_direct(predicate, predicate.replace("_", "-"))
 
     comparison_rule = PREDICATE_RULES["macd_dif_vs_dea"]
@@ -812,6 +899,16 @@ def build_claims_document(repo_root: Path, symbol: str) -> ClaimsDocument:
 
     add_direct("vendor_pending", "vendor-pending")
     claims.sort(key=lambda item: item["claim_id"])
+    return claims
+
+
+def build_claims_document(repo_root: Path, symbol: str) -> ClaimsDocument:
+    """Build one deterministic typed Claims fixture from committed Facts."""
+    if symbol not in FIXED_SYMBOLS:
+        raise Phase2ClaimsError(f"symbol is outside fixed scope: {symbol}")
+    facts, facts_path, facts_sha256 = _load_facts(repo_root, symbol)
+    trade_date = str(facts["trade_date"])
+    claims = build_claim_payloads(facts, symbol, trade_date, facts_sha256)
     relative_facts_path = facts_path.relative_to(repo_root.resolve(strict=True)).as_posix()
     return ClaimsDocument.model_validate(
         {
@@ -939,6 +1036,11 @@ def _validate_claim(
         operands = [object_value.left, object_value.right]
         if [operand.fact_ref for operand in operands] != refs:
             errors.append(f"claim_operand_refs_mismatch:{predicate}")
+        if any(
+            operand.label_id != OPERAND_LABEL_BY_REF.get(operand.fact_ref)
+            for operand in operands
+        ):
+            errors.append(f"claim_operand_label_mismatch:{predicate}")
         operand_bases = [operand.price_basis for operand in operands]
         if len(set(operand_bases)) > 1 or any(
             basis != rule.price_basis for basis in operand_bases
@@ -969,6 +1071,11 @@ def _validate_claim(
         operands = object_value.operands
         if [operand.fact_ref for operand in operands] != refs:
             errors.append(f"claim_operand_refs_mismatch:{predicate}")
+        if any(
+            operand.label_id != OPERAND_LABEL_BY_REF.get(operand.fact_ref)
+            for operand in operands
+        ):
+            errors.append(f"claim_operand_label_mismatch:{predicate}")
         operand_bases = [operand.price_basis for operand in operands]
         if len(set(operand_bases)) > 1 or any(
             basis != rule.price_basis for basis in operand_bases
@@ -1067,10 +1174,19 @@ def validate_claims_document(
             errors.append("document_scope_mismatch")
 
     claim_ids = [claim.claim_id for claim in document.claims]
+    predicates = [claim.predicate for claim in document.claims]
     if len(claim_ids) != len(set(claim_ids)):
         errors.append("claim_id_duplicate")
     if claim_ids != sorted(claim_ids):
         errors.append("claim_order_invalid")
+    if predicates != list(EXPECTED_PREDICATE_ORDER):
+        errors.append("claim_predicate_set_invalid")
+    expected_ids = [
+        expected_claim_id(document.symbol, document.trade_date, index, predicate)
+        for index, predicate in enumerate(EXPECTED_PREDICATE_ORDER, start=1)
+    ]
+    if claim_ids != expected_ids:
+        errors.append("claim_id_set_invalid")
 
     pointer_bindings = 0
     unsourced_claims = 0
