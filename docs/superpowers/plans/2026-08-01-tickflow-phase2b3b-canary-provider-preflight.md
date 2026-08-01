@@ -87,8 +87,8 @@
 - Produces: a sanitized ready or blocked preflight result; it never executes the Canary. With the current Mock-only runtime Proxy and no approved real-adapter hash, the expected result is `PHASE2B_CANARY_EGRESS_BLOCKED`.
 
 - [x] Run focused pytest, backend full pytest, `compileall app scripts`, and Ruff F821.
-- [ ] Execute the validator against the local approval file and Keychain existence gate; print no configuration body and no credential metadata beyond presence.
-- [ ] Recompute protected evidence hashes, verify no sensitive shape or placeholder residue, and confirm Provider/AI/TickFlow/public-network counters remain zero.
-- [ ] Write a sanitized report containing only approved public identity, boolean gates, stable hashes, zero counters, limitations, and the next action `IMPLEMENT_AND_AUDIT_REAL_OPENAI_HTTPS_PROXY_OFFLINE` when the actual Proxy remains Mock-only.
+- [x] Execute the validator against the local approval file and Keychain existence gate; print no configuration body and no credential metadata beyond presence.
+- [x] Recompute protected evidence hashes, verify no sensitive shape or placeholder residue, and confirm Provider/AI/TickFlow/public-network counters remain zero.
+- [x] Write a sanitized report containing only approved public identity, boolean gates, stable hashes, zero counters, limitations, and the next action `IMPLEMENT_AND_AUDIT_REAL_OPENAI_HTTPS_PROXY_OFFLINE` when the actual Proxy remains Mock-only.
 - [ ] Run `git diff --check`, inspect the exact diff, commit only code/tests/plan/report, and push `codex/tickflow-phase2-ai-review` to `fork`.
 - [ ] Stop before any real Provider request.
