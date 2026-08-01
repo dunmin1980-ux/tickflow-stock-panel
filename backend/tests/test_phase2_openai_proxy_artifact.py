@@ -9,16 +9,19 @@ from typing import Any
 
 import pytest
 
+import scripts.build_phase2_openai_proxy_offline as artifact_cli
 from app.services.phase2_openai_proxy_artifact import (
     BASE_IMAGE_DIGEST,
     BASE_IMAGE_REFERENCE,
     IMAGE_NAME,
     ArtifactInputHashes,
+    FreshBuildProvenance,
     OpenAIProxyArtifactError,
     build_artifact_candidate,
     build_offline_image_command,
     compute_artifact_input_hashes,
     inspect_openai_proxy_image,
+    validate_fresh_build_provenance,
     validate_local_base_image,
     verify_image_contents,
     write_artifact_reports,
@@ -37,6 +40,10 @@ EXPECTED_ENVIRONMENT = [
     "PYTHONDONTWRITEBYTECODE=1",
     "PYTHONHASHSEED=0",
 ]
+BASE_ROOTFS_LAYERS = tuple("sha256:" + str(index % 10) * 64 for index in range(43))
+ADDED_ROOTFS_LAYERS = tuple(
+    "sha256:" + character * 64 for character in ("a", "b", "c", "d", "e")
+)
 
 
 @pytest.fixture
@@ -128,11 +135,16 @@ def test_build_context_rejects_even_an_extra_empty_directory(tmp_path: Path) -> 
 
 def test_build_command_is_offline_narrow_and_contains_only_nonsensitive_hashes(
     hashes: ArtifactInputHashes,
+    tmp_path: Path,
 ) -> None:
-    command = build_offline_image_command(REPO_ROOT, hashes)
+    iidfile = tmp_path / "image.iid"
+    command = build_offline_image_command(REPO_ROOT, hashes, iidfile=iidfile)
 
     assert command[:3] == ["docker", "build", "--pull=false"]
     assert "--network=none" in command
+    assert "--no-cache" in command
+    assert command[command.index("--iidfile") + 1] == str(iidfile)
+    assert "SOURCE_DATE_EPOCH=0" in command
     assert command[-1] == str(CONTEXT)
     assert "--secret" not in command
     assert "--ssh" not in command
@@ -160,20 +172,26 @@ def test_build_command_is_offline_narrow_and_contains_only_nonsensitive_hashes(
 
 def test_build_command_rejects_one_byte_hash_drift(
     hashes: ArtifactInputHashes,
+    tmp_path: Path,
 ) -> None:
     for field in ArtifactInputHashes.model_fields:
         value = hashes.model_dump()
         value[field] = ("0" if value[field][0] != "0" else "1") + value[field][1:]
         drifted = ArtifactInputHashes.model_validate(value)
         with pytest.raises(OpenAIProxyArtifactError):
-            build_offline_image_command(REPO_ROOT, drifted)
+            build_offline_image_command(
+                REPO_ROOT,
+                drifted,
+                iidfile=tmp_path / "image.iid",
+            )
 
 
 def _base_inspect() -> list[dict[str, Any]]:
     return [
         {
-            "Id": "sha256:" + "b" * 64,
+            "Id": BASE_IMAGE_DIGEST,
             "RepoDigests": [BASE_IMAGE_REFERENCE],
+            "RootFS": {"Type": "layers", "Layers": list(BASE_ROOTFS_LAYERS)},
         }
     ]
 
@@ -182,16 +200,25 @@ def test_local_base_check_requires_exact_repo_digest() -> None:
     evidence = validate_local_base_image(_base_inspect())
     assert evidence.base_available is True
     assert evidence.base_reference == BASE_IMAGE_REFERENCE
-    assert evidence.local_config_id == "sha256:" + "b" * 64
+    assert evidence.local_config_id == BASE_IMAGE_DIGEST
+    assert evidence.rootfs_layers == BASE_ROOTFS_LAYERS
 
     for payload in (
         [],
         [{}],
-        [{"Id": "sha256:" + "b" * 64, "RepoDigests": []}],
+        [{"Id": BASE_IMAGE_DIGEST, "RepoDigests": [], "RootFS": {"Layers": []}}],
+        [
+            {
+                "Id": BASE_IMAGE_DIGEST,
+                "RepoDigests": ["gcr.io/distroless/python3-debian12@sha256:" + "0" * 64],
+                "RootFS": {"Layers": list(BASE_ROOTFS_LAYERS)},
+            }
+        ],
         [
             {
                 "Id": "sha256:" + "b" * 64,
-                "RepoDigests": ["gcr.io/distroless/python3-debian12@sha256:" + "0" * 64],
+                "RepoDigests": [BASE_IMAGE_REFERENCE],
+                "RootFS": {"Layers": list(BASE_ROOTFS_LAYERS)},
             }
         ],
     ):
@@ -204,6 +231,10 @@ def _image_inspect(hashes: ArtifactInputHashes) -> list[dict[str, Any]]:
         {
             "Id": "sha256:" + "a" * 64,
             "RepoTags": [IMAGE_NAME],
+            "RootFS": {
+                "Type": "layers",
+                "Layers": [*BASE_ROOTFS_LAYERS, *ADDED_ROOTFS_LAYERS],
+            },
             "Config": {
                 "User": "65532:65532",
                 "Entrypoint": ["/usr/bin/python3", "/proxy/proxy.py"],
@@ -232,6 +263,31 @@ def _clean_history() -> list[dict[str, Any]]:
     ]
 
 
+def _base_evidence():
+    return validate_local_base_image(_base_inspect())
+
+
+def _provenance(
+    hashes: ArtifactInputHashes,
+    *,
+    image_id: str = "sha256:" + "a" * 64,
+) -> FreshBuildProvenance:
+    image = inspect_openai_proxy_image(
+        _image_inspect(hashes),
+        _clean_history(),
+        hashes,
+        _base_evidence(),
+        expected_image_id=image_id,
+    )
+    return validate_fresh_build_provenance(
+        hashes_before=hashes,
+        hashes_after=hashes,
+        iidfile_image_id=image_id,
+        image=image,
+        base=_base_evidence(),
+    )
+
+
 def test_image_inspection_requires_exact_identity_labels_and_clean_history(
     hashes: ArtifactInputHashes,
 ) -> None:
@@ -239,6 +295,8 @@ def test_image_inspection_requires_exact_identity_labels_and_clean_history(
         _image_inspect(hashes),
         _clean_history(),
         hashes,
+        _base_evidence(),
+        expected_image_id="sha256:" + "a" * 64,
     )
 
     assert evidence.image_valid is True
@@ -247,6 +305,8 @@ def test_image_inspection_requires_exact_identity_labels_and_clean_history(
     assert evidence.image_name == IMAGE_NAME
     assert evidence.runtime_user == "65532:65532"
     assert evidence.entrypoint == ("/usr/bin/python3", "/proxy/proxy.py")
+    assert evidence.base_rootfs_prefix_verified is True
+    assert evidence.rootfs_layer_count == 48
 
 
 @pytest.mark.parametrize(
@@ -263,6 +323,9 @@ def test_image_inspection_requires_exact_identity_labels_and_clean_history(
         "contract_label",
         "policy_label",
         "extra_label",
+        "base_layer_prefix",
+        "extra_layer_count",
+        "iidfile_mismatch",
         "sensitive_history",
     ],
 )
@@ -296,13 +359,72 @@ def test_image_inspection_rejects_every_identity_or_layer_mutation(
         labels["org.tickflow.phase2.proxy-policy-sha256"] = "0" * 64
     elif case == "extra_label":
         labels["unapproved"] = "value"
+    elif case == "base_layer_prefix":
+        payload[0]["RootFS"]["Layers"][0] = "sha256:" + "f" * 64
+    elif case == "extra_layer_count":
+        payload[0]["RootFS"]["Layers"].append("sha256:" + "f" * 64)
+    elif case == "iidfile_mismatch":
+        payload[0]["Id"] = "sha256:" + "f" * 64
     elif case == "sensitive_history":
         history.append({"CreatedBy": "OPENAI_API_KEY=synthetic"})
     else:  # pragma: no cover - parameter list is closed above
         raise AssertionError(case)
 
     with pytest.raises(OpenAIProxyArtifactError):
-        inspect_openai_proxy_image(payload, history, hashes)
+        inspect_openai_proxy_image(
+            payload,
+            history,
+            hashes,
+            _base_evidence(),
+            expected_image_id="sha256:" + "a" * 64,
+        )
+
+
+def test_fresh_build_provenance_binds_iid_inputs_and_base_layers(
+    hashes: ArtifactInputHashes,
+) -> None:
+    image = inspect_openai_proxy_image(
+        _image_inspect(hashes),
+        _clean_history(),
+        hashes,
+        _base_evidence(),
+        expected_image_id="sha256:" + "a" * 64,
+    )
+
+    evidence = validate_fresh_build_provenance(
+        hashes_before=hashes,
+        hashes_after=hashes,
+        iidfile_image_id=image.image_id,
+        image=image,
+        base=_base_evidence(),
+    )
+
+    assert evidence.fresh_offline_build is True
+    assert evidence.no_cache is True
+    assert evidence.iidfile_verified is True
+    assert evidence.input_hashes_stable is True
+    assert evidence.base_rootfs_prefix_verified is True
+    assert evidence.image_id == image.image_id
+    assert evidence.base_image_id == BASE_IMAGE_DIGEST
+
+    with pytest.raises(OpenAIProxyArtifactError):
+        validate_fresh_build_provenance(
+            hashes_before=hashes,
+            hashes_after=hashes.model_copy(
+                update={"launcher_source_sha256": "0" * 64}
+            ),
+            iidfile_image_id=image.image_id,
+            image=image,
+            base=_base_evidence(),
+        )
+    with pytest.raises(OpenAIProxyArtifactError):
+        validate_fresh_build_provenance(
+            hashes_before=hashes,
+            hashes_after=hashes,
+            iidfile_image_id="sha256:" + "f" * 64,
+            image=image,
+            base=_base_evidence(),
+        )
 
 
 class _ExecutorDouble:
@@ -419,6 +541,8 @@ def test_artifact_candidate_is_exact_path_free_and_hash_bound(
         _image_inspect(hashes),
         _clean_history(),
         hashes,
+        _base_evidence(),
+        expected_image_id="sha256:" + "a" * 64,
     )
     contents = verify_image_contents(
         REPO_ROOT,
@@ -426,7 +550,12 @@ def test_artifact_candidate_is_exact_path_free_and_hash_bound(
         executor=_ExecutorDouble(),
     )
 
-    candidate = build_artifact_candidate(REPO_ROOT, image, contents)
+    candidate = build_artifact_candidate(
+        REPO_ROOT,
+        image,
+        contents,
+        _provenance(hashes),
+    )
     value = candidate.model_dump(mode="json")
 
     assert set(value) == {
@@ -464,6 +593,8 @@ def test_artifact_candidate_rejects_current_source_or_content_drift(
         _image_inspect(hashes),
         _clean_history(),
         hashes,
+        _base_evidence(),
+        expected_image_id="sha256:" + "a" * 64,
     )
     contents = verify_image_contents(
         REPO_ROOT,
@@ -478,7 +609,23 @@ def test_artifact_candidate_rejects_current_source_or_content_drift(
             update={field: "0" * 64},
         )
         with pytest.raises(OpenAIProxyArtifactError):
-            build_artifact_candidate(REPO_ROOT, image, drifted)
+            build_artifact_candidate(
+                REPO_ROOT,
+                image,
+                drifted,
+                _provenance(hashes),
+            )
+
+    drifted_provenance = _provenance(hashes).model_copy(
+        update={"image_id": "sha256:" + "f" * 64}
+    )
+    with pytest.raises(OpenAIProxyArtifactError):
+        build_artifact_candidate(
+            REPO_ROOT,
+            image,
+            contents,
+            drifted_provenance,
+        )
 
 
 def test_artifact_reports_are_canonical_atomic_and_path_free(
@@ -489,15 +636,29 @@ def test_artifact_reports_are_canonical_atomic_and_path_free(
         _image_inspect(hashes),
         _clean_history(),
         hashes,
+        _base_evidence(),
+        expected_image_id="sha256:" + "a" * 64,
     )
     contents = verify_image_contents(
         REPO_ROOT,
         image.image_id,
         executor=_ExecutorDouble(),
     )
-    candidate = build_artifact_candidate(REPO_ROOT, image, contents)
+    provenance = _provenance(hashes)
+    candidate = build_artifact_candidate(
+        REPO_ROOT,
+        image,
+        contents,
+        provenance,
+    )
 
-    write_artifact_reports(tmp_path, candidate, image, contents)
+    write_artifact_reports(
+        tmp_path,
+        candidate,
+        image,
+        contents,
+        provenance,
+    )
 
     report_dir = tmp_path / "reports/phase2_openai_proxy_artifact"
     candidate_path = report_dir / "approval_candidate.json"
@@ -511,7 +672,69 @@ def test_artifact_reports_are_canonical_atomic_and_path_free(
     assert evidence["ai_call_count"] == 0
     assert evidence["tickflow_request_count"] == 0
     assert evidence["public_network_request_count"] == 0
+    assert evidence["fresh_offline_build"] is True
+    assert evidence["no_cache"] is True
+    assert evidence["iidfile_verified"] is True
+    assert evidence["input_hashes_stable"] is True
+    assert evidence["base_rootfs_prefix_verified"] is True
     serialized = candidate_path.read_text() + evidence_path.read_text()
     assert str(REPO_ROOT) not in serialized
     assert str(Path.home()) not in serialized
     assert not any(path.name.endswith((".tmp", ".partial")) for path in report_dir.iterdir())
+
+
+def test_verify_mode_rechecks_immutable_attestation_without_rebuilding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: list[str] = []
+    monkeypatch.setattr(artifact_cli, "_base_evidence", lambda: object())
+    monkeypatch.setattr(
+        artifact_cli,
+        "_verify_attested_artifact",
+        lambda _root, *, base: observed.append("verified"),
+    )
+    monkeypatch.setattr(
+        artifact_cli,
+        "_fresh_offline_build",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("verify must not rebuild or rotate the approved IID")
+        ),
+    )
+
+    assert artifact_cli.main(["--verify"]) == 0
+    assert observed == ["verified"]
+
+
+def test_attest_mode_is_the_only_report_writing_fresh_build_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image = type("ImageEvidence", (), {"image_id": "sha256:" + "a" * 64})()
+    provenance = object()
+    contents = object()
+    candidate = object()
+    writes: list[tuple[object, ...]] = []
+    monkeypatch.setattr(artifact_cli, "_base_evidence", lambda: object())
+    monkeypatch.setattr(
+        artifact_cli,
+        "_fresh_offline_build",
+        lambda _root, *, base: (image, provenance),
+    )
+    monkeypatch.setattr(
+        artifact_cli,
+        "verify_image_contents",
+        lambda *_args, **_kwargs: contents,
+    )
+    monkeypatch.setattr(
+        artifact_cli,
+        "build_artifact_candidate",
+        lambda *_args: candidate,
+    )
+    monkeypatch.setattr(
+        artifact_cli,
+        "write_artifact_reports",
+        lambda *args: writes.append(args),
+    )
+
+    assert artifact_cli.main(["--attest"]) == 0
+    assert len(writes) == 1
+    assert writes[0][1:] == (candidate, image, contents, provenance)

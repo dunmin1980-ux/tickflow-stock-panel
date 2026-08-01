@@ -168,10 +168,18 @@ def _clean_git_result(command: list[str]) -> subprocess.CompletedProcess:
 
 def _artifact_image_inspect() -> list[dict[str, Any]]:
     candidate = _artifact_candidate()
+    base_layers = ["sha256:" + str(index % 10) * 64 for index in range(43)]
     return [
         {
             "Id": candidate["image_id"],
             "RepoTags": [candidate["image_name"]],
+            "RootFS": {
+                "Type": "layers",
+                "Layers": [
+                    *base_layers,
+                    *("sha256:" + value * 64 for value in "abcde"),
+                ],
+            },
             "Config": {
                 "User": candidate["runtime_user"],
                 "Entrypoint": candidate["entrypoint"],
@@ -202,12 +210,46 @@ def _artifact_image_inspect() -> list[dict[str, Any]]:
     ]
 
 
+def _artifact_base_inspect() -> list[dict[str, Any]]:
+    candidate = _artifact_candidate()
+    return [
+        {
+            "Id": candidate["base_image_digest"],
+            "RepoDigests": [
+                "gcr.io/distroless/python3-debian12@"
+                + candidate["base_image_digest"]
+            ],
+            "RootFS": {
+                "Type": "layers",
+                "Layers": [
+                    "sha256:" + str(index % 10) * 64 for index in range(43)
+                ],
+            },
+        }
+    ]
+
+
 def _artifact_runtime_runner(
     calls: list[list[str]],
 ):
     def runner(command: list[str], **_kwargs: Any) -> subprocess.CompletedProcess:
         calls.append(list(command))
-        if command[:4] == ["docker", "image", "inspect", _artifact_candidate()["image_name"]]:
+        if command[:4] == [
+            "docker",
+            "image",
+            "inspect",
+            (
+                "gcr.io/distroless/python3-debian12@"
+                + _artifact_candidate()["base_image_digest"]
+            ),
+        ]:
+            stdout = json.dumps(_artifact_base_inspect())
+        elif command[:4] == [
+            "docker",
+            "image",
+            "inspect",
+            _artifact_candidate()["image_id"],
+        ]:
             stdout = json.dumps(_artifact_image_inspect())
         elif command[:2] == ["docker", "history"]:
             stdout = json.dumps({"CreatedBy": "COPY verified inputs"}) + "\n"
@@ -675,7 +717,8 @@ def test_placeholder_secret_injection_is_single_file_readonly_and_cleans_up(
         "temporary_directory_residue_count": 0,
     }
     assert len(observed) == 1
-    assert observed[0][-1] == "tickflow-phase2-openai-egress-proxy:canary-v1"
+    assert observed[0][-1] == "sha256:" + "0" * 64
+    assert "tickflow-phase2-openai-egress-proxy:canary-v1" not in observed[0]
     assert any(
         value.endswith("dst=/run/phase2/provider-auth,readonly")
         for value in observed[0]

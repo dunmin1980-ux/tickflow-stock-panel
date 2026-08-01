@@ -630,17 +630,20 @@ git commit -m "feat: enforce OpenAI proxy TLS and failure closure"
 **Interfaces:**
 - Produces: `OpenAICanaryRuntimePaths`,
   `build_openai_proxy_create_command(name: str, relay_network: str,
-  paths: OpenAICanaryRuntimePaths) -> list[str]`,
+  paths: OpenAICanaryRuntimePaths, *, image_id: str) -> list[str]`,
   `build_canary_relay_network_command(network: str) -> list[str]`,
   `build_canary_egress_network_command(network: str) -> list[str]`, and
   `validate_openai_proxy_inspect(payload: Any, *,
   paths: OpenAICanaryRuntimePaths, relay_network: str, egress_network: str,
+  expected_image_id: str,
   expected_state: Literal["created", "running", "exited"])
   -> ContainerContractEvidence`.
 - Also produces:
   `build_openai_proxy_egress_attach_command(network: str,
   container: str) -> list[str]`.
-- Consumes: existing Relay resource limits and image name `tickflow-phase2-openai-egress-proxy:canary-v1`.
+- Consumes: existing Relay resource limits and the externally approved immutable
+  `sha256:<64hex>` image ID. The image tag is build metadata only and is never
+  accepted by the runtime launcher.
 
 - [ ] **Step 1: Write failing command-contract tests**
 
@@ -657,12 +660,17 @@ def test_openai_proxy_command_has_only_two_mounts(tmp_path: Path) -> None:
         auth=tmp_path / "provider-auth",
         receipt=tmp_path / "proxy-receipt.json",
     )
-    command = build_openai_proxy_create_command("phase2-openai-proxy-test", "relay-net", paths)
+    command = build_openai_proxy_create_command(
+        "phase2-openai-proxy-test",
+        "relay-net",
+        paths,
+        image_id="sha256:" + "a" * 64,
+    )
     mounts = [command[index + 1] for index, item in enumerate(command) if item == "--mount"]
     assert len(mounts) == 2
     assert mounts[0].endswith("dst=/run/phase2/provider-auth,readonly")
     assert mounts[1].endswith("dst=/output/receipt.json")
-    assert command[-1] == "tickflow-phase2-openai-egress-proxy:canary-v1"
+    assert command[-1] == "sha256:" + "a" * 64
 ```
 
 - [ ] **Step 2: Write failing network and inspect tests**
@@ -733,14 +741,16 @@ git commit -m "feat: define restricted OpenAI canary launcher"
 - Produces: `ArtifactInputHashes`, `ImageInspectionEvidence`,
   `ImageContentEvidence`, `OpenAIProxyArtifactCandidate`,
   `build_offline_image_command(repo_root: Path,
-  hashes: ArtifactInputHashes) -> list[str]`,
+  hashes: ArtifactInputHashes, *, iidfile: Path) -> list[str]`,
   `inspect_openai_proxy_image(payload: Any, history: Any,
-  hashes: ArtifactInputHashes) -> ImageInspectionEvidence`,
+  hashes: ArtifactInputHashes, base: LocalBaseImageEvidence, *,
+  expected_image_id: str) -> ImageInspectionEvidence`,
   `verify_image_contents(repo_root: Path,
   image_id: str, *, executor: Executor) -> ImageContentEvidence`,
   `build_artifact_candidate(repo_root: Path,
   image: ImageInspectionEvidence,
-  contents: ImageContentEvidence) -> OpenAIProxyArtifactCandidate`, and a
+  contents: ImageContentEvidence,
+  provenance: FreshBuildProvenance) -> OpenAIProxyArtifactCandidate`, and a
   non-network build CLI. `Executor` is a `Protocol` whose `__call__` accepts a
   `Sequence[str]` plus keyword-only `check`, `capture_output`, `text`, `shell`,
   and `timeout`, and returns `subprocess.CompletedProcess[Any]`; every call
@@ -760,6 +770,8 @@ The command test requires:
 ```python
 assert command[:3] == ["docker", "build", "--pull=false"]
 assert "--network=none" in command
+assert "--no-cache" in command
+assert "--iidfile" in command
 assert command[-1] == str(dedicated_context)
 assert dedicated_context == repo_root / "docker/phase2-openai-egress-proxy"
 assert "--secret" not in command
@@ -802,8 +814,10 @@ Before building, call `docker image inspect` on the exact digest-qualified base
 reference. Require successful inspection and require that exact
 `gcr.io/distroless/python3-debian12@sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5`
 value in
-`RepoDigests`; do not equate the registry manifest digest with Docker's local
-config `.Id`. If the immutable reference is absent or does not match, return
+`RepoDigests`; separately record and validate Docker's local config `.Id` and
+the exact base RootFS layer sequence. If the immutable reference is absent or
+the built image does not preserve that base layer sequence as an exact prefix,
+return
 `PHASE2B_CANARY_BUILD_INPUT_BLOCKED`; never pull. Run subprocesses with
 `shell=False`, captured output, fixed timeout, and argument arrays.
 
@@ -811,6 +825,12 @@ For image content verification, create one stopped container with
 `--network none`, copy only the two approved files into a mode-0700 temporary
 directory, compare bytes, and remove the container in `finally`. Do not start
 it or attach an egress network.
+
+Only `--attest` may perform the fresh no-cache build and publish evidence. It
+must read the build's IID file, inspect that immutable ID rather than the tag,
+verify build input hashes before and after the build, and bind the base RootFS
+prefix. `--verify` must only recheck the committed immutable ID; it must not
+build or rewrite reports.
 
 Publish canonical, path-free JSON atomically. The approval candidate contains
 only the exact fields specified in section 11 of the design. The separate
@@ -841,7 +861,7 @@ If it exits `2`, record `PHASE2B_CANARY_BUILD_INPUT_BLOCKED` and stop the plan;
 do not pull. If it exits `0`, execute:
 
 ```bash
-PYTHONPATH=. .venv/bin/python scripts/build_phase2_openai_proxy_offline.py --build
+PYTHONPATH=. .venv/bin/python scripts/build_phase2_openai_proxy_offline.py --attest
 PYTHONPATH=. .venv/bin/python scripts/build_phase2_openai_proxy_offline.py --verify
 ```
 

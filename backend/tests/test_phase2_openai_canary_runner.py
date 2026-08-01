@@ -19,6 +19,7 @@ from app.services.phase2_openai_canary_runner import (
 PROXY_NAME = "phase2-openai-proxy-test"
 RELAY_NETWORK = "relay-net"
 EGRESS_NETWORK = "phase2-canary-egress-test"
+APPROVED_IMAGE_ID = "sha256:" + "a" * 64
 EXPECTED_ENVIRONMENT = [
     "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
     "SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt",
@@ -57,13 +58,15 @@ def test_openai_proxy_command_has_only_two_single_file_mounts(
         PROXY_NAME,
         RELAY_NETWORK,
         runtime_paths,
+        image_id=APPROVED_IMAGE_ID,
     )
 
     mounts = _mount_arguments(command)
     assert len(mounts) == 2
     assert mounts[0].endswith("dst=/run/phase2/provider-auth,readonly")
     assert mounts[1].endswith("dst=/output/receipt.json")
-    assert command[-1] == OPENAI_PROXY_IMAGE
+    assert command[-1] == APPROVED_IMAGE_ID
+    assert OPENAI_PROXY_IMAGE not in command
     assert command.count("--network") == 1
     assert command[command.index("--network") + 1] == RELAY_NETWORK
     assert command[command.index("--network-alias") + 1] == "phase2-egress-proxy"
@@ -76,6 +79,7 @@ def test_openai_proxy_command_is_hardened_and_contains_no_override_surface(
         PROXY_NAME,
         RELAY_NETWORK,
         runtime_paths,
+        image_id=APPROVED_IMAGE_ID,
     )
     joined = " ".join(command)
 
@@ -107,7 +111,30 @@ def test_openai_proxy_command_is_hardened_and_contains_no_override_surface(
         "synthetic-value",
     ):
         assert forbidden not in joined
-    assert command[-1] == OPENAI_PROXY_IMAGE
+    assert command[-1] == APPROVED_IMAGE_ID
+
+
+@pytest.mark.parametrize(
+    "image_id",
+    [
+        OPENAI_PROXY_IMAGE,
+        "latest",
+        "sha256:" + "a" * 63,
+        "sha256:" + "g" * 64,
+        "sha256:" + "a" * 64 + "extra",
+    ],
+)
+def test_openai_proxy_command_rejects_mutable_or_invalid_image_identity(
+    runtime_paths: OpenAICanaryRuntimePaths,
+    image_id: str,
+) -> None:
+    with pytest.raises(OpenAICanaryRuntimeError, match="image_id_invalid"):
+        build_openai_proxy_create_command(
+            PROXY_NAME,
+            RELAY_NETWORK,
+            runtime_paths,
+            image_id=image_id,
+        )
 
 
 def test_network_commands_are_exact_and_only_relay_is_internal() -> None:
@@ -176,6 +203,7 @@ def test_create_and_network_builders_reject_invalid_names(
             invalid_name,
             RELAY_NETWORK,
             runtime_paths,
+            image_id=APPROVED_IMAGE_ID,
         )
     with pytest.raises(OpenAICanaryRuntimeError):
         build_canary_relay_network_command(invalid_name)
@@ -204,11 +232,12 @@ def _inspect_payload(
 ) -> list[dict]:
     return [
         {
+            "Image": APPROVED_IMAGE_ID,
             "Path": "/usr/bin/python3",
             "Args": ["/proxy/proxy.py"],
             "Config": {
                 "User": "65532:65532",
-                "Image": OPENAI_PROXY_IMAGE,
+                "Image": APPROVED_IMAGE_ID,
                 "Entrypoint": ["/usr/bin/python3", "/proxy/proxy.py"],
                 "Cmd": None,
                 "Env": list(EXPECTED_ENVIRONMENT),
@@ -264,6 +293,7 @@ def test_openai_proxy_inspect_accepts_exact_contract(
         paths=runtime_paths,
         relay_network=RELAY_NETWORK,
         egress_network=EGRESS_NETWORK,
+        expected_image_id=APPROVED_IMAGE_ID,
         expected_state=state,
     )
 
@@ -280,7 +310,8 @@ def test_openai_proxy_inspect_accepts_exact_contract(
     ("case", "error_code"),
     [
         ("root_user", "runtime_user_invalid"),
-        ("wrong_image", "runtime_image_invalid"),
+        ("wrong_config_image", "runtime_image_invalid"),
+        ("wrong_immutable_image", "runtime_image_invalid"),
         ("wrong_entrypoint", "runtime_entrypoint_invalid"),
         ("command_override", "runtime_entrypoint_invalid"),
         ("sensitive_env", "runtime_environment_invalid"),
@@ -315,8 +346,10 @@ def test_openai_proxy_inspect_rejects_every_single_field_mutation(
     item = payload[0]
     if case == "root_user":
         item["Config"]["User"] = "0:0"
-    elif case == "wrong_image":
+    elif case == "wrong_config_image":
         item["Config"]["Image"] = "unapproved:latest"
+    elif case == "wrong_immutable_image":
+        item["Image"] = "sha256:" + "b" * 64
     elif case == "wrong_entrypoint":
         item["Config"]["Entrypoint"] = ["/bin/sh"]
     elif case == "command_override":
@@ -380,6 +413,7 @@ def test_openai_proxy_inspect_rejects_every_single_field_mutation(
         paths=runtime_paths,
         relay_network=RELAY_NETWORK,
         egress_network=EGRESS_NETWORK,
+        expected_image_id=APPROVED_IMAGE_ID,
         expected_state="created",
     )
 
@@ -401,6 +435,7 @@ def test_inspect_rejects_non_list_or_multiple_items(
             paths=runtime_paths,
             relay_network=RELAY_NETWORK,
             egress_network=EGRESS_NETWORK,
+            expected_image_id=APPROVED_IMAGE_ID,
             expected_state="created",
         )
         assert evidence.contract_valid is False

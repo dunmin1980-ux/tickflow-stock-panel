@@ -19,6 +19,7 @@ from app.services.phase2_provider_relay_runner import (
 
 OPENAI_PROXY_IMAGE = "tickflow-phase2-openai-egress-proxy:canary-v1"
 _RUNTIME_NAME = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,62}$")
+_IMAGE_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
 _PROXY_NAME_PREFIX = "phase2-openai-proxy-"
 _RELAY_NETWORK_PREFIX = "phase2-canary-relay-"
 _EGRESS_NETWORK_PREFIX = "phase2-canary-egress-"
@@ -120,17 +121,21 @@ def build_openai_proxy_create_command(
     name: str,
     relay_network: str,
     paths: OpenAICanaryRuntimePaths,
+    *,
+    image_id: str,
 ) -> list[str]:
     """Build, but never execute, the hardened dedicated Proxy create command."""
     if not isinstance(paths, OpenAICanaryRuntimePaths):
         raise OpenAICanaryRuntimeError("runtime_paths_invalid")
+    if not isinstance(image_id, str) or _IMAGE_ID.fullmatch(image_id) is None:
+        raise OpenAICanaryRuntimeError("image_id_invalid")
     return [
         *_common_create_prefix(name, relay_network),
         "--mount",
         _mount(paths.auth, "/run/phase2/provider-auth", readonly=True),
         "--mount",
         _mount(paths.receipt, "/output/receipt.json", readonly=False),
-        OPENAI_PROXY_IMAGE,
+        image_id,
     ]
 
 
@@ -219,6 +224,7 @@ def validate_openai_proxy_inspect(
     paths: OpenAICanaryRuntimePaths,
     relay_network: str,
     egress_network: str,
+    expected_image_id: str,
     expected_state: Literal["created", "running", "exited"],
 ) -> ContainerContractEvidence:
     """Validate an inspect-shaped value without returning names or paths."""
@@ -230,6 +236,11 @@ def validate_openai_proxy_inspect(
         _EGRESS_NETWORK_PREFIX,
         "egress_network_name_invalid",
     )
+    if (
+        not isinstance(expected_image_id, str)
+        or _IMAGE_ID.fullmatch(expected_image_id) is None
+    ):
+        raise OpenAICanaryRuntimeError("image_id_invalid")
     if expected_state not in {"created", "running", "exited"}:
         raise OpenAICanaryRuntimeError("runtime_state_invalid")
     errors: list[str] = []
@@ -244,7 +255,10 @@ def validate_openai_proxy_inspect(
     mounts = item.get("Mounts") if isinstance(item.get("Mounts"), list) else []
 
     non_root = config.get("User") == RUNTIME_USER
-    image_valid = config.get("Image") == OPENAI_PROXY_IMAGE
+    image_valid = (
+        config.get("Image") == expected_image_id
+        and item.get("Image") == expected_image_id
+    )
     entrypoint_valid = (
         config.get("Entrypoint") == ["/usr/bin/python3", "/proxy/proxy.py"]
         and config.get("Cmd") is None

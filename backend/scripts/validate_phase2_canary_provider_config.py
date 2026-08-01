@@ -34,14 +34,12 @@ from app.services.phase2_openai_canary_runner import (
     build_openai_proxy_create_command,
 )
 from app.services.phase2_openai_proxy_artifact import (
-    IMAGE_NAME as OPENAI_PROXY_IMAGE,
-)
-from app.services.phase2_openai_proxy_artifact import (
+    BASE_IMAGE_REFERENCE,
     OpenAIProxyArtifactCandidate,
     OpenAIProxyArtifactError,
-    build_artifact_candidate,
     compute_artifact_input_hashes,
     inspect_openai_proxy_image,
+    validate_local_base_image,
     verify_image_contents,
 )
 from app.services.phase2_provider_relay_runner import (
@@ -129,6 +127,7 @@ _ALLOWED_PREFLIGHT_DELTA = {
     "reports/tickflow_phase2b_canary_provider_preflight_eval.md": "M",
 }
 _PROXY_ARTIFACT_APPROVAL_REQUIRED = "PHASE2B_PROXY_ARTIFACT_APPROVAL_REQUIRED"
+_SYNTHETIC_PROXY_IMAGE_ID = "sha256:" + "0" * 64
 _PROXY_ARTIFACT_EVIDENCE_FIELDS = {
     "evidence_schema_version",
     "status",
@@ -147,6 +146,11 @@ _PROXY_ARTIFACT_EVIDENCE_FIELDS = {
     "public_network_request_count",
     "independent_review",
     "approval_candidate_sha256",
+    "fresh_offline_build",
+    "no_cache",
+    "iidfile_verified",
+    "input_hashes_stable",
+    "base_rootfs_prefix_verified",
 }
 
 
@@ -687,6 +691,11 @@ def load_reviewed_proxy_artifact(repo_root: Path) -> OpenAIProxyArtifactCandidat
         "public_network_request_count": 0,
         "independent_review": "PASSED",
         "approval_candidate_sha256": candidate_sha256,
+        "fresh_offline_build": True,
+        "no_cache": True,
+        "iidfile_verified": True,
+        "input_hashes_stable": True,
+        "base_rootfs_prefix_verified": True,
     }
     if set(evidence) != _PROXY_ARTIFACT_EVIDENCE_FIELDS or evidence != expected_evidence:
         raise CanaryPreflightError("artifact_review_evidence_invalid")
@@ -727,16 +736,19 @@ class RestrictedCanaryRuntimeRunner:
             ["docker", "ps", "-a", "--format", "{{.Image}}\t{{.Names}}"],
             ["docker", "network", "ls", "--format", "{{.Name}}"],
             ["ps", "-axo", "command="],
-            ["docker", "image", "inspect", OPENAI_PROXY_IMAGE],
-            [
-                "docker",
-                "history",
-                "--no-trunc",
-                "--format",
-                "{{json .}}",
-                OPENAI_PROXY_IMAGE,
-            ],
+            ["docker", "image", "inspect", BASE_IMAGE_REFERENCE],
         ):
+            return
+        if command == ["docker", "image", "inspect", self._approved_image_id]:
+            return
+        if command == [
+            "docker",
+            "history",
+            "--no-trunc",
+            "--format",
+            "{{json .}}",
+            self._approved_image_id,
+        ]:
             return
         if (
             len(command) == 7
@@ -806,8 +818,16 @@ def inspect_approved_proxy_image(
     except OpenAIProxyArtifactError as exc:
         raise CanaryPreflightError("artifact_source_binding_invalid") from exc
     runner.bind_image_id(candidate.image_id)
+    base_result = runner(
+        ["docker", "image", "inspect", BASE_IMAGE_REFERENCE],
+        check=False,
+        capture_output=True,
+        text=True,
+        shell=False,
+        timeout=10,
+    )
     inspect_result = runner(
-        ["docker", "image", "inspect", OPENAI_PROXY_IMAGE],
+        ["docker", "image", "inspect", candidate.image_id],
         check=False,
         capture_output=True,
         text=True,
@@ -821,7 +841,7 @@ def inspect_approved_proxy_image(
             "--no-trunc",
             "--format",
             "{{json .}}",
-            OPENAI_PROXY_IMAGE,
+            candidate.image_id,
         ],
         check=False,
         capture_output=True,
@@ -830,8 +850,10 @@ def inspect_approved_proxy_image(
         timeout=10,
     )
     if (
-        inspect_result.returncode != 0
+        base_result.returncode != 0
+        or inspect_result.returncode != 0
         or history_result.returncode != 0
+        or not isinstance(base_result.stdout, str)
         or not isinstance(inspect_result.stdout, str)
         or not isinstance(history_result.stdout, str)
     ):
@@ -840,13 +862,28 @@ def inspect_approved_proxy_image(
         inspect_result.stdout,
         "artifact_image_identity_invalid",
     )
+    try:
+        base = validate_local_base_image(
+            _strict_json_output(
+                base_result.stdout,
+                "artifact_base_image_invalid",
+            )
+        )
+    except OpenAIProxyArtifactError as exc:
+        raise CanaryPreflightError("artifact_base_image_invalid") from exc
     history = [
         _strict_json_output(line, "artifact_image_history_invalid")
         for line in history_result.stdout.splitlines()
         if line.strip()
     ]
     try:
-        image = inspect_openai_proxy_image(inspect_payload, history, hashes)
+        image = inspect_openai_proxy_image(
+            inspect_payload,
+            history,
+            hashes,
+            base,
+            expected_image_id=candidate.image_id,
+        )
     except OpenAIProxyArtifactError as exc:
         raise CanaryPreflightError("artifact_image_identity_invalid") from exc
     if (
@@ -875,10 +912,15 @@ def verify_approved_proxy_artifact(
             candidate.image_id,
             executor=runner,
         )
-        rebuilt = build_artifact_candidate(repo_root, image, contents)
     except OpenAIProxyArtifactError as exc:
         raise CanaryPreflightError("artifact_image_content_invalid") from exc
-    if rebuilt != candidate:
+    if (
+        contents.proxy_source_sha256 != candidate.proxy_source_sha256
+        or contents.responses_contract_sha256
+        != candidate.responses_contract_sha256
+        or image.image_id != candidate.image_id
+        or not image.base_rootfs_prefix_verified
+    ):
         raise CanaryPreflightError("artifact_image_content_mismatch")
 
 
@@ -986,6 +1028,7 @@ def exercise_placeholder_secret_injection(
             "phase2-openai-proxy-preflight",
             "phase2-canary-relay-preflight",
             proxy_paths,
+            image_id=_SYNTHETIC_PROXY_IMAGE_ID,
         )
         proxy_readonly_mount = any(
             item.endswith("dst=/run/phase2/provider-auth,readonly")
@@ -997,7 +1040,7 @@ def exercise_placeholder_secret_injection(
         runtime_secret_boundary_verified = (
             proxy_readonly_mount
             and not relay_has_secret_mount
-            and proxy_command[-1] == OPENAI_PROXY_IMAGE
+            and proxy_command[-1] == _SYNTHETIC_PROXY_IMAGE_ID
         )
         policy = CanaryEgressPolicy.from_approval(approval)
         request = build_responses_request_contract(approval)

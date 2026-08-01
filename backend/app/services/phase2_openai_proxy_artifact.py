@@ -99,6 +99,7 @@ class LocalBaseImageEvidence(_StrictFrozenModel):
         "gcr.io/distroless/python3-debian12@sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5"
     ]
     local_config_id: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    rootfs_layers: tuple[str, ...]
 
 
 class ImageInspectionEvidence(_StrictFrozenModel):
@@ -114,12 +115,28 @@ class ImageInspectionEvidence(_StrictFrozenModel):
     proxy_policy_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     runtime_user: Literal["65532:65532"]
     entrypoint: tuple[str, ...]
+    base_rootfs_prefix_verified: Literal[True]
+    rootfs_layer_count: int = Field(ge=1)
 
     @model_validator(mode="after")
     def require_exact_entrypoint(self) -> ImageInspectionEvidence:
         if self.entrypoint != ENTRYPOINT:
             raise ValueError("artifact_entrypoint_invalid")
         return self
+
+
+class FreshBuildProvenance(_StrictFrozenModel):
+    fresh_offline_build: Literal[True]
+    pull_allowed: Literal[False]
+    build_network: Literal["none"]
+    no_cache: Literal[True]
+    iidfile_verified: Literal[True]
+    input_hashes_stable: Literal[True]
+    base_rootfs_prefix_verified: Literal[True]
+    image_id: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    base_image_id: Literal[
+        "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5"
+    ]
 
 
 class ImageContentEvidence(_StrictFrozenModel):
@@ -260,6 +277,8 @@ def compute_artifact_input_hashes(repo_root: Path) -> ArtifactInputHashes:
 def build_offline_image_command(
     repo_root: Path,
     hashes: ArtifactInputHashes,
+    *,
+    iidfile: Path,
 ) -> list[str]:
     root = _absolute_root(repo_root)
     if not isinstance(hashes, ArtifactInputHashes):
@@ -267,15 +286,32 @@ def build_offline_image_command(
     current = compute_artifact_input_hashes(root)
     if hashes != current:
         raise OpenAIProxyArtifactError("artifact_input_hash_mismatch")
+    iidfile_path = Path(os.path.abspath(os.fspath(iidfile)))
+    try:
+        parent = os.lstat(iidfile_path.parent)
+        exists = os.path.lexists(iidfile_path)
+    except OSError as exc:
+        raise OpenAIProxyArtifactError("artifact_iidfile_path_invalid") from exc
+    if (
+        stat.S_ISLNK(parent.st_mode)
+        or not stat.S_ISDIR(parent.st_mode)
+        or exists
+    ):
+        raise OpenAIProxyArtifactError("artifact_iidfile_path_invalid")
     return [
         "docker",
         "build",
         "--pull=false",
         "--network=none",
+        "--no-cache",
+        "--iidfile",
+        str(iidfile_path),
         "--tag",
         IMAGE_NAME,
         "--build-arg",
         f"BASE_IMAGE_DIGEST={BASE_IMAGE_DIGEST}",
+        "--build-arg",
+        "SOURCE_DATE_EPOCH=0",
         "--build-arg",
         f"PROXY_SOURCE_SHA256={hashes.proxy_source_sha256}",
         "--build-arg",
@@ -300,17 +336,25 @@ def validate_local_base_image(payload: Any) -> LocalBaseImageEvidence:
     item = _inspect_item(payload, "artifact_base_image_unavailable")
     image_id = item.get("Id")
     repo_digests = item.get("RepoDigests")
+    rootfs = item.get("RootFS")
+    layers = rootfs.get("Layers") if isinstance(rootfs, Mapping) else None
     if (
-        not isinstance(image_id, str)
-        or _IMAGE_ID.fullmatch(image_id) is None
+        image_id != BASE_IMAGE_DIGEST
         or not isinstance(repo_digests, list)
         or BASE_IMAGE_REFERENCE not in repo_digests
+        or not isinstance(layers, list)
+        or not layers
+        or any(
+            not isinstance(layer, str) or _IMAGE_ID.fullmatch(layer) is None
+            for layer in layers
+        )
     ):
         raise OpenAIProxyArtifactError("artifact_base_image_unavailable")
     return LocalBaseImageEvidence(
         base_available=True,
         base_reference=BASE_IMAGE_REFERENCE,
         local_config_id=image_id,
+        rootfs_layers=tuple(layers),
     )
 
 
@@ -318,8 +362,14 @@ def inspect_openai_proxy_image(
     payload: Any,
     history: Any,
     hashes: ArtifactInputHashes,
+    base: LocalBaseImageEvidence,
+    *,
+    expected_image_id: str,
 ) -> ImageInspectionEvidence:
-    if not isinstance(hashes, ArtifactInputHashes):
+    if not isinstance(hashes, ArtifactInputHashes) or not isinstance(
+        base,
+        LocalBaseImageEvidence,
+    ):
         raise OpenAIProxyArtifactError("artifact_hashes_invalid")
     item = _inspect_item(payload, "artifact_image_inspect_invalid")
     config = item.get("Config")
@@ -327,6 +377,8 @@ def inspect_openai_proxy_image(
         raise OpenAIProxyArtifactError("artifact_image_inspect_invalid")
     image_id = item.get("Id")
     repo_tags = item.get("RepoTags")
+    rootfs = item.get("RootFS")
+    layers = rootfs.get("Layers") if isinstance(rootfs, Mapping) else None
     environment = config.get("Env")
     labels = config.get("Labels")
     expected_labels = {
@@ -338,8 +390,9 @@ def inspect_openai_proxy_image(
         "org.tickflow.phase2.proxy-policy-sha256": hashes.proxy_policy_sha256,
     }
     if (
-        not isinstance(image_id, str)
-        or _IMAGE_ID.fullmatch(image_id) is None
+        not isinstance(expected_image_id, str)
+        or _IMAGE_ID.fullmatch(expected_image_id) is None
+        or image_id != expected_image_id
         or repo_tags != [IMAGE_NAME]
         or config.get("User") != RUNTIME_USER
         or config.get("Entrypoint") != list(ENTRYPOINT)
@@ -350,6 +403,13 @@ def inspect_openai_proxy_image(
         or not isinstance(labels, Mapping)
         or set(labels) != _LABELS
         or dict(labels) != expected_labels
+        or not isinstance(layers, list)
+        or len(layers) != len(base.rootfs_layers) + 5
+        or tuple(layers[: len(base.rootfs_layers)]) != base.rootfs_layers
+        or any(
+            not isinstance(layer, str) or _IMAGE_ID.fullmatch(layer) is None
+            for layer in layers
+        )
     ):
         raise OpenAIProxyArtifactError("artifact_image_identity_invalid")
     if not isinstance(history, list) or not history:
@@ -371,6 +431,41 @@ def inspect_openai_proxy_image(
         proxy_policy_sha256=hashes.proxy_policy_sha256,
         runtime_user=RUNTIME_USER,
         entrypoint=ENTRYPOINT,
+        base_rootfs_prefix_verified=True,
+        rootfs_layer_count=len(layers),
+    )
+
+
+def validate_fresh_build_provenance(
+    *,
+    hashes_before: ArtifactInputHashes,
+    hashes_after: ArtifactInputHashes,
+    iidfile_image_id: str,
+    image: ImageInspectionEvidence,
+    base: LocalBaseImageEvidence,
+) -> FreshBuildProvenance:
+    """Bind a fresh no-cache offline build's IID to stable reviewed inputs."""
+    if (
+        not isinstance(hashes_before, ArtifactInputHashes)
+        or not isinstance(hashes_after, ArtifactInputHashes)
+        or not isinstance(image, ImageInspectionEvidence)
+        or not isinstance(base, LocalBaseImageEvidence)
+        or hashes_before != hashes_after
+        or iidfile_image_id != image.image_id
+        or iidfile_image_id == base.local_config_id
+        or not image.base_rootfs_prefix_verified
+    ):
+        raise OpenAIProxyArtifactError("artifact_fresh_build_provenance_invalid")
+    return FreshBuildProvenance(
+        fresh_offline_build=True,
+        pull_allowed=False,
+        build_network="none",
+        no_cache=True,
+        iidfile_verified=True,
+        input_hashes_stable=True,
+        base_rootfs_prefix_verified=True,
+        image_id=image.image_id,
+        base_image_id=base.local_config_id,
     )
 
 
@@ -499,11 +594,12 @@ def build_artifact_candidate(
     repo_root: Path,
     image: ImageInspectionEvidence,
     contents: ImageContentEvidence,
+    provenance: FreshBuildProvenance,
 ) -> OpenAIProxyArtifactCandidate:
     if not isinstance(image, ImageInspectionEvidence) or not isinstance(
         contents,
         ImageContentEvidence,
-    ):
+    ) or not isinstance(provenance, FreshBuildProvenance):
         raise OpenAIProxyArtifactError("artifact_evidence_invalid")
     hashes = compute_artifact_input_hashes(repo_root)
     if (
@@ -516,6 +612,14 @@ def build_artifact_candidate(
         or not image.history_clean
         or not contents.content_valid
         or not contents.cleanup_complete
+        or not image.base_rootfs_prefix_verified
+        or not provenance.fresh_offline_build
+        or not provenance.no_cache
+        or not provenance.iidfile_verified
+        or not provenance.input_hashes_stable
+        or not provenance.base_rootfs_prefix_verified
+        or provenance.image_id != image.image_id
+        or provenance.base_image_id != BASE_IMAGE_DIGEST
     ):
         raise OpenAIProxyArtifactError("artifact_evidence_mismatch")
     return OpenAIProxyArtifactCandidate(
@@ -586,11 +690,13 @@ def write_artifact_reports(
     candidate: OpenAIProxyArtifactCandidate,
     image: ImageInspectionEvidence,
     contents: ImageContentEvidence,
+    provenance: FreshBuildProvenance,
 ) -> None:
     if (
         not isinstance(candidate, OpenAIProxyArtifactCandidate)
         or not isinstance(image, ImageInspectionEvidence)
         or not isinstance(contents, ImageContentEvidence)
+        or not isinstance(provenance, FreshBuildProvenance)
     ):
         raise OpenAIProxyArtifactError("artifact_evidence_invalid")
     root = Path(os.path.abspath(os.fspath(repo_root)))
@@ -607,6 +713,13 @@ def write_artifact_reports(
         "image_history_clean": image.history_clean,
         "image_contents_valid": contents.content_valid,
         "cleanup_complete": contents.cleanup_complete,
+        "fresh_offline_build": provenance.fresh_offline_build,
+        "no_cache": provenance.no_cache,
+        "iidfile_verified": provenance.iidfile_verified,
+        "input_hashes_stable": provenance.input_hashes_stable,
+        "base_rootfs_prefix_verified": (
+            provenance.base_rootfs_prefix_verified
+        ),
         "provider_attempt_count": 0,
         "ai_call_count": 0,
         "tickflow_request_count": 0,
