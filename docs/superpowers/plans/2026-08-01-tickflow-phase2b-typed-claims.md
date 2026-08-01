@@ -315,7 +315,7 @@ and why Python guards do not prove macOS OS-level isolation.
 Require `ISOLATION_DESIGN_READY` and
 `ISOLATION_RUNTIME_NOT_YET_VERIFIED` in sanitized output.
 
-- [ ] **Step 7: Commit protocol and isolation evidence**
+- [x] **Step 7: Commit protocol and isolation evidence**
 
 ```bash
 git add backend/app/services/phase2_ai_worker_protocol.py \
@@ -335,7 +335,7 @@ git commit -m "test: add claims validation and AI isolation protocol"
 **Interfaces:**
 - Produces final state `PHASE2B_TYPED_CLAIMS_CONTRACT_READY` and a pushed branch with a matching remote SHA.
 
-- [ ] **Step 1: Run the required focused suite**
+- [x] **Step 1: Run the required focused suite**
 
 ```bash
 cd backend
@@ -345,7 +345,7 @@ PYTHONPATH=. .venv/bin/pytest \
   tests/test_phase2_ai_worker_protocol.py -q
 ```
 
-- [ ] **Step 2: Run full backend and static verification**
+- [x] **Step 2: Run full backend and static verification**
 
 ```bash
 PYTHONPATH=. .venv/bin/pytest -q
@@ -353,13 +353,13 @@ PYTHONPATH=. .venv/bin/python -m compileall -q app scripts
 .venv/bin/ruff check app scripts --select F821
 ```
 
-- [ ] **Step 3: Run both Claims CLIs, renderer twice, legacy validator, and isolation harness**
+- [x] **Step 3: Run both Claims CLIs, renderer twice, legacy validator, and isolation harness**
 
 Require three valid fixtures, three deterministic Markdown files, zero invalid
 claims, three typed inbox files, zero typed rejected files, preserved legacy
 rejected files, and no reviewed files.
 
-- [ ] **Step 4: Recompute all immutable hashes**
+- [x] **Step 4: Recompute all immutable hashes**
 
 Require exact equality with the preflight values:
 
@@ -374,21 +374,21 @@ Also compare every historical AI sample and rejected-preview file hash listed in
 the design-phase command output. Verify historical `ai_body_sha256` fields are
 unchanged and new external-action counters are all zero.
 
-- [ ] **Step 5: Run sensitive, trading, forbidden-field, path, and temp scans**
+- [x] **Step 5: Run sensitive, trading, forbidden-field, path, and temp scans**
 
 Scan new artifacts and implementation files without treating deliberate test
 fixtures as production leaks. Ensure no transaction marker, staging directory,
 Secret, Authorization, Cookie, Session, private key, trading claim, or real
 Vault path exists in production artifacts.
 
-- [ ] **Step 6: Write the final evaluation report**
+- [x] **Step 6: Write the final evaluation report**
 
 Answer all 17 required questions, record exact allowed/forbidden counts, test
 counts, hashes, routes, zero external actions, and the honest isolation caveat.
 Set the next action to `DESIGN_ISOLATED_AI_CLAIMS_BATCH` only when every Claims
 and renderer gate passes.
 
-- [ ] **Step 7: Final verification and report commit**
+- [x] **Step 7: Final verification and report commit**
 
 Run `git diff --check`, inspect status/name-status/stat, and commit only the
 report and completed plan:
