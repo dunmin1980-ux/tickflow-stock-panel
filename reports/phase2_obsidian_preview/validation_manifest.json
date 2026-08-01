@@ -1,0 +1,46 @@
+{
+  "can_publish": false,
+  "entries": [
+    {
+      "basis_mixing_claim_count": 0,
+      "financial_fabrication_count": 0,
+      "forbidden_term_count": 0,
+      "news_fabrication_count": 0,
+      "output_markdown_sha256": "0eec90e1ad10115e21b8260a2cc82bd4243e61eea0e90250e437e8c0071ef76b",
+      "review_status": "REVIEW_NEEDS_VERIFICATION",
+      "route": "inbox",
+      "secret_hit_count": 0,
+      "symbol": "000403.SZ",
+      "unsupported_numeric_claim_count": 0
+    },
+    {
+      "basis_mixing_claim_count": 0,
+      "financial_fabrication_count": 0,
+      "forbidden_term_count": 0,
+      "news_fabrication_count": 0,
+      "output_markdown_sha256": "9aa03b97b8f0d68908977dca99438025f042d9ec065acc69a12e6d70252561af",
+      "review_status": "REVIEW_NEEDS_VERIFICATION",
+      "route": "inbox",
+      "secret_hit_count": 0,
+      "symbol": "600489.SH",
+      "unsupported_numeric_claim_count": 0
+    },
+    {
+      "basis_mixing_claim_count": 1,
+      "financial_fabrication_count": 0,
+      "forbidden_term_count": 0,
+      "news_fabrication_count": 0,
+      "output_markdown_sha256": "8211f480f1c20cd0201a23a4c1bb2e79461ba98f85708abb47ef611726c77717",
+      "review_status": "REVIEW_REJECTED",
+      "route": "rejected",
+      "secret_hit_count": 0,
+      "symbol": "300059.SZ",
+      "unsupported_numeric_claim_count": 0
+    }
+  ],
+  "inbox_count": 2,
+  "rejected_count": 1,
+  "reviewed_auto_write": false,
+  "schema_version": 1,
+  "status": "PHASE2_AI_OUTPUT_BLOCKED"
+}

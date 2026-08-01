@@ -1,0 +1,1154 @@
+{
+  "additional_ai_call_count": 0,
+  "additional_provider_attempt_count": 0,
+  "application_ai_config_changed": false,
+  "cloud_mutation_count": 0,
+  "cloud_redeploy": false,
+  "external_send_count": 0,
+  "generated_at": "2026-08-01T10:32:27+08:00",
+  "integrated_gold_enabled": false,
+  "obsidian_real_vault_write": false,
+  "offline_rematerialization": {
+    "additional_ai_call_count": 0,
+    "additional_provider_attempt_count": 0,
+    "body_hashes_verified": true,
+    "reason": "validator_mixed_language_period_boundary_fix",
+    "source_audit_sha256": "60aa85e5c7035239c498353d0b843487dd7892c6279c6b48b7196424fae21743"
+  },
+  "offline_rematerialization_count": 2,
+  "paper_trading_started": false,
+  "provider_attempt_count": 3,
+  "provider_attempt_policy": "exactly_once_no_retry",
+  "retry_count": 0,
+  "schema_version": 1,
+  "status": "PHASE2_AI_OUTPUT_BLOCKED",
+  "symbol_scope": [
+    "000403.SZ",
+    "600489.SH",
+    "300059.SZ"
+  ],
+  "symbols": [
+    {
+      "ai_body_sha256": "028d7ab8d409dc2c9b58d993d63b3e62c5a82c47a1a80941f10075abe22f4675",
+      "basis_mixing_claim_count": 0,
+      "can_publish": false,
+      "duration_ms": 147825,
+      "financial_fabrication_count": 0,
+      "forbidden_term_count": 0,
+      "input_facts_path": "reports/phase2_facts/000403SZ_facts.json",
+      "input_facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+      "model": "codex_cli_default",
+      "model_source": "isolated_codex_cli_default_configuration",
+      "name": "派林生物",
+      "news_fabrication_count": 0,
+      "output_markdown_sha256": "0eec90e1ad10115e21b8260a2cc82bd4243e61eea0e90250e437e8c0071ef76b",
+      "pre_rematerialization_output_markdown_sha256": "b3307f02406c0314186e41da69ff16f68f86aba720207a4736d53e791f3ca2be",
+      "preview_route": "inbox",
+      "prompt_sha256": "674ab09eb7781b775ab748ad9d31927a582697596bec835ded0c3e841a7cb0dd",
+      "provider": "codex_cli",
+      "provider_attempt_count": 1,
+      "retry_count": 0,
+      "review_status": "REVIEW_NEEDS_VERIFICATION",
+      "secret_hit_count": 0,
+      "symbol": "000403.SZ",
+      "unsupported_numeric_claim_count": 0,
+      "validation": {
+        "basis_mixing_claim_count": 0,
+        "can_publish": false,
+        "errors": [],
+        "financial_fabrication_count": 0,
+        "forbidden_terms": [],
+        "matched_numeric_claims": [
+          {
+            "display_transform": "identity",
+            "facts_pointer": "/trade_date",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "literal": "2026-07-31"
+          },
+          {
+            "display_transform": "identity",
+            "facts_pointer": "/symbol",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "literal": "000403.SZ"
+          },
+          {
+            "display_transform": "localized_minute_period",
+            "facts_pointer": "/minute_1m/period",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "literal": "1分钟"
+          },
+          {
+            "display_transform": "localized_minute_period",
+            "facts_pointer": "/minute_30m/period",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "literal": "30分钟"
+          },
+          {
+            "display_transform": "localized_minute_period",
+            "facts_pointer": "/minute_1m/period",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "literal": "1分钟"
+          },
+          {
+            "display_transform": "localized_minute_period",
+            "facts_pointer": "/minute_30m/period",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "literal": "30分钟"
+          },
+          {
+            "display_transform": "localized_minute_period",
+            "facts_pointer": "/minute_30m/period",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "literal": "30分钟"
+          },
+          {
+            "display_transform": "localized_minute_period",
+            "facts_pointer": "/minute_30m/period",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "literal": "30分钟"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/open",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "daily_open",
+            "literal": "10.36",
+            "price_basis": "raw",
+            "source_value": 10.36,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/close",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "daily_close",
+            "literal": "10.43",
+            "price_basis": "raw",
+            "source_value": 10.43,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/low",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "daily_low",
+            "literal": "10.25",
+            "price_basis": "raw",
+            "source_value": 10.25,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/high",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "daily_high",
+            "literal": "10.47",
+            "price_basis": "raw",
+            "source_value": 10.47,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/ma5/value",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "ma5",
+            "literal": "10.1360",
+            "price_basis": "qfq",
+            "source_value": 10.136,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/ma10/value",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "ma10",
+            "literal": "9.8660",
+            "price_basis": "qfq",
+            "source_value": 9.866,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/boll_middle/value",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "boll_middle",
+            "literal": "9.6425",
+            "price_basis": "qfq",
+            "source_value": 9.6425,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/ma20/value",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "ma20",
+            "literal": "9.6425",
+            "price_basis": "qfq",
+            "source_value": 9.6425,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/ma60/value",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "ma60",
+            "literal": "10.6830",
+            "price_basis": "qfq",
+            "source_value": 10.683,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/boll_upper/value",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "boll_upper",
+            "literal": "10.5011",
+            "price_basis": "qfq",
+            "source_value": 10.501063672039606,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/boll_lower/value",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "boll_lower",
+            "literal": "8.7839",
+            "price_basis": "qfq",
+            "source_value": 8.783936327960394,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "integer",
+            "facts_pointer": "/minute_1m/bar_count",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "minute_1m_bar_count",
+            "literal": "241",
+            "price_basis": "none",
+            "source_value": 241,
+            "unit": "bars"
+          },
+          {
+            "display_transform": "integer",
+            "facts_pointer": "/minute_30m/bar_count",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "minute_30m_bar_count",
+            "literal": "8",
+            "price_basis": "none",
+            "source_value": 8,
+            "unit": "bars"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/volume_ratio/value",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "volume_ratio",
+            "literal": "0.8720",
+            "price_basis": "not_applicable",
+            "source_value": 0.8720365355858223,
+            "unit": "dimensionless"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/atr14/value",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "atr14",
+            "literal": "0.4296",
+            "price_basis": "qfq",
+            "source_value": 0.429555321578577,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/rsi14/value",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "rsi14",
+            "literal": "58.5995",
+            "price_basis": "qfq",
+            "source_value": 58.59950492944132,
+            "unit": "dimensionless"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/rsi6/value",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "rsi6",
+            "literal": "76.2183",
+            "price_basis": "qfq",
+            "source_value": 76.21830812329453,
+            "unit": "dimensionless"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/macd_dif/value",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "macd_dif",
+            "literal": "-0.0075",
+            "price_basis": "qfq",
+            "source_value": -0.007465131240531164,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/macd_dea/value",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "macd_dea",
+            "literal": "-0.1866",
+            "price_basis": "qfq",
+            "source_value": -0.18656732410368454,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/macd_hist/value",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "macd_hist",
+            "literal": "0.3582",
+            "price_basis": "qfq",
+            "source_value": 0.35820438572630675,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/open",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "daily_open",
+            "literal": "10.36",
+            "price_basis": "raw",
+            "source_value": 10.36,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/close",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "daily_close",
+            "literal": "10.43",
+            "price_basis": "raw",
+            "source_value": 10.43,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/low",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "daily_low",
+            "literal": "10.25",
+            "price_basis": "raw",
+            "source_value": 10.25,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/high",
+            "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+            "label": "daily_high",
+            "literal": "10.47",
+            "price_basis": "raw",
+            "source_value": 10.47,
+            "unit": "raw_price"
+          }
+        ],
+        "needs_verification": [
+          "financial_data_unavailable",
+          "news_data_unavailable",
+          "key_levels_not_implemented",
+          "intraday_batch_entitlement",
+          "first_30m_bucket_includes_09_30",
+          "volume_unit",
+          "amount_unit"
+        ],
+        "news_fabrication_count": 0,
+        "secret_hits": [],
+        "status": "REVIEW_NEEDS_VERIFICATION",
+        "unsupported_numeric_claims": []
+      }
+    },
+    {
+      "ai_body_sha256": "5f2901b36c721dc99db06da28d26c2efe3ff14e2b11068eab375860b3da97890",
+      "basis_mixing_claim_count": 0,
+      "can_publish": false,
+      "duration_ms": 155337,
+      "financial_fabrication_count": 0,
+      "forbidden_term_count": 0,
+      "input_facts_path": "reports/phase2_facts/600489SH_facts.json",
+      "input_facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+      "model": "codex_cli_default",
+      "model_source": "isolated_codex_cli_default_configuration",
+      "name": "中金黄金",
+      "news_fabrication_count": 0,
+      "output_markdown_sha256": "9aa03b97b8f0d68908977dca99438025f042d9ec065acc69a12e6d70252561af",
+      "pre_rematerialization_output_markdown_sha256": "8de882f2a32ba48b8c049759bf5e7e9836e44c8b05b62d697b6fe378b6a88baa",
+      "preview_route": "inbox",
+      "prompt_sha256": "cf09520dc94ef4dc035d967d19c7dccb9ccfd9837561f64a6df2465c56b53dc1",
+      "provider": "codex_cli",
+      "provider_attempt_count": 1,
+      "retry_count": 0,
+      "review_status": "REVIEW_NEEDS_VERIFICATION",
+      "secret_hit_count": 0,
+      "symbol": "600489.SH",
+      "unsupported_numeric_claim_count": 0,
+      "validation": {
+        "basis_mixing_claim_count": 0,
+        "can_publish": false,
+        "errors": [],
+        "financial_fabrication_count": 0,
+        "forbidden_terms": [],
+        "matched_numeric_claims": [
+          {
+            "display_transform": "identity",
+            "facts_pointer": "/trade_date",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "literal": "2026-07-31"
+          },
+          {
+            "display_transform": "identity",
+            "facts_pointer": "/symbol",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "literal": "600489.SH"
+          },
+          {
+            "display_transform": "localized_minute_period",
+            "facts_pointer": "/minute_1m/period",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "literal": "1 分钟"
+          },
+          {
+            "display_transform": "localized_minute_period",
+            "facts_pointer": "/minute_30m/period",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "literal": "30 分钟"
+          },
+          {
+            "display_transform": "localized_minute_period",
+            "facts_pointer": "/minute_30m/period",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "literal": "30 分钟"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/low",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "daily_low",
+            "literal": "22.14",
+            "price_basis": "raw",
+            "source_value": 22.14,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/high",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "daily_high",
+            "literal": "23.28",
+            "price_basis": "raw",
+            "source_value": 23.28,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/close",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "daily_close",
+            "literal": "23.01",
+            "price_basis": "raw",
+            "source_value": 23.01,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/open",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "daily_open",
+            "literal": "22.18",
+            "price_basis": "raw",
+            "source_value": 22.18,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/high",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "daily_high",
+            "literal": "23.28",
+            "price_basis": "raw",
+            "source_value": 23.28,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/low",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "daily_low",
+            "literal": "22.14",
+            "price_basis": "raw",
+            "source_value": 22.14,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/close",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "daily_close",
+            "literal": "23.01",
+            "price_basis": "raw",
+            "source_value": 23.01,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/ma5/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "ma5",
+            "literal": "21.9060",
+            "price_basis": "qfq",
+            "source_value": 21.906,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/ma10/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "ma10",
+            "literal": "21.5760",
+            "price_basis": "qfq",
+            "source_value": 21.576,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/boll_middle/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "boll_middle",
+            "literal": "20.7795",
+            "price_basis": "qfq",
+            "source_value": 20.779500000000002,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/ma20/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "ma20",
+            "literal": "20.7795",
+            "price_basis": "qfq",
+            "source_value": 20.779500000000002,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/ma60/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "ma60",
+            "literal": "21.8228",
+            "price_basis": "qfq",
+            "source_value": 21.82283333333333,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/boll_lower/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "boll_lower",
+            "literal": "18.5968",
+            "price_basis": "qfq",
+            "source_value": 18.596846134922707,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/boll_upper/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "boll_upper",
+            "literal": "22.9622",
+            "price_basis": "qfq",
+            "source_value": 22.962153865077298,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/macd_dif/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "macd_dif",
+            "literal": "0.3650",
+            "price_basis": "qfq",
+            "source_value": 0.36503679211833884,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/macd_dea/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "macd_dea",
+            "literal": "0.0426",
+            "price_basis": "qfq",
+            "source_value": 0.042592094253742524,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/macd_hist/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "macd_hist",
+            "literal": "0.6449",
+            "price_basis": "qfq",
+            "source_value": 0.6448893957291926,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/rsi6/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "rsi6",
+            "literal": "74.9574",
+            "price_basis": "qfq",
+            "source_value": 74.95739861741134,
+            "unit": "dimensionless"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/rsi14/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "rsi14",
+            "literal": "62.3587",
+            "price_basis": "qfq",
+            "source_value": 62.358731346228076,
+            "unit": "dimensionless"
+          },
+          {
+            "display_transform": "integer",
+            "facts_pointer": "/minute_1m/bar_count",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "minute_1m_bar_count",
+            "literal": "241",
+            "price_basis": "none",
+            "source_value": 241,
+            "unit": "bars"
+          },
+          {
+            "display_transform": "integer",
+            "facts_pointer": "/minute_30m/bar_count",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "minute_30m_bar_count",
+            "literal": "8",
+            "price_basis": "none",
+            "source_value": 8,
+            "unit": "bars"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/volume_ratio/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "volume_ratio",
+            "literal": "1.3805",
+            "price_basis": "not_applicable",
+            "source_value": 1.3805218720918222,
+            "unit": "dimensionless"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/low",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "daily_low",
+            "literal": "22.14",
+            "price_basis": "raw",
+            "source_value": 22.14,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/high",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "daily_high",
+            "literal": "23.28",
+            "price_basis": "raw",
+            "source_value": 23.28,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/close",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "daily_close",
+            "literal": "23.01",
+            "price_basis": "raw",
+            "source_value": 23.01,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/open",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "daily_open",
+            "literal": "22.18",
+            "price_basis": "raw",
+            "source_value": 22.18,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/boll_lower/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "boll_lower",
+            "literal": "18.5968",
+            "price_basis": "qfq",
+            "source_value": 18.596846134922707,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/boll_middle/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "boll_middle",
+            "literal": "20.7795",
+            "price_basis": "qfq",
+            "source_value": 20.779500000000002,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/ma20/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "ma20",
+            "literal": "20.7795",
+            "price_basis": "qfq",
+            "source_value": 20.779500000000002,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/boll_upper/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "boll_upper",
+            "literal": "22.9622",
+            "price_basis": "qfq",
+            "source_value": 22.962153865077298,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/atr14/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "atr14",
+            "literal": "1.1134",
+            "price_basis": "qfq",
+            "source_value": 1.1134470901367544,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/low",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "daily_low",
+            "literal": "22.14",
+            "price_basis": "raw",
+            "source_value": 22.14,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/open",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "daily_open",
+            "literal": "22.18",
+            "price_basis": "raw",
+            "source_value": 22.18,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/close",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "daily_close",
+            "literal": "23.01",
+            "price_basis": "raw",
+            "source_value": 23.01,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/high",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "daily_high",
+            "literal": "23.28",
+            "price_basis": "raw",
+            "source_value": 23.28,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/rsi6/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "rsi6",
+            "literal": "74.9574",
+            "price_basis": "qfq",
+            "source_value": 74.95739861741134,
+            "unit": "dimensionless"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/rsi14/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "rsi14",
+            "literal": "62.3587",
+            "price_basis": "qfq",
+            "source_value": 62.358731346228076,
+            "unit": "dimensionless"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/volume_ratio/value",
+            "facts_sha256": "2372a4aef60c340465d5492385a52785e8f6c02407376cac0821eb5a6f6c9409",
+            "label": "volume_ratio",
+            "literal": "1.3805",
+            "price_basis": "not_applicable",
+            "source_value": 1.3805218720918222,
+            "unit": "dimensionless"
+          }
+        ],
+        "needs_verification": [
+          "financial_data_unavailable",
+          "news_data_unavailable",
+          "key_levels_not_implemented",
+          "intraday_batch_entitlement",
+          "first_30m_bucket_includes_09_30",
+          "volume_unit",
+          "amount_unit"
+        ],
+        "news_fabrication_count": 0,
+        "secret_hits": [],
+        "status": "REVIEW_NEEDS_VERIFICATION",
+        "unsupported_numeric_claims": []
+      }
+    },
+    {
+      "ai_body_sha256": "acd1c28a0774cfadd42cfd3196eacc5385c9f19ee43618193c95d21050abd98b",
+      "basis_mixing_claim_count": 1,
+      "can_publish": false,
+      "duration_ms": 140105,
+      "financial_fabrication_count": 0,
+      "forbidden_term_count": 0,
+      "input_facts_path": "reports/phase2_facts/300059SZ_facts.json",
+      "input_facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+      "model": "codex_cli_default",
+      "model_source": "isolated_codex_cli_default_configuration",
+      "name": "东方财富",
+      "news_fabrication_count": 0,
+      "output_markdown_sha256": "8211f480f1c20cd0201a23a4c1bb2e79461ba98f85708abb47ef611726c77717",
+      "pre_rematerialization_output_markdown_sha256": "9a62cbd48600744277c43d1bbbc7f6cee76e323fe43858ee90522558af97b2a7",
+      "preview_route": "rejected",
+      "prompt_sha256": "3569eec52f28b82021e474061d83fb4488dec705a5adcfe3254e4790115e1a5c",
+      "provider": "codex_cli",
+      "provider_attempt_count": 1,
+      "retry_count": 0,
+      "review_status": "REVIEW_REJECTED",
+      "secret_hit_count": 0,
+      "symbol": "300059.SZ",
+      "unsupported_numeric_claim_count": 0,
+      "validation": {
+        "basis_mixing_claim_count": 1,
+        "can_publish": false,
+        "errors": [
+          "raw_qfq_comparison_detected"
+        ],
+        "financial_fabrication_count": 0,
+        "forbidden_terms": [],
+        "matched_numeric_claims": [
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/open",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "daily_open",
+            "literal": "19.98",
+            "price_basis": "raw",
+            "source_value": 19.98,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/high",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "daily_high",
+            "literal": "20.52",
+            "price_basis": "raw",
+            "source_value": 20.52,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/low",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "daily_low",
+            "literal": "19.91",
+            "price_basis": "raw",
+            "source_value": 19.91,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_2_decimal",
+            "facts_pointer": "/daily/close",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "daily_close",
+            "literal": "20.17",
+            "price_basis": "raw",
+            "source_value": 20.17,
+            "unit": "raw_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/ma5/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "ma5",
+            "literal": "19.8260",
+            "price_basis": "qfq",
+            "source_value": 19.826,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/ma10/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "ma10",
+            "literal": "19.9360",
+            "price_basis": "qfq",
+            "source_value": 19.936,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/boll_middle/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "boll_middle",
+            "literal": "20.0420",
+            "price_basis": "qfq",
+            "source_value": 20.042,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/ma20/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "ma20",
+            "literal": "20.0420",
+            "price_basis": "qfq",
+            "source_value": 20.042,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/ma60/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "ma60",
+            "literal": "19.7827",
+            "price_basis": "qfq",
+            "source_value": 19.782666666666668,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/boll_lower/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "boll_lower",
+            "literal": "19.2175",
+            "price_basis": "qfq",
+            "source_value": 19.217491214818384,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/boll_upper/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "boll_upper",
+            "literal": "20.8665",
+            "price_basis": "qfq",
+            "source_value": 20.86650878518162,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/macd_dif/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "macd_dif",
+            "literal": "-0.0137",
+            "price_basis": "qfq",
+            "source_value": -0.013730564457485883,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/macd_dea/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "macd_dea",
+            "literal": "0.0122",
+            "price_basis": "qfq",
+            "source_value": 0.012188214888996223,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/macd_hist/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "macd_hist",
+            "literal": "-0.0518",
+            "price_basis": "qfq",
+            "source_value": -0.05183755869296421,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/rsi6/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "rsi6",
+            "literal": "57.7703",
+            "price_basis": "qfq",
+            "source_value": 57.77034061172677,
+            "unit": "dimensionless"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/rsi14/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "rsi14",
+            "literal": "52.2831",
+            "price_basis": "qfq",
+            "source_value": 52.28308759960673,
+            "unit": "dimensionless"
+          },
+          {
+            "display_transform": "integer",
+            "facts_pointer": "/minute_1m/bar_count",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "minute_1m_bar_count",
+            "literal": "241",
+            "price_basis": "none",
+            "source_value": 241,
+            "unit": "bars"
+          },
+          {
+            "display_transform": "integer",
+            "facts_pointer": "/minute_30m/bar_count",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "minute_30m_bar_count",
+            "literal": "8",
+            "price_basis": "none",
+            "source_value": 8,
+            "unit": "bars"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/volume_ratio/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "volume_ratio",
+            "literal": "1.3376",
+            "price_basis": "not_applicable",
+            "source_value": 1.3376076287424494,
+            "unit": "dimensionless"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/boll_lower/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "boll_lower",
+            "literal": "19.2175",
+            "price_basis": "qfq",
+            "source_value": 19.217491214818384,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/boll_middle/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "boll_middle",
+            "literal": "20.0420",
+            "price_basis": "qfq",
+            "source_value": 20.042,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/ma20/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "ma20",
+            "literal": "20.0420",
+            "price_basis": "qfq",
+            "source_value": 20.042,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/boll_upper/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "boll_upper",
+            "literal": "20.8665",
+            "price_basis": "qfq",
+            "source_value": 20.86650878518162,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/ma5/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "ma5",
+            "literal": "19.8260",
+            "price_basis": "qfq",
+            "source_value": 19.826,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/ma10/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "ma10",
+            "literal": "19.9360",
+            "price_basis": "qfq",
+            "source_value": 19.936,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/ma60/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "ma60",
+            "literal": "19.7827",
+            "price_basis": "qfq",
+            "source_value": 19.782666666666668,
+            "unit": "qfq_price"
+          },
+          {
+            "display_transform": "integer",
+            "facts_pointer": "/adjustment_factors/factor_count",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "adjustment_factor_count",
+            "literal": "17",
+            "price_basis": "qfq",
+            "source_value": 17,
+            "unit": "factors"
+          },
+          {
+            "display_transform": "fixed_4_decimal",
+            "facts_pointer": "/indicators/volume_ratio/value",
+            "facts_sha256": "696ba210937c6ca5432c39920eebf1ca09ce8308fea3a7a94e86ab698bcad5af",
+            "label": "volume_ratio",
+            "literal": "1.3376",
+            "price_basis": "not_applicable",
+            "source_value": 1.3376076287424494,
+            "unit": "dimensionless"
+          }
+        ],
+        "needs_verification": [
+          "financial_data_unavailable",
+          "news_data_unavailable",
+          "key_levels_not_implemented",
+          "intraday_batch_entitlement",
+          "first_30m_bucket_includes_09_30",
+          "volume_unit",
+          "amount_unit"
+        ],
+        "news_fabrication_count": 0,
+        "secret_hits": [],
+        "status": "REVIEW_REJECTED",
+        "unsupported_numeric_claims": []
+      }
+    }
+  ],
+  "tickflow_api_request_count": 0
+}
