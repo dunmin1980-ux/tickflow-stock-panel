@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import http.client
 import json
 import math
 import os
 import re
+import ssl
 import stat
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +30,7 @@ TIMEOUT_SECONDS = 60
 CONTRACT_PATH = Path("/proxy/responses-contract.json")
 AUTH_PATH = Path("/run/phase2/provider-auth")
 RECEIPT_PATH = Path("/output/receipt.json")
+AUTH_MAXIMUM_BYTES = 16_384
 
 _EXPECTED_CONTRACT_SHA256 = (
     "73c653cde9060964d490a1e4727c51ec7506b74e45af119b6bf56baf6b87413e"
@@ -183,6 +187,36 @@ _SCHEMA_KEYWORDS = {
     "title",
 }
 _JSON_TYPES = {"object", "array", "string", "integer", "number", "boolean", "null"}
+_RECEIPT_FIELDS = {
+    "receipt_schema_version",
+    "method_allowed",
+    "path_allowed",
+    "auth_present",
+    "tls_verification",
+    "redirect_followed",
+    "provider_attempt_count",
+    "retry_count",
+    "provider_http_status",
+    "response_category",
+    "response_size",
+}
+_LOCAL_STATUS = {
+    "METHOD_BLOCKED": 405,
+    "PATH_BLOCKED": 404,
+    "REQUEST_SIZE_BLOCKED": 413,
+    "REQUEST_SCHEMA_BLOCKED": 400,
+    "AUTH_BLOCKED": 503,
+    "TIMEOUT": 504,
+    "RATE_LIMIT_REJECTED": 429,
+    "TLS_BLOCKED": 502,
+    "REDIRECT_REJECTED": 502,
+    "UPSTREAM_REJECTED": 502,
+    "RESPONSE_SIZE_BLOCKED": 502,
+    "RESPONSE_JSON_BLOCKED": 502,
+    "RESPONSE_SCHEMA_BLOCKED": 502,
+    "MODEL_IDENTITY_BLOCKED": 502,
+    "OUTPUT_EXTRACTION_BLOCKED": 502,
+}
 
 
 class ProxyError(Exception):
@@ -796,3 +830,474 @@ def extract_candidate(
         validated_envelope = validate_relay_envelope(envelope, contract)
         _validate_candidate_bindings(candidate, validated_envelope)
     return candidate
+
+
+ConnectionFactory = Callable[
+    [str, int, int, ssl.SSLContext],
+    http.client.HTTPSConnection,
+]
+ProviderRequester = Callable[[bytes, str], tuple[int, bytes]]
+
+
+def create_tls_context() -> ssl.SSLContext:
+    """Create the fixed verified TLS context used by the sole upstream."""
+    context = ssl.create_default_context(
+        cafile="/etc/ssl/certs/ca-certificates.crt"
+    )
+    context.check_hostname = True
+    context.verify_mode = ssl.CERT_REQUIRED
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    return context
+
+
+def default_connection_factory(
+    host: str,
+    port: int,
+    timeout: int,
+    context: ssl.SSLContext,
+) -> http.client.HTTPSConnection:
+    return http.client.HTTPSConnection(
+        host,
+        port,
+        timeout=timeout,
+        context=context,
+    )
+
+
+def read_auth_file(path: str = "/run/phase2/provider-auth") -> str:
+    """Read one fixed, no-follow mode-0600 credential file without metadata output."""
+    try:
+        descriptor = os.open(Path(path), os.O_RDONLY | _NOFOLLOW)
+    except OSError as exc:
+        raise ProxyError("AUTH_BLOCKED") from exc
+    try:
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+            or not 0 < metadata.st_size <= AUTH_MAXIMUM_BYTES
+        ):
+            raise ProxyError("AUTH_BLOCKED")
+        raw = os.read(descriptor, AUTH_MAXIMUM_BYTES + 1)
+        if len(raw) != metadata.st_size or len(raw) > AUTH_MAXIMUM_BYTES:
+            raise ProxyError("AUTH_BLOCKED")
+    except OSError as exc:
+        raise ProxyError("AUTH_BLOCKED") from exc
+    finally:
+        os.close(descriptor)
+    try:
+        value = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ProxyError("AUTH_BLOCKED") from exc
+    if (
+        not value
+        or value != value.strip()
+        or "\x00" in value
+        or "\r" in value
+        or "\n" in value
+    ):
+        raise ProxyError("AUTH_BLOCKED")
+    return value
+
+
+def perform_provider_request(
+    body: bytes,
+    auth_value: str,
+    *,
+    connection_factory: ConnectionFactory = default_connection_factory,
+) -> tuple[int, bytes]:
+    """Perform exactly one verified HTTPS request with no redirect or retry."""
+    if not isinstance(body, bytes) or not 0 < len(body) <= MAXIMUM_BYTES:
+        raise ProxyError("REQUEST_SIZE_BLOCKED")
+    if (
+        not isinstance(auth_value, str)
+        or not auth_value
+        or auth_value != auth_value.strip()
+        or any(character in auth_value for character in ("\x00", "\r", "\n"))
+    ):
+        raise ProxyError("AUTH_BLOCKED")
+    connection: http.client.HTTPSConnection | None = None
+    try:
+        context = create_tls_context()
+        connection = connection_factory(
+            UPSTREAM_HOST,
+            UPSTREAM_PORT,
+            TIMEOUT_SECONDS,
+            context,
+        )
+        connection.request(
+            ALLOWED_METHOD,
+            UPSTREAM_PATH,
+            body=body,
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {auth_value}",
+            },
+        )
+        response = connection.getresponse()
+        status_code = response.status
+        if 300 <= status_code < 400:
+            raise ProxyError(
+                "REDIRECT_REJECTED",
+                provider_http_status=status_code,
+                provider_attempt_count=1,
+            )
+        if status_code == 429:
+            raise ProxyError(
+                "RATE_LIMIT_REJECTED",
+                provider_http_status=status_code,
+                provider_attempt_count=1,
+            )
+        if not 200 <= status_code < 300:
+            raise ProxyError(
+                "UPSTREAM_REJECTED",
+                provider_http_status=status_code,
+                provider_attempt_count=1,
+            )
+        content_type = response.getheader("Content-Type")
+        if (
+            not isinstance(content_type, str)
+            or content_type.split(";", 1)[0].strip().lower() != "application/json"
+        ):
+            raise ProxyError(
+                "UPSTREAM_REJECTED",
+                provider_http_status=status_code,
+                provider_attempt_count=1,
+            )
+        declared_size = response.getheader("Content-Length")
+        if declared_size is not None:
+            try:
+                parsed_size = int(declared_size)
+            except ValueError as exc:
+                raise ProxyError(
+                    "RESPONSE_SIZE_BLOCKED",
+                    provider_http_status=status_code,
+                    provider_attempt_count=1,
+                ) from exc
+            if parsed_size < 0 or parsed_size > MAXIMUM_BYTES:
+                raise ProxyError(
+                    "RESPONSE_SIZE_BLOCKED",
+                    provider_http_status=status_code,
+                    provider_attempt_count=1,
+                )
+        raw = response.read(MAXIMUM_BYTES + 1)
+        if len(raw) > MAXIMUM_BYTES:
+            raise ProxyError(
+                "RESPONSE_SIZE_BLOCKED",
+                provider_http_status=status_code,
+                provider_attempt_count=1,
+                response_size=len(raw),
+            )
+        return status_code, raw
+    except ProxyError:
+        raise
+    except TimeoutError as exc:
+        raise ProxyError("TIMEOUT", provider_attempt_count=1) from exc
+    except (ssl.SSLError, ssl.CertificateError) as exc:
+        raise ProxyError("TLS_BLOCKED", provider_attempt_count=1) from exc
+    except (OSError, http.client.HTTPException) as exc:
+        raise ProxyError("UPSTREAM_REJECTED", provider_attempt_count=1) from exc
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+def build_receipt(
+    *,
+    response_category: str,
+    method_allowed: bool = False,
+    path_allowed: bool = False,
+    auth_present: bool = False,
+    provider_attempt_count: int = 0,
+    provider_http_status: int | None = None,
+    response_size: int | None = None,
+) -> dict[str, Any]:
+    """Build the only persisted proxy evidence shape."""
+    value = {
+        "receipt_schema_version": 1,
+        "method_allowed": method_allowed,
+        "path_allowed": path_allowed,
+        "auth_present": auth_present,
+        "tls_verification": True,
+        "redirect_followed": False,
+        "provider_attempt_count": provider_attempt_count,
+        "retry_count": RETRY_COUNT,
+        "provider_http_status": provider_http_status,
+        "response_category": response_category,
+        "response_size": response_size,
+    }
+    if (
+        set(value) != _RECEIPT_FIELDS
+        or not isinstance(response_category, str)
+        or not response_category
+        or provider_attempt_count not in {0, 1}
+        or (
+            provider_http_status is not None
+            and not 100 <= provider_http_status <= 599
+        )
+        or (
+            response_size is not None
+            and not 0 <= response_size <= MAXIMUM_BYTES + 1
+        )
+    ):
+        raise ProxyError("UPSTREAM_REJECTED")
+    return value
+
+
+def write_receipt(
+    value: Mapping[str, Any],
+    path: str = "/output/receipt.json",
+) -> None:
+    """Atomically replace the contents of one existing no-follow regular file."""
+    if not isinstance(value, Mapping) or set(value) != _RECEIPT_FIELDS:
+        raise ProxyError("UPSTREAM_REJECTED")
+    try:
+        raw = _canonical_bytes(value)
+        descriptor = os.open(
+            Path(path),
+            os.O_WRONLY | os.O_TRUNC | _NOFOLLOW,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        raise ProxyError("UPSTREAM_REJECTED") from exc
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise ProxyError("UPSTREAM_REJECTED")
+        offset = 0
+        while offset < len(raw):
+            written = os.write(descriptor, raw[offset:])
+            if written <= 0:
+                raise ProxyError("UPSTREAM_REJECTED")
+            offset += written
+        os.fsync(descriptor)
+    except OSError as exc:
+        raise ProxyError("UPSTREAM_REJECTED") from exc
+    finally:
+        os.close(descriptor)
+
+
+def _error_body(category: str) -> bytes:
+    return json.dumps(
+        {"error": category},
+        ensure_ascii=True,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("ascii")
+
+
+def _local_status(category: str) -> int:
+    return _LOCAL_STATUS.get(category, 502)
+
+
+def process_local_request(
+    *,
+    method: str,
+    path: str,
+    content_length: str | None,
+    body: bytes,
+    contract: Mapping[str, Any],
+    auth_path: str = "/run/phase2/provider-auth",
+    receipt_path: str = "/output/receipt.json",
+    provider_requester: ProviderRequester = perform_provider_request,
+) -> tuple[int, bytes, dict[str, Any]]:
+    """Apply every local gate and produce one sanitized receipt."""
+    method_allowed = method == ALLOWED_METHOD
+    path_allowed = path == ALLOWED_PATH
+    auth_present = False
+    provider_attempted = False
+    provider_status: int | None = None
+    response_size: int | None = None
+    try:
+        if not method_allowed:
+            raise ProxyError("METHOD_BLOCKED")
+        if not path_allowed:
+            raise ProxyError("PATH_BLOCKED")
+        try:
+            declared_size = int(content_length) if content_length is not None else -1
+        except (TypeError, ValueError) as exc:
+            raise ProxyError("REQUEST_SIZE_BLOCKED") from exc
+        if (
+            declared_size <= 0
+            or declared_size > MAXIMUM_BYTES
+            or not isinstance(body, bytes)
+            or len(body) != declared_size
+        ):
+            raise ProxyError("REQUEST_SIZE_BLOCKED")
+        envelope = strict_object(body, "REQUEST_SCHEMA_BLOCKED")
+        provider_payload = build_provider_request(envelope, contract)
+        provider_body = _canonical_bytes(provider_payload)
+        if len(provider_body) > MAXIMUM_BYTES:
+            raise ProxyError("REQUEST_SIZE_BLOCKED")
+        auth_value = read_auth_file(auth_path)
+        auth_present = True
+        provider_attempted = True
+        provider_status, raw_response = provider_requester(provider_body, auth_value)
+        if (
+            isinstance(provider_status, bool)
+            or not isinstance(provider_status, int)
+            or not 100 <= provider_status <= 599
+        ):
+            raise ProxyError("UPSTREAM_REJECTED", provider_attempt_count=1)
+        if 300 <= provider_status < 400:
+            raise ProxyError(
+                "REDIRECT_REJECTED",
+                provider_http_status=provider_status,
+                provider_attempt_count=1,
+            )
+        if provider_status == 429:
+            raise ProxyError(
+                "RATE_LIMIT_REJECTED",
+                provider_http_status=provider_status,
+                provider_attempt_count=1,
+            )
+        if not 200 <= provider_status < 300:
+            raise ProxyError(
+                "UPSTREAM_REJECTED",
+                provider_http_status=provider_status,
+                provider_attempt_count=1,
+            )
+        if not isinstance(raw_response, bytes):
+            raise ProxyError(
+                "RESPONSE_JSON_BLOCKED",
+                provider_http_status=provider_status,
+                provider_attempt_count=1,
+            )
+        response_size = len(raw_response)
+        if response_size > MAXIMUM_BYTES:
+            raise ProxyError(
+                "RESPONSE_SIZE_BLOCKED",
+                provider_http_status=provider_status,
+                provider_attempt_count=1,
+                response_size=min(response_size, MAXIMUM_BYTES + 1),
+            )
+        response = strict_object(raw_response, "RESPONSE_JSON_BLOCKED")
+        candidate = extract_candidate(response, contract, envelope)
+        relay_response = {
+            "protocol_version": envelope["request"]["protocol_version"],
+            "request_id": envelope["request"]["request_id"],
+            "symbol": envelope["request"]["symbol"],
+            "projection_sha256": envelope["request"]["projection_sha256"],
+            "claims_candidate": candidate,
+        }
+        response_body = _canonical_bytes(relay_response)
+        receipt = build_receipt(
+            method_allowed=True,
+            path_allowed=True,
+            auth_present=True,
+            provider_attempt_count=1,
+            provider_http_status=provider_status,
+            response_category="FORWARDED",
+            response_size=response_size,
+        )
+        write_receipt(receipt, receipt_path)
+        return 200, response_body, receipt
+    except ProxyError as exc:
+        attempts = max(
+            int(provider_attempted),
+            exc.provider_attempt_count,
+        )
+        receipt = build_receipt(
+            method_allowed=method_allowed,
+            path_allowed=path_allowed,
+            auth_present=auth_present,
+            provider_attempt_count=attempts,
+            provider_http_status=(
+                exc.provider_http_status
+                if exc.provider_http_status is not None
+                else provider_status
+            ),
+            response_category=exc.category,
+            response_size=(
+                exc.response_size
+                if exc.response_size is not None
+                else response_size
+            ),
+        )
+        write_receipt(receipt, receipt_path)
+        return _local_status(exc.category), _error_body(exc.category), receipt
+
+
+class ProxyHTTPServer(HTTPServer):
+    proxy_contract: dict[str, Any]
+
+
+class ProxyHandler(BaseHTTPRequestHandler):
+    """No-log local-only adapter endpoint for the fixed Relay request."""
+
+    server_version = "TickFlowOpenAIProxy/1"
+    sys_version = ""
+
+    def log_message(self, _format: str, *args: object) -> None:
+        del args
+
+    def _send(self, status_code: int, body: bytes) -> None:
+        self.send_response(status_code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        if body:
+            self.wfile.write(body)
+
+    def _handle(self, method: str) -> None:
+        content_length = self.headers.get("Content-Length")
+        body = b""
+        if method == ALLOWED_METHOD and self.path == ALLOWED_PATH:
+            try:
+                declared_size = int(content_length) if content_length is not None else -1
+            except (TypeError, ValueError):
+                declared_size = -1
+            if 0 < declared_size <= MAXIMUM_BYTES:
+                body = self.rfile.read(declared_size)
+        try:
+            status_code, response_body, _receipt = process_local_request(
+                method=method,
+                path=self.path,
+                content_length=content_length,
+                body=body,
+                contract=self.server.proxy_contract,
+            )
+        except ProxyError:
+            status_code = 502
+            response_body = _error_body("UPSTREAM_REJECTED")
+        self._send(status_code, response_body)
+
+    def do_POST(self) -> None:
+        self._handle("POST")
+
+    def _reject_method(self) -> None:
+        self._handle(self.command)
+
+    do_GET = _reject_method  # noqa: N815
+    do_PUT = _reject_method  # noqa: N815
+    do_DELETE = _reject_method  # noqa: N815
+    do_PATCH = _reject_method  # noqa: N815
+    do_HEAD = _reject_method  # noqa: N815
+    do_OPTIONS = _reject_method  # noqa: N815
+
+
+def create_server(
+    address: tuple[str, int] = ("0.0.0.0", 8080),
+    *,
+    contract: dict[str, Any] | None = None,
+) -> ProxyHTTPServer:
+    server = ProxyHTTPServer(address, ProxyHandler)
+    server.proxy_contract = contract if contract is not None else load_contract()
+    return server
+
+
+def main() -> int:
+    try:
+        contract = load_contract()
+        server = create_server(contract=contract)
+    except ProxyError:
+        return 2
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

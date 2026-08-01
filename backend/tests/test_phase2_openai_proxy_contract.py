@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import importlib.util
 import json
+import socket
+import ssl
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -599,3 +602,605 @@ def test_schema_validator_rejects_boolean_as_number(proxy_module: ModuleType) ->
     with pytest.raises(proxy_module.ProxyError) as raised:
         proxy_module.validate_candidate(True, {"type": "number"})
     assert raised.value.category == "RESPONSE_SCHEMA_BLOCKED"
+
+
+class _FakeHTTPSResponse:
+    def __init__(
+        self,
+        body: bytes,
+        *,
+        status: int = 200,
+        content_type: str = "application/json; charset=utf-8",
+        content_length: str | None = None,
+    ) -> None:
+        self.status = status
+        self.body = body
+        self.headers = {"Content-Type": content_type}
+        if content_length is not None:
+            self.headers["Content-Length"] = content_length
+        self.read_limits: list[int] = []
+
+    def getheader(self, name: str) -> str | None:
+        return self.headers.get(name)
+
+    def read(self, amount: int) -> bytes:
+        self.read_limits.append(amount)
+        return self.body[:amount]
+
+
+class _FakeHTTPSConnection:
+    def __init__(
+        self,
+        response: _FakeHTTPSResponse,
+        *,
+        request_error: BaseException | None = None,
+    ) -> None:
+        self.response = response
+        self.request_error = request_error
+        self.requests: list[tuple[str, str, bytes, dict[str, str]]] = []
+        self.getresponse_count = 0
+        self.close_count = 0
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        body: bytes,
+        headers: dict[str, str],
+    ) -> None:
+        self.requests.append((method, path, body, headers))
+        if self.request_error is not None:
+            raise self.request_error
+
+    def getresponse(self) -> _FakeHTTPSResponse:
+        self.getresponse_count += 1
+        return self.response
+
+    def close(self) -> None:
+        self.close_count += 1
+
+
+class _FakeConnectionFactory:
+    def __init__(self, connection: _FakeHTTPSConnection) -> None:
+        self.connection = connection
+        self.created: list[tuple[str, int, int]] = []
+        self.contexts: list[ssl.SSLContext] = []
+
+    def __call__(
+        self,
+        host: str,
+        port: int,
+        timeout: int,
+        context: ssl.SSLContext,
+    ) -> _FakeHTTPSConnection:
+        self.created.append((host, port, timeout))
+        self.contexts.append(context)
+        return self.connection
+
+
+def _provider_response_bytes(candidate: dict[str, Any]) -> bytes:
+    return json.dumps(
+        _responses_fixture(candidate),
+        ensure_ascii=False,
+        allow_nan=False,
+        sort_keys=True,
+    ).encode("utf-8")
+
+
+def _relay_body(envelope: dict[str, Any]) -> bytes:
+    return (
+        json.dumps(
+            envelope,
+            ensure_ascii=False,
+            allow_nan=False,
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+def test_transport_uses_one_verified_https_request(
+    proxy_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response_body = b'{"status":"synthetic"}'
+    response = _FakeHTTPSResponse(response_body)
+    connection = _FakeHTTPSConnection(response)
+    factory = _FakeConnectionFactory(connection)
+    tls_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    monkeypatch.setattr(proxy_module, "create_tls_context", lambda: tls_context)
+    monkeypatch.setattr(
+        socket,
+        "socket",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("real socket forbidden")
+        ),
+    )
+    valid_body = b'{"model":"gpt-5.6-terra"}'
+
+    status, raw = proxy_module.perform_provider_request(
+        valid_body,
+        "synthetic-value",
+        connection_factory=factory,
+    )
+
+    assert status == 200
+    assert raw == response_body
+    assert factory.created == [("api.openai.com", 443, 60)]
+    assert factory.contexts == [tls_context]
+    assert connection.requests == [
+        (
+            "POST",
+            "/v1/responses",
+            valid_body,
+            {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Authorization": "Bearer synthetic-value",
+            },
+        )
+    ]
+    assert connection.getresponse_count == 1
+    assert connection.close_count == 1
+    assert response.read_limits == [proxy_module.MAXIMUM_BYTES + 1]
+
+
+def test_tls_context_requires_ca_hostname_and_tls12(
+    proxy_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    calls: list[str | None] = []
+
+    def fake_default_context(*, cafile: str | None = None) -> ssl.SSLContext:
+        calls.append(cafile)
+        return context
+
+    monkeypatch.setattr(ssl, "create_default_context", fake_default_context)
+
+    result = proxy_module.create_tls_context()
+
+    assert result is context
+    assert calls == ["/etc/ssl/certs/ca-certificates.crt"]
+    assert result.check_hostname is True
+    assert result.verify_mode == ssl.CERT_REQUIRED
+    assert result.minimum_version >= ssl.TLSVersion.TLSv1_2
+
+
+def test_read_auth_file_accepts_only_regular_mode_0600(
+    proxy_module: ModuleType,
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "provider-auth"
+    path.write_text("synthetic-value", encoding="utf-8")
+    path.chmod(0o600)
+
+    assert proxy_module.read_auth_file(str(path)) == "synthetic-value"
+
+
+@pytest.mark.parametrize(
+    ("case", "content"),
+    [
+        ("missing", None),
+        ("empty", b""),
+        ("nul", b"synthetic\x00value"),
+        ("cr", b"synthetic\rvalue"),
+        ("lf", b"synthetic\nvalue"),
+        ("leading_space", b" synthetic"),
+        ("trailing_space", b"synthetic "),
+        ("oversized", b"x" * 16_385),
+        ("wrong_mode", b"synthetic"),
+        ("directory", b"directory"),
+        ("symlink", b"synthetic"),
+    ],
+)
+def test_read_auth_file_rejects_unsafe_inputs(
+    case: str,
+    content: bytes | None,
+    proxy_module: ModuleType,
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "provider-auth"
+    if case == "directory":
+        path.mkdir()
+    elif case == "symlink":
+        target = tmp_path / "target"
+        target.write_bytes(content or b"")
+        target.chmod(0o600)
+        path.symlink_to(target)
+    elif case != "missing":
+        path.write_bytes(content or b"")
+        path.chmod(0o644 if case == "wrong_mode" else 0o600)
+
+    with pytest.raises(proxy_module.ProxyError) as raised:
+        proxy_module.read_auth_file(str(path))
+    assert raised.value.category == "AUTH_BLOCKED"
+    assert raised.value.provider_attempt_count == 0
+
+
+@pytest.mark.parametrize(
+    ("case", "category", "status"),
+    [
+        ("timeout", "TIMEOUT", 200),
+        ("tls", "TLS_BLOCKED", 200),
+        ("redirect_301", "REDIRECT_REJECTED", 301),
+        ("redirect_307", "REDIRECT_REJECTED", 307),
+        ("rate_limit", "RATE_LIMIT_REJECTED", 429),
+        ("server_error", "UPSTREAM_REJECTED", 500),
+        ("wrong_content_type", "UPSTREAM_REJECTED", 200),
+        ("oversized", "RESPONSE_SIZE_BLOCKED", 200),
+        ("invalid_content_length", "RESPONSE_SIZE_BLOCKED", 200),
+    ],
+)
+def test_transport_failures_are_one_attempt_and_stable(
+    case: str,
+    category: str,
+    status: int,
+    proxy_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    body = b"{}"
+    content_type = "application/json"
+    content_length: str | None = None
+    request_error: BaseException | None = None
+    if case == "timeout":
+        request_error = TimeoutError("synthetic timeout")
+    elif case == "tls":
+        request_error = ssl.SSLError("synthetic tls")
+    elif case == "wrong_content_type":
+        content_type = "text/plain"
+    elif case == "oversized":
+        body = b"x" * (proxy_module.MAXIMUM_BYTES + 1)
+    elif case == "invalid_content_length":
+        content_length = "not-an-integer"
+    response = _FakeHTTPSResponse(
+        body,
+        status=status,
+        content_type=content_type,
+        content_length=content_length,
+    )
+    connection = _FakeHTTPSConnection(response, request_error=request_error)
+    factory = _FakeConnectionFactory(connection)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    monkeypatch.setattr(proxy_module, "create_tls_context", lambda: context)
+
+    with pytest.raises(proxy_module.ProxyError) as raised:
+        proxy_module.perform_provider_request(
+            b"{}",
+            "synthetic-value",
+            connection_factory=factory,
+        )
+
+    assert raised.value.category == category
+    assert raised.value.provider_attempt_count == 1
+    assert len(factory.created) == 1
+    assert len(connection.requests) == 1
+    assert connection.getresponse_count in {0, 1}
+    assert connection.close_count == 1
+    if status in {301, 307, 429, 500}:
+        assert response.read_limits == []
+
+
+def test_process_local_request_success_returns_relay_response_and_sanitized_receipt(
+    proxy_module: ModuleType,
+    relay_envelope: dict[str, Any],
+    valid_candidate: dict[str, Any],
+    contract: dict[str, Any],
+    tmp_path: Path,
+) -> None:
+    request_body = _relay_body(relay_envelope)
+    provider_body = _provider_response_bytes(valid_candidate)
+    auth_value = "synthetic-value"
+    auth_path = tmp_path / "provider-auth"
+    auth_path.write_text(auth_value, encoding="utf-8")
+    auth_path.chmod(0o600)
+    receipt_path = tmp_path / "receipt.json"
+    receipt_path.write_text("{}\n", encoding="utf-8")
+    calls: list[tuple[bytes, str]] = []
+
+    def provider_requester(body: bytes, auth: str) -> tuple[int, bytes]:
+        calls.append((body, auth))
+        return 200, provider_body
+
+    status, response_body, receipt = proxy_module.process_local_request(
+        method="POST",
+        path="/v1/typed-claims",
+        content_length=str(len(request_body)),
+        body=request_body,
+        contract=contract,
+        auth_path=str(auth_path),
+        receipt_path=str(receipt_path),
+        provider_requester=provider_requester,
+    )
+
+    assert status == 200
+    assert len(calls) == 1
+    assert json.loads(calls[0][0]) == proxy_module.build_provider_request(
+        relay_envelope,
+        contract,
+    )
+    assert calls[0][1] == auth_value
+    assert json.loads(response_body) == {
+        "protocol_version": 1,
+        "request_id": FIXED_REQUEST_ID,
+        "symbol": "000403.SZ",
+        "projection_sha256": relay_envelope["projection"]["projection_sha256"],
+        "claims_candidate": valid_candidate,
+    }
+    assert set(receipt) == {
+        "receipt_schema_version",
+        "method_allowed",
+        "path_allowed",
+        "auth_present",
+        "tls_verification",
+        "redirect_followed",
+        "provider_attempt_count",
+        "retry_count",
+        "provider_http_status",
+        "response_category",
+        "response_size",
+    }
+    assert receipt == json.loads(receipt_path.read_bytes())
+    assert receipt["provider_attempt_count"] == 1
+    assert receipt["retry_count"] == 0
+    assert receipt["response_category"] == "FORWARDED"
+    serialized_receipt = receipt_path.read_text(encoding="utf-8")
+    assert auth_value not in serialized_receipt
+    assert request_body.decode("utf-8") not in serialized_receipt
+    assert provider_body.decode("utf-8") not in serialized_receipt
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "content_length", "body", "status", "category"),
+    [
+        ("GET", "/v1/typed-claims", None, b"", 405, "METHOD_BLOCKED"),
+        ("POST", "/blocked", None, b"", 404, "PATH_BLOCKED"),
+        ("POST", "/v1/typed-claims", None, b"", 413, "REQUEST_SIZE_BLOCKED"),
+        ("POST", "/v1/typed-claims", "invalid", b"", 413, "REQUEST_SIZE_BLOCKED"),
+        ("POST", "/v1/typed-claims", "2", b"{}x", 413, "REQUEST_SIZE_BLOCKED"),
+        ("POST", "/v1/typed-claims", "2", b"{}", 400, "REQUEST_SCHEMA_BLOCKED"),
+    ],
+)
+def test_process_local_request_gates_before_auth_or_transport(
+    method: str,
+    path: str,
+    content_length: str | None,
+    body: bytes,
+    status: int,
+    category: str,
+    proxy_module: ModuleType,
+    contract: dict[str, Any],
+    tmp_path: Path,
+) -> None:
+    receipt_path = tmp_path / "receipt.json"
+    receipt_path.write_text("{}\n", encoding="utf-8")
+    calls = 0
+
+    def forbidden_requester(_body: bytes, _auth: str) -> tuple[int, bytes]:
+        nonlocal calls
+        calls += 1
+        raise AssertionError("transport must not run")
+
+    actual_status, response_body, receipt = proxy_module.process_local_request(
+        method=method,
+        path=path,
+        content_length=content_length,
+        body=body,
+        contract=contract,
+        auth_path=str(tmp_path / "missing-auth"),
+        receipt_path=str(receipt_path),
+        provider_requester=forbidden_requester,
+    )
+
+    assert actual_status == status
+    assert json.loads(response_body) == {"error": category}
+    assert calls == 0
+    assert receipt["provider_attempt_count"] == 0
+    assert receipt["retry_count"] == 0
+    assert receipt["response_category"] == category
+
+
+def test_process_local_request_maps_auth_failure_to_503(
+    proxy_module: ModuleType,
+    relay_envelope: dict[str, Any],
+    contract: dict[str, Any],
+    tmp_path: Path,
+) -> None:
+    body = _relay_body(relay_envelope)
+    receipt_path = tmp_path / "receipt.json"
+    receipt_path.write_text("{}\n", encoding="utf-8")
+
+    status, response_body, receipt = proxy_module.process_local_request(
+        method="POST",
+        path="/v1/typed-claims",
+        content_length=str(len(body)),
+        body=body,
+        contract=contract,
+        auth_path=str(tmp_path / "missing-auth"),
+        receipt_path=str(receipt_path),
+    )
+
+    assert status == 503
+    assert json.loads(response_body) == {"error": "AUTH_BLOCKED"}
+    assert receipt["auth_present"] is False
+    assert receipt["provider_attempt_count"] == 0
+
+
+@pytest.mark.parametrize(
+    ("category", "local_status"),
+    [
+        ("TIMEOUT", 504),
+        ("RATE_LIMIT_REJECTED", 429),
+        ("TLS_BLOCKED", 502),
+        ("REDIRECT_REJECTED", 502),
+        ("UPSTREAM_REJECTED", 502),
+        ("RESPONSE_SIZE_BLOCKED", 502),
+    ],
+)
+def test_process_local_request_maps_transport_failures_without_retry(
+    category: str,
+    local_status: int,
+    proxy_module: ModuleType,
+    relay_envelope: dict[str, Any],
+    contract: dict[str, Any],
+    tmp_path: Path,
+) -> None:
+    body = _relay_body(relay_envelope)
+    auth_value = "synthetic-value"
+    auth_path = tmp_path / "provider-auth"
+    auth_path.write_text(auth_value, encoding="utf-8")
+    auth_path.chmod(0o600)
+    receipt_path = tmp_path / "receipt.json"
+    receipt_path.write_text("{}\n", encoding="utf-8")
+    calls = 0
+
+    def failing_requester(_body: bytes, _auth: str) -> tuple[int, bytes]:
+        nonlocal calls
+        calls += 1
+        raise proxy_module.ProxyError(
+            category,
+            provider_http_status=429 if category == "RATE_LIMIT_REJECTED" else None,
+            provider_attempt_count=1,
+        )
+
+    status, response_body, receipt = proxy_module.process_local_request(
+        method="POST",
+        path="/v1/typed-claims",
+        content_length=str(len(body)),
+        body=body,
+        contract=contract,
+        auth_path=str(auth_path),
+        receipt_path=str(receipt_path),
+        provider_requester=failing_requester,
+    )
+
+    assert status == local_status
+    assert json.loads(response_body) == {"error": category}
+    assert calls == 1
+    assert receipt["provider_attempt_count"] == 1
+    assert receipt["retry_count"] == 0
+    assert auth_value not in json.dumps(receipt, sort_keys=True)
+
+
+@pytest.mark.parametrize(
+    ("case", "provider_status", "category", "local_status"),
+    [
+        ("redirect", 307, "REDIRECT_REJECTED", 502),
+        ("rate_limit", 429, "RATE_LIMIT_REJECTED", 429),
+        ("server_error", 500, "UPSTREAM_REJECTED", 502),
+        ("oversized", 200, "RESPONSE_SIZE_BLOCKED", 502),
+    ],
+)
+def test_process_local_request_revalidates_provider_result_boundary(
+    case: str,
+    provider_status: int,
+    category: str,
+    local_status: int,
+    proxy_module: ModuleType,
+    relay_envelope: dict[str, Any],
+    contract: dict[str, Any],
+    tmp_path: Path,
+) -> None:
+    body = _relay_body(relay_envelope)
+    auth_path = tmp_path / "provider-auth"
+    auth_path.write_text("synthetic-value", encoding="utf-8")
+    auth_path.chmod(0o600)
+    receipt_path = tmp_path / "receipt.json"
+    receipt_path.write_text("{}\n", encoding="utf-8")
+    provider_body = b"x" * 1_048_577 if case == "oversized" else b"{}"
+
+    def provider_requester(_body: bytes, _auth: str) -> tuple[int, bytes]:
+        return provider_status, provider_body
+
+    status, response_body, receipt = proxy_module.process_local_request(
+        method="POST",
+        path="/v1/typed-claims",
+        content_length=str(len(body)),
+        body=body,
+        contract=contract,
+        auth_path=str(auth_path),
+        receipt_path=str(receipt_path),
+        provider_requester=provider_requester,
+    )
+
+    assert status == local_status
+    assert json.loads(response_body) == {"error": category}
+    assert receipt["response_category"] == category
+    assert receipt["provider_attempt_count"] == 1
+
+
+@pytest.mark.parametrize(
+    ("case", "category"),
+    [
+        ("malformed_json", "RESPONSE_JSON_BLOCKED"),
+        ("wrong_model", "MODEL_IDENTITY_BLOCKED"),
+        ("schema_invalid", "RESPONSE_SCHEMA_BLOCKED"),
+    ],
+)
+def test_process_local_request_rejects_invalid_provider_output(
+    case: str,
+    category: str,
+    proxy_module: ModuleType,
+    relay_envelope: dict[str, Any],
+    valid_candidate: dict[str, Any],
+    contract: dict[str, Any],
+    tmp_path: Path,
+) -> None:
+    body = _relay_body(relay_envelope)
+    auth_path = tmp_path / "provider-auth"
+    auth_path.write_text("synthetic-value", encoding="utf-8")
+    auth_path.chmod(0o600)
+    receipt_path = tmp_path / "receipt.json"
+    receipt_path.write_text("{}\n", encoding="utf-8")
+    if case == "malformed_json":
+        provider_body = b"not-json"
+    else:
+        response = _responses_fixture(valid_candidate)
+        if case == "wrong_model":
+            response["model"] = "wrong-model"
+        else:
+            response["output"][-1]["content"][0]["text"] = "{}"
+        provider_body = json.dumps(response, ensure_ascii=False).encode("utf-8")
+
+    def provider_requester(_body: bytes, _auth: str) -> tuple[int, bytes]:
+        return 200, provider_body
+
+    status, response_body, receipt = proxy_module.process_local_request(
+        method="POST",
+        path="/v1/typed-claims",
+        content_length=str(len(body)),
+        body=body,
+        contract=contract,
+        auth_path=str(auth_path),
+        receipt_path=str(receipt_path),
+        provider_requester=provider_requester,
+    )
+
+    assert status == 502
+    assert json.loads(response_body) == {"error": category}
+    assert receipt["provider_attempt_count"] == 1
+    assert provider_body.decode("utf-8") not in json.dumps(receipt, ensure_ascii=False)
+
+
+def test_receipt_writer_rejects_symlink(
+    proxy_module: ModuleType,
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "outside.json"
+    target.write_text("unchanged\n", encoding="utf-8")
+    receipt = tmp_path / "receipt.json"
+    receipt.symlink_to(target)
+
+    with pytest.raises(proxy_module.ProxyError):
+        proxy_module.write_receipt(
+            proxy_module.build_receipt(response_category="AUTH_BLOCKED"),
+            str(receipt),
+        )
+    assert target.read_text(encoding="utf-8") == "unchanged\n"
+
+
+def test_handler_disables_access_logs(proxy_module: ModuleType) -> None:
+    handler = object.__new__(proxy_module.ProxyHandler)
+    assert handler.log_message("sensitive %s", "value") is None
+    assert not issubclass(proxy_module.ProxyHandler, http.client.HTTPConnection)
