@@ -6,6 +6,7 @@ import hashlib
 import importlib
 import importlib.util
 import json
+import re
 import subprocess
 from pathlib import Path
 from types import ModuleType
@@ -20,6 +21,11 @@ from app.services.phase2_claims_service import canonical_json_bytes
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKER_PATH = REPO_ROOT / "docker/phase2-ai-worker/worker.py"
 WORKER_CONTEXT = REPO_ROOT / "docker/phase2-ai-worker"
+DOCKERFILE_PATH = WORKER_CONTEXT / "Dockerfile"
+EXPECTED_BASE_DIGEST = (
+    "gcr.io/distroless/python3-debian12@"
+    "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5"
+)
 
 
 def _load_worker() -> ModuleType:
@@ -123,6 +129,54 @@ def test_worker_mount_placeholders_are_small_regular_safe_files() -> None:
         assert path.is_file() and not path.is_symlink()
         assert path.read_bytes() == content
         assert path.stat().st_size < 128
+
+
+def test_worker_dockerfile_is_digest_pinned_shellless_and_minimal() -> None:
+    assert DOCKERFILE_PATH.is_file(), "isolated worker Dockerfile is missing"
+    source = DOCKERFILE_PATH.read_text(encoding="utf-8")
+    significant = [
+        line.strip()
+        for line in source.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+
+    assert significant[0] == f"FROM {EXPECTED_BASE_DIGEST}"
+    assert (
+        'LABEL org.tickflow.phase2.base-image-digest="'
+        "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5"
+        '"'
+    ) in significant
+    assert len([line for line in significant if line.startswith("COPY ")]) == 3
+    assert all(
+        line.startswith("COPY --chown=65532:65532 ")
+        for line in significant
+        if line.startswith("COPY ")
+    )
+    for expected in (
+        "USER 65532:65532",
+        "WORKDIR /worker",
+        "ENV PYTHONDONTWRITEBYTECODE=1 PYTHONHASHSEED=0",
+        'ENTRYPOINT ["/usr/bin/python3", "/worker/worker.py"]',
+        'CMD ["candidate"]',
+    ):
+        assert expected in significant
+    assert not re.search(r"(?mi)^\s*(?:RUN|ADD)\b", source)
+    for forbidden in (
+        ":debug",
+        "apt-get",
+        "apt ",
+        "apk ",
+        "pip ",
+        "curl ",
+        "wget ",
+        "http://",
+        "https://",
+        "SECRET",
+        "TOKEN",
+        "PASSWORD",
+        "API_KEY",
+    ):
+        assert forbidden not in source
 
 
 def _runtime_paths(tmp_path: Path):

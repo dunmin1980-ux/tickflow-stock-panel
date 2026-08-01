@@ -1,0 +1,90 @@
+{
+  "cleanup_complete": true,
+  "docker": {
+    "arch": "amd64",
+    "os": "linux",
+    "server_version": "29.3.1"
+  },
+  "errors": [],
+  "external_actions": {
+    "ai_call_count": 0,
+    "cloud_mutation_count": 0,
+    "external_send_count": 0,
+    "integrated_gold_enabled": false,
+    "obsidian_real_vault_write": false,
+    "paper_trading_started": false,
+    "provider_attempt_count": 0,
+    "tickflow_api_request_count": 0
+  },
+  "host_validation": {
+    "candidate_sha256": "da07152ea51247251df6cca7b67d3f1fe1e58f62b4a486b646244732f9a4b045",
+    "claim_count": 42,
+    "claims_status": "CLAIMS_VALID",
+    "errors": [],
+    "facts_pointer_binding_count": 47,
+    "free_text_field_count": 0,
+    "raw_qfq_mismatch_count": 0,
+    "rendered_sha256": "63482087ca33cb7a0ea4767c9b4f41e9176b7abd0f5ac5516bb14b11fc9514e8",
+    "renderer_status": "RENDERED_VALID",
+    "sensitive_hit_count": 0,
+    "trading_claim_count": 0,
+    "unsourced_claim_count": 0,
+    "worker_status": "WORKER_CANDIDATE_VALID"
+  },
+  "image": {
+    "base_image_digest": "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5",
+    "entrypoint": [
+      "/usr/bin/python3",
+      "/worker/worker.py"
+    ],
+    "image_id": "sha256:eff194d53d8958b3b1007a61efe7938b06642a5aa253583c11c764f759efd936",
+    "user": "65532:65532"
+  },
+  "probe": {
+    "all_blocked": true,
+    "forbidden_read_blocked_count": 6,
+    "forbidden_write_blocked_count": 6,
+    "network_blocked": true,
+    "shell_blocked_count": 3
+  },
+  "projection_sha256": "5db35e91eabce452e5be3a3020b5c10711797941431df9bd5bb52f67625b42e1",
+  "runtime_contract": {
+    "candidate": {
+      "cap_drop_all": true,
+      "contract_valid": true,
+      "cpu_limited": true,
+      "errors": [],
+      "ipc_none": true,
+      "memory_limited": true,
+      "mount_count": 2,
+      "network_none": true,
+      "no_new_privileges": true,
+      "non_root": true,
+      "output_writable": true,
+      "pids_limited": true,
+      "projection_readonly": true,
+      "restart_disabled": true,
+      "rootfs_readonly": true,
+      "state_valid": true
+    },
+    "probe": {
+      "cap_drop_all": true,
+      "contract_valid": true,
+      "cpu_limited": true,
+      "errors": [],
+      "ipc_none": true,
+      "memory_limited": true,
+      "mount_count": 2,
+      "network_none": true,
+      "no_new_privileges": true,
+      "non_root": true,
+      "output_writable": true,
+      "pids_limited": true,
+      "projection_readonly": true,
+      "restart_disabled": true,
+      "rootfs_readonly": true,
+      "state_valid": true
+    }
+  },
+  "status": "PHASE2B_ISOLATION_RUNTIME_VERIFIED"
+}
