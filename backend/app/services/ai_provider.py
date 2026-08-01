@@ -207,6 +207,26 @@ async def generate_ai_text(
     )
 
 
+async def generate_codex_cli_text(
+    messages: Sequence[Message],
+    *,
+    max_tokens: int = 3000,
+    timeout: float = 600.0,
+    model: str = "",
+) -> str:
+    """Run the installed Codex CLI without changing application AI settings.
+
+    An empty model deliberately uses the Codex CLI default instead of inheriting
+    an OpenAI-compatible model name from the application's saved configuration.
+    """
+    return await _run_codex_cli(
+        messages,
+        max_tokens=max_tokens,
+        timeout=max(timeout, 600.0),
+        model_override=model,
+    )
+
+
 async def stream_ai_text(
     messages: Sequence[Message],
     *,
@@ -453,6 +473,7 @@ async def _run_codex_cli(
     *,
     max_tokens: int,
     timeout: float,
+    model_override: str | None = None,
 ) -> str:
     prompt = _codex_prompt(messages, max_tokens=max_tokens)
     run_path = Path(tempfile.mkdtemp(prefix="tickflow-codex-run-"))
@@ -462,7 +483,7 @@ async def _run_codex_cli(
         codex_home_path.mkdir()
         workspace_path.mkdir()
         output_path = codex_home_path / "last-message.txt"
-        _prepare_codex_home(codex_home_path)
+        _prepare_codex_home(codex_home_path, model_override=model_override)
 
         args = [
             *_codex_base_command(),
@@ -476,7 +497,11 @@ async def _run_codex_cli(
             "--output-last-message",
             str(output_path),
         ]
-        model = current_ai_model().strip()
+        model = (
+            current_ai_model().strip()
+            if model_override is None
+            else model_override.strip()
+        )
         if model:
             args.extend(["--model", model])
         args.extend(["--cd", str(workspace_path), "-"])
@@ -684,20 +709,31 @@ def _resolve_windows_desktop_codex() -> str | None:
     return str(newest)
 
 
-def _prepare_codex_home(target: Path) -> None:
+def _prepare_codex_home(
+    target: Path,
+    *,
+    model_override: str | None = None,
+) -> None:
     """Create an isolated CODEX_HOME that reuses auth but not fragile config."""
     source = _codex_home()
     auth_file = source / "auth.json"
     if auth_file.exists():
         shutil.copy2(auth_file, target / "auth.json")
-    _write_compatible_codex_config(target / "config.toml")
+    _write_compatible_codex_config(
+        target / "config.toml",
+        model_override=model_override,
+    )
 
 
 def _codex_home() -> Path:
     return Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
 
 
-def _write_compatible_codex_config(path: Path) -> None:
+def _write_compatible_codex_config(
+    path: Path,
+    *,
+    model_override: str | None = None,
+) -> None:
     config = _read_codex_config()
     lines: list[str] = []
     local_provider = _docker_codex_local_provider(config)
@@ -705,7 +741,12 @@ def _write_compatible_codex_config(path: Path) -> None:
     if local_provider:
         lines.append(_toml_string("model_provider", "codex_local_access"))
 
-    model = current_ai_model() or normalize_codex_model(str(config.get("model") or ""))
+    if model_override is None:
+        model = current_ai_model() or normalize_codex_model(
+            str(config.get("model") or "")
+        )
+    else:
+        model = normalize_codex_model(model_override)
     if model:
         lines.append(_toml_string("model", model))
 

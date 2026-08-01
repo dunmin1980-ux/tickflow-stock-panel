@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import tomllib
 
 import httpx
@@ -226,3 +227,51 @@ def test_codex_config_does_not_copy_provider_without_docker_opt_in(monkeypatch, 
     assert "model_provider" not in text
     assert "model_providers" not in text
     assert "must-not-leak" not in text
+
+
+def test_generate_codex_cli_text_can_use_cli_default_without_app_model(monkeypatch):
+    captured = {}
+
+    async def fake_run(messages, *, max_tokens, timeout, model_override=None):
+        captured.update(
+            {
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "timeout": timeout,
+                "model_override": model_override,
+            }
+        )
+        return "review"
+
+    monkeypatch.setattr(ai_provider, "_run_codex_cli", fake_run)
+
+    result = asyncio.run(
+        ai_provider.generate_codex_cli_text(
+            [{"role": "user", "content": "facts-only"}],
+            max_tokens=1200,
+            timeout=700,
+            model="",
+        )
+    )
+
+    assert result == "review"
+    assert captured == {
+        "messages": [{"role": "user", "content": "facts-only"}],
+        "max_tokens": 1200,
+        "timeout": 700,
+        "model_override": "",
+    }
+
+
+def test_codex_config_explicit_empty_model_does_not_inherit_app_or_base_model(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(ai_provider, "current_ai_model", lambda: "application-model")
+    monkeypatch.setattr(ai_provider, "current_codex_reasoning_effort", lambda: "")
+    monkeypatch.setattr(ai_provider, "_read_codex_config", lambda: {"model": "base-model"})
+    path = tmp_path / "config.toml"
+
+    ai_provider._write_compatible_codex_config(path, model_override="")
+
+    config = tomllib.loads(path.read_text(encoding="utf-8"))
+    assert "model" not in config
