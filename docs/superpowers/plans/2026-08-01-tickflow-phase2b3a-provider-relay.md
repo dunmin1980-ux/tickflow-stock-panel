@@ -52,7 +52,7 @@ Phase 2B-2 runtime evidence: 9cf174d4def6908e84522366105b41ed33a00f3be8aab9dc014
 - Consumes: existing `WorkerClaimsCandidate`, `ALLOWED_CLAIM_TYPES`, `PREDICATE_RULES`, Projection dictionaries, and canonical JSON helpers.
 - Produces: `RelayRequest`, `GenerationControls`, `ProviderEnvelope`, `RelayResponse`, `RelayExecutionReceipt`, `build_relay_request(...)`, `build_provider_envelope(...)`, `parse_single_json_object(...)`, `validate_relay_response(...)`, and stable protocol error codes.
 
-- [ ] **Step 1: Write failing strict-schema tests**
+- [x] **Step 1: Write failing strict-schema tests**
 
 Create tests that express the public API before importing production code:
 
@@ -84,7 +84,7 @@ Parametrize request and response mutations for unknown fields, wrong protocol,
 invalid request ID, wrong symbol, wrong Projection SHA, changed allowlist,
 Markdown/HTML/XML/prose keys, multiple Candidates, and non-finite values.
 
-- [ ] **Step 2: Write failing strict-JSON tests**
+- [x] **Step 2: Write failing strict-JSON tests**
 
 Require one object and trailing whitespace only:
 
@@ -98,7 +98,7 @@ def test_single_json_parser_rejects_non_contract_input(raw):
 Also reject 1,048,577 bytes and accept exactly 1,048,576 only when that byte
 sequence is one valid object.
 
-- [ ] **Step 3: Run Task 1 tests and require RED**
+- [x] **Step 3: Run Task 1 tests and require RED**
 
 ```bash
 cd backend
@@ -108,7 +108,7 @@ PYTHONPATH=. .venv/bin/pytest tests/test_phase2_provider_relay.py -q
 Expected: collection failure because the schema and protocol modules do not
 exist. Correct test import errors before proceeding; do not weaken assertions.
 
-- [ ] **Step 4: Implement strict Pydantic schemas**
+- [x] **Step 4: Implement strict Pydantic schemas**
 
 Use `ConfigDict(extra="forbid", frozen=True)` on every model. Restrict symbol
 to `Literal["000403.SZ"]`, response format to
@@ -121,7 +121,7 @@ HTTP status or null, attempt count, retry count, response byte count/hash or
 null, and timestamps. It contains no body, header, endpoint, environment,
 container identifier, or host path.
 
-- [ ] **Step 5: Implement pure protocol helpers**
+- [x] **Step 5: Implement pure protocol helpers**
 
 `build_relay_request` validates the Projection using existing protocol helpers,
 requires the fixed symbol, and copies only canonical allowlists.
@@ -133,7 +133,7 @@ byte limit before decoding.
 `validate_relay_response` requires request ID, symbol, and Projection SHA to
 match before returning the typed Candidate. It never changes a field.
 
-- [ ] **Step 6: Run Task 1 tests and static checks**
+- [x] **Step 6: Run Task 1 tests and static checks**
 
 ```bash
 cd backend
@@ -144,7 +144,7 @@ PYTHONPATH=. .venv/bin/pytest tests/test_phase2_provider_relay.py -q
 .venv/bin/python -m compileall -q app
 ```
 
-- [ ] **Step 7: Commit Task 1**
+- [x] **Step 7: Commit Task 1**
 
 ```bash
 git add backend/app/schemas/phase2_provider_relay.py \
@@ -170,7 +170,7 @@ git commit -m "feat: add strict phase2 provider relay protocol"
 - Consumes: `/input/request.json`, `/input/projection.json`, fixed Proxy name/port/path, and one HTTP response.
 - Produces: exact `/output/response.json` on success, sanitized `/output/receipt.json` on every terminal result, and `run`/`probe` entrypoint modes.
 
-- [ ] **Step 1: Write failing Relay module tests**
+- [x] **Step 1: Write failing Relay module tests**
 
 Load `relay.py` by exact file path. Assert fixed constants:
 
@@ -189,14 +189,14 @@ wrong response binding, and no partial response file on failure. Use a local
 standard-library test HTTP server for actual client behavior; do not mock a
 model SDK.
 
-- [ ] **Step 2: Write failing Relay filesystem and dependency tests**
+- [x] **Step 2: Write failing Relay filesystem and dependency tests**
 
 AST-inspect imports and require standard-library roots only. Verify all reads
 and writes use fixed paths, `O_NOFOLLOW` when available, regular-file checks,
 size limits, fsync, and no stdout/stderr body logging. Require `relay.py` to
 contain no credential name or Secret path.
 
-- [ ] **Step 3: Run Relay tests and require RED**
+- [x] **Step 3: Run Relay tests and require RED**
 
 ```bash
 cd backend
@@ -206,7 +206,7 @@ PYTHONPATH=. .venv/bin/pytest \
 
 Expected: missing Relay module and image context.
 
-- [ ] **Step 4: Implement Relay run mode**
+- [x] **Step 4: Implement Relay run mode**
 
 Use only `http.client`, `json`, `hashlib`, `os`, `socket`, `time`, and other
 standard-library modules. The Relay validates request/Projection binding before
@@ -219,7 +219,7 @@ response placeholder to one newline and writes a receipt with a stable category
 such as `HTTP_REJECTED`, `TIMEOUT`, `RESPONSE_TOO_LARGE`, `STRICT_JSON_REJECTED`,
 or `BINDING_REJECTED`.
 
-- [ ] **Step 5: Implement Relay probe mode**
+- [x] **Step 5: Implement Relay probe mode**
 
 Probe mode performs actual bounded operations for:
 
@@ -238,7 +238,7 @@ It records only `ALLOWED`, `BLOCKED`, `NOT_REACHABLE`, or
 `REDIRECT_REJECTED`; no address, resolved IP, exception text, or response body
 is written.
 
-- [ ] **Step 6: Add a pinned minimal Dockerfile**
+- [x] **Step 6: Add a pinned minimal Dockerfile**
 
 The first line is exactly:
 
@@ -251,7 +251,7 @@ bytecode, and use JSON `ENTRYPOINT`. Reject `RUN`, `ADD`, tag-only `FROM`,
 `:debug`, package managers, shell paths, URLs, and sensitive environment names
 in static tests.
 
-- [ ] **Step 7: Run Relay tests and require GREEN**
+- [x] **Step 7: Run Relay tests and require GREEN**
 
 ```bash
 cd backend
@@ -259,7 +259,7 @@ PYTHONPATH=. .venv/bin/pytest tests/test_phase2_provider_relay.py -q
 .venv/bin/ruff check tests/test_phase2_provider_relay.py
 ```
 
-- [ ] **Step 8: Commit Task 2**
+- [x] **Step 8: Commit Task 2**
 
 ```bash
 git add docker/phase2-provider-relay backend/tests/test_phase2_provider_relay.py
@@ -286,7 +286,7 @@ git commit -m "feat: add isolated phase2 provider relay"
 - Proxy consumes one Relay request and one temporary Secret file; it produces one upstream request and a sanitized receipt.
 - Mock consumes one Provider envelope, one scenario name, and the same test Secret; it produces one deterministic response and a sanitized receipt.
 
-- [ ] **Step 1: Write failing Proxy policy tests**
+- [x] **Step 1: Write failing Proxy policy tests**
 
 Import `proxy.py` by exact path and assert policy constants are immutable:
 
@@ -306,7 +306,7 @@ timeout, 429/500 pass-through as rejected statuses, upstream redirect rejection,
 and one upstream request maximum. Assert no body/header is present in receipts
 or captured logs.
 
-- [ ] **Step 2: Write failing Mock scenario tests**
+- [x] **Step 2: Write failing Mock scenario tests**
 
 Load the existing Phase 2B-2 worker only as the deterministic candidate factory
 for tests. Parametrize all scenarios:
@@ -341,7 +341,7 @@ EXPECTED = {
 Require the valid response to contain all 42 typed Claims and every mutation to
 change only the field needed for that scenario.
 
-- [ ] **Step 3: Run Proxy/Mock tests and require RED**
+- [x] **Step 3: Run Proxy/Mock tests and require RED**
 
 ```bash
 cd backend
@@ -349,7 +349,7 @@ PYTHONPATH=. .venv/bin/pytest tests/test_phase2_provider_relay.py -q \
   -k 'proxy or mock_provider'
 ```
 
-- [ ] **Step 4: Implement the fixed Proxy**
+- [x] **Step 4: Implement the fixed Proxy**
 
 Use `HTTPServer` with `log_message` overridden to no-op. Read the Secret with
 `O_NOFOLLOW`, inject it only into the upstream authorization header, and never
@@ -359,7 +359,7 @@ target URL from request headers or body. Reject 3xx without exposing Location.
 Write a receipt containing only method/path policy booleans, upstream attempt
 count, response category, response size, and Secret-present boolean.
 
-- [ ] **Step 5: Implement the Mock Provider**
+- [x] **Step 5: Implement the Mock Provider**
 
 Use one standard-library HTTP server with disabled logs. Validate method/path,
 authorization, exact Provider envelope, fixed generation controls, and scenario
@@ -372,7 +372,7 @@ whose target is never followed. External URL returns JSON containing an
 unapproved URL field so strict response validation rejects it without a second
 request.
 
-- [ ] **Step 6: Add pinned Dockerfiles and static policy tests**
+- [x] **Step 6: Add pinned Dockerfiles and static policy tests**
 
 Both Dockerfiles use the same complete distroless digest and non-root entrypoint.
 Mock builds with `docker` as context so its Dockerfile may copy only:
@@ -386,7 +386,7 @@ phase2-mock-provider/*.placeholder*
 Static tests reject any other repository copy, `RUN`, shell, package manager,
 credential, or network download.
 
-- [ ] **Step 7: Run all pure protocol/component tests**
+- [x] **Step 7: Run all pure protocol/component tests**
 
 ```bash
 cd backend
@@ -396,7 +396,7 @@ PYTHONPATH=. .venv/bin/pytest tests/test_phase2_provider_relay.py -q
   tests/test_phase2_provider_relay.py
 ```
 
-- [ ] **Step 8: Commit Task 3**
+- [x] **Step 8: Commit Task 3**
 
 ```bash
 git add docker/phase2-egress-proxy docker/phase2-mock-provider \
@@ -416,7 +416,7 @@ git commit -m "feat: add fixed phase2 mock egress path"
 - Consumes: exact image names, temporary single-file paths, Docker inspect/network inspect JSON, and an injected command executor.
 - Produces: `RelayRuntimePaths`, `ProxyRuntimePaths`, `MockRuntimePaths`, command builders, inspect validators, network topology validators, sanitized contract evidence, and stable runtime error codes.
 
-- [ ] **Step 1: Write failing command construction tests**
+- [x] **Step 1: Write failing command construction tests**
 
 Require exact argument arrays for two internal networks and three containers.
 Relay command must have exactly four mounts and one network; Proxy two mounts
@@ -439,7 +439,7 @@ Reject command strings containing privileged/host networking, published ports,
 devices, env/env-file, Home, repository, Vault, SSH, user config, database, or
 Docker control mounts.
 
-- [ ] **Step 2: Write failing inspect and topology mutation tests**
+- [x] **Step 2: Write failing inspect and topology mutation tests**
 
 Start from valid sanitized fixtures, then independently mutate user, rootfs,
 capabilities, security options, resources, restart policy, mount count/mode,
@@ -453,34 +453,34 @@ relay_proxy_net: Relay + Proxy
 proxy_provider_net: Proxy + Mock
 ```
 
-- [ ] **Step 3: Write failing Secret boundary tests**
+- [x] **Step 3: Write failing Secret boundary tests**
 
 Create a random canary at test runtime. Assert it is absent from commands,
 inspect payloads, receipts, reports, logs, and serialized evidence. Require
 Relay mounts not to include the Secret path while Proxy and Mock each have one
 read-only Secret mount. Assert evidence has no Secret hash field.
 
-- [ ] **Step 4: Run Task 4 tests and require RED**
+- [x] **Step 4: Run Task 4 tests and require RED**
 
 ```bash
 cd backend
 PYTHONPATH=. .venv/bin/pytest tests/test_phase2_provider_relay_runtime.py -q
 ```
 
-- [ ] **Step 5: Implement immutable path and command builders**
+- [x] **Step 5: Implement immutable path and command builders**
 
 Resolve every path only after rejecting symlinks and non-regular files. Build
 argument lists only and call no shell. Container/network names are random,
 bounded, and never persisted. Image references are fixed constants; the API
 accepts no image, endpoint, network, mount, user, or security override.
 
-- [ ] **Step 6: Implement inspect and network validators**
+- [x] **Step 6: Implement inspect and network validators**
 
 Validate actual Docker fields and return dataclasses whose `to_dict()` methods
 contain only booleans, counts, image digests, and stable errors. Do not include
 container IDs/names, IPs, commands, environments, mount sources, or raw payloads.
 
-- [ ] **Step 7: Run Task 4 tests and static checks**
+- [x] **Step 7: Run Task 4 tests and static checks**
 
 ```bash
 cd backend
@@ -490,7 +490,7 @@ PYTHONPATH=. .venv/bin/pytest tests/test_phase2_provider_relay_runtime.py -q
 .venv/bin/python -m compileall -q app
 ```
 
-- [ ] **Step 8: Commit Task 4**
+- [x] **Step 8: Commit Task 4**
 
 ```bash
 git add backend/app/services/phase2_provider_relay_runner.py \
@@ -512,7 +512,7 @@ git commit -m "feat: add provider relay runtime contracts"
 - Consumes: repository/reports roots, fixed Facts/Projection, fixed images, Docker executor, and current UTC clock.
 - Produces: `run_mock_provider_relay(repo_root, reports_root) -> ProviderRelayResult`, atomic `reports/phase2_provider_relay/`, sanitized scenario receipts, one valid inbox Markdown, rejection records, and runtime evidence.
 
-- [ ] **Step 1: Write failing lifecycle tests with a fake Docker executor**
+- [x] **Step 1: Write failing lifecycle tests with a fake Docker executor**
 
 Cover this order per scenario:
 
@@ -534,7 +534,7 @@ retry. Fail create/start/inspect/output/validation/cleanup one boundary at a
 time and require blocked status plus cleanup of every successfully created
 object.
 
-- [ ] **Step 2: Write failing full Mock matrix tests**
+- [x] **Step 2: Write failing full Mock matrix tests**
 
 Use the fake executor to produce two valid runs and every invalid scenario.
 Require only valid runs to pass Host Candidate/Claims/Renderer validation.
@@ -542,34 +542,34 @@ Require normalized Candidate and rendered hashes to match across valid runs.
 Every invalid run must route one sanitized record to rejected and no Markdown
 to inbox.
 
-- [ ] **Step 3: Write failing network-probe and Secret lifecycle tests**
+- [x] **Step 3: Write failing network-probe and Secret lifecycle tests**
 
 Require all ten network policy results, exact enum values, zero real-public
 successes, no redirect/content-URL follow, no Secret hit or digest, and zero
 container/network/file residue. Verify the generated Secret is random per suite
 and absent after return.
 
-- [ ] **Step 4: Write failing atomic publication and invariance tests**
+- [x] **Step 4: Write failing atomic publication and invariance tests**
 
 Require staging + fsync + atomic directory exchange. Simulate publication
 failure and prove prior output remains intact. Verify the runner never writes
 outside `reports/phase2_provider_relay/` and does not change any protected hash.
 
-- [ ] **Step 5: Run Task 5 tests and require RED**
+- [x] **Step 5: Run Task 5 tests and require RED**
 
 ```bash
 cd backend
 PYTHONPATH=. .venv/bin/pytest tests/test_phase2_provider_relay_runtime.py -q
 ```
 
-- [ ] **Step 6: Implement one-scenario lifecycle and fail-closed cleanup**
+- [x] **Step 6: Implement one-scenario lifecycle and fail-closed cleanup**
 
 Use `subprocess.run(shell=False, check=False, capture_output=True, text=True,
 timeout=...)` behind an injected executor. There is no loop that retries a
 Provider attempt. Cleanup tracks created resources and removes each once in
 reverse dependency order. Cleanup errors always block success.
 
-- [ ] **Step 7: Implement Host validation and deterministic routing**
+- [x] **Step 7: Implement Host validation and deterministic routing**
 
 For a successful Relay envelope call the existing `validate_isolated_candidate`
 with the original Projection, then the existing Claims/Renderer chain. Compute
@@ -580,21 +580,21 @@ Rejected records contain scenario, stable error codes, HTTP category, response
 size/hash when available, and route only. They never contain raw responses or
 free text from Provider.
 
-- [ ] **Step 8: Implement sanitized audit and atomic publication**
+- [x] **Step 8: Implement sanitized audit and atomic publication**
 
 Record every required audit field and zero external counters. Generate the test
 Secret with `secrets.token_urlsafe` in memory, write it to one temporary file,
 scan exact bytes before deletion, and never compute its digest. Publish with the
 existing atomic directory helper.
 
-- [ ] **Step 9: Implement fixed CLIs**
+- [x] **Step 9: Implement fixed CLIs**
 
 `run_phase2_mock_provider_relay.py` accepts only `--repo-root` and
 `--reports-root`; it exposes no endpoint/image/network/Secret/force/retry
 override. `validate_phase2_provider_relay.py` is offline and validates file set,
 schemas, hashes, routes, counters, and absence of sensitive shapes.
 
-- [ ] **Step 10: Run Task 5 tests and require GREEN**
+- [x] **Step 10: Run Task 5 tests and require GREEN**
 
 ```bash
 cd backend
@@ -610,7 +610,7 @@ PYTHONPATH=. .venv/bin/pytest \
   tests/test_phase2_provider_relay_runtime.py
 ```
 
-- [ ] **Step 11: Commit Task 5**
+- [x] **Step 11: Commit Task 5**
 
 ```bash
 git add backend/app/services/phase2_provider_relay_runner.py \
@@ -637,14 +637,14 @@ git commit -m "feat: orchestrate restricted provider relay"
 - Consumes: running Docker Desktop, pinned local base image, committed component contexts, and no credentials.
 - Produces: one real local Mock E2E evidence tree and no residual runtime objects.
 
-- [ ] **Step 1: Write failing runtime script/static-policy tests**
+- [x] **Step 1: Write failing runtime script/static-policy tests**
 
 Require the shell script to use `set -euo pipefail`, exact fixed image tags,
 `--network none --pull=false` builds, no credentials, no `eval`, no dynamic
 endpoint, no force/retry option, and one invocation of the Host run CLI. Require
 all three Dockerfiles to pass digest/user/entrypoint/import/copy policy tests.
 
-- [ ] **Step 2: Run runtime-policy tests and require RED**
+- [x] **Step 2: Run runtime-policy tests and require RED**
 
 ```bash
 cd backend
@@ -652,7 +652,7 @@ PYTHONPATH=. .venv/bin/pytest tests/test_phase2_provider_relay.py \
   tests/test_phase2_provider_relay_runtime.py -q -k 'dockerfile or runtime_script'
 ```
 
-- [ ] **Step 3: Implement the fixed runtime shell script**
+- [x] **Step 3: Implement the fixed runtime shell script**
 
 The script checks Docker availability, builds:
 
@@ -667,7 +667,7 @@ context with `docker/phase2-mock-provider/Dockerfile`. All builds are offline
 from the already present pinned base. The script then invokes the Host CLI once
 and runs the offline validator once.
 
-- [ ] **Step 4: Run focused tests before Docker**
+- [x] **Step 4: Run focused tests before Docker**
 
 ```bash
 cd backend
@@ -678,7 +678,7 @@ cd ..
 bash -n scripts/test_phase2_provider_relay_runtime.sh
 ```
 
-- [ ] **Step 5: Execute the real Docker runtime script once**
+- [x] **Step 5: Execute the real Docker runtime script once**
 
 ```bash
 cd "/Users/macbookpro/Documents/TradingView 量化/tickflow-phase2-ai-review"
@@ -690,7 +690,7 @@ relax a runtime flag. Diagnose any implementation failure with a new RED test
 before changing production code. A true egress or Secret boundary failure ends
 with the corresponding blocked status.
 
-- [ ] **Step 6: Verify real runtime residue and evidence**
+- [x] **Step 6: Verify real runtime residue and evidence**
 
 Require zero matching containers and networks, no Secret/request/response temp
 files, no staging directories, no raw inspect/log/command files, and no exact
@@ -698,7 +698,7 @@ test Secret hit. Verify image IDs and Dockerfile hashes are content-addressed
 and evidence contains all 22 scenarios plus the second valid run and ten network
 policy results.
 
-- [ ] **Step 7: Commit runtime proof**
+- [x] **Step 7: Commit runtime proof**
 
 ```bash
 git add scripts/test_phase2_provider_relay_runtime.sh \
@@ -721,7 +721,7 @@ git commit -m "test: verify provider relay egress and secret boundaries"
 - Consumes: committed runtime evidence, all protected preflight digests, test outputs, image/contract hashes, and residue scans.
 - Produces: final report, controlled-canary runbook with no real credential or execution command, final status, commits, and verified fork branch SHA.
 
-- [ ] **Step 1: Run the required focused suite**
+- [x] **Step 1: Run the required focused suite**
 
 ```bash
 cd backend
@@ -730,7 +730,7 @@ PYTHONPATH=. .venv/bin/pytest \
   tests/test_phase2_provider_relay_runtime.py -q
 ```
 
-- [ ] **Step 2: Run backend full and static validation**
+- [x] **Step 2: Run backend full and static validation**
 
 ```bash
 PYTHONPATH=. .venv/bin/pytest -q
@@ -745,27 +745,27 @@ PYTHONPATH=. .venv/bin/python -m compileall -q app scripts
   tests/test_phase2_provider_relay_runtime.py
 ```
 
-- [ ] **Step 3: Revalidate Claims and Relay artifacts offline**
+- [x] **Step 3: Revalidate Claims and Relay artifacts offline**
 
 Run typed Claims validation and require `CLAIMS_VALID`. Run the historical
 freeform validator and require the expected fail-closed
 `PHASE2_AI_OUTPUT_BLOCKED`. Run `validate_phase2_provider_relay.py` and require
 `PHASE2B_PROVIDER_RELAY_READY` with every invalid scenario rejected.
 
-- [ ] **Step 4: Recompute all protected digests**
+- [x] **Step 4: Recompute all protected digests**
 
 Use the exact sorted `shasum -a 256` aggregation from preflight. Every digest in
 Global Constraints must match byte-for-byte. A mismatch stops as
 `PHASE2B_EVIDENCE_MUTATED`; do not repair or regenerate the protected tree.
 
-- [ ] **Step 5: Run sensitive and residue scans**
+- [x] **Step 5: Run sensitive and residue scans**
 
 Scan code and new reports for credential shapes, absolute Home/Vault paths,
 raw headers, inspect, stdout/stderr, commands, IDs/IPs, Secret hashes, staging,
 tmp/partial/bak files, and transaction markers. Confirm Docker has no matching
 containers/networks and the real-public-network success count is zero.
 
-- [ ] **Step 6: Write the evaluation report**
+- [x] **Step 6: Write the evaluation report**
 
 Answer all 14 questions in the approved design. Include exact Docker/image
 digests, runtime controls, topology booleans, Secret lifecycle, valid/invalid
@@ -773,14 +773,14 @@ matrix, deterministic hashes, Host validation, cleanup, tests, invariance, zero
 external actions, and limitations. State that a real single-symbol canary still
 requires separate approval and was not run.
 
-- [ ] **Step 7: Write the controlled-canary runbook**
+- [x] **Step 7: Write the controlled-canary runbook**
 
 Document only future approval gates, required TLS/credential controls, one-symbol
 scope, abort criteria, human verification, cleanup, and evidence requirements.
 Do not include a real endpoint, model, key, executable live command, or imply
 current approval.
 
-- [ ] **Step 8: Commit report, runbook, and completed plan**
+- [x] **Step 8: Commit report, runbook, and completed plan**
 
 ```bash
 git add reports/tickflow_phase2b_provider_relay_eval.md \
@@ -789,7 +789,7 @@ git add reports/tickflow_phase2b_provider_relay_eval.md \
 git commit -m "docs: add controlled AI canary runbook"
 ```
 
-- [ ] **Step 9: Push only the fork branch**
+- [x] **Step 9: Push only the fork branch**
 
 ```bash
 git status --short
@@ -802,7 +802,7 @@ git ls-remote fork refs/heads/codex/tickflow-phase2-ai-review
 Require local and remote SHA equality and a clean worktree. Do not create a PR,
 merge, deploy, or remove the worktree.
 
-- [ ] **Step 10: Stop at the approved state**
+- [x] **Step 10: Stop at the approved state**
 
 The only success state is:
 
