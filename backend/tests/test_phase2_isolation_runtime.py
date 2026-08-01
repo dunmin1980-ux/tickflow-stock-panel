@@ -432,11 +432,16 @@ class FakeDockerExecutor:
         *,
         probe: dict | None = None,
         cleanup_fails: bool = False,
+        image_env: list[str] | None = None,
     ) -> None:
         self.calls: list[list[str]] = []
         self.containers: dict[str, dict] = {}
         self.probe = probe or _blocked_probe()
         self.cleanup_fails = cleanup_fails
+        self.image_env = image_env or [
+            "PYTHONDONTWRITEBYTECODE=1",
+            "PYTHONHASHSEED=0",
+        ]
         self.worker = _load_worker()
         self.temp_paths: set[Path] = set()
 
@@ -474,10 +479,7 @@ class FakeDockerExecutor:
                                     "/usr/bin/python3",
                                     "/worker/worker.py",
                                 ],
-                                "Env": [
-                                    "PYTHONDONTWRITEBYTECODE=1",
-                                    "PYTHONHASHSEED=0",
-                                ],
+                                "Env": self.image_env,
                                 "Labels": {
                                     "org.tickflow.phase2.base-image-digest": (
                                         "sha256:" + "b" * 64
@@ -667,3 +669,23 @@ def test_runtime_orchestrator_blocks_probe_or_cleanup_failure(
         assert result.status == "PHASE2B_ISOLATION_RUNTIME_BLOCKED"
         assert result.errors
         assert result.cleanup_complete is expected_cleanup
+
+
+def test_runtime_orchestrator_rejects_sensitive_image_environment(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime()
+    reports_root = tmp_path / "reports"
+    reports_root.mkdir()
+    executor = FakeDockerExecutor(image_env=["AI_KEY=canary"])
+
+    result = runtime.run_runtime_validation(
+        REPO_ROOT,
+        reports_root,
+        _executor=executor,
+        _allow_test_output_root=True,
+    )
+
+    assert result.status == "PHASE2B_ISOLATION_RUNTIME_BLOCKED"
+    assert result.errors == ["worker_image_sensitive_environment"]
+    assert not executor.containers

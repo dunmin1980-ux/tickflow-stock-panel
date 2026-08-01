@@ -54,7 +54,7 @@ _RUNTIME_BLOCKED = "PHASE2B_ISOLATION_RUNTIME_BLOCKED"
 _EXPECTED_ENTRYPOINT = ["/usr/bin/python3", "/worker/worker.py"]
 _BASE_DIGEST_LABEL = "org.tickflow.phase2.base-image-digest"
 _SENSITIVE_ENV_NAME = re.compile(
-    r"(?:^|_)(?:api_?key|authorization|cookie|password|secret|session|token)(?:$|_)",
+    r"(?:^|_)(?:api_?key|ai_?key|authorization|cookie|credential|password|secret|session|token)(?:$|_)",
     re.IGNORECASE,
 )
 _PROBE_GROUPS = {
@@ -494,6 +494,7 @@ def _default_executor(command: list[str]) -> subprocess.CompletedProcess[str]:
         check=False,
         capture_output=True,
         text=True,
+        shell=False,
         timeout=60,
     )
 
