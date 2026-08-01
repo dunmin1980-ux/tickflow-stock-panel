@@ -6,6 +6,7 @@ import hashlib
 import importlib
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 from types import ModuleType
 
@@ -334,3 +335,279 @@ def test_host_adapter_blocks_candidate_tampering_before_rendering() -> None:
         )
         assert evidence.errors
         assert evidence.renderer_status == "RENDERED_BLOCKED"
+
+
+def _blocked_probe() -> dict:
+    blocked = {"blocked": True, "errno": "EPERM"}
+    return {
+        "probe_schema_version": 1,
+        "network": {"blocked": True, "errno": "ENETUNREACH"},
+        "shells": {
+            "sh": {"blocked": True, "errno": "ENOENT"},
+            "bash": {"blocked": True, "errno": "ENOENT"},
+            "busybox": {"blocked": True, "errno": "ENOENT"},
+        },
+        "forbidden_reads": {
+            name: dict(blocked)
+            for name in (
+                "host_home",
+                "repository",
+                "ssh",
+                "config",
+                "vault",
+                "docker_socket",
+            )
+        },
+        "forbidden_writes": {
+            name: dict(blocked)
+            for name in (
+                "projection",
+                "tmp",
+                "worker",
+                "worker_source",
+                "etc",
+                "extra_output",
+            )
+        },
+    }
+
+
+class FakeDockerExecutor:
+    def __init__(
+        self,
+        *,
+        probe: dict | None = None,
+        cleanup_fails: bool = False,
+    ) -> None:
+        self.calls: list[list[str]] = []
+        self.containers: dict[str, dict] = {}
+        self.probe = probe or _blocked_probe()
+        self.cleanup_fails = cleanup_fails
+        self.worker = _load_worker()
+        self.temp_paths: set[Path] = set()
+
+    @staticmethod
+    def _option(command: list[str], name: str) -> str:
+        return command[command.index(name) + 1]
+
+    def __call__(self, command: list[str]) -> subprocess.CompletedProcess[str]:
+        self.calls.append(list(command))
+        if command[:2] == ["docker", "version"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        "Version": "29.3.1",
+                        "Os": "linux",
+                        "Arch": "amd64",
+                        "ApiVersion": "1.52",
+                    }
+                ),
+                stderr="",
+            )
+        if command[:3] == ["docker", "image", "inspect"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    [
+                        {
+                            "Id": "sha256:" + "a" * 64,
+                            "Config": {
+                                "User": "65532:65532",
+                                "Entrypoint": [
+                                    "/usr/bin/python3",
+                                    "/worker/worker.py",
+                                ],
+                                "Env": [
+                                    "PYTHONDONTWRITEBYTECODE=1",
+                                    "PYTHONHASHSEED=0",
+                                ],
+                                "Labels": {
+                                    "org.tickflow.phase2.base-image-digest": (
+                                        "sha256:" + "b" * 64
+                                    )
+                                },
+                            },
+                        }
+                    ]
+                ),
+                stderr="",
+            )
+        if command[:2] == ["docker", "create"]:
+            runtime = _runtime()
+            name = self._option(command, "--name")
+            mounts = [
+                command[index + 1]
+                for index, value in enumerate(command)
+                if value == "--mount"
+            ]
+            mount_values = {
+                part.split("=", 1)[0]: part.split("=", 1)[1]
+                for mount in mounts
+                for part in mount.split(",")
+                if "=" in part
+            }
+            projection = Path(
+                next(
+                    mount.split("src=", 1)[1].split(",", 1)[0]
+                    for mount in mounts
+                    if "dst=/input/projection.json" in mount
+                )
+            )
+            output = Path(
+                next(
+                    mount.split("src=", 1)[1].split(",", 1)[0]
+                    for mount in mounts
+                    if "dst=/output/candidate.json" in mount
+                )
+            )
+            paths = runtime.IsolationPaths(projection=projection, output=output)
+            self.temp_paths.update({projection, output, projection.parent})
+            self.containers[name] = {
+                "mode": command[-1],
+                "paths": paths,
+                "state": "created",
+                "mount_values": mount_values,
+            }
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout="fake-container-id\n",
+                stderr="",
+            )
+        if command[:2] == ["docker", "inspect"]:
+            name = command[-1]
+            container = self.containers[name]
+            payload = _inspect_payload(
+                container["paths"],
+                state=container["state"],
+            )
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(payload),
+                stderr="",
+            )
+        if command[:3] == ["docker", "start", "--attach"]:
+            name = command[-1]
+            container = self.containers[name]
+            if container["mode"] == "candidate":
+                projection = json.loads(container["paths"].projection.read_bytes())
+                value = self.worker.generate_candidate(projection)
+            else:
+                value = self.probe
+            container["paths"].output.write_bytes(canonical_json_bytes(value))
+            container["state"] = "exited"
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+        if command[:3] == ["docker", "rm", "-f"]:
+            if self.cleanup_fails:
+                return subprocess.CompletedProcess(
+                    command,
+                    1,
+                    stdout="",
+                    stderr="cleanup failed",
+                )
+            self.containers.pop(command[-1], None)
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+        raise AssertionError(f"unexpected docker command: {command[:3]}")
+
+
+def test_runtime_orchestrator_publishes_only_sanitized_verified_evidence(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime()
+    reports_root = tmp_path / "reports"
+    reports_root.mkdir()
+    executor = FakeDockerExecutor()
+
+    result = runtime.run_runtime_validation(
+        REPO_ROOT,
+        reports_root,
+        _executor=executor,
+        _allow_test_output_root=True,
+    )
+
+    assert result.status == "PHASE2B_ISOLATION_RUNTIME_VERIFIED"
+    assert result.errors == []
+    assert result.cleanup_complete is True
+    evidence_path = reports_root / "phase2_isolation_runtime/runtime_evidence.json"
+    evidence = json.loads(evidence_path.read_bytes())
+    assert evidence["status"] == "PHASE2B_ISOLATION_RUNTIME_VERIFIED"
+    assert evidence["host_validation"]["claims_status"] == "CLAIMS_VALID"
+    assert evidence["host_validation"]["renderer_status"] == "RENDERED_VALID"
+    assert evidence["runtime_contract"]["candidate"]["contract_valid"] is True
+    assert evidence["runtime_contract"]["probe"]["contract_valid"] is True
+    assert evidence["probe"]["all_blocked"] is True
+    assert evidence["external_actions"] == {
+        "ai_call_count": 0,
+        "cloud_mutation_count": 0,
+        "external_send_count": 0,
+        "integrated_gold_enabled": False,
+        "obsidian_real_vault_write": False,
+        "paper_trading_started": False,
+        "provider_attempt_count": 0,
+        "tickflow_api_request_count": 0,
+    }
+    serialized = json.dumps(evidence, ensure_ascii=False, sort_keys=True)
+    for forbidden in (
+        "container_id",
+        "command",
+        "environment",
+        "Authorization",
+        "Cookie",
+        "Session",
+        "api_key",
+        "/Users/",
+        "docker.sock",
+    ):
+        assert forbidden not in serialized
+    assert not executor.containers
+    assert all(not path.exists() for path in executor.temp_paths)
+
+
+def test_runtime_orchestrator_has_no_retry_and_cleans_both_containers(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime()
+    reports_root = tmp_path / "reports"
+    reports_root.mkdir()
+    executor = FakeDockerExecutor()
+
+    result = runtime.run_runtime_validation(
+        REPO_ROOT,
+        reports_root,
+        _executor=executor,
+        _allow_test_output_root=True,
+    )
+
+    assert result.status == "PHASE2B_ISOLATION_RUNTIME_VERIFIED"
+    assert sum(call[:2] == ["docker", "create"] for call in executor.calls) == 2
+    assert sum(call[:3] == ["docker", "start", "--attach"] for call in executor.calls) == 2
+    assert sum(call[:3] == ["docker", "rm", "-f"] for call in executor.calls) == 2
+
+
+def test_runtime_orchestrator_blocks_probe_or_cleanup_failure(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime()
+    bad_probe = _blocked_probe()
+    bad_probe["network"] = {"blocked": False, "errno": "NONE"}
+
+    scenarios = (
+        (FakeDockerExecutor(probe=bad_probe), True),
+        (FakeDockerExecutor(cleanup_fails=True), False),
+    )
+    for executor, expected_cleanup in scenarios:
+        reports_root = tmp_path / f"reports-{len(list(tmp_path.iterdir()))}"
+        reports_root.mkdir()
+        result = runtime.run_runtime_validation(
+            REPO_ROOT,
+            reports_root,
+            _executor=executor,
+            _allow_test_output_root=True,
+        )
+        assert result.status == "PHASE2B_ISOLATION_RUNTIME_BLOCKED"
+        assert result.errors
+        assert result.cleanup_complete is expected_cleanup
