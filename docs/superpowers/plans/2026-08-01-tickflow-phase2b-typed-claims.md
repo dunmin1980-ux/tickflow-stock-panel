@@ -399,7 +399,7 @@ git add reports/tickflow_phase2b_typed_claims_eval.md \
 git commit -m "docs: close typed claims contract validation"
 ```
 
-- [ ] **Step 8: Push and verify exact remote Head**
+- [x] **Step 8: Push and verify exact remote Head**
 
 Push only `codex/tickflow-phase2-ai-review` to the writable fork remote, then
 compare `git rev-parse HEAD` with `git ls-remote`. Require a clean worktree.
