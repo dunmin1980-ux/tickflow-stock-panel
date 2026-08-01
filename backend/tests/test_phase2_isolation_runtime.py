@@ -591,6 +591,7 @@ def test_runtime_orchestrator_publishes_only_sanitized_verified_evidence(
     assert evidence["status"] == "PHASE2B_ISOLATION_RUNTIME_VERIFIED"
     assert evidence["host_validation"]["claims_status"] == "CLAIMS_VALID"
     assert evidence["host_validation"]["renderer_status"] == "RENDERED_VALID"
+    assert evidence["host_validation"]["claim_without_provenance_count"] == 0
     assert evidence["runtime_contract"]["candidate"]["contract_valid"] is True
     assert evidence["runtime_contract"]["probe"]["contract_valid"] is True
     assert evidence["probe"]["all_blocked"] is True
@@ -606,6 +607,7 @@ def test_runtime_orchestrator_publishes_only_sanitized_verified_evidence(
     }
     serialized = json.dumps(evidence, ensure_ascii=False, sort_keys=True)
     for forbidden in (
+        "source",
         "container_id",
         "command",
         "environment",

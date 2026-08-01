@@ -843,6 +843,14 @@ def _blocked_host_evidence() -> CandidateHostEvidence:
     )
 
 
+def _host_evidence_for_report(value: CandidateHostEvidence) -> dict[str, Any]:
+    evidence = value.to_dict()
+    evidence["claim_without_provenance_count"] = evidence.pop(
+        "unsourced_claim_count"
+    )
+    return evidence
+
+
 def _publish_runtime_evidence(reports_root: Path, evidence: Mapping[str, Any]) -> None:
     staging = Path(
         tempfile.mkdtemp(prefix=".phase2_isolation_runtime.staging-", dir=reports_root)
@@ -963,7 +971,7 @@ def run_runtime_validation(
             "candidate": candidate_contract.to_dict(),
             "probe": probe_contract.to_dict(),
         },
-        "host_validation": host_evidence.to_dict(),
+        "host_validation": _host_evidence_for_report(host_evidence),
         "probe": probe_evidence,
         "projection_sha256": projection_sha256,
         "cleanup_complete": cleanup_complete,

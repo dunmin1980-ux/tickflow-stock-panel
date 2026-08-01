@@ -19,6 +19,7 @@
   "host_validation": {
     "candidate_sha256": "da07152ea51247251df6cca7b67d3f1fe1e58f62b4a486b646244732f9a4b045",
     "claim_count": 42,
+    "claim_without_provenance_count": 0,
     "claims_status": "CLAIMS_VALID",
     "errors": [],
     "facts_pointer_binding_count": 47,
@@ -28,7 +29,6 @@
     "renderer_status": "RENDERED_VALID",
     "sensitive_hit_count": 0,
     "trading_claim_count": 0,
-    "unsourced_claim_count": 0,
     "worker_status": "WORKER_CANDIDATE_VALID"
   },
   "image": {
