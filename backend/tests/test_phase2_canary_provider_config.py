@@ -19,21 +19,47 @@ from app.schemas.phase2_canary_provider_config import (
     validate_exact_egress,
 )
 from app.schemas.phase2_claims import WorkerClaimsCandidate
+from app.services.phase2_openai_proxy_artifact import (
+    OpenAIProxyArtifactCandidate,
+)
 from scripts.validate_phase2_canary_provider_config import (
     CanaryPreflightError,
+    ProxyArtifactApproval,
+    RestrictedCanaryRuntimeRunner,
     count_secret_exposure,
     exercise_placeholder_secret_injection,
-    inspect_runtime_proxy_policy,
     keychain_secret_exists,
     read_git_gate,
     read_provider_approval,
-    read_runtime_proxy_image_identity,
+    read_proxy_artifact_approval,
     read_runtime_residue,
     run_canary_preflight,
     validate_offline_canary_inputs,
+    validate_proxy_artifact_approval,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+_EXPECTED_PREFLIGHT_DELTA = {
+    "backend/app/services/phase2_openai_proxy_contract.py": "A",
+    "backend/app/services/phase2_openai_proxy_artifact.py": "A",
+    "backend/app/services/phase2_openai_canary_runner.py": "A",
+    "backend/scripts/build_phase2_openai_proxy_offline.py": "A",
+    "backend/scripts/validate_phase2_canary_provider_config.py": "M",
+    "backend/tests/test_phase2_openai_proxy_contract.py": "A",
+    "backend/tests/test_phase2_openai_proxy_artifact.py": "A",
+    "backend/tests/test_phase2_openai_canary_runner.py": "A",
+    "backend/tests/test_phase2_canary_provider_config.py": "M",
+    "docker/phase2-openai-egress-proxy/Dockerfile": "A",
+    "docker/phase2-openai-egress-proxy/proxy.py": "A",
+    "docker/phase2-openai-egress-proxy/responses-contract.json": "A",
+    "docker/phase2-openai-egress-proxy/secret.placeholder": "A",
+    "docker/phase2-openai-egress-proxy/receipt.placeholder.json": "A",
+    "docs/superpowers/plans/2026-08-02-tickflow-phase2b3b-openai-proxy.md": "A",
+    "reports/phase2_openai_proxy_artifact/approval_candidate.json": "A",
+    "reports/phase2_openai_proxy_artifact/build_evidence.json": "A",
+    "reports/tickflow_phase2b_canary_provider_preflight_eval.md": "M",
+}
 
 
 def _approved_config() -> dict[str, Any]:
@@ -73,13 +99,54 @@ def _walk_schema(value: Any):
 
 
 def _write_approval(path: Path, payload: dict[str, Any] | None = None) -> None:
-    path.parent.mkdir(parents=True, mode=0o700)
+    path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
     path.parent.chmod(0o700)
     path.write_text(
         json.dumps(payload or _approved_config(), sort_keys=True),
         encoding="utf-8",
     )
     path.chmod(0o600)
+
+
+def _artifact_candidate() -> dict[str, Any]:
+    return json.loads(
+        (
+            REPO_ROOT
+            / "reports/phase2_openai_proxy_artifact/approval_candidate.json"
+        ).read_text(encoding="utf-8")
+    )
+
+
+def _artifact_approval() -> dict[str, Any]:
+    return {**_artifact_candidate(), "approval_status": "APPROVED"}
+
+
+def _artifact_candidate_model() -> OpenAIProxyArtifactCandidate:
+    return OpenAIProxyArtifactCandidate.model_validate_json(
+        json.dumps(_artifact_candidate())
+    )
+
+
+def _artifact_approval_model(
+    payload: dict[str, Any] | None = None,
+) -> ProxyArtifactApproval:
+    return ProxyArtifactApproval.model_validate_json(
+        json.dumps(payload or _artifact_approval())
+    )
+
+
+def _write_artifact_approval(
+    path: Path,
+    payload: dict[str, Any] | None = None,
+) -> None:
+    _write_approval(path, payload or _artifact_approval())
+
+
+def _expected_git_diff() -> str:
+    return "".join(
+        f"{status}\t{path}\n"
+        for path, status in _EXPECTED_PREFLIGHT_DELTA.items()
+    )
 
 
 def _clean_git_result(command: list[str]) -> subprocess.CompletedProcess:
@@ -93,13 +160,76 @@ def _clean_git_result(command: list[str]) -> subprocess.CompletedProcess:
     ):
         stdout = ""
     elif "diff" in command:
-        stdout = (
-            "A\tbackend/app/schemas/phase2_canary_provider_config.py\n"
-            "A\tbackend/scripts/validate_phase2_canary_provider_config.py\n"
-        )
+        stdout = _expected_git_diff()
     else:
         raise AssertionError(f"unexpected git command: {command}")
     return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
+
+
+def _artifact_image_inspect() -> list[dict[str, Any]]:
+    candidate = _artifact_candidate()
+    return [
+        {
+            "Id": candidate["image_id"],
+            "RepoTags": [candidate["image_name"]],
+            "Config": {
+                "User": candidate["runtime_user"],
+                "Entrypoint": candidate["entrypoint"],
+                "Cmd": None,
+                "Env": [
+                    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                    "SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt",
+                    "LANG=C.UTF-8",
+                    "PYTHONDONTWRITEBYTECODE=1",
+                    "PYTHONHASHSEED=0",
+                ],
+                "Labels": {
+                    "org.tickflow.phase2.base-image-digest": candidate[
+                        "base_image_digest"
+                    ],
+                    "org.tickflow.phase2.proxy-source-sha256": candidate[
+                        "proxy_source_sha256"
+                    ],
+                    "org.tickflow.phase2.responses-contract-sha256": candidate[
+                        "responses_contract_sha256"
+                    ],
+                    "org.tickflow.phase2.proxy-policy-sha256": candidate[
+                        "proxy_policy_sha256"
+                    ],
+                },
+            },
+        }
+    ]
+
+
+def _artifact_runtime_runner(
+    calls: list[list[str]],
+):
+    def runner(command: list[str], **_kwargs: Any) -> subprocess.CompletedProcess:
+        calls.append(list(command))
+        if command[:4] == ["docker", "image", "inspect", _artifact_candidate()["image_name"]]:
+            stdout = json.dumps(_artifact_image_inspect())
+        elif command[:2] == ["docker", "history"]:
+            stdout = json.dumps({"CreatedBy": "COPY verified inputs"}) + "\n"
+        elif command[:2] == ["docker", "cp"]:
+            source = command[2]
+            destination = Path(command[3])
+            if source.endswith(":/proxy/proxy.py"):
+                original = REPO_ROOT / "docker/phase2-openai-egress-proxy/proxy.py"
+            elif source.endswith(":/proxy/responses-contract.json"):
+                original = (
+                    REPO_ROOT
+                    / "docker/phase2-openai-egress-proxy/responses-contract.json"
+                )
+            else:
+                raise AssertionError(f"unexpected copy source: {source}")
+            destination.write_bytes(original.read_bytes())
+            stdout = ""
+        else:
+            stdout = ""
+        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
+
+    return runner
 
 
 def test_exact_provider_approval_is_accepted_and_frozen() -> None:
@@ -359,6 +489,108 @@ def test_approval_reader_rejects_malformed_or_non_contract_json(
         read_provider_approval(alternate, current_uid=os.getuid())
 
 
+def test_proxy_artifact_approval_is_exact_candidate_plus_approved() -> None:
+    approval = _artifact_approval_model()
+
+    assert approval.approval_status == "APPROVED"
+    assert approval.model_dump(mode="json", exclude={"approval_status"}) == (
+        _artifact_candidate()
+    )
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "image_id",
+        "base_image_digest",
+        "proxy_source_sha256",
+        "dockerfile_sha256",
+        "responses_contract_sha256",
+        "proxy_policy_sha256",
+        "launcher_source_sha256",
+    ],
+)
+def test_proxy_artifact_approval_rejects_every_identity_mutation(
+    field: str,
+) -> None:
+    payload = _artifact_approval()
+    value = payload[field]
+    assert isinstance(value, str)
+    payload[field] = value[:-1] + ("0" if value[-1] != "0" else "1")
+    try:
+        approval = _artifact_approval_model(payload)
+    except ValidationError:
+        return
+    with pytest.raises(CanaryPreflightError, match="artifact_approval_mismatch"):
+        validate_proxy_artifact_approval(_artifact_candidate_model(), approval)
+
+
+def test_secure_proxy_artifact_approval_reader_returns_no_secret_metadata(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "TickFlowPhase2Canary/proxy-artifact-approval.json"
+    _write_artifact_approval(path)
+
+    loaded = read_proxy_artifact_approval(path, current_uid=os.getuid())
+
+    assert loaded.approval.model_dump(mode="json") == _artifact_approval()
+    assert loaded.directory_mode == "0700"
+    assert loaded.file_mode == "0600"
+    assert loaded.owner_matches is True
+    assert loaded.parents_not_symlinks is True
+    assert loaded.config_secret_scan_clean is True
+
+
+@pytest.mark.parametrize(
+    ("mutation", "error_code"),
+    [
+        ("missing", "artifact_approval_missing"),
+        ("file_mode", "artifact_approval_file_mode_invalid"),
+        ("directory_mode", "artifact_approval_directory_mode_invalid"),
+        ("malformed", "artifact_approval_json_invalid"),
+        ("extra", "artifact_approval_contract_invalid"),
+        ("status", "artifact_approval_contract_invalid"),
+    ],
+)
+def test_proxy_artifact_approval_reader_fails_closed(
+    tmp_path: Path,
+    mutation: str,
+    error_code: str,
+) -> None:
+    path = tmp_path / "TickFlowPhase2Canary/proxy-artifact-approval.json"
+    if mutation != "missing":
+        payload = _artifact_approval()
+        if mutation == "extra":
+            payload["local_path"] = "/private/path"
+        elif mutation == "status":
+            payload["approval_status"] = "REVIEWED"
+        _write_artifact_approval(path, payload)
+        if mutation == "file_mode":
+            path.chmod(0o644)
+        elif mutation == "directory_mode":
+            path.parent.chmod(0o755)
+        elif mutation == "malformed":
+            path.write_text("{", encoding="utf-8")
+            path.chmod(0o600)
+
+    with pytest.raises(CanaryPreflightError, match=error_code):
+        read_proxy_artifact_approval(path, current_uid=os.getuid())
+
+
+def test_proxy_artifact_approval_reader_rejects_symlink(tmp_path: Path) -> None:
+    real = tmp_path / "real/proxy-artifact-approval.json"
+    _write_artifact_approval(real)
+    path = tmp_path / "TickFlowPhase2Canary/proxy-artifact-approval.json"
+    path.parent.mkdir(mode=0o700)
+    path.symlink_to(real)
+
+    with pytest.raises(
+        CanaryPreflightError,
+        match="artifact_approval_symlink_forbidden",
+    ):
+        read_proxy_artifact_approval(path, current_uid=os.getuid())
+
+
 def test_keychain_gate_checks_only_entry_existence_and_discards_output() -> None:
     calls: list[tuple[list[str], dict[str, Any]]] = []
 
@@ -405,8 +637,23 @@ def test_keychain_gate_returns_false_without_reading_missing_secret() -> None:
     ) is False
 
 
-def test_placeholder_secret_injection_is_single_file_readonly_and_cleans_up() -> None:
+def test_placeholder_secret_injection_is_single_file_readonly_and_cleans_up(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     approval = CanaryProviderApproval.model_validate(_approved_config())
+    observed: list[list[str]] = []
+    original = canary_preflight.build_openai_proxy_create_command
+
+    def capture(*args: Any, **kwargs: Any) -> list[str]:
+        command = original(*args, **kwargs)
+        observed.append(command)
+        return command
+
+    monkeypatch.setattr(
+        canary_preflight,
+        "build_openai_proxy_create_command",
+        capture,
+    )
 
     evidence = exercise_placeholder_secret_injection(REPO_ROOT, approval)
 
@@ -427,6 +674,12 @@ def test_placeholder_secret_injection_is_single_file_readonly_and_cleans_up() ->
         "secret_file_residue_count": 0,
         "temporary_directory_residue_count": 0,
     }
+    assert len(observed) == 1
+    assert observed[0][-1] == "tickflow-phase2-openai-egress-proxy:canary-v1"
+    assert any(
+        value.endswith("dst=/run/phase2/provider-auth,readonly")
+        for value in observed[0]
+    )
 
 
 def test_secret_exposure_scanner_detects_inspect_log_or_artifact_leaks() -> None:
@@ -489,6 +742,35 @@ def test_runtime_residue_reader_counts_only_phase2_provider_runtime() -> None:
     assert evidence.provider_process_residue_count == 1
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["docker", "start", "phase2-openai-proxy-x"],
+        ["docker", "run", "tickflow-phase2-openai-egress-proxy:canary-v1"],
+        ["docker", "network", "create", "phase2-canary-egress-x"],
+        ["docker", "network", "connect", "net", "container"],
+        ["docker", "pull", "example.invalid/image"],
+        ["docker", "login"],
+    ],
+)
+def test_restricted_runtime_runner_rejects_every_active_or_network_command(
+    command: list[str],
+) -> None:
+    runner = RestrictedCanaryRuntimeRunner(
+        lambda observed, **_kwargs: subprocess.CompletedProcess(observed, 0)
+    )
+
+    with pytest.raises(CanaryPreflightError, match="runtime_command_forbidden"):
+        runner(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            shell=False,
+            timeout=10,
+        )
+
+
 def test_git_gate_binds_preflight_to_clean_allowed_branch_delta() -> None:
     current_head = "c" * 40
     calls: list[list[str]] = []
@@ -506,10 +788,7 @@ def test_git_gate_binds_preflight_to_clean_allowed_branch_delta() -> None:
             subprocess.CompletedProcess(
                 [],
                 0,
-                stdout=(
-                    "A\tbackend/app/schemas/phase2_canary_provider_config.py\n"
-                    "A\tbackend/scripts/validate_phase2_canary_provider_config.py\n"
-                ),
+                stdout=_expected_git_diff(),
                 stderr="",
             ),
         ]
@@ -525,7 +804,7 @@ def test_git_gate_binds_preflight_to_clean_allowed_branch_delta() -> None:
 
     assert evidence.ready is True
     assert evidence.base_head == (
-        "b5c7e7bf3833f63c706535da9e1be818ddb2ec4f"
+        "165dc46ec9c10806ddcc4ff5d2171bc24ec7a87e"
     )
     assert evidence.current_head == current_head
     assert evidence.branch == "codex/tickflow-phase2-ai-review"
@@ -574,149 +853,53 @@ def test_git_gate_rejects_dirty_or_unapproved_drift() -> None:
     assert evidence.changed_paths_allowed is False
 
 
-def test_actual_runtime_proxy_is_mock_only_and_blocks_openai_canary() -> None:
-    evidence = inspect_runtime_proxy_policy(
-        REPO_ROOT / "docker/phase2-egress-proxy/proxy.py"
+@pytest.mark.parametrize(
+    "changed_diff",
+    [
+        _expected_git_diff().replace(
+            "A\tbackend/app/services/phase2_openai_proxy_contract.py\n",
+            "",
+        ),
+        _expected_git_diff()
+        + "A\tbackend/app/services/unapproved_runtime.py\n",
+        _expected_git_diff().replace(
+            "M\tbackend/scripts/validate_phase2_canary_provider_config.py\n",
+            "A\tbackend/scripts/validate_phase2_canary_provider_config.py\n",
+        ),
+        _expected_git_diff().replace(
+            "A\tdocker/phase2-openai-egress-proxy/proxy.py\n",
+            "D\tdocker/phase2-openai-egress-proxy/proxy.py\n",
+        ),
+        _expected_git_diff().replace(
+            "A\tdocker/phase2-openai-egress-proxy/proxy.py\n",
+            "R100\tdocker/phase2-openai-egress-proxy/proxy.py\t"
+            "docker/phase2-openai-egress-proxy/proxy-renamed.py\n",
+        ),
+    ],
+)
+def test_git_gate_requires_the_exact_status_path_delta(changed_diff: str) -> None:
+    outputs = iter(
+        [
+            subprocess.CompletedProcess([], 0, stdout="c" * 40 + "\n", stderr=""),
+            subprocess.CompletedProcess(
+                [],
+                0,
+                stdout="codex/tickflow-phase2-ai-review\n",
+                stderr="",
+            ),
+            subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+            subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+            subprocess.CompletedProcess([], 0, stdout=changed_diff, stderr=""),
+        ]
     )
 
-    assert evidence.status == "MOCK_ONLY"
-    assert evidence.approved_endpoint_enforced is False
-    assert evidence.actual_host == "phase2-mock-provider"
-    assert evidence.actual_port == 8081
-    assert evidence.actual_path == "/v1/typed-claims"
-    assert evidence.connection_type == "HTTPConnection"
-    assert evidence.tls_verification_enforced is False
-
-
-def test_unpinned_https_proxy_cannot_self_approve_with_dead_constants(
-    tmp_path: Path,
-) -> None:
-    proxy = tmp_path / "proxy.py"
-    proxy.write_text(
-        "\n".join(
-            [
-                "import http.client",
-                "import ssl",
-                'ALLOWED_METHOD = "POST"',
-                'UPSTREAM_HOST = "api.openai.com"',
-                "UPSTREAM_PORT = 443",
-                'UPSTREAM_PATH = "/v1/responses"',
-                "FOLLOW_REDIRECTS = False",
-                "RETRY_COUNT = 0",
-                "context = ssl.create_default_context()",
-                "connection = http.client.HTTPSConnection(",
-                "    UPSTREAM_HOST, UPSTREAM_PORT, context=context",
-                ")",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
+    evidence = read_git_gate(
+        REPO_ROOT,
+        runner=lambda command, **_kwargs: next(outputs),
     )
 
-    evidence = inspect_runtime_proxy_policy(proxy)
-
-    assert evidence.status == "UNPINNED"
-    assert evidence.approved_endpoint_enforced is False
-    assert evidence.artifact_hash_approved is False
-    assert evidence.connection_type == "HTTPSConnection"
-    assert evidence.tls_verification_enforced is True
-
-
-def test_runtime_proxy_requires_exact_source_image_and_label_binding(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    proxy = tmp_path / "proxy.py"
-    proxy.write_text(
-        "\n".join(
-            [
-                "import http.client",
-                "import ssl",
-                'ALLOWED_METHOD = "POST"',
-                'UPSTREAM_HOST = "api.openai.com"',
-                "UPSTREAM_PORT = 443",
-                'UPSTREAM_PATH = "/v1/responses"',
-                "FOLLOW_REDIRECTS = False",
-                "RETRY_COUNT = 0",
-                "context = ssl.create_default_context()",
-                "connection = http.client.HTTPSConnection(",
-                "    UPSTREAM_HOST, UPSTREAM_PORT, context=context",
-                ")",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    source_sha256 = canary_preflight._sha256(proxy)
-    image_digest = "sha256:" + "d" * 64
-    monkeypatch.setattr(
-        canary_preflight,
-        "_APPROVED_RUNTIME_PROXY_SHA256",
-        source_sha256,
-    )
-    monkeypatch.setattr(
-        canary_preflight,
-        "_APPROVED_RUNTIME_PROXY_IMAGE_DIGEST",
-        image_digest,
-    )
-
-    ready = inspect_runtime_proxy_policy(
-        proxy,
-        image_digest=image_digest,
-        image_source_sha256=source_sha256,
-    )
-    wrong_image = inspect_runtime_proxy_policy(
-        proxy,
-        image_digest="sha256:" + "e" * 64,
-        image_source_sha256=source_sha256,
-    )
-    proxy.write_text(proxy.read_text(encoding="utf-8") + "# one byte drift\n")
-    changed_source = inspect_runtime_proxy_policy(
-        proxy,
-        image_digest=image_digest,
-        image_source_sha256=source_sha256,
-    )
-
-    assert ready.status == "READY"
-    assert ready.approved_endpoint_enforced is True
-    assert ready.artifact_hash_approved is True
-    assert ready.image_digest_approved is True
-    assert ready.image_source_hash_matches is True
-    assert wrong_image.status == "IMAGE_UNVERIFIED"
-    assert wrong_image.approved_endpoint_enforced is False
-    assert changed_source.status == "UNPINNED"
-    assert changed_source.approved_endpoint_enforced is False
-
-
-def test_runtime_proxy_image_identity_reads_only_digest_and_source_label() -> None:
-    image_digest = "sha256:" + "d" * 64
-    source_sha256 = "a" * 64
-    observed: list[str] = []
-
-    def runner(
-        command: list[str],
-        **_kwargs: Any,
-    ) -> subprocess.CompletedProcess:
-        observed.extend(command)
-        return subprocess.CompletedProcess(
-            command,
-            0,
-            stdout=f"{image_digest}\t{source_sha256}\n",
-            stderr="",
-        )
-
-    assert read_runtime_proxy_image_identity(runner=runner) == (
-        image_digest,
-        source_sha256,
-    )
-    assert observed[:4] == [
-        "docker",
-        "image",
-        "inspect",
-        "tickflow-phase2-egress-proxy:runtime-v1",
-    ]
-    assert "{{json .}}" not in observed
-    assert "Config.Env" not in " ".join(observed)
+    assert evidence.ready is False
+    assert evidence.changed_paths_allowed is False
 
 
 def test_offline_canary_inputs_rebuild_projection_and_preserve_all_evidence() -> None:
@@ -803,12 +986,18 @@ def test_offline_canary_protected_evidence_matches_nine_frozen_sets() -> None:
     }
 
 
-def test_combined_preflight_blocks_mock_only_proxy_without_opening_socket(
+def test_combined_preflight_requires_artifact_approval_before_runtime_create(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config_path = tmp_path / "TickFlowPhase2Canary/provider-approval.json"
     _write_approval(config_path)
+    candidate = _artifact_candidate_model()
+    monkeypatch.setattr(
+        canary_preflight,
+        "load_reviewed_proxy_artifact",
+        lambda _repo_root: candidate,
+    )
 
     def keychain_runner(
         command: list[str],
@@ -816,16 +1005,11 @@ def test_combined_preflight_blocks_mock_only_proxy_without_opening_socket(
     ) -> subprocess.CompletedProcess:
         return subprocess.CompletedProcess(command, 0)
 
-    def runtime_runner(
-        command: list[str],
-        **_kwargs: Any,
-    ) -> subprocess.CompletedProcess:
-        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
-
     def forbid_socket(*_args: Any, **_kwargs: Any) -> socket.socket:
         raise AssertionError("network socket forbidden in preflight")
 
     monkeypatch.setattr(socket, "socket", forbid_socket)
+    runtime_calls: list[list[str]] = []
 
     result = run_canary_preflight(
         repo_root=REPO_ROOT,
@@ -833,12 +1017,12 @@ def test_combined_preflight_blocks_mock_only_proxy_without_opening_socket(
         account="macbookpro",
         current_uid=os.getuid(),
         keychain_runner=keychain_runner,
-        runtime_runner=runtime_runner,
+        runtime_runner=_artifact_runtime_runner(runtime_calls),
         git_runner=lambda command, **_kwargs: _clean_git_result(command),
     )
 
-    assert result.status == "PHASE2B_CANARY_EGRESS_BLOCKED"
-    assert result.errors == ["runtime_proxy_policy_not_approved"]
+    assert result.status == "PHASE2B_PROXY_ARTIFACT_APPROVAL_REQUIRED"
+    assert result.errors == ["artifact_approval_missing"]
     assert result.provider == "openai"
     assert result.exact_model == "gpt-5.6-terra"
     assert result.endpoint_alias == "openai_responses_v1"
@@ -850,9 +1034,14 @@ def test_combined_preflight_blocks_mock_only_proxy_without_opening_socket(
     assert result.secret_content_read is False
     assert result.secret_hash_recorded is False
     assert result.strict_json_schema == "READY"
-    assert result.tls == "BLOCKED"
+    assert result.proxy_artifact_candidate == "VALID"
+    assert result.proxy_artifact_review == "PASSED"
+    assert result.proxy_artifact_approval == "REQUIRED"
+    assert result.proxy_image == "IDENTITY_VERIFIED"
+    assert result.proxy_launcher == "HASH_VERIFIED"
+    assert result.tls == "NOT_RUN"
     assert result.redirect == "DISABLED"
-    assert result.egress_allowlist == "FAILED"
+    assert result.egress_allowlist == "NOT_RUN"
     assert result.provider_attempt_count == 0
     assert result.ai_call_count == 0
     assert result.retry_count == 0
@@ -862,6 +1051,87 @@ def test_combined_preflight_blocks_mock_only_proxy_without_opening_socket(
     assert result.external_action_evidence == (
         "DERIVED_FROM_UNCHANGED_AUDITS_AND_ABSENT_CANARY_RUNTIME"
     )
+    assert not any(command[:2] == ["docker", "create"] for command in runtime_calls)
+
+
+def test_combined_preflight_reaches_offline_ready_with_exact_approval(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = tmp_path / "TickFlowPhase2Canary/provider-approval.json"
+    artifact_approval_path = config_path.with_name("proxy-artifact-approval.json")
+    _write_approval(config_path)
+    _write_artifact_approval(artifact_approval_path)
+    candidate = _artifact_candidate_model()
+    monkeypatch.setattr(
+        canary_preflight,
+        "load_reviewed_proxy_artifact",
+        lambda _repo_root: candidate,
+    )
+    monkeypatch.setattr(
+        socket,
+        "socket",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("network socket forbidden in preflight")
+        ),
+    )
+    runtime_calls: list[list[str]] = []
+
+    result = run_canary_preflight(
+        repo_root=REPO_ROOT,
+        config_path=config_path,
+        artifact_approval_path=artifact_approval_path,
+        account="macbookpro",
+        current_uid=os.getuid(),
+        keychain_runner=lambda command, **_kwargs: subprocess.CompletedProcess(
+            command,
+            0,
+        ),
+        runtime_runner=_artifact_runtime_runner(runtime_calls),
+        git_runner=lambda command, **_kwargs: _clean_git_result(command),
+    )
+
+    assert result.status == "CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL"
+    assert result.errors == []
+    assert result.provider == "openai"
+    assert result.exact_model == "gpt-5.6-terra"
+    assert result.keychain_secret == "PRESENT"
+    assert result.secret_content_read is False
+    assert result.secret_hash_recorded is False
+    assert result.temporary_single_file_injection == "PASSED"
+    assert result.strict_json_schema == "READY"
+    assert result.proxy_artifact_approval == "APPROVED"
+    assert result.proxy_image == "CONTENT_VERIFIED"
+    assert result.proxy_launcher == "HASH_VERIFIED"
+    assert result.tls == "READY"
+    assert result.tls_evidence == "OFFLINE_ARTIFACT_VERIFIED"
+    assert result.redirect == "DISABLED"
+    assert result.egress_allowlist == "PASSED"
+    assert result.egress_evidence == "OFFLINE_APPLICATION_POLICY_VERIFIED"
+    assert result.provider_attempt_count == 0
+    assert result.ai_call_count == 0
+    assert result.provider_http == "NOT_RUN"
+    assert result.tickflow_api_request_count == 0
+    assert result.real_public_network_success_count == 0
+    forbidden = {"start", "run", "pull", "login"}
+    assert not any(
+        len(command) > 1 and command[1] in forbidden for command in runtime_calls
+    )
+    assert not any(
+        command[:3] in (
+            ["docker", "network", "create"],
+            ["docker", "network", "connect"],
+        )
+        for command in runtime_calls
+    )
+    create_calls = [
+        command for command in runtime_calls if command[:2] == ["docker", "create"]
+    ]
+    assert len(create_calls) == 1
+    assert "--network" in create_calls[0]
+    assert create_calls[0][create_calls[0].index("--network") + 1] == "none"
+    assert sum(command[:2] == ["docker", "cp"] for command in runtime_calls) == 2
+    assert sum(command[:3] == ["docker", "rm", "-f"] for command in runtime_calls) == 1
 
 
 def test_combined_preflight_missing_keychain_item_requires_user_action(

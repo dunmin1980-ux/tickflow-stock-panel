@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import ast
 import hashlib
 import hmac
 import json
@@ -17,7 +16,7 @@ import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import ValidationError
 
@@ -30,11 +29,23 @@ from app.schemas.phase2_canary_provider_config import (
 from app.services.phase2_ai_worker_protocol import build_worker_projection
 from app.services.phase2_claims_service import canonical_json_bytes
 from app.services.phase2_facts import validate_facts_document
+from app.services.phase2_openai_canary_runner import (
+    OpenAICanaryRuntimePaths,
+    build_openai_proxy_create_command,
+)
+from app.services.phase2_openai_proxy_artifact import (
+    IMAGE_NAME as OPENAI_PROXY_IMAGE,
+)
+from app.services.phase2_openai_proxy_artifact import (
+    OpenAIProxyArtifactCandidate,
+    OpenAIProxyArtifactError,
+    build_artifact_candidate,
+    compute_artifact_input_hashes,
+    inspect_openai_proxy_image,
+    verify_image_contents,
+)
 from app.services.phase2_provider_relay_runner import (
-    PROXY_IMAGE,
-    ProxyRuntimePaths,
     RelayRuntimePaths,
-    build_proxy_create_command,
     build_relay_create_command,
 )
 from scripts.validate_phase2_provider_relay import validate_provider_relay_artifacts
@@ -95,19 +106,47 @@ _PROTECTED_EXPECTED = {
         "4ae713b5ad4641a2c4f5f84f0d86bc6cdf5e309bcc23aab7fe596f6138fd897e",
     ),
 }
-_PREFLIGHT_BASE_HEAD = "b5c7e7bf3833f63c706535da9e1be818ddb2ec4f"
+_PREFLIGHT_BASE_HEAD = "165dc46ec9c10806ddcc4ff5d2171bc24ec7a87e"
 _PREFLIGHT_BRANCH = "codex/tickflow-phase2-ai-review"
-# A real Provider adapter must be reviewed independently before its exact hash is
-# pinned here.  None intentionally keeps every non-mock runtime fail-closed.
-_APPROVED_RUNTIME_PROXY_SHA256: str | None = None
-_APPROVED_RUNTIME_PROXY_IMAGE_DIGEST: str | None = None
-_RUNTIME_PROXY_SOURCE_LABEL = "org.tickflow.phase2.proxy-source-sha256"
-_ALLOWED_PREFLIGHT_CHANGES = {
-    "backend/app/schemas/phase2_canary_provider_config.py",
-    "backend/scripts/validate_phase2_canary_provider_config.py",
-    "backend/tests/test_phase2_canary_provider_config.py",
-    "docs/superpowers/plans/2026-08-01-tickflow-phase2b3b-canary-provider-preflight.md",
-    "reports/tickflow_phase2b_canary_provider_preflight_eval.md",
+_ALLOWED_PREFLIGHT_DELTA = {
+    "backend/app/services/phase2_openai_proxy_contract.py": "A",
+    "backend/app/services/phase2_openai_proxy_artifact.py": "A",
+    "backend/app/services/phase2_openai_canary_runner.py": "A",
+    "backend/scripts/build_phase2_openai_proxy_offline.py": "A",
+    "backend/scripts/validate_phase2_canary_provider_config.py": "M",
+    "backend/tests/test_phase2_openai_proxy_contract.py": "A",
+    "backend/tests/test_phase2_openai_proxy_artifact.py": "A",
+    "backend/tests/test_phase2_openai_canary_runner.py": "A",
+    "backend/tests/test_phase2_canary_provider_config.py": "M",
+    "docker/phase2-openai-egress-proxy/Dockerfile": "A",
+    "docker/phase2-openai-egress-proxy/proxy.py": "A",
+    "docker/phase2-openai-egress-proxy/responses-contract.json": "A",
+    "docker/phase2-openai-egress-proxy/secret.placeholder": "A",
+    "docker/phase2-openai-egress-proxy/receipt.placeholder.json": "A",
+    "docs/superpowers/plans/2026-08-02-tickflow-phase2b3b-openai-proxy.md": "A",
+    "reports/phase2_openai_proxy_artifact/approval_candidate.json": "A",
+    "reports/phase2_openai_proxy_artifact/build_evidence.json": "A",
+    "reports/tickflow_phase2b_canary_provider_preflight_eval.md": "M",
+}
+_PROXY_ARTIFACT_APPROVAL_REQUIRED = "PHASE2B_PROXY_ARTIFACT_APPROVAL_REQUIRED"
+_PROXY_ARTIFACT_EVIDENCE_FIELDS = {
+    "evidence_schema_version",
+    "status",
+    "image_name",
+    "image_id",
+    "offline_build",
+    "pull_allowed",
+    "build_network",
+    "image_identity_valid",
+    "image_history_clean",
+    "image_contents_valid",
+    "cleanup_complete",
+    "provider_attempt_count",
+    "ai_call_count",
+    "tickflow_request_count",
+    "public_network_request_count",
+    "independent_review",
+    "approval_candidate_sha256",
 }
 
 
@@ -122,6 +161,22 @@ class CanaryPreflightError(ValueError):
 @dataclass(frozen=True)
 class ProviderApprovalLoad:
     approval: CanaryProviderApproval
+    directory_mode: str
+    file_mode: str
+    owner_matches: bool
+    parents_not_symlinks: bool
+    config_secret_scan_clean: bool
+
+
+class ProxyArtifactApproval(OpenAIProxyArtifactCandidate):
+    """Exact externally approved artifact identity, without local paths."""
+
+    approval_status: Literal["APPROVED"]
+
+
+@dataclass(frozen=True)
+class ProxyArtifactApprovalLoad:
+    approval: ProxyArtifactApproval
     directory_mode: str
     file_mode: str
     owner_matches: bool
@@ -208,9 +263,16 @@ class CanaryPreflightResult:
     secret_artifact_hit_count: int = 0
     secret_temporary_residue_count: int = 0
     strict_json_schema: str = "NOT_RUN"
+    proxy_artifact_candidate: str = "NOT_RUN"
+    proxy_artifact_review: str = "NOT_RUN"
+    proxy_artifact_approval: str = "NOT_RUN"
+    proxy_image: str = "NOT_RUN"
+    proxy_launcher: str = "NOT_RUN"
     tls: str = "NOT_RUN"
+    tls_evidence: str = "NOT_RUN"
     redirect: str = "NOT_RUN"
     egress_allowlist: str = "NOT_RUN"
+    egress_evidence: str = "NOT_RUN"
     facts: str = "NOT_RUN"
     projection: str = "NOT_RUN"
     projection_sha: str = "NOT_RUN"
@@ -246,28 +308,6 @@ class GitGateEvidence:
     worktree_clean: bool
     base_is_ancestor: bool
     changed_paths_allowed: bool
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass(frozen=True)
-class RuntimeProxyPolicyEvidence:
-    status: str
-    approved_endpoint_enforced: bool
-    artifact_sha256: str
-    artifact_hash_approved: bool
-    image_digest: str | None
-    image_digest_approved: bool
-    image_source_hash_matches: bool
-    actual_method: str | None
-    actual_host: str | None
-    actual_port: int | None
-    actual_path: str | None
-    connection_type: str | None
-    tls_verification_enforced: bool
-    redirects_disabled: bool
-    retry_count: int | None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -377,6 +417,106 @@ def read_provider_approval(
     )
 
 
+def _assert_artifact_approval_parent_chain(path: Path) -> None:
+    current = Path(path.anchor)
+    for part in path.parent.parts[1:]:
+        current /= part
+        try:
+            metadata = os.lstat(current)
+        except OSError as exc:
+            raise CanaryPreflightError("artifact_approval_missing") from exc
+        if stat.S_ISLNK(metadata.st_mode):
+            raise CanaryPreflightError(
+                "artifact_approval_parent_symlink_forbidden"
+            )
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise CanaryPreflightError("artifact_approval_parent_not_directory")
+
+
+def read_proxy_artifact_approval(
+    path: Path,
+    *,
+    current_uid: int,
+) -> ProxyArtifactApprovalLoad:
+    """Read the exact non-sensitive artifact approval without following links."""
+    candidate = _absolute(path)
+    _assert_artifact_approval_parent_chain(candidate)
+    try:
+        before = os.lstat(candidate)
+    except OSError as exc:
+        raise CanaryPreflightError("artifact_approval_missing") from exc
+    if stat.S_ISLNK(before.st_mode):
+        raise CanaryPreflightError("artifact_approval_symlink_forbidden")
+    if not stat.S_ISREG(before.st_mode):
+        raise CanaryPreflightError("artifact_approval_not_regular_file")
+    directory = os.lstat(candidate.parent)
+    if stat.S_IMODE(directory.st_mode) != 0o700:
+        raise CanaryPreflightError("artifact_approval_directory_mode_invalid")
+    if directory.st_uid != current_uid or before.st_uid != current_uid:
+        raise CanaryPreflightError("artifact_approval_owner_invalid")
+    if stat.S_IMODE(before.st_mode) != 0o600:
+        raise CanaryPreflightError("artifact_approval_file_mode_invalid")
+    if not 0 < before.st_size <= _MAX_CONFIG_BYTES:
+        raise CanaryPreflightError("artifact_approval_size_invalid")
+
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(candidate, flags)
+    except OSError as exc:
+        raise CanaryPreflightError("artifact_approval_open_failed") from exc
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode):
+            raise CanaryPreflightError("artifact_approval_not_regular_file")
+        if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+            raise CanaryPreflightError("artifact_approval_replaced_during_open")
+        raw = _read_bounded_file(descriptor, opened.st_size)
+        after = os.lstat(candidate)
+        if (after.st_dev, after.st_ino) != (opened.st_dev, opened.st_ino):
+            raise CanaryPreflightError("artifact_approval_replaced_during_read")
+    finally:
+        os.close(descriptor)
+    if _CONFIG_SENSITIVE.search(raw):
+        raise CanaryPreflightError("artifact_approval_sensitive_shape_detected")
+
+    def reject_constant(_value: str) -> None:
+        raise ValueError("non-finite JSON constant")
+
+    try:
+        _ = json.loads(raw, parse_constant=reject_constant)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise CanaryPreflightError("artifact_approval_json_invalid") from exc
+    try:
+        approval = ProxyArtifactApproval.model_validate_json(raw)
+    except ValidationError as exc:
+        raise CanaryPreflightError("artifact_approval_contract_invalid") from exc
+    return ProxyArtifactApprovalLoad(
+        approval=approval,
+        directory_mode="0700",
+        file_mode="0600",
+        owner_matches=True,
+        parents_not_symlinks=True,
+        config_secret_scan_clean=True,
+    )
+
+
+def validate_proxy_artifact_approval(
+    candidate: OpenAIProxyArtifactCandidate,
+    approval: ProxyArtifactApproval,
+) -> None:
+    if not isinstance(candidate, OpenAIProxyArtifactCandidate) or not isinstance(
+        approval,
+        ProxyArtifactApproval,
+    ):
+        raise CanaryPreflightError("artifact_approval_contract_invalid")
+    approved_candidate = approval.model_dump(
+        mode="json",
+        exclude={"approval_status"},
+    )
+    if approved_candidate != candidate.model_dump(mode="json"):
+        raise CanaryPreflightError("artifact_approval_mismatch")
+
+
 def keychain_secret_exists(
     *,
     account: str,
@@ -453,15 +593,16 @@ def read_git_gate(
     current_head = head_result.stdout.strip()
     branch = branch_result.stdout.strip()
     worktree_clean = status_result.stdout == ""
+    observed_delta: dict[str, str] = {}
     changed_paths_allowed = True
     for raw_line in diff_result.stdout.splitlines():
         fields = raw_line.split("\t")
-        if (
-            len(fields) != 2
-            or fields[0] != "A"
-            or fields[1] not in _ALLOWED_PREFLIGHT_CHANGES
-        ):
+        if len(fields) != 2 or fields[1] in observed_delta:
             changed_paths_allowed = False
+            continue
+        observed_delta[fields[1]] = fields[0]
+    if observed_delta != _ALLOWED_PREFLIGHT_DELTA:
+        changed_paths_allowed = False
     head_valid = re.fullmatch(r"[0-9a-f]{40}", current_head) is not None
     base_is_ancestor = ancestor_result.returncode == 0
     ready = (
@@ -482,162 +623,205 @@ def read_git_gate(
     )
 
 
-def _assigned_constants(tree: ast.Module) -> dict[str, Any]:
-    values: dict[str, Any] = {}
-    for node in tree.body:
-        if (
-            isinstance(node, ast.Assign)
-            and len(node.targets) == 1
-            and isinstance(node.targets[0], ast.Name)
-        ):
-            try:
-                values[node.targets[0].id] = ast.literal_eval(node.value)
-            except (ValueError, TypeError):
-                continue
-    return values
-
-
-def _call_name(node: ast.Call) -> str | None:
-    function = node.func
-    if not isinstance(function, ast.Attribute):
-        return None
-    if (
-        isinstance(function.value, ast.Attribute)
-        and isinstance(function.value.value, ast.Name)
-        and function.value.value.id == "http"
-        and function.value.attr == "client"
-    ):
-        return function.attr
-    if isinstance(function.value, ast.Name) and function.value.id == "ssl":
-        return f"ssl.{function.attr}"
-    return None
-
-
-def inspect_runtime_proxy_policy(
-    path: Path,
-    *,
-    image_digest: str | None = None,
-    image_source_sha256: str | None = None,
-) -> RuntimeProxyPolicyEvidence:
-    """Inspect the actual Proxy source that a Canary runner would execute."""
+def _read_artifact_report(path: Path, category: str) -> tuple[bytes, dict[str, Any]]:
     candidate = _absolute(path)
-    if candidate.is_symlink() or not candidate.is_file():
-        raise CanaryPreflightError("runtime_proxy_artifact_invalid")
+    try:
+        metadata = os.lstat(candidate)
+    except OSError as exc:
+        raise CanaryPreflightError(category) from exc
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+        raise CanaryPreflightError(category)
+    if not 0 < metadata.st_size <= _MAX_CONFIG_BYTES:
+        raise CanaryPreflightError(category)
     try:
         raw = candidate.read_bytes()
-        tree = ast.parse(raw.decode("utf-8"))
-    except (OSError, UnicodeDecodeError, SyntaxError) as exc:
-        raise CanaryPreflightError("runtime_proxy_artifact_invalid") from exc
-    artifact_sha256 = hashlib.sha256(raw).hexdigest()
-    constants = _assigned_constants(tree)
-    calls = [
-        name
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and (name := _call_name(node)) is not None
-    ]
-    connection_calls = [
-        name for name in calls if name in {"HTTPConnection", "HTTPSConnection"}
-    ]
-    connection_type = connection_calls[0] if len(connection_calls) == 1 else None
-    default_tls_context = "ssl.create_default_context" in calls
-    unverified_tls_context = "ssl._create_unverified_context" in calls
-    tls_verified = (
-        connection_type == "HTTPSConnection"
-        and default_tls_context
-        and not unverified_tls_context
-    )
-    method = constants.get("ALLOWED_METHOD")
-    host = constants.get("UPSTREAM_HOST")
-    port = constants.get("UPSTREAM_PORT")
-    path_value = constants.get("UPSTREAM_PATH")
-    redirects_disabled = constants.get("FOLLOW_REDIRECTS") is False
-    retry_count = constants.get("RETRY_COUNT")
-    endpoint_structurally_enforced = (
-        method == "POST"
-        and host == "api.openai.com"
-        and type(port) is int
-        and port == 443
-        and path_value == "/v1/responses"
-        and tls_verified
-        and redirects_disabled
-        and retry_count == 0
-    )
-    artifact_hash_approved = (
-        _APPROVED_RUNTIME_PROXY_SHA256 is not None
-        and hmac.compare_digest(
-            artifact_sha256,
-            _APPROVED_RUNTIME_PROXY_SHA256,
-        )
-    )
-    image_digest_approved = (
-        _APPROVED_RUNTIME_PROXY_IMAGE_DIGEST is not None
-        and image_digest is not None
-        and hmac.compare_digest(
-            image_digest,
-            _APPROVED_RUNTIME_PROXY_IMAGE_DIGEST,
-        )
-    )
-    image_source_hash_matches = (
-        image_source_sha256 is not None
-        and hmac.compare_digest(image_source_sha256, artifact_sha256)
-    )
-    endpoint_enforced = (
-        endpoint_structurally_enforced
-        and artifact_hash_approved
-        and image_digest_approved
-        and image_source_hash_matches
-    )
-    mock_only = (
-        host == "phase2-mock-provider"
-        and port == 8081
-        and path_value == "/v1/typed-claims"
-        and connection_type == "HTTPConnection"
-    )
-    if mock_only:
-        runtime_status = "MOCK_ONLY"
-    elif endpoint_structurally_enforced and not artifact_hash_approved:
-        runtime_status = "UNPINNED"
-    elif endpoint_structurally_enforced and not endpoint_enforced:
-        runtime_status = "IMAGE_UNVERIFIED"
-    elif endpoint_enforced:
-        runtime_status = "READY"
-    else:
-        runtime_status = "BLOCKED"
-    return RuntimeProxyPolicyEvidence(
-        status=runtime_status,
-        approved_endpoint_enforced=endpoint_enforced,
-        artifact_sha256=artifact_sha256,
-        artifact_hash_approved=artifact_hash_approved,
-        image_digest=image_digest,
-        image_digest_approved=image_digest_approved,
-        image_source_hash_matches=image_source_hash_matches,
-        actual_method=method if isinstance(method, str) else None,
-        actual_host=host if isinstance(host, str) else None,
-        actual_port=port if type(port) is int else None,
-        actual_path=path_value if isinstance(path_value, str) else None,
-        connection_type=connection_type,
-        tls_verification_enforced=tls_verified,
-        redirects_disabled=redirects_disabled,
-        retry_count=retry_count if type(retry_count) is int else None,
-    )
+    except OSError as exc:
+        raise CanaryPreflightError(category) from exc
+    if len(raw) != metadata.st_size or _CONFIG_SENSITIVE.search(raw):
+        raise CanaryPreflightError(category)
+
+    def reject_constant(_value: str) -> None:
+        raise ValueError("non-finite JSON constant")
+
+    try:
+        parsed = json.loads(raw, parse_constant=reject_constant)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise CanaryPreflightError(category) from exc
+    if not isinstance(parsed, dict):
+        raise CanaryPreflightError(category)
+    return raw, parsed
 
 
-def read_runtime_proxy_image_identity(
+def load_reviewed_proxy_artifact(repo_root: Path) -> OpenAIProxyArtifactCandidate:
+    """Load the committed, independently reviewed candidate and bind its inputs."""
+    root = _absolute(repo_root)
+    report_root = root / "reports/phase2_openai_proxy_artifact"
+    candidate_raw, _candidate_payload = _read_artifact_report(
+        report_root / "approval_candidate.json",
+        "artifact_candidate_invalid",
+    )
+    _evidence_raw, evidence = _read_artifact_report(
+        report_root / "build_evidence.json",
+        "artifact_review_evidence_invalid",
+    )
+    try:
+        candidate = OpenAIProxyArtifactCandidate.model_validate_json(candidate_raw)
+    except ValidationError as exc:
+        raise CanaryPreflightError("artifact_candidate_invalid") from exc
+    candidate_sha256 = hashlib.sha256(candidate_raw).hexdigest()
+    expected_evidence = {
+        "evidence_schema_version": 1,
+        "status": _PROXY_ARTIFACT_APPROVAL_REQUIRED,
+        "image_name": candidate.image_name,
+        "image_id": candidate.image_id,
+        "offline_build": True,
+        "pull_allowed": False,
+        "build_network": "none",
+        "image_identity_valid": True,
+        "image_history_clean": True,
+        "image_contents_valid": True,
+        "cleanup_complete": True,
+        "provider_attempt_count": 0,
+        "ai_call_count": 0,
+        "tickflow_request_count": 0,
+        "public_network_request_count": 0,
+        "independent_review": "PASSED",
+        "approval_candidate_sha256": candidate_sha256,
+    }
+    if set(evidence) != _PROXY_ARTIFACT_EVIDENCE_FIELDS or evidence != expected_evidence:
+        raise CanaryPreflightError("artifact_review_evidence_invalid")
+    try:
+        hashes = compute_artifact_input_hashes(root)
+    except OpenAIProxyArtifactError as exc:
+        raise CanaryPreflightError("artifact_source_binding_invalid") from exc
+    if (
+        candidate.proxy_source_sha256 != hashes.proxy_source_sha256
+        or candidate.dockerfile_sha256 != hashes.dockerfile_sha256
+        or candidate.responses_contract_sha256 != hashes.responses_contract_sha256
+        or candidate.proxy_policy_sha256 != hashes.proxy_policy_sha256
+        or candidate.launcher_source_sha256 != hashes.launcher_source_sha256
+    ):
+        raise CanaryPreflightError("artifact_source_binding_invalid")
+    return candidate
+
+
+class RestrictedCanaryRuntimeRunner:
+    """Allow only bounded, offline artifact inspection and residue probes."""
+
+    def __init__(self, runner: Callable[..., subprocess.CompletedProcess[Any]]) -> None:
+        self._runner = runner
+        self._approved_image_id: str | None = None
+        self._verification_container: str | None = None
+        self._create_count = 0
+        self._copy_count = 0
+
+    def bind_image_id(self, image_id: str) -> None:
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", image_id) is None:
+            raise CanaryPreflightError("runtime_image_id_invalid")
+        if self._approved_image_id not in {None, image_id}:
+            raise CanaryPreflightError("runtime_image_id_rebound")
+        self._approved_image_id = image_id
+
+    def _validate(self, command: list[str]) -> None:
+        if command in (
+            ["docker", "ps", "-a", "--format", "{{.Image}}\t{{.Names}}"],
+            ["docker", "network", "ls", "--format", "{{.Name}}"],
+            ["ps", "-axo", "command="],
+            ["docker", "image", "inspect", OPENAI_PROXY_IMAGE],
+            [
+                "docker",
+                "history",
+                "--no-trunc",
+                "--format",
+                "{{json .}}",
+                OPENAI_PROXY_IMAGE,
+            ],
+        ):
+            return
+        if (
+            len(command) == 7
+            and command[:3] == ["docker", "create", "--name"]
+            and command[4:6] == ["--network", "none"]
+            and re.fullmatch(
+                r"phase2-openai-proxy-verify-[0-9a-f]{12}",
+                command[3],
+            )
+            and command[6] == self._approved_image_id
+            and self._create_count == 0
+        ):
+            self._verification_container = command[3]
+            self._create_count += 1
+            return
+        if (
+            len(command) == 4
+            and command[:2] == ["docker", "cp"]
+            and self._verification_container is not None
+            and command[2]
+            in {
+                f"{self._verification_container}:/proxy/proxy.py",
+                (
+                    f"{self._verification_container}:"
+                    "/proxy/responses-contract.json"
+                ),
+            }
+            and Path(command[3]).is_absolute()
+            and self._copy_count < 2
+        ):
+            self._copy_count += 1
+            return
+        if (
+            command
+            == ["docker", "rm", "-f", self._verification_container]
+            and self._verification_container is not None
+        ):
+            return
+        raise CanaryPreflightError("runtime_command_forbidden")
+
+    def __call__(self, command: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[Any]:
+        normalized = list(command)
+        self._validate(normalized)
+        if kwargs.get("shell") is not False:
+            raise CanaryPreflightError("runtime_command_forbidden")
+        return self._runner(normalized, **kwargs)
+
+
+def _strict_json_output(raw: str, category: str) -> Any:
+    def reject_constant(_value: str) -> None:
+        raise ValueError("non-finite")
+
+    try:
+        return json.loads(raw, parse_constant=reject_constant)
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise CanaryPreflightError(category) from exc
+
+
+def inspect_approved_proxy_image(
+    repo_root: Path,
+    candidate: OpenAIProxyArtifactCandidate,
     *,
-    runner: Callable[..., subprocess.CompletedProcess[Any]] = subprocess.run,
-) -> tuple[str, str]:
-    """Read only the local image ID and audited source-hash label."""
-    result = runner(
+    runner: RestrictedCanaryRuntimeRunner,
+):
+    try:
+        hashes = compute_artifact_input_hashes(repo_root)
+    except OpenAIProxyArtifactError as exc:
+        raise CanaryPreflightError("artifact_source_binding_invalid") from exc
+    runner.bind_image_id(candidate.image_id)
+    inspect_result = runner(
+        ["docker", "image", "inspect", OPENAI_PROXY_IMAGE],
+        check=False,
+        capture_output=True,
+        text=True,
+        shell=False,
+        timeout=10,
+    )
+    history_result = runner(
         [
             "docker",
-            "image",
-            "inspect",
-            PROXY_IMAGE,
+            "history",
+            "--no-trunc",
             "--format",
-            (
-                "{{.Id}}\t{{index .Config.Labels "
-                f'"{_RUNTIME_PROXY_SOURCE_LABEL}"}}}}'
-            ),
+            "{{json .}}",
+            OPENAI_PROXY_IMAGE,
         ],
         check=False,
         capture_output=True,
@@ -645,16 +829,57 @@ def read_runtime_proxy_image_identity(
         shell=False,
         timeout=10,
     )
-    if result.returncode != 0 or not isinstance(result.stdout, str):
-        raise CanaryPreflightError("runtime_proxy_image_probe_failed")
-    fields = result.stdout.strip().split("\t")
     if (
-        len(fields) != 2
-        or re.fullmatch(r"sha256:[0-9a-f]{64}", fields[0]) is None
-        or re.fullmatch(r"[0-9a-f]{64}", fields[1]) is None
+        inspect_result.returncode != 0
+        or history_result.returncode != 0
+        or not isinstance(inspect_result.stdout, str)
+        or not isinstance(history_result.stdout, str)
     ):
-        raise CanaryPreflightError("runtime_proxy_image_identity_invalid")
-    return fields[0], fields[1]
+        raise CanaryPreflightError("artifact_image_probe_failed")
+    inspect_payload = _strict_json_output(
+        inspect_result.stdout,
+        "artifact_image_identity_invalid",
+    )
+    history = [
+        _strict_json_output(line, "artifact_image_history_invalid")
+        for line in history_result.stdout.splitlines()
+        if line.strip()
+    ]
+    try:
+        image = inspect_openai_proxy_image(inspect_payload, history, hashes)
+    except OpenAIProxyArtifactError as exc:
+        raise CanaryPreflightError("artifact_image_identity_invalid") from exc
+    if (
+        image.image_id != candidate.image_id
+        or image.image_name != candidate.image_name
+        or image.proxy_source_sha256 != candidate.proxy_source_sha256
+        or image.responses_contract_sha256 != candidate.responses_contract_sha256
+        or image.proxy_policy_sha256 != candidate.proxy_policy_sha256
+    ):
+        raise CanaryPreflightError("artifact_image_identity_mismatch")
+    return image
+
+
+def verify_approved_proxy_artifact(
+    repo_root: Path,
+    candidate: OpenAIProxyArtifactCandidate,
+    approval: ProxyArtifactApproval,
+    image: Any,
+    *,
+    runner: RestrictedCanaryRuntimeRunner,
+) -> None:
+    validate_proxy_artifact_approval(candidate, approval)
+    try:
+        contents = verify_image_contents(
+            repo_root,
+            candidate.image_id,
+            executor=runner,
+        )
+        rebuilt = build_artifact_candidate(repo_root, image, contents)
+    except OpenAIProxyArtifactError as exc:
+        raise CanaryPreflightError("artifact_image_content_invalid") from exc
+    if rebuilt != candidate:
+        raise CanaryPreflightError("artifact_image_content_mismatch")
 
 
 def _serialized(value: Any) -> bytes:
@@ -747,7 +972,7 @@ def exercise_placeholder_secret_injection(
             runtime_files["response.json"],
             runtime_files["relay-receipt.json"],
         )
-        proxy_paths = ProxyRuntimePaths(
+        proxy_paths = OpenAICanaryRuntimePaths(
             secret_path,
             runtime_files["proxy-receipt.json"],
         )
@@ -757,26 +982,23 @@ def exercise_placeholder_secret_injection(
             relay_paths,
             mode="run",
         )
-        proxy_command = build_proxy_create_command(
-            "phase2-canary-proxy-preflight",
-            "phase2-canary-net",
+        proxy_command = build_openai_proxy_create_command(
+            "phase2-openai-proxy-preflight",
+            "phase2-canary-relay-preflight",
             proxy_paths,
         )
-        runtime_evidence_path = (
-            root / "reports/phase2_provider_relay/runtime_evidence.json"
+        proxy_readonly_mount = any(
+            item.endswith("dst=/run/phase2/provider-auth,readonly")
+            for item in proxy_command
         )
-        runtime_evidence = json.loads(runtime_evidence_path.read_bytes())
-        runtime_secret_boundary_verified = runtime_evidence.get(
-            "secret_boundary"
-        ) == {
-            "secret_present": True,
-            "secret_value_hit_count": 0,
-            "secret_digest_recorded": False,
-            "secret_file_cleanup": True,
-            "relay_has_secret_mount": False,
-            "proxy_has_readonly_secret_mount": True,
-            "mock_has_readonly_secret_mount": True,
-        }
+        relay_has_secret_mount = any(
+            "/run/phase2/provider-auth" in item for item in relay_command
+        )
+        runtime_secret_boundary_verified = (
+            proxy_readonly_mount
+            and not relay_has_secret_mount
+            and proxy_command[-1] == OPENAI_PROXY_IMAGE
+        )
         policy = CanaryEgressPolicy.from_approval(approval)
         request = build_responses_request_contract(approval)
         projection = {"symbol": approval.approved_symbol, "secret_present": False}
@@ -789,7 +1011,10 @@ def exercise_placeholder_secret_injection(
         artifacts = [
             proxy_command,
             relay_command,
-            runtime_evidence.get("secret_boundary", {}),
+            {
+                "proxy_has_readonly_secret_mount": proxy_readonly_mount,
+                "relay_has_secret_mount": relay_has_secret_mount,
+            },
             policy.model_dump(mode="json"),
             projection,
             request,
@@ -800,13 +1025,6 @@ def exercise_placeholder_secret_injection(
         artifact_hits = count_secret_exposure(placeholder, artifacts)
         log_hits = count_secret_exposure(placeholder, logs)
         workspace_hits = _workspace_value_hits(root, placeholder_bytes)
-        proxy_readonly_mount = any(
-            item.endswith("dst=/run/phase2/provider-auth,readonly")
-            for item in proxy_command
-        )
-        relay_has_secret_mount = any(
-            "/run/phase2/provider-auth" in item for item in relay_command
-        )
         if not validate_exact_egress(
             policy,
             scheme="https",
@@ -889,15 +1107,23 @@ def read_runtime_residue(
     container_markers = (
         "tickflow-phase2-provider-relay",
         "tickflow-phase2-egress-proxy",
+        "tickflow-phase2-openai-egress-proxy",
         "tickflow-phase2-mock-provider",
         "phase2-relay-",
         "phase2-proxy-",
+        "phase2-openai-proxy-",
         "phase2-mock-",
     )
-    network_markers = ("phase2-provider-", "phase2-relay-proxy-")
+    network_markers = (
+        "phase2-provider-",
+        "phase2-relay-proxy-",
+        "phase2-canary-relay-",
+        "phase2-canary-egress-",
+    )
     process_markers = (
         "phase2-provider-relay",
         "phase2-egress-proxy",
+        "phase2-openai-egress-proxy",
         "phase2-mock-provider",
         "run_phase2_mock_provider_relay",
     )
@@ -1171,7 +1397,7 @@ def run_canary_preflight(
     keychain_runner: Callable[..., subprocess.CompletedProcess[Any]] = subprocess.run,
     runtime_runner: Callable[..., subprocess.CompletedProcess[Any]] = subprocess.run,
     git_runner: Callable[..., subprocess.CompletedProcess[Any]] = subprocess.run,
-    proxy_policy_path: Path | None = None,
+    artifact_approval_path: Path | None = None,
 ) -> CanaryPreflightResult:
     """Run every approved local gate and stop before Provider execution."""
     try:
@@ -1387,8 +1613,9 @@ def run_canary_preflight(
             **configured,
         )
 
+    restricted_runtime = RestrictedCanaryRuntimeRunner(runtime_runner)
     try:
-        runtime = read_runtime_residue(runner=runtime_runner)
+        runtime = read_runtime_residue(runner=restricted_runtime)
     except Exception:
         return CanaryPreflightResult(
             status="PHASE2B_CANARY_CONFIG_BLOCKED",
@@ -1442,79 +1669,150 @@ def run_canary_preflight(
             **configured,
         )
 
+    common = {
+        "keychain_secret": "PRESENT",
+        "temporary_single_file_injection": "PASSED",
+        "secret_log_hit_count": placeholder.secret_log_hit_count,
+        "secret_artifact_hit_count": placeholder.secret_artifact_hit_count,
+        "secret_temporary_residue_count": 0,
+        "strict_json_schema": "READY",
+        "redirect": "DISABLED",
+        "facts": "VALID",
+        "projection": "VALID",
+        "projection_sha": "PASSED",
+        "provider_relay": offline.provider_relay_status,
+        "historical_evidence": "UNCHANGED",
+        "external_action_evidence": offline.external_action_evidence,
+        "provider_attempt_count": offline.provider_attempt_count,
+        "ai_call_count": offline.ai_call_count,
+        "tickflow_api_request_count": offline.tickflow_api_request_count,
+        "real_public_network_success_count": (
+            offline.real_public_network_success_count
+        ),
+        **git_fields,
+        **runtime.to_dict(),
+        **configured,
+    }
     try:
-        runtime_policy_path = (
-            proxy_policy_path
-            or _absolute(repo_root) / "docker/phase2-egress-proxy/proxy.py"
+        artifact_candidate = load_reviewed_proxy_artifact(repo_root)
+    except CanaryPreflightError as exc:
+        return CanaryPreflightResult(
+            status="PHASE2B_CANARY_EGRESS_BLOCKED",
+            errors=[exc.code],
+            proxy_artifact_candidate="INVALID",
+            proxy_artifact_review="FAILED",
+            tls="BLOCKED",
+            egress_allowlist="FAILED",
+            **common,
         )
-        runtime_policy = inspect_runtime_proxy_policy(
-            runtime_policy_path
-        )
-        if runtime_policy.status == "IMAGE_UNVERIFIED":
-            image_digest, image_source_sha256 = read_runtime_proxy_image_identity(
-                runner=runtime_runner
-            )
-            runtime_policy = inspect_runtime_proxy_policy(
-                runtime_policy_path,
-                image_digest=image_digest,
-                image_source_sha256=image_source_sha256,
-            )
     except Exception:
         return CanaryPreflightResult(
             status="PHASE2B_CANARY_EGRESS_BLOCKED",
-            errors=["runtime_proxy_policy_probe_failed"],
-            keychain_secret="PRESENT",
-            temporary_single_file_injection="PASSED",
-            strict_json_schema="READY",
+            errors=["artifact_candidate_probe_failed"],
+            proxy_artifact_candidate="INVALID",
+            proxy_artifact_review="FAILED",
             tls="BLOCKED",
-            redirect="DISABLED",
             egress_allowlist="FAILED",
-            facts="VALID",
-            projection="VALID",
-            projection_sha="PASSED",
-            provider_relay=offline.provider_relay_status,
-            historical_evidence="UNCHANGED",
-            external_action_evidence=offline.external_action_evidence,
-            provider_attempt_count=offline.provider_attempt_count,
-            ai_call_count=offline.ai_call_count,
-            tickflow_api_request_count=offline.tickflow_api_request_count,
-            real_public_network_success_count=(
-                offline.real_public_network_success_count
-            ),
-            **git_fields,
-            **runtime.to_dict(),
-            **configured,
+            **common,
         )
-    if not runtime_policy.approved_endpoint_enforced:
+    try:
+        image = inspect_approved_proxy_image(
+            repo_root,
+            artifact_candidate,
+            runner=restricted_runtime,
+        )
+    except CanaryPreflightError as exc:
         return CanaryPreflightResult(
             status="PHASE2B_CANARY_EGRESS_BLOCKED",
-            errors=["runtime_proxy_policy_not_approved"],
-            keychain_secret="PRESENT",
-            temporary_single_file_injection="PASSED",
-            secret_log_hit_count=placeholder.secret_log_hit_count,
-            secret_artifact_hit_count=placeholder.secret_artifact_hit_count,
-            secret_temporary_residue_count=0,
-            strict_json_schema="READY",
+            errors=[exc.code],
+            proxy_artifact_candidate="VALID",
+            proxy_artifact_review="PASSED",
+            proxy_image="FAILED",
+            proxy_launcher="HASH_VERIFIED",
             tls="BLOCKED",
-            redirect=(
-                "DISABLED" if runtime_policy.redirects_disabled else "ENABLED"
-            ),
             egress_allowlist="FAILED",
-            facts="VALID",
-            projection="VALID",
-            projection_sha="PASSED",
-            provider_relay=offline.provider_relay_status,
-            historical_evidence="UNCHANGED",
-            external_action_evidence=offline.external_action_evidence,
-            provider_attempt_count=offline.provider_attempt_count,
-            ai_call_count=offline.ai_call_count,
-            tickflow_api_request_count=offline.tickflow_api_request_count,
-            real_public_network_success_count=(
-                offline.real_public_network_success_count
-            ),
-            **git_fields,
-            **runtime.to_dict(),
-            **configured,
+            **common,
+        )
+    except Exception:
+        return CanaryPreflightResult(
+            status="PHASE2B_CANARY_EGRESS_BLOCKED",
+            errors=["artifact_image_probe_failed"],
+            proxy_artifact_candidate="VALID",
+            proxy_artifact_review="PASSED",
+            proxy_image="FAILED",
+            proxy_launcher="HASH_VERIFIED",
+            tls="BLOCKED",
+            egress_allowlist="FAILED",
+            **common,
+        )
+
+    approval_path = artifact_approval_path or _absolute(config_path).with_name(
+        "proxy-artifact-approval.json"
+    )
+    try:
+        artifact_approval = read_proxy_artifact_approval(
+            approval_path,
+            current_uid=current_uid,
+        ).approval
+    except CanaryPreflightError as exc:
+        if exc.code == "artifact_approval_missing":
+            return CanaryPreflightResult(
+                status=_PROXY_ARTIFACT_APPROVAL_REQUIRED,
+                errors=[exc.code],
+                proxy_artifact_candidate="VALID",
+                proxy_artifact_review="PASSED",
+                proxy_artifact_approval="REQUIRED",
+                proxy_image="IDENTITY_VERIFIED",
+                proxy_launcher="HASH_VERIFIED",
+                tls="NOT_RUN",
+                egress_allowlist="NOT_RUN",
+                **common,
+            )
+        return CanaryPreflightResult(
+            status="PHASE2B_CANARY_EGRESS_BLOCKED",
+            errors=[exc.code],
+            proxy_artifact_candidate="VALID",
+            proxy_artifact_review="PASSED",
+            proxy_artifact_approval="INVALID",
+            proxy_image="IDENTITY_VERIFIED",
+            proxy_launcher="HASH_VERIFIED",
+            tls="BLOCKED",
+            egress_allowlist="FAILED",
+            **common,
+        )
+    try:
+        verify_approved_proxy_artifact(
+            repo_root,
+            artifact_candidate,
+            artifact_approval,
+            image,
+            runner=restricted_runtime,
+        )
+    except CanaryPreflightError as exc:
+        return CanaryPreflightResult(
+            status="PHASE2B_CANARY_EGRESS_BLOCKED",
+            errors=[exc.code],
+            proxy_artifact_candidate="VALID",
+            proxy_artifact_review="PASSED",
+            proxy_artifact_approval="INVALID",
+            proxy_image="FAILED",
+            proxy_launcher="HASH_VERIFIED",
+            tls="BLOCKED",
+            egress_allowlist="FAILED",
+            **common,
+        )
+    except Exception:
+        return CanaryPreflightResult(
+            status="PHASE2B_CANARY_EGRESS_BLOCKED",
+            errors=["artifact_content_probe_failed"],
+            proxy_artifact_candidate="VALID",
+            proxy_artifact_review="PASSED",
+            proxy_artifact_approval="INVALID",
+            proxy_image="FAILED",
+            proxy_launcher="HASH_VERIFIED",
+            tls="BLOCKED",
+            egress_allowlist="FAILED",
+            **common,
         )
 
     return CanaryPreflightResult(
@@ -1526,9 +1824,16 @@ def run_canary_preflight(
         secret_artifact_hit_count=placeholder.secret_artifact_hit_count,
         secret_temporary_residue_count=0,
         strict_json_schema="READY",
+        proxy_artifact_candidate="VALID",
+        proxy_artifact_review="PASSED",
+        proxy_artifact_approval="APPROVED",
+        proxy_image="CONTENT_VERIFIED",
+        proxy_launcher="HASH_VERIFIED",
         tls="READY",
+        tls_evidence="OFFLINE_ARTIFACT_VERIFIED",
         redirect="DISABLED",
         egress_allowlist="PASSED",
+        egress_evidence="OFFLINE_APPLICATION_POLICY_VERIFIED",
         facts="VALID",
         projection="VALID",
         projection_sha="PASSED",
