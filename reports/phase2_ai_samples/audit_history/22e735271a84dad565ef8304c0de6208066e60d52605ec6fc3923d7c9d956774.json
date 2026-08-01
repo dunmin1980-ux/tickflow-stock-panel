@@ -4,7 +4,7 @@
   "application_ai_config_changed": false,
   "attempt_evidence_strength": "process_recorded_not_external_attestation",
   "audit_history_complete": false,
-  "audit_predecessor_sha256": "22e735271a84dad565ef8304c0de6208066e60d52605ec6fc3923d7c9d956774",
+  "audit_predecessor_sha256": "5382fab2f0c5503a3df83b78f9ee1d169ae18684aab84415db4feb84a62f1620",
   "cloud_mutation_count": 0,
   "cloud_redeploy": false,
   "external_send_count": 0,
@@ -15,10 +15,10 @@
     "additional_ai_call_count": 0,
     "additional_provider_attempt_count": 0,
     "body_hashes_verified": true,
-    "reason": "freeform_fail_closed_policy",
-    "source_audit_sha256": "22e735271a84dad565ef8304c0de6208066e60d52605ec6fc3923d7c9d956774"
+    "reason": "validator_security_hardening_round2",
+    "source_audit_sha256": "5382fab2f0c5503a3df83b78f9ee1d169ae18684aab84415db4feb84a62f1620"
   },
-  "offline_rematerialization_count": 5,
+  "offline_rematerialization_count": 4,
   "paper_trading_started": false,
   "provider_attempt_count": 3,
   "provider_attempt_policy": "one_process_recorded_attempt_per_symbol_no_retry",
@@ -46,23 +46,21 @@
       "model_source": "isolated_codex_cli_default_configuration",
       "name": "派林生物",
       "news_fabrication_count": 0,
-      "output_markdown_sha256": "b3307f02406c0314186e41da69ff16f68f86aba720207a4736d53e791f3ca2be",
+      "output_markdown_sha256": "0eec90e1ad10115e21b8260a2cc82bd4243e61eea0e90250e437e8c0071ef76b",
       "pre_rematerialization_output_markdown_sha256": "b3307f02406c0314186e41da69ff16f68f86aba720207a4736d53e791f3ca2be",
-      "preview_route": "rejected",
+      "preview_route": "inbox",
       "prompt_sha256": "674ab09eb7781b775ab748ad9d31927a582697596bec835ded0c3e841a7cb0dd",
       "provider": "codex_cli",
       "provider_attempt_count": 1,
       "retry_count": 0,
-      "review_status": "REVIEW_REJECTED",
+      "review_status": "REVIEW_NEEDS_VERIFICATION",
       "secret_hit_count": 0,
       "symbol": "000403.SZ",
       "unsupported_numeric_claim_count": 0,
       "validation": {
         "basis_mixing_claim_count": 0,
         "can_publish": false,
-        "errors": [
-          "freeform_semantic_validation_incomplete"
-        ],
+        "errors": [],
         "financial_fabrication_count": 0,
         "forbidden_terms": [],
         "matched_numeric_claims": [
@@ -366,7 +364,7 @@
         ],
         "news_fabrication_count": 0,
         "secret_hits": [],
-        "status": "REVIEW_REJECTED",
+        "status": "REVIEW_NEEDS_VERIFICATION",
         "unsupported_numeric_claims": []
       }
     },
@@ -385,23 +383,21 @@
       "model_source": "isolated_codex_cli_default_configuration",
       "name": "中金黄金",
       "news_fabrication_count": 0,
-      "output_markdown_sha256": "8de882f2a32ba48b8c049759bf5e7e9836e44c8b05b62d697b6fe378b6a88baa",
+      "output_markdown_sha256": "9aa03b97b8f0d68908977dca99438025f042d9ec065acc69a12e6d70252561af",
       "pre_rematerialization_output_markdown_sha256": "8de882f2a32ba48b8c049759bf5e7e9836e44c8b05b62d697b6fe378b6a88baa",
-      "preview_route": "rejected",
+      "preview_route": "inbox",
       "prompt_sha256": "cf09520dc94ef4dc035d967d19c7dccb9ccfd9837561f64a6df2465c56b53dc1",
       "provider": "codex_cli",
       "provider_attempt_count": 1,
       "retry_count": 0,
-      "review_status": "REVIEW_REJECTED",
+      "review_status": "REVIEW_NEEDS_VERIFICATION",
       "secret_hit_count": 0,
       "symbol": "600489.SH",
       "unsupported_numeric_claim_count": 0,
       "validation": {
         "basis_mixing_claim_count": 0,
         "can_publish": false,
-        "errors": [
-          "freeform_semantic_validation_incomplete"
-        ],
+        "errors": [],
         "financial_fabrication_count": 0,
         "forbidden_terms": [],
         "matched_numeric_claims": [
@@ -823,7 +819,7 @@
         ],
         "news_fabrication_count": 0,
         "secret_hits": [],
-        "status": "REVIEW_REJECTED",
+        "status": "REVIEW_NEEDS_VERIFICATION",
         "unsupported_numeric_claims": []
       }
     },

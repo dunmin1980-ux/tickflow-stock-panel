@@ -6,9 +6,9 @@
       "financial_fabrication_count": 0,
       "forbidden_term_count": 0,
       "news_fabrication_count": 0,
-      "output_markdown_sha256": "0eec90e1ad10115e21b8260a2cc82bd4243e61eea0e90250e437e8c0071ef76b",
-      "review_status": "REVIEW_NEEDS_VERIFICATION",
-      "route": "inbox",
+      "output_markdown_sha256": "b3307f02406c0314186e41da69ff16f68f86aba720207a4736d53e791f3ca2be",
+      "review_status": "REVIEW_REJECTED",
+      "route": "rejected",
       "secret_hit_count": 0,
       "symbol": "000403.SZ",
       "unsupported_numeric_claim_count": 0
@@ -18,9 +18,9 @@
       "financial_fabrication_count": 0,
       "forbidden_term_count": 0,
       "news_fabrication_count": 0,
-      "output_markdown_sha256": "9aa03b97b8f0d68908977dca99438025f042d9ec065acc69a12e6d70252561af",
-      "review_status": "REVIEW_NEEDS_VERIFICATION",
-      "route": "inbox",
+      "output_markdown_sha256": "8de882f2a32ba48b8c049759bf5e7e9836e44c8b05b62d697b6fe378b6a88baa",
+      "review_status": "REVIEW_REJECTED",
+      "route": "rejected",
       "secret_hit_count": 0,
       "symbol": "600489.SH",
       "unsupported_numeric_claim_count": 0
@@ -38,8 +38,8 @@
       "unsupported_numeric_claim_count": 0
     }
   ],
-  "inbox_count": 2,
-  "rejected_count": 1,
+  "inbox_count": 0,
+  "rejected_count": 3,
   "reviewed_auto_write": false,
   "schema_version": 1,
   "status": "PHASE2_AI_OUTPUT_BLOCKED"
