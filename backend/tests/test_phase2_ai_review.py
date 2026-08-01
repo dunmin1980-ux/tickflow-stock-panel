@@ -17,6 +17,7 @@ from app.services.phase2_ai_review import (
     ProviderResult,
     build_numeric_claim_catalog,
     build_review_prompt,
+    rematerialize_review_delivery,
     render_review_document,
     route_review_preview,
     run_review_batch,
@@ -143,6 +144,38 @@ def test_valid_body_matches_every_numeric_claim_to_facts() -> None:
     assert "/daily/close" in pointers
     assert "/indicators/ma5/value" in pointers
     assert result.can_publish is False
+
+
+def test_chinese_adjacent_date_and_minute_periods_map_to_facts() -> None:
+    facts, facts_hash = _load_facts()
+    body = _valid_body(facts).replace("截至 2026-07-31", "截至2026-07-31")
+    body = body.replace(
+        "分钟数据合同已通过",
+        "1分钟bar合同已通过，30分钟bucket合同已通过",
+    )
+
+    result = validate_review_body(body, facts, facts_hash)
+
+    assert result.status == REVIEW_NEEDS_VERIFICATION
+    assert result.unsupported_numeric_claims == []
+    pointers = {item["facts_pointer"] for item in result.matched_numeric_claims}
+    assert "/trade_date" in pointers
+    assert "/minute_1m/period" in pointers
+    assert "/minute_30m/period" in pointers
+
+
+def test_raw_close_compared_with_qfq_indicator_is_rejected() -> None:
+    facts, facts_hash = _load_facts()
+    body = _valid_body(facts).replace(
+        "继续记录日线结构、分钟合同和相对量能的变化，并保持价格口径分离。",
+        "关注日线收盘相对前复权均线簇的结构变化。",
+    )
+
+    result = validate_review_body(body, facts, facts_hash)
+
+    assert result.status == REVIEW_REJECTED
+    assert result.basis_mixing_claim_count == 1
+    assert "raw_qfq_comparison_detected" in result.errors
 
 
 @pytest.mark.parametrize("claim", ["99.99", "2026-08-01", "15:01", "000001.SZ"])
@@ -463,3 +496,51 @@ def test_offline_delivery_validator_detects_sample_tampering(tmp_path: Path) -> 
 
     assert result["status"] == "PHASE2_AI_OUTPUT_BLOCKED"
     assert result["errors"]
+
+
+def test_offline_rematerialization_reuses_bodies_without_provider_calls(
+    tmp_path: Path,
+) -> None:
+    async def provider(prompt, symbol: str) -> ProviderResult:
+        facts, _ = _load_facts(symbol)
+        return ProviderResult(
+            text=_valid_body(facts),
+            provider="codex_cli",
+            model="codex_cli_default",
+            model_source="active_codex_cli_configuration",
+            duration_ms=25,
+        )
+
+    asyncio.run(
+        run_review_batch(
+            REPO_ROOT,
+            tmp_path,
+            provider,
+            generated_at=datetime.fromisoformat("2026-08-01T16:30:00+08:00"),
+        )
+    )
+    original_audit_path = tmp_path / "phase2_ai_samples/generation_audit.json"
+    original_audit_hash = hashlib.sha256(original_audit_path.read_bytes()).hexdigest()
+    sample = tmp_path / "phase2_ai_samples/000403SZ_派林生物.md"
+    sample.write_text(
+        sample.read_text(encoding="utf-8").replace(
+            "review_status: REVIEW_NEEDS_VERIFICATION",
+            "review_status: REVIEW_REJECTED",
+        ),
+        encoding="utf-8",
+    )
+
+    result = rematerialize_review_delivery(
+        REPO_ROOT,
+        tmp_path,
+        reason="validator_contract_fix",
+    )
+
+    assert result["provider_attempt_count"] == 3
+    assert result["additional_ai_call_count"] == 0
+    assert result["additional_provider_attempt_count"] == 0
+    assert result["offline_rematerialization"]["source_audit_sha256"] == original_audit_hash
+    assert result["offline_rematerialization"]["body_hashes_verified"] is True
+    assert validate_review_delivery(REPO_ROOT, tmp_path)["status"] == (
+        "PHASE2_AI_REVIEW_READY_FOR_OBSERVATION"
+    )

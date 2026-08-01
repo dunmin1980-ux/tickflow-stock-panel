@@ -92,11 +92,33 @@ _SECRET_PATTERNS = {
     "api_key": re.compile(r"api[_-]?key\s*[:=]\s*\S+", re.IGNORECASE),
     "private_key": re.compile(r"BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY", re.IGNORECASE),
 }
-_SYMBOL_RE = re.compile(r"\b\d{6}\.(?:SZ|SH|BJ)\b")
-_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
-_TIME_RE = re.compile(r"\b\d{1,2}:\d{2}(?::\d{2})?\b")
+_SYMBOL_RE = re.compile(
+    r"(?<![0-9A-Za-z_])\d{6}\.(?:SZ|SH|BJ)(?![0-9A-Za-z_])"
+)
+_DATE_RE = re.compile(
+    r"(?<![0-9A-Za-z_])\d{4}-\d{2}-\d{2}(?![0-9A-Za-z_])"
+)
+_TIME_RE = re.compile(
+    r"(?<![0-9A-Za-z_])\d{1,2}:\d{2}(?::\d{2})?(?![0-9A-Za-z_])"
+)
+_MINUTE_PERIOD_RE = re.compile(
+    r"(?<![0-9A-Za-z_])(?P<value>1|30)\s*(?:分钟|mins?\b)",
+    re.IGNORECASE,
+)
 _NUMBER_RE = re.compile(r"(?<![A-Za-z0-9_])[-+]?(?:\d+\.\d+|\d+)(?![A-Za-z0-9_])")
 _HEADING_RE = re.compile(r"^###\s+(\d+)\.\s+(.+?)\s*$", re.MULTILINE)
+_RAW_BASIS_RE = re.compile(r"\braw\b|原始|日线收盘|收盘价|开盘价|日线开盘", re.IGNORECASE)
+_QFQ_BASIS_RE = re.compile(
+    r"\bqfq\b|前复权|均线|\bma(?:5|10|20|60)\b|\bboll|\bmacd|\brsi|\batr",
+    re.IGNORECASE,
+)
+_CROSS_BASIS_RELATION_RE = re.compile(
+    r"相对|高于|低于|上方|下方|突破|跌破|站上|失守|围绕|比较"
+)
+_CROSS_BASIS_NEGATION_RE = re.compile(
+    r"不(?:能|可|得|做|与)?[^。；\n]{0,16}(?:比较|交叉)|"
+    r"分别(?:陈述|表述)|口径(?:不同|分离)"
+)
 
 
 class Phase2ReviewError(RuntimeError):
@@ -149,6 +171,7 @@ class ReviewValidation:
     secret_hits: list[str]
     financial_fabrication_count: int
     news_fabrication_count: int
+    basis_mixing_claim_count: int
     needs_verification: list[str]
     can_publish: bool = False
 
@@ -404,6 +427,32 @@ def _numeric_claims(
                 {"literal": literal, "offset": match.start(), "reason": "symbol_out_of_scope"}
             )
 
+    expected_periods = {
+        "1": ("/minute_1m/period", facts["minute_1m"].get("period")),
+        "30": ("/minute_30m/period", facts["minute_30m"].get("period")),
+    }
+    for match in _MINUTE_PERIOD_RE.finditer(body):
+        occupied.append(match.span())
+        literal = match.group("value")
+        pointer, period = expected_periods[literal]
+        if period == f"{literal}m":
+            matched.append(
+                {
+                    "literal": match.group(0),
+                    "facts_pointer": pointer,
+                    "facts_sha256": facts_sha256,
+                    "display_transform": "localized_minute_period",
+                }
+            )
+        else:
+            unsupported.append(
+                {
+                    "literal": match.group(0),
+                    "offset": match.start(),
+                    "reason": "minute_period_not_in_facts",
+                }
+            )
+
     for match in _TIME_RE.finditer(body):
         if _overlaps(match.span(), occupied):
             continue
@@ -444,6 +493,19 @@ def _fabricated_sentence_count(body: str, pattern: re.Pattern[str]) -> int:
     return count
 
 
+def _basis_mixing_claim_count(body: str) -> int:
+    count = 0
+    for sentence in re.split(r"[\n。；！？]+", body):
+        if not _RAW_BASIS_RE.search(sentence) or not _QFQ_BASIS_RE.search(sentence):
+            continue
+        if not _CROSS_BASIS_RELATION_RE.search(sentence):
+            continue
+        if _CROSS_BASIS_NEGATION_RE.search(sentence):
+            continue
+        count += 1
+    return count
+
+
 def _rejected_validation(
     errors: list[str],
     *,
@@ -453,6 +515,7 @@ def _rejected_validation(
     secrets: list[str] | None = None,
     financial_count: int = 0,
     news_count: int = 0,
+    basis_mixing_count: int = 0,
     needs_verification: list[str] | None = None,
 ) -> ReviewValidation:
     return ReviewValidation(
@@ -464,6 +527,7 @@ def _rejected_validation(
         secret_hits=secrets or [],
         financial_fabrication_count=financial_count,
         news_fabrication_count=news_count,
+        basis_mixing_claim_count=basis_mixing_count,
         needs_verification=needs_verification or [],
         can_publish=False,
     )
@@ -509,10 +573,13 @@ def validate_review_body(
 
     financial_count = _fabricated_sentence_count(body, _FINANCIAL_ASSERTION_RE)
     news_count = _fabricated_sentence_count(body, _NEWS_ASSERTION_RE)
+    basis_mixing_count = _basis_mixing_claim_count(body)
     if financial_count:
         errors.append("financial_fabrication_detected")
     if news_count:
         errors.append("news_fabrication_detected")
+    if basis_mixing_count:
+        errors.append("raw_qfq_comparison_detected")
 
     matched, unsupported = _numeric_claims(body, facts, facts_sha256)
     if unsupported:
@@ -533,6 +600,7 @@ def validate_review_body(
             secrets=secret_hits,
             financial_count=financial_count,
             news_count=news_count,
+            basis_mixing_count=basis_mixing_count,
             needs_verification=needs_verification,
         )
     return ReviewValidation(
@@ -544,6 +612,7 @@ def validate_review_body(
         secret_hits=[],
         financial_fabrication_count=0,
         news_fabrication_count=0,
+        basis_mixing_claim_count=0,
         needs_verification=needs_verification,
         can_publish=False,
     )
@@ -679,6 +748,7 @@ def validate_review_document(
             secrets=body_validation.secret_hits,
             financial_count=body_validation.financial_fabrication_count,
             news_count=body_validation.news_fabrication_count,
+            basis_mixing_count=body_validation.basis_mixing_claim_count,
             needs_verification=body_validation.needs_verification,
         )
     return body_validation
@@ -790,6 +860,7 @@ async def run_review_batch(
                 "forbidden_term_count": len(validation.forbidden_terms),
                 "financial_fabrication_count": validation.financial_fabrication_count,
                 "news_fabrication_count": validation.news_fabrication_count,
+                "basis_mixing_claim_count": validation.basis_mixing_claim_count,
                 "secret_hit_count": len(validation.secret_hits),
                 "validation": validation.to_dict(),
                 "preview_route": route_review_preview(validation.status),
@@ -837,6 +908,7 @@ async def run_review_batch(
                     "financial_fabrication_count"
                 ],
                 "news_fabrication_count": entry["news_fabrication_count"],
+                "basis_mixing_claim_count": entry["basis_mixing_claim_count"],
                 "secret_hit_count": entry["secret_hit_count"],
             }
             for entry in entries
@@ -889,6 +961,176 @@ def _load_regular_json(path: Path, *, label: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise Phase2ReviewError(f"{label} must contain a JSON object")
     return value
+
+
+def rematerialize_review_delivery(
+    repo_root: Path,
+    reports_root: Path,
+    *,
+    reason: str,
+) -> dict[str, Any]:
+    """Revalidate existing response bodies without another provider call."""
+    if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,120}", reason):
+        raise Phase2ReviewError("rematerialization reason is invalid")
+    repo_root = repo_root.resolve(strict=True)
+    reports_root = reports_root.resolve(strict=True)
+    samples_root = reports_root / "phase2_ai_samples"
+    if samples_root.is_symlink() or not samples_root.is_dir():
+        raise Phase2ReviewError("samples directory is invalid")
+    source_audit_path = samples_root / "generation_audit.json"
+    source_audit_bytes = source_audit_path.read_bytes()
+    source_audit_sha256 = _sha256_bytes(source_audit_bytes)
+    source_audit = _load_regular_json(
+        source_audit_path, label="source generation audit"
+    )
+    source_entries = source_audit.get("symbols")
+    if not isinstance(source_entries, list):
+        raise Phase2ReviewError("source generation audit symbols are invalid")
+    source_by_symbol = {
+        item.get("symbol"): item
+        for item in source_entries
+        if isinstance(item, dict) and isinstance(item.get("symbol"), str)
+    }
+    generated_at = str(source_audit.get("generated_at") or "")
+    _validate_generated_at(generated_at)
+
+    documents: dict[str, bytes] = {}
+    entries: list[dict[str, Any]] = []
+    for symbol, name in FIXED_SYMBOLS.items():
+        source_entry = source_by_symbol.get(symbol)
+        if not isinstance(source_entry, dict):
+            raise Phase2ReviewError(f"source audit entry is missing: {symbol}")
+        facts_path = _safe_facts_path(repo_root, symbol)
+        facts_bytes = facts_path.read_bytes()
+        facts_sha256 = _sha256_bytes(facts_bytes)
+        if source_entry.get("input_facts_sha256") != facts_sha256:
+            raise Phase2ReviewError(f"Facts hash changed before rematerialization: {symbol}")
+        facts = json.loads(facts_bytes)
+        facts_errors = validate_facts_document(repo_root, facts)
+        if facts_errors:
+            raise Phase2ReviewError(f"Facts validation failed for {symbol}: {facts_errors}")
+
+        filename = f'{symbol.replace(".", "")}_{name}.md'
+        sample_path = samples_root / filename
+        if sample_path.is_symlink() or not sample_path.is_file():
+            raise Phase2ReviewError(f"source sample is missing: {symbol}")
+        _, body = _split_document(sample_path.read_text(encoding="utf-8"))
+        body_hash = _sha256_bytes(body.strip().encode("utf-8"))
+        if source_entry.get("ai_body_sha256") != body_hash:
+            raise Phase2ReviewError(f"AI body hash changed before rematerialization: {symbol}")
+
+        document = render_review_document(body, facts, facts_sha256, generated_at)
+        validation = validate_review_document(document, facts, facts_sha256)
+        document_bytes = document.encode("utf-8")
+        documents[filename] = document_bytes
+        entry = dict(source_entry)
+        entry.setdefault(
+            "pre_rematerialization_output_markdown_sha256",
+            source_entry.get("output_markdown_sha256"),
+        )
+        entry.update(
+            {
+                "output_markdown_sha256": _sha256_bytes(document_bytes),
+                "review_status": validation.status,
+                "can_publish": False,
+                "unsupported_numeric_claim_count": len(
+                    validation.unsupported_numeric_claims
+                ),
+                "forbidden_term_count": len(validation.forbidden_terms),
+                "financial_fabrication_count": validation.financial_fabrication_count,
+                "news_fabrication_count": validation.news_fabrication_count,
+                "basis_mixing_claim_count": validation.basis_mixing_claim_count,
+                "secret_hit_count": len(validation.secret_hits),
+                "validation": validation.to_dict(),
+                "preview_route": route_review_preview(validation.status),
+            }
+        )
+        entries.append(entry)
+
+    blocked = any(entry["review_status"] == REVIEW_REJECTED for entry in entries)
+    status = PHASE2_OUTPUT_BLOCKED if blocked else PHASE2_READY
+    audit = dict(source_audit)
+    audit.update(
+        {
+            "status": status,
+            "symbols": entries,
+            "additional_ai_call_count": 0,
+            "additional_provider_attempt_count": 0,
+            "offline_rematerialization_count": int(
+                source_audit.get("offline_rematerialization_count") or 0
+            )
+            + 1,
+            "offline_rematerialization": {
+                "reason": reason,
+                "source_audit_sha256": source_audit_sha256,
+                "body_hashes_verified": True,
+                "additional_ai_call_count": 0,
+                "additional_provider_attempt_count": 0,
+            },
+        }
+    )
+    preview_manifest = {
+        "schema_version": 1,
+        "status": status,
+        "can_publish": False,
+        "reviewed_auto_write": False,
+        "inbox_count": sum(entry["preview_route"] == "inbox" for entry in entries),
+        "rejected_count": sum(
+            entry["preview_route"] == "rejected" for entry in entries
+        ),
+        "entries": [
+            {
+                "symbol": entry["symbol"],
+                "review_status": entry["review_status"],
+                "route": entry["preview_route"],
+                "output_markdown_sha256": entry["output_markdown_sha256"],
+                "unsupported_numeric_claim_count": entry[
+                    "unsupported_numeric_claim_count"
+                ],
+                "forbidden_term_count": entry["forbidden_term_count"],
+                "financial_fabrication_count": entry[
+                    "financial_fabrication_count"
+                ],
+                "news_fabrication_count": entry["news_fabrication_count"],
+                "basis_mixing_claim_count": entry["basis_mixing_claim_count"],
+                "secret_hit_count": entry["secret_hit_count"],
+            }
+            for entry in entries
+        ],
+    }
+
+    samples_stage = Path(
+        tempfile.mkdtemp(prefix=".phase2_ai_samples.staging-", dir=reports_root)
+    )
+    preview_stage = Path(
+        tempfile.mkdtemp(prefix=".phase2_obsidian_preview.staging-", dir=reports_root)
+    )
+    try:
+        for filename, document_bytes in documents.items():
+            _write_durable(samples_stage / filename, document_bytes)
+        _write_durable(
+            samples_stage / "generation_audit.json", canonical_json_bytes(audit)
+        )
+        for route in ("inbox", "reviewed", "rejected"):
+            (preview_stage / route).mkdir(parents=True, exist_ok=True)
+        for entry in entries:
+            filename = f'{entry["symbol"].replace(".", "")}_{entry["name"]}.md'
+            _write_durable(
+                preview_stage / entry["preview_route"] / filename,
+                documents[filename],
+            )
+        _write_durable(
+            preview_stage / "validation_manifest.json",
+            canonical_json_bytes(preview_manifest),
+        )
+        atomic_publish_directory(samples_stage, reports_root / "phase2_ai_samples")
+        atomic_publish_directory(
+            preview_stage, reports_root / "phase2_obsidian_preview"
+        )
+    finally:
+        shutil.rmtree(samples_stage, ignore_errors=True)
+        shutil.rmtree(preview_stage, ignore_errors=True)
+    return audit
 
 
 def validate_review_delivery(
@@ -987,6 +1229,7 @@ def validate_review_delivery(
             "forbidden_term_count": len(validation.forbidden_terms),
             "financial_fabrication_count": validation.financial_fabrication_count,
             "news_fabrication_count": validation.news_fabrication_count,
+            "basis_mixing_claim_count": validation.basis_mixing_claim_count,
             "secret_hit_count": len(validation.secret_hits),
             "preview_route": expected_route,
         }
@@ -1079,6 +1322,9 @@ def validate_review_delivery(
         ),
         "news_fabrication_count": sum(
             item.news_fabrication_count for item in validations
+        ),
+        "basis_mixing_claim_count": sum(
+            item.basis_mixing_claim_count for item in validations
         ),
         "secret_hit_count": sum(len(item.secret_hits) for item in validations),
         "reviewed_file_count": len(reviewed_files),
