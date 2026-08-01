@@ -33,7 +33,7 @@
 - Produces: `ClaimsDocument`, eight discriminated claim models, `WorkerClaimsCandidate`, `claims_json_schema()`, `ALLOWED_CLAIM_TYPES`, and `FORBIDDEN_CLAIM_TYPES`.
 - Consumes: only Pydantic and standard-library enums/types.
 
-- [ ] **Step 1: Write failing strict-schema tests**
+- [x] **Step 1: Write failing strict-schema tests**
 
 Add tests that parse a minimal valid document and reject extra fields, unknown
 claim types, every forbidden claim type, freeform fields, non-finite numbers,
@@ -53,7 +53,7 @@ def test_claims_schema_forbids_freeform_and_trading_types():
         ClaimsDocument.model_validate(payload)
 ```
 
-- [ ] **Step 2: Run tests and confirm RED**
+- [x] **Step 2: Run tests and confirm RED**
 
 Run:
 
@@ -64,7 +64,7 @@ PYTHONPATH=. .venv/bin/pytest tests/test_phase2_claims.py -q
 
 Expected: collection fails because `app.schemas.phase2_claims` does not exist.
 
-- [ ] **Step 3: Implement closed Pydantic models**
+- [x] **Step 3: Implement closed Pydantic models**
 
 Use `ConfigDict(extra="forbid", strict=True)` on every model. Define typed
 objects for numbers, booleans, enums, comparisons, ordered operands, scope,
@@ -73,7 +73,7 @@ with `Field(discriminator="claim_type")`. Require
 `validation_status="VALIDATED"`, exact `source_system`, timezone, and false
 trading flag. Reject `NaN` and Infinity with finite-number validators.
 
-- [ ] **Step 4: Generate deterministic JSON Schema in memory**
+- [x] **Step 4: Generate deterministic JSON Schema in memory**
 
 Implement:
 
@@ -85,7 +85,7 @@ def claims_json_schema() -> dict[str, Any]:
 The artifact writer will serialize this through the existing canonical JSON
 function, not Pydantic's unordered display helpers.
 
-- [ ] **Step 5: Run schema tests and confirm GREEN**
+- [x] **Step 5: Run schema tests and confirm GREEN**
 
 Run the focused test file and require zero failures.
 
@@ -103,7 +103,7 @@ Run the focused test file and require zero failures.
 - Consumes: `ClaimsDocument`, Phase 2A `validate_facts_document`, `FIXED_SYMBOLS`, `VENDOR_PENDING`, and canonical JSON.
 - Produces: `ClaimsValidationResult`, `CALCULATION_REGISTRY`, `PREDICATE_RULES`, `build_claims_document(repo_root, symbol)`, `validate_claims_document(repo_root, value)`, `build_claims_fixtures(repo_root)`, and `validate_claims_directory(repo_root, claims_root)`.
 
-- [ ] **Step 1: Write failing provenance and calculation tests**
+- [x] **Step 1: Write failing provenance and calculation tests**
 
 Cover exact Facts file/SHA binding, RFC 6901 pointer resolution, direct value
 equality, calculation replay, claim ID uniqueness/order, symbol/name/date,
@@ -123,19 +123,19 @@ def test_raw_close_cannot_compare_with_qfq_ma20():
 Test all registry IDs, metadata, input counts, basis rules, epsilon, and output
 types. Confirm unknown IDs and expression-like strings are rejected.
 
-- [ ] **Step 2: Run new tests and confirm RED**
+- [x] **Step 2: Run new tests and confirm RED**
 
 Expected: imports or unimplemented interfaces fail before production code is
 added.
 
-- [ ] **Step 3: Implement safe Facts loading and pointers**
+- [x] **Step 3: Implement safe Facts loading and pointers**
 
 Facts paths must equal `reports/phase2_facts/<SYMBOL>_facts.json`, remain under
 the resolved repository root, be regular non-symlink files, and match the
 document SHA. Resolve pointers only inside the loaded mapping/list and reject
 invalid RFC 6901 escapes.
 
-- [ ] **Step 4: Implement the closed calculation registry**
+- [x] **Step 4: Implement the closed calculation registry**
 
 Create executable specs for:
 
@@ -153,14 +153,14 @@ Calculations accept already resolved typed values. The percentage function is
 `1e-10`. `normalize_scope_v1` accepts only
 `manual_verification_required -> unavailable`.
 
-- [ ] **Step 5: Implement predicate rules and full validation**
+- [x] **Step 5: Implement predicate rules and full validation**
 
 Each predicate fixes claim type, exact pointers, unit, basis, calculation,
 template, precision, and section. Validation must collect deterministic sorted
 errors, recompute normalized SHA-256, and return only `CLAIMS_VALID` or
 `CLAIMS_INVALID`. Any claim failure invalidates the document.
 
-- [ ] **Step 6: Implement deterministic fixture construction**
+- [x] **Step 6: Implement deterministic fixture construction**
 
 Generate claims for raw close, raw open-to-close percentage, MA/MACD/RSI/BOLL/
 ATR, minute states/counts/anomalies, adjustment factors, one MACD same-basis
@@ -168,14 +168,14 @@ comparison, one qfq MA ordering, four scope notices, and one vendor notice.
 Use numeric claim ID prefixes and sort lexicographically. Do not generate key
 levels or previous-close return.
 
-- [ ] **Step 7: Implement build and validation CLIs**
+- [x] **Step 7: Implement build and validation CLIs**
 
 `build_phase2_claims_fixture.py` writes canonical schema and fixtures under an
 atomic staging directory. `validate_phase2_claims.py` reads existing artifacts,
 validates all three documents, checks file set and hashes, and emits a sanitized
 JSON summary with zero external-action counters.
 
-- [ ] **Step 8: Run focused tests, CLIs, compileall, and Ruff**
+- [x] **Step 8: Run focused tests, CLIs, compileall, and Ruff**
 
 Require the test file, fixture builder dry output, validator, compileall, and
 Ruff F821 to pass before committing.
