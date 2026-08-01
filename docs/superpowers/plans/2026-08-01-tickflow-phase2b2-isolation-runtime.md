@@ -432,6 +432,6 @@ git add reports/tickflow_phase2b_isolation_runtime_eval.md \
 git commit -m "docs: close phase2 isolation runtime validation"
 ```
 
-- [ ] **Step 8: Push and verify the branch**
+- [x] **Step 8: Push and verify the branch**
 
 Push only `codex/tickflow-phase2-ai-review` to `fork`, compare local `HEAD` with `git ls-remote`, and require a clean worktree. Do not create a PR, merge, or deploy.
