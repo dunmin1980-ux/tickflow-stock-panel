@@ -1429,3 +1429,29 @@ next_action=APPROVE_UPDATED_STORE_FALSE_ARTIFACT_HASHES
 Do not install the new approval, read the Secret, start the runtime, or execute
 the authorized single Provider call until the user explicitly approves the
 new complete artifact hash set.
+
+---
+
+### Task 10: Install the Approved `store=false` Artifact and Restore Offline READY
+
+**Authorization:** The user explicitly approved the complete regenerated Proxy
+artifact hash set. This approval covers the immutable artifact only; it is not
+interpreted as a renewed authorization to perform the sole real Provider call.
+
+- [x] Recompute the approval candidate SHA-256 and compare every approved
+  Dockerfile, source, contract, policy, launcher, base image, and image ID value.
+- [x] Run the fresh backend full suite, four focused suites, compileall, Ruff
+  F821, contract check, artifact verification, protected-evidence validation,
+  and approval-absent preflight.
+- [x] Atomically install the exact non-sensitive candidate plus
+  `approval_status=APPROVED` as a mode-0600 regular file inside the existing
+  mode-0700 local approval directory. Do not read or modify Provider credentials.
+- [x] Run the final offline preflight and require exactly
+  `CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL`, `provider_attempt_count=0`,
+  `ai_call_count=0`, and `provider_http=NOT_RUN`.
+- [x] Update sanitized evidence and stop before Secret access, runtime startup,
+  or any public connection.
+
+The next action is `REQUEST_FINAL_SINGLE_CALL_APPROVAL`. A subsequent approval
+must explicitly authorize one real `000403.SZ` Provider attempt; artifact hash
+approval alone does not satisfy that execution gate.

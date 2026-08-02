@@ -3,17 +3,17 @@
 ## 1. 最终状态
 
 ```text
-PHASE2B_CANARY_CONTRACT_REAPPROVAL_REQUIRED
+CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL
 ```
 
-调用前硬门禁发现原批准工件缺少明确的 `store=false`，因此本轮真实 Provider Canary 未执行。唯一调用授权未消耗，不得把本报告解释为 Provider、TLS 或模型可用性测试。
+`store=false` 完整工件哈希已获用户明确批准，非敏感批准文件已安全安装，最终纯离线门禁已通过。真实 Provider Canary 仍未执行；不得把本报告解释为 Provider、TLS 实时握手或模型可用性测试。
 
 ## 2. 执行摘要
 
 | 项目 | 结果 |
 |---|---|
 | 开工前 Head | `9bba2fd98750350fa00b9b019f0d669445d4a98f` |
-| 合同实现 Head | `83e364e` 及后续报告关闭提交 |
+| 离线批准前 Head | `1c50e5b139b2e327357195f380e576ba754083fe` |
 | 标的 | `000403.SZ 派林生物` |
 | Trade date | `2026-07-31` |
 | Provider | `openai` |
@@ -49,16 +49,16 @@ PHASE2B_CANARY_CONTRACT_REAPPROVAL_REQUIRED
 | Integrated Gold | `DISABLED / external_send_count=0` |
 | Three-symbol real batch | `NOT_APPROVED` |
 
-## 3. 阻断证据
+## 3. 离线 READY 证据
 
-原批准 Responses policy 不包含 `store` 字段。根据最终授权，缺失 `store=false` 必须在 Secret 读取和运行时启动之前停止。代码随后完成四层隐私绑定、无网络镜像重建、测试和独立复审，但新哈希尚未获得用户批准。
+最终离线门禁已验证：Provider config `VALID`、Keychain Secret 仅存在性为 `PRESENT`、Secret content read `NO`、strict JSON Schema `READY`、`store=false`、重定向禁用、出站策略通过离线工件校验、镜像内容与批准标识一致、历史证据未变、运行时残留为 `0`。
 
-待批准哈希集合记录在 `reports/tickflow_phase2b_canary_provider_preflight_eval.md`。本报告不保存完整请求、响应、Authorization header、Secret 或本地绝对路径。
+当前 TLS 和 Egress 结论只是离线工件证据，不是实时公网证据。本报告不保存完整请求、响应、Authorization header、Secret 或本地绝对路径。
 
 ## 4. 下一动作
 
 ```text
-APPROVE_UPDATED_STORE_FALSE_ARTIFACT_HASHES
+REQUEST_FINAL_SINGLE_CALL_APPROVAL
 ```
 
-新工件批准后需要重新执行纯离线 READY 门禁；只有再次收到明确的唯一真实调用授权，才允许读取一次 Keychain Secret 并发起一次 Provider 请求。
+必须再次收到明确的唯一真实调用授权，才允许专用启动器读取一次 Keychain Secret 并发起一次 Provider 请求。

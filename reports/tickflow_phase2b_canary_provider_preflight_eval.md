@@ -1,14 +1,14 @@
-# TickFlow Phase 2B-3B Provider Canary 合同重新审批报告
+# TickFlow Phase 2B-3B Provider Canary 最终离线门禁报告
 
 ## 1. 结论
 
 ```text
-PHASE2B_CANARY_CONTRACT_REAPPROVAL_REQUIRED
+CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL
 ```
 
-单票真实 Provider Canary 在读取 Secret、启动容器和发送请求之前发现：上一版已批准 Responses 工件未明确包含 `store=false`。因此唯一真实调用没有执行，原批准工件已被安全归档，默认工件批准路径保持为空。
+用户已明确批准包含 `store=false` 的完整 Proxy 工件哈希集合。批准对象已以模式 `0600`、原子 rename 和目录 `fsync` 方式写入本机非敏感批准文件；安装前后都未读取 Keychain Secret 内容。
 
-当前代码和重新构建的不可变工件已把 `store=false` 固化在 Host 请求合同、Proxy policy、Proxy 出站 body 和预门禁四层。新完整哈希集合必须重新获得用户明确批准后，才能恢复最终离线 READY 门禁。
+最终离线预门禁返回 `CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL`。这只证明固定工件、本地边界和保护证据已就绪，不是 TLS 实时握手或 Provider 可用性证据。本轮 Provider 请求、AI 调用和真实公网连接仍为 `0`。
 
 ## 2. 隐私合同
 
@@ -29,7 +29,7 @@ PHASE2B_CANARY_CONTRACT_REAPPROVAL_REQUIRED
 
 预门禁对缺失 `store` 和 `store=true` 均返回 `responses_schema_not_ready`，并在占位 Secret 注入和任何运行时创建之前停止。
 
-## 3. 待重新批准的精确工件
+## 3. 已批准的精确工件
 
 | 工件 | SHA-256 / 不可变标识 |
 |---|---|
@@ -78,7 +78,7 @@ PHASE2B_CANARY_CONTRACT_REAPPROVAL_REQUIRED
 | 九组历史证据 | `UNCHANGED` |
 | Facts / Projection / Relay | `VALID` |
 | Container / network / process residue | 0 |
-| Default artifact approval | `ABSENT` |
+| Default artifact approval | `APPROVED / MODE_0600` |
 | Superseded approval | `PRESERVED / MODE_0600` |
 | Obsidian real vault write | `NO` |
 | Paper Trading | `NOT_STARTED` |
@@ -89,12 +89,12 @@ PHASE2B_CANARY_CONTRACT_REAPPROVAL_REQUIRED
 ## 6. 当前停止点
 
 ```text
-status=PHASE2B_CANARY_CONTRACT_REAPPROVAL_REQUIRED
+status=CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL
 provider_store=false
 provider_attempt_count=0
 ai_call_count=0
 provider_http=NOT_RUN
-next_action=APPROVE_UPDATED_STORE_FALSE_ARTIFACT_HASHES
+next_action=REQUEST_FINAL_SINGLE_CALL_APPROVAL
 ```
 
-在第 3 节完整哈希集合获得明确批准前，不得安装新批准文件、读取真实 Secret、启动 Canary 运行时或执行唯一 Provider 请求。
+本次工件哈希批准不自动扩大为真实调用批准。下一步必须单独获得“唯一一次 `000403.SZ` Provider 调用”的最终执行授权；在此之前不得读取真实 Secret、启动 Canary 运行时或发送外部请求。
