@@ -1315,6 +1315,7 @@ reviewed artifact binding.
 - Regenerate: `reports/phase2_openai_proxy_artifact/approval_candidate.json`
 - Regenerate: `reports/phase2_openai_proxy_artifact/build_evidence.json`
 - Update: `reports/tickflow_phase2b_canary_provider_preflight_eval.md`
+- Create: `reports/tickflow_phase2b_single_symbol_canary_eval.md`
 
 **Interfaces:**
 - `build_responses_request_contract()` returns exactly `store: False`.
@@ -1324,7 +1325,7 @@ reviewed artifact binding.
 - The new artifact candidate supersedes candidate SHA-256
   `437c51a7afda22f54fb9fa4160e696dabbf5b2e5334efd6abe317a9179d6105a`.
 
-- [ ] **Step 1: Write the failing privacy-contract tests**
+- [x] **Step 1: Write the failing privacy-contract tests**
 
 Update the Host and Proxy tests to require:
 
@@ -1338,7 +1339,7 @@ Add mutation tests for `store=True`, and add preflight tests proving both a
 missing `store` field and `store=True` stop with
 `responses_schema_not_ready`, before any runtime create command.
 
-- [ ] **Step 2: Run RED tests**
+- [x] **Step 2: Run RED tests**
 
 ```bash
 cd backend
@@ -1350,7 +1351,7 @@ PYTHONPATH=. .venv/bin/pytest \
 Expected: failures specifically show that `store` is missing and that the
 current preflight accepts a contract without the privacy invariant.
 
-- [ ] **Step 3: Implement the minimal three-layer invariant**
+- [x] **Step 3: Implement the minimal three-layer invariant**
 
 Add literal `store=False` to the Host request builder, immutable policy,
 Proxy `_POLICY`, and Provider body. Extend preflight strict readiness with:
@@ -1362,7 +1363,7 @@ request_contract.get("store") is False
 Update the exact Git delta allowlist for the modified Host schema path. Do not
 read the Keychain Secret and do not add `store` to Provider settings.
 
-- [ ] **Step 4: Regenerate the deterministic contract and reach GREEN**
+- [x] **Step 4: Regenerate the deterministic contract and reach GREEN**
 
 ```bash
 cd backend
@@ -1373,7 +1374,7 @@ PYTHONPATH=. .venv/bin/python \
 Copy only the new canonical `contract_sha256` into the Proxy's fixed expected
 contract constant, then rerun the two focused suites. Expected: all pass.
 
-- [ ] **Step 5: Commit the privacy invariant**
+- [x] **Step 5: Commit the privacy invariant**
 
 ```bash
 git add backend/app/schemas/phase2_canary_provider_config.py \
@@ -1387,14 +1388,14 @@ git add backend/app/schemas/phase2_canary_provider_config.py \
 git commit -m "fix: disable OpenAI response storage in canary contract"
 ```
 
-- [ ] **Step 6: Rebuild and attest with no network**
+- [x] **Step 6: Rebuild and attest with no network**
 
 Run `build_phase2_openai_proxy_offline.py --attest`; require `--network none`,
 `--pull=false`, no cache, a new immutable image ID, stable input hashes, a
 verified base RootFS prefix, clean image history, verified image contents, and
 all Provider/AI/TickFlow/public-network counters at zero.
 
-- [ ] **Step 7: Perform independent review and full verification**
+- [x] **Step 7: Perform independent review and full verification**
 
 Review exact `store=false` propagation, false-READY paths, immutable image
 binding, Secret boundaries, and the absence of a second-call path. Run the
@@ -1402,7 +1403,7 @@ four focused suites, full backend pytest, compileall, Ruff, contract check,
 artifact verify, sensitive-shape scan, protected-evidence hash checks, and
 residue checks.
 
-- [ ] **Step 8: Retire the superseded local approval safely**
+- [x] **Step 8: Retire the superseded local approval safely**
 
 After the new candidate is verified, atomically rename the old non-sensitive
 approval file to a mode-0600 superseded audit filename in the same mode-0700
@@ -1410,7 +1411,7 @@ directory. Do not read or modify Provider approval or Keychain data. Leave the
 default `proxy-artifact-approval.json` path absent until the user approves the
 new exact hash set.
 
-- [ ] **Step 9: Publish the new approval-required evidence and stop**
+- [x] **Step 9: Publish the new approval-required evidence and stop**
 
 Set build evidence to `PHASE2B_PROXY_ARTIFACT_APPROVAL_REQUIRED`, record the
 new candidate SHA-256 and `independent_review=PASSED`, update the sanitized
