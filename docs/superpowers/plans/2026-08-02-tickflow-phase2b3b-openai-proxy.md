@@ -16,10 +16,9 @@
 - Provider/model/endpoint: `openai`, `gpt-5.6-terra`, `POST https://api.openai.com:443/v1/responses`.
 - TLS verification and hostname checking are mandatory; minimum TLS is 1.2.
 - Redirects, streaming, tools, web, files, retries, alternate models, alternate Providers, and publishing are disabled.
-- The Provider request top-level keys are exactly `model`, `stream`, `tools`,
-  `input`, and `text`. Do not add `temperature`, `store`, or another
-  unapproved field; `temperature` is deliberately omitted because the current
-  Provider approval does not authorize it.
+- The Provider request top-level keys are exactly `model`, `stream`, `store`,
+  `tools`, `input`, and `text`. `store` is the immutable literal `false`;
+  `temperature` and every other unapproved field remain absent.
 - Provider attempts, AI calls, TickFlow requests, and successful public connections remain zero.
 - Real Keychain Secret content, length, prefix, suffix, and hash must never be read or recorded.
 - Existing Mock Proxy, Mock Provider, Provider Relay runtime evidence, Phase 1 evidence, Phase 2 Facts, typed Claims/inbox, historical AI Markdown, historical rejected, and isolation evidence remain byte-for-byte unchanged.
@@ -252,7 +251,8 @@ The primary request test must assert:
 ```python
 def test_provider_request_is_exact_and_projection_only(proxy_module, relay_envelope, contract):
     payload = proxy_module.build_provider_request(relay_envelope, contract)
-    assert set(payload) == {"model", "stream", "tools", "input", "text"}
+    assert set(payload) == {"model", "stream", "store", "tools", "input", "text"}
+    assert payload["store"] is False
     assert payload["model"] == "gpt-5.6-terra"
     assert payload["stream"] is False
     assert payload["tools"] == []
@@ -1280,3 +1280,151 @@ Verify the remote Head equals local Head and the worktree is clean. Do not
 create a PR, merge, deploy, construct a real authorization header, start the
 future runtime, or execute a Provider request. Stop at
 `CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL`.
+
+---
+
+### Task 9: Bind `store=false` and Regenerate the Approval Candidate
+
+**Trigger:** The approved immutable contract omitted `store`; the authorized
+single Provider call therefore stopped before Secret access or runtime start
+with `PHASE2B_CANARY_CONTRACT_REAPPROVAL_REQUIRED`.
+
+**Design decision:** Treat response storage as a non-configurable privacy
+invariant. Bind literal `store=false` at all three boundaries: Host request
+contract, immutable Proxy policy, and Proxy-generated Provider body. The
+preflight must reject a Host request contract where `store` is missing or is
+not the boolean `false`. Do not add a mutable Provider-approval setting, and do
+not patch the payload only at runtime because either approach weakens the
+reviewed artifact binding.
+
+**Rejected approaches:**
+
+1. Add `store` to the user-editable Provider config. This creates a privacy
+   downgrade switch and requires unrelated local config migration.
+2. Add `store=false` only inside `build_provider_request()`. This leaves the
+   Host preflight and approved policy unable to prove the outbound property.
+
+**Files:**
+- Modify: `backend/app/schemas/phase2_canary_provider_config.py`
+- Modify: `backend/app/services/phase2_openai_proxy_contract.py`
+- Modify: `backend/scripts/validate_phase2_canary_provider_config.py`
+- Modify: `backend/tests/test_phase2_canary_provider_config.py`
+- Modify: `backend/tests/test_phase2_openai_proxy_contract.py`
+- Modify: `docker/phase2-openai-egress-proxy/proxy.py`
+- Regenerate: `docker/phase2-openai-egress-proxy/responses-contract.json`
+- Regenerate: `reports/phase2_openai_proxy_artifact/approval_candidate.json`
+- Regenerate: `reports/phase2_openai_proxy_artifact/build_evidence.json`
+- Update: `reports/tickflow_phase2b_canary_provider_preflight_eval.md`
+
+**Interfaces:**
+- `build_responses_request_contract()` returns exactly `store: False`.
+- `OpenAIProxyPolicy.store` is `Literal[False]` with no permissive branch.
+- `build_provider_request()` emits exactly `store: False`.
+- `run_canary_preflight()` requires `request_contract.get("store") is False`.
+- The new artifact candidate supersedes candidate SHA-256
+  `437c51a7afda22f54fb9fa4160e696dabbf5b2e5334efd6abe317a9179d6105a`.
+
+- [ ] **Step 1: Write the failing privacy-contract tests**
+
+Update the Host and Proxy tests to require:
+
+```python
+assert request["store"] is False
+assert OpenAIProxyPolicy().store is False
+assert payload["store"] is False
+```
+
+Add mutation tests for `store=True`, and add preflight tests proving both a
+missing `store` field and `store=True` stop with
+`responses_schema_not_ready`, before any runtime create command.
+
+- [ ] **Step 2: Run RED tests**
+
+```bash
+cd backend
+PYTHONPATH=. .venv/bin/pytest \
+  tests/test_phase2_openai_proxy_contract.py \
+  tests/test_phase2_canary_provider_config.py -q
+```
+
+Expected: failures specifically show that `store` is missing and that the
+current preflight accepts a contract without the privacy invariant.
+
+- [ ] **Step 3: Implement the minimal three-layer invariant**
+
+Add literal `store=False` to the Host request builder, immutable policy,
+Proxy `_POLICY`, and Provider body. Extend preflight strict readiness with:
+
+```python
+request_contract.get("store") is False
+```
+
+Update the exact Git delta allowlist for the modified Host schema path. Do not
+read the Keychain Secret and do not add `store` to Provider settings.
+
+- [ ] **Step 4: Regenerate the deterministic contract and reach GREEN**
+
+```bash
+cd backend
+PYTHONPATH=. .venv/bin/python \
+  -m app.services.phase2_openai_proxy_contract --write
+```
+
+Copy only the new canonical `contract_sha256` into the Proxy's fixed expected
+contract constant, then rerun the two focused suites. Expected: all pass.
+
+- [ ] **Step 5: Commit the privacy invariant**
+
+```bash
+git add backend/app/schemas/phase2_canary_provider_config.py \
+  backend/app/services/phase2_openai_proxy_contract.py \
+  backend/scripts/validate_phase2_canary_provider_config.py \
+  backend/tests/test_phase2_canary_provider_config.py \
+  backend/tests/test_phase2_openai_proxy_contract.py \
+  docker/phase2-openai-egress-proxy/proxy.py \
+  docker/phase2-openai-egress-proxy/responses-contract.json \
+  docs/superpowers/plans/2026-08-02-tickflow-phase2b3b-openai-proxy.md
+git commit -m "fix: disable OpenAI response storage in canary contract"
+```
+
+- [ ] **Step 6: Rebuild and attest with no network**
+
+Run `build_phase2_openai_proxy_offline.py --attest`; require `--network none`,
+`--pull=false`, no cache, a new immutable image ID, stable input hashes, a
+verified base RootFS prefix, clean image history, verified image contents, and
+all Provider/AI/TickFlow/public-network counters at zero.
+
+- [ ] **Step 7: Perform independent review and full verification**
+
+Review exact `store=false` propagation, false-READY paths, immutable image
+binding, Secret boundaries, and the absence of a second-call path. Run the
+four focused suites, full backend pytest, compileall, Ruff, contract check,
+artifact verify, sensitive-shape scan, protected-evidence hash checks, and
+residue checks.
+
+- [ ] **Step 8: Retire the superseded local approval safely**
+
+After the new candidate is verified, atomically rename the old non-sensitive
+approval file to a mode-0600 superseded audit filename in the same mode-0700
+directory. Do not read or modify Provider approval or Keychain data. Leave the
+default `proxy-artifact-approval.json` path absent until the user approves the
+new exact hash set.
+
+- [ ] **Step 9: Publish the new approval-required evidence and stop**
+
+Set build evidence to `PHASE2B_PROXY_ARTIFACT_APPROVAL_REQUIRED`, record the
+new candidate SHA-256 and `independent_review=PASSED`, update the sanitized
+report, commit, and push the current branch. The final state is:
+
+```text
+PHASE2B_CANARY_CONTRACT_REAPPROVAL_REQUIRED
+provider_store=false
+provider_attempt_count=0
+ai_call_count=0
+provider_http=NOT_RUN
+next_action=APPROVE_UPDATED_STORE_FALSE_ARTIFACT_HASHES
+```
+
+Do not install the new approval, read the Secret, start the runtime, or execute
+the authorized single Provider call until the user explicitly approves the
+new complete artifact hash set.
