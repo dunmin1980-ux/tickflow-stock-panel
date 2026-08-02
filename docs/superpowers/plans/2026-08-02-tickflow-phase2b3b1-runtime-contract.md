@@ -73,11 +73,11 @@
 - Produces: `AttemptLedger`, `AttemptLedgerStore`, `ExclusiveCanaryLock`, `CanaryRunIdentity`, and `recover_attempt_state()`.
 - Consumes: canonical JSON bytes, mode-0700 state root, and injected wall/monotonic clocks.
 
-- [ ] Write failing tests for every ledger state, durable dispatch marker, legal transitions, crash recovery, symlink/mode rejection, and atomic update failure.
-- [ ] Implement atomic mode-0600 ledger publication with file and directory fsync.
-- [ ] Write failing tests for concurrent lock rejection, no second request ID, stale lock plus terminal/nonterminal ledger handling, and unknown owner failure.
-- [ ] Implement nonblocking `flock`, sanitized metadata, and fail-closed stale-lock logic.
-- [ ] Run focused tests and commit.
+- [x] Write failing tests for every ledger state, durable dispatch marker, legal transitions, crash recovery, symlink/mode rejection, and atomic update failure.
+- [x] Implement atomic mode-0600 ledger publication with file and directory fsync.
+- [x] Write failing tests for concurrent lock rejection, no second request ID, stale lock plus terminal/nonterminal ledger handling, and unknown owner failure.
+- [x] Implement nonblocking `flock`, sanitized metadata, and fail-closed stale-lock logic.
+- [x] Run focused tests and commit.
 
 ### Task 4: One-Shot Orchestrator and Fault Matrix
 
