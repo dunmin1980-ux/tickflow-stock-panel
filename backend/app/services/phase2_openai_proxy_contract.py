@@ -57,6 +57,7 @@ class OpenAIProxyPolicy(_StrictFrozenModel):
     minimum_tls_version: Literal["TLSv1_2"] = "TLSv1_2"
     follow_redirects: Literal[False] = False
     stream: Literal[False] = False
+    store: Literal[False] = False
     tools: tuple[Any, ...] = ()
     retry_count: Literal[0] = 0
     maximum_attempts: Literal[1] = 1

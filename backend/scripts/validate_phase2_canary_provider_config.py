@@ -107,6 +107,7 @@ _PROTECTED_EXPECTED = {
 _PREFLIGHT_BASE_HEAD = "165dc46ec9c10806ddcc4ff5d2171bc24ec7a87e"
 _PREFLIGHT_BRANCH = "codex/tickflow-phase2-ai-review"
 _ALLOWED_PREFLIGHT_DELTA = {
+    "backend/app/schemas/phase2_canary_provider_config.py": "M",
     "backend/app/services/phase2_openai_proxy_contract.py": "A",
     "backend/app/services/phase2_openai_proxy_artifact.py": "A",
     "backend/app/services/phase2_openai_canary_runner.py": "A",
@@ -1518,6 +1519,7 @@ def run_canary_preflight(
     strict_ready = (
         request_contract.get("model") == loaded.approval.exact_model_id
         and request_contract.get("stream") is False
+        and request_contract.get("store") is False
         and request_contract.get("tools") == []
         and response_format.get("type") == "json_schema"
         and response_format.get("name") == "tickflow_phase2_claims_candidate"

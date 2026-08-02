@@ -6,11 +6,11 @@
     "/usr/bin/python3",
     "/proxy/proxy.py"
   ],
-  "image_id": "sha256:083cd22cd8fac6e6de1051ef78e62033711783a50a5b4a1c0d49c5b8908754d4",
+  "image_id": "sha256:0658d30ae7a2588775a650b71d66a409a18ff36db6bdae22dfce9d75e4397bd3",
   "image_name": "tickflow-phase2-openai-egress-proxy:canary-v1",
   "launcher_source_sha256": "43eaf09a31cdcf94c0d4d6e60eef8c41a6531f6dc48a90dd554cedfb5fa49e9c",
-  "proxy_policy_sha256": "46c8b4aef0f775b31b5da0843fd56791e0ad87c25067f6ba603f291ac93b4093",
-  "proxy_source_sha256": "b17ce80c480576c36ee81764ce51154720e6834de9c11a6186b99e80ff8021f0",
-  "responses_contract_sha256": "6fab15c902e310f299a5a2545c3d84428ab6bf69052a37ca7dee367baa67ac06",
+  "proxy_policy_sha256": "3d4c996e80f52bc37d33eea12cf728a9a9c24f0f6aeef5a114833ae245dd5489",
+  "proxy_source_sha256": "47efc9d087e3d028e97a5b2c738fa3c5bdfbce98e4cbbe74b55dca6543e0b02d",
+  "responses_contract_sha256": "22f6dba5e5292a09237c26bab04b89315fe6f1dd3f2a1d6fcf46272fdf381303",
   "runtime_user": "65532:65532"
 }

@@ -41,6 +41,7 @@ from scripts.validate_phase2_canary_provider_config import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 _EXPECTED_PREFLIGHT_DELTA = {
+    "backend/app/schemas/phase2_canary_provider_config.py": "M",
     "backend/app/services/phase2_openai_proxy_contract.py": "A",
     "backend/app/services/phase2_openai_proxy_artifact.py": "A",
     "backend/app/services/phase2_openai_canary_runner.py": "A",
@@ -342,6 +343,7 @@ def test_responses_contract_uses_typed_candidate_schema_without_mutating_it() ->
 
     assert request["model"] == "gpt-5.6-terra"
     assert request["stream"] is False
+    assert request["store"] is False
     assert request["tools"] == []
     assert request["text"]["format"]["type"] == "json_schema"
     assert request["text"]["format"]["name"] == (
@@ -370,6 +372,52 @@ def test_responses_schema_is_closed_required_and_provider_compatible() -> None:
             properties = item.get("properties", {})
             assert item.get("additionalProperties") is False
             assert item.get("required") == list(properties)
+
+
+@pytest.mark.parametrize("store_value", [None, True])
+def test_preflight_rejects_missing_or_enabled_provider_storage(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    store_value: bool | None,
+) -> None:
+    config_path = tmp_path / "TickFlowPhase2Canary/provider-approval.json"
+    _write_approval(config_path)
+    approval = CanaryProviderApproval.model_validate(_approved_config())
+    request = build_responses_request_contract(approval)
+    request.pop("store", None)
+    if store_value is not None:
+        request["store"] = store_value
+    monkeypatch.setattr(
+        canary_preflight,
+        "build_responses_request_contract",
+        lambda _approval: deepcopy(request),
+    )
+    monkeypatch.setattr(
+        canary_preflight,
+        "exercise_placeholder_secret_injection",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("privacy gate must stop before Secret injection")
+        ),
+    )
+
+    result = run_canary_preflight(
+        repo_root=REPO_ROOT,
+        config_path=config_path,
+        account="macbookpro",
+        current_uid=os.getuid(),
+        keychain_runner=lambda command, **_kwargs: subprocess.CompletedProcess(
+            command,
+            0,
+        ),
+        git_runner=lambda command, **_kwargs: _clean_git_result(command),
+    )
+
+    assert result.status == "PHASE2B_CANARY_CONFIG_BLOCKED"
+    assert result.errors == ["responses_schema_not_ready"]
+    assert result.strict_json_schema == "BLOCKED"
+    assert result.provider_attempt_count == 0
+    assert result.ai_call_count == 0
+    assert result.provider_http == "NOT_RUN"
 
 
 def test_egress_policy_is_exact_and_rejects_every_bypass() -> None:

@@ -33,7 +33,7 @@ RECEIPT_PATH = Path("/output/receipt.json")
 AUTH_MAXIMUM_BYTES = 16_384
 
 _EXPECTED_CONTRACT_SHA256 = (
-    "73c653cde9060964d490a1e4727c51ec7506b74e45af119b6bf56baf6b87413e"
+    "da840ca12a4df5278cd4f1b01fef395b553186d6b1fe5df2d895b0c151ea6427"
 )
 _HEX_32 = re.compile(r"^[0-9a-f]{32}$")
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")
@@ -61,6 +61,7 @@ _POLICY = {
     "minimum_tls_version": "TLSv1_2",
     "follow_redirects": FOLLOW_REDIRECTS,
     "stream": False,
+    "store": False,
     "tools": [],
     "retry_count": RETRY_COUNT,
     "maximum_attempts": MAXIMUM_ATTEMPTS,
@@ -567,6 +568,7 @@ def build_provider_request(
         return {
             "model": MODEL_ID,
             "stream": False,
+            "store": False,
             "tools": [],
             "input": [
                 {

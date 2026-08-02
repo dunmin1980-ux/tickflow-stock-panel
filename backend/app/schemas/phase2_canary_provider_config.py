@@ -95,6 +95,7 @@ def build_responses_request_contract(
     return {
         "model": approval.exact_model_id,
         "stream": approval.streaming,
+        "store": False,
         "tools": [],
         "text": {
             "format": {

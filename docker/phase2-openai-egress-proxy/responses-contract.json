@@ -1,6 +1,6 @@
 {
   "contract_schema_version": 1,
-  "contract_sha256": "73c653cde9060964d490a1e4727c51ec7506b74e45af119b6bf56baf6b87413e",
+  "contract_sha256": "da840ca12a4df5278cd4f1b01fef395b553186d6b1fe5df2d895b0c151ea6427",
   "fixed_instructions": [
     "Use only supplied projection facts and pointers.",
     "Return exactly one schema-valid candidate object.",
@@ -20,6 +20,7 @@
     "model_id": "gpt-5.6-terra",
     "provider_id": "openai",
     "retry_count": 0,
+    "store": false,
     "stream": false,
     "timeout_seconds": 60,
     "tls_verification": true,

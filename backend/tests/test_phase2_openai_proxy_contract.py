@@ -57,6 +57,7 @@ EXPECTED_POLICY = {
     "minimum_tls_version": "TLSv1_2",
     "follow_redirects": False,
     "stream": False,
+    "store": False,
     "tools": [],
     "retry_count": 0,
     "maximum_attempts": 1,
@@ -83,6 +84,7 @@ def test_proxy_policy_is_closed_and_exact() -> None:
         ("minimum_tls_version", "TLSv1_1"),
         ("follow_redirects", True),
         ("stream", True),
+        ("store", True),
         ("tools", ["web_search"]),
         ("retry_count", 1),
         ("maximum_attempts", 2),
@@ -264,9 +266,17 @@ def test_provider_request_is_exact_and_projection_only(
 ) -> None:
     payload = proxy_module.build_provider_request(relay_envelope, contract)
 
-    assert set(payload) == {"model", "stream", "tools", "input", "text"}
+    assert set(payload) == {
+        "model",
+        "stream",
+        "store",
+        "tools",
+        "input",
+        "text",
+    }
     assert payload["model"] == "gpt-5.6-terra"
     assert payload["stream"] is False
+    assert payload["store"] is False
     assert payload["tools"] == []
     assert payload["text"]["format"] == contract["response_format"]
     assert payload["input"] == [
@@ -301,7 +311,6 @@ def test_provider_request_is_exact_and_projection_only(
     assert str(REPO_ROOT) not in serialized
     assert str(Path.home()) not in serialized
     assert "temperature" not in payload
-    assert "store" not in payload
 
 
 def test_projection_hash_uses_host_canonical_encoding(
