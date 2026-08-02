@@ -487,6 +487,50 @@ def test_runtime_evidence_failure_removes_success_route(
     assert not inbox.exists() or not list(inbox.iterdir())
 
 
+def test_host_validation_cannot_publish_after_orchestrator_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+    orchestrator_config: CanaryOrchestratorConfig,
+    artifacts: ApprovedCanaryArtifacts,
+    projection: dict[str, Any],
+    relay_response: dict[str, Any],
+) -> None:
+    backend = MockCanaryBackend(
+        scenario="provider_1s",
+        relay_response=relay_response,
+    )
+    original = orchestrator_module._host_validate_and_render
+
+    def delayed_validation(*args: object, **kwargs: object) -> tuple[dict[str, Any], str]:
+        document, rendered = original(*args, **kwargs)
+        backend._now = 90.000_001
+        return document, rendered
+
+    monkeypatch.setattr(
+        orchestrator_module,
+        "_host_validate_and_render",
+        delayed_validation,
+    )
+
+    result = run_single_symbol_canary(
+        config=orchestrator_config,
+        artifacts=artifacts,
+        projection=projection,
+        backend=backend,
+        artifact_verifier=lambda _artifacts: None,
+        secret_reader=lambda: "placeholder-canary-secret",
+        request_id_factory=lambda: "a" * 32,
+        wall_clock=lambda: FIXED_TIME,
+        monotonic=backend.monotonic,
+    )
+
+    assert result.terminal_state == "ORCHESTRATOR_TIMEOUT"
+    assert result.provider_attempt_count == 1
+    assert result.retry_count == 0
+    assert result.route == "rejected"
+    inbox = orchestrator_config.canary_output_root / "inbox"
+    assert not inbox.exists() or not list(inbox.iterdir())
+
+
 @pytest.mark.parametrize(
     ("scenario", "terminal", "ledger_state", "attempts", "route"),
     [

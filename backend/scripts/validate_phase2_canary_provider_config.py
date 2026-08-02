@@ -1334,7 +1334,21 @@ def validate_offline_canary_inputs(repo_root: Path) -> OfflineCanaryEvidence:
         errors.append("provider_relay_not_ready")
 
     canary_root = root / "reports/phase2_provider_canary"
-    canary_output_empty = not canary_root.exists() or not any(canary_root.rglob("*"))
+    allowed_offline_evidence = {
+        Path("runtime_evidence.json"),
+        Path("runtime_contract_candidate.json"),
+        Path("runtime_contract_build_evidence.json"),
+    }
+    canary_files = (
+        {
+            path.relative_to(canary_root)
+            for path in canary_root.rglob("*")
+            if path.is_file()
+        }
+        if canary_root.exists()
+        else set()
+    )
+    canary_output_empty = canary_files <= allowed_offline_evidence
     if not canary_output_empty:
         errors.append("canary_output_not_empty")
 

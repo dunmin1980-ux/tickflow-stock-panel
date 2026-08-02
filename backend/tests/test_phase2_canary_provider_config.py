@@ -179,7 +179,7 @@ def _artifact_image_inspect() -> list[dict[str, Any]]:
                 "Type": "layers",
                 "Layers": [
                     *base_layers,
-                    *("sha256:" + value * 64 for value in "abcde"),
+                    *("sha256:" + value * 64 for value in "abcdef"),
                 ],
             },
             "Config": {
@@ -206,6 +206,11 @@ def _artifact_image_inspect() -> list[dict[str, Any]]:
                     "org.tickflow.phase2.proxy-policy-sha256": candidate[
                         "proxy_policy_sha256"
                     ],
+                    "org.tickflow.phase2.runtime-contract-sha256": (
+                        canary_preflight.compute_artifact_input_hashes(
+                            REPO_ROOT
+                        ).runtime_contract_sha256
+                    ),
                 },
             },
         }
@@ -264,6 +269,11 @@ def _artifact_runtime_runner(
                 original = (
                     REPO_ROOT
                     / "docker/phase2-openai-egress-proxy/responses-contract.json"
+                )
+            elif source.endswith(":/proxy/runtime-contract.json"):
+                original = (
+                    REPO_ROOT
+                    / "docker/phase2-openai-egress-proxy/runtime-contract.json"
                 )
             else:
                 raise AssertionError(f"unexpected copy source: {source}")
@@ -1078,19 +1088,12 @@ def test_offline_canary_protected_evidence_matches_nine_frozen_sets() -> None:
     }
 
 
-def test_combined_preflight_requires_artifact_approval_before_runtime_create(
+def test_combined_preflight_rejects_superseded_candidate_before_runtime_create(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config_path = tmp_path / "TickFlowPhase2Canary/provider-approval.json"
     _write_approval(config_path)
-    candidate = _artifact_candidate_model()
-    monkeypatch.setattr(
-        canary_preflight,
-        "load_reviewed_proxy_artifact",
-        lambda _repo_root: candidate,
-    )
-
     def keychain_runner(
         command: list[str],
         **_kwargs: Any,
@@ -1113,8 +1116,8 @@ def test_combined_preflight_requires_artifact_approval_before_runtime_create(
         git_runner=lambda command, **_kwargs: _clean_git_result(command),
     )
 
-    assert result.status == "PHASE2B_PROXY_ARTIFACT_APPROVAL_REQUIRED"
-    assert result.errors == ["artifact_approval_missing"]
+    assert result.status == "PHASE2B_CANARY_EGRESS_BLOCKED"
+    assert result.errors == ["artifact_source_binding_invalid"]
     assert result.provider == "openai"
     assert result.exact_model == "gpt-5.6-terra"
     assert result.endpoint_alias == "openai_responses_v1"
@@ -1126,14 +1129,14 @@ def test_combined_preflight_requires_artifact_approval_before_runtime_create(
     assert result.secret_content_read is False
     assert result.secret_hash_recorded is False
     assert result.strict_json_schema == "READY"
-    assert result.proxy_artifact_candidate == "VALID"
-    assert result.proxy_artifact_review == "PASSED"
-    assert result.proxy_artifact_approval == "REQUIRED"
-    assert result.proxy_image == "IDENTITY_VERIFIED"
-    assert result.proxy_launcher == "HASH_VERIFIED"
-    assert result.tls == "NOT_RUN"
+    assert result.proxy_artifact_candidate == "INVALID"
+    assert result.proxy_artifact_review == "FAILED"
+    assert result.proxy_artifact_approval == "NOT_RUN"
+    assert result.proxy_image == "NOT_RUN"
+    assert result.proxy_launcher == "NOT_RUN"
+    assert result.tls == "BLOCKED"
     assert result.redirect == "DISABLED"
-    assert result.egress_allowlist == "NOT_RUN"
+    assert result.egress_allowlist == "FAILED"
     assert result.provider_attempt_count == 0
     assert result.ai_call_count == 0
     assert result.retry_count == 0
@@ -1146,7 +1149,7 @@ def test_combined_preflight_requires_artifact_approval_before_runtime_create(
     assert not any(command[:2] == ["docker", "create"] for command in runtime_calls)
 
 
-def test_combined_preflight_reaches_offline_ready_with_exact_approval(
+def test_combined_preflight_does_not_reopen_superseded_approval(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1154,12 +1157,6 @@ def test_combined_preflight_reaches_offline_ready_with_exact_approval(
     artifact_approval_path = config_path.with_name("proxy-artifact-approval.json")
     _write_approval(config_path)
     _write_artifact_approval(artifact_approval_path)
-    candidate = _artifact_candidate_model()
-    monkeypatch.setattr(
-        canary_preflight,
-        "load_reviewed_proxy_artifact",
-        lambda _repo_root: candidate,
-    )
     monkeypatch.setattr(
         socket,
         "socket",
@@ -1183,8 +1180,8 @@ def test_combined_preflight_reaches_offline_ready_with_exact_approval(
         git_runner=lambda command, **_kwargs: _clean_git_result(command),
     )
 
-    assert result.status == "CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL"
-    assert result.errors == []
+    assert result.status == "PHASE2B_CANARY_EGRESS_BLOCKED"
+    assert result.errors == ["artifact_source_binding_invalid"]
     assert result.provider == "openai"
     assert result.exact_model == "gpt-5.6-terra"
     assert result.keychain_secret == "PRESENT"
@@ -1192,14 +1189,14 @@ def test_combined_preflight_reaches_offline_ready_with_exact_approval(
     assert result.secret_hash_recorded is False
     assert result.temporary_single_file_injection == "PASSED"
     assert result.strict_json_schema == "READY"
-    assert result.proxy_artifact_approval == "APPROVED"
-    assert result.proxy_image == "CONTENT_VERIFIED"
-    assert result.proxy_launcher == "HASH_VERIFIED"
-    assert result.tls == "READY"
-    assert result.tls_evidence == "OFFLINE_ARTIFACT_VERIFIED"
+    assert result.proxy_artifact_approval == "NOT_RUN"
+    assert result.proxy_image == "NOT_RUN"
+    assert result.proxy_launcher == "NOT_RUN"
+    assert result.tls == "BLOCKED"
+    assert result.tls_evidence == "NOT_RUN"
     assert result.redirect == "DISABLED"
-    assert result.egress_allowlist == "PASSED"
-    assert result.egress_evidence == "OFFLINE_APPLICATION_POLICY_VERIFIED"
+    assert result.egress_allowlist == "FAILED"
+    assert result.egress_evidence == "NOT_RUN"
     assert result.provider_attempt_count == 0
     assert result.ai_call_count == 0
     assert result.provider_http == "NOT_RUN"
@@ -1216,14 +1213,8 @@ def test_combined_preflight_reaches_offline_ready_with_exact_approval(
         )
         for command in runtime_calls
     )
-    create_calls = [
-        command for command in runtime_calls if command[:2] == ["docker", "create"]
-    ]
-    assert len(create_calls) == 1
-    assert "--network" in create_calls[0]
-    assert create_calls[0][create_calls[0].index("--network") + 1] == "none"
-    assert sum(command[:2] == ["docker", "cp"] for command in runtime_calls) == 2
-    assert sum(command[:3] == ["docker", "rm", "-f"] for command in runtime_calls) == 1
+    assert not any(command[:2] == ["docker", "create"] for command in runtime_calls)
+    assert not any(command[:2] == ["docker", "cp"] for command in runtime_calls)
 
 
 def test_combined_preflight_missing_keychain_item_requires_user_action(

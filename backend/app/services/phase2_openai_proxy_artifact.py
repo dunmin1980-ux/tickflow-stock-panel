@@ -17,6 +17,10 @@ from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.services.phase2_canary_runtime_contract import (
+    canonical_runtime_contract_bytes,
+    runtime_contract_sha256,
+)
 from app.services.phase2_openai_proxy_contract import (
     canonical_proxy_contract_bytes,
     proxy_policy_sha256,
@@ -40,6 +44,7 @@ _CONTEXT_RELATIVE = Path("docker/phase2-openai-egress-proxy")
 _PROXY_RELATIVE = _CONTEXT_RELATIVE / "proxy.py"
 _DOCKERFILE_RELATIVE = _CONTEXT_RELATIVE / "Dockerfile"
 _CONTRACT_RELATIVE = _CONTEXT_RELATIVE / "responses-contract.json"
+_RUNTIME_CONTRACT_RELATIVE = _CONTEXT_RELATIVE / "runtime-contract.json"
 _LAUNCHER_RELATIVE = Path(
     "backend/app/services/phase2_openai_canary_runner.py"
 )
@@ -47,6 +52,7 @@ _CONTEXT_FILES = {
     "Dockerfile",
     "proxy.py",
     "responses-contract.json",
+    "runtime-contract.json",
     "secret.placeholder",
     "receipt.placeholder.json",
 }
@@ -62,6 +68,7 @@ _LABELS = {
     "org.tickflow.phase2.proxy-source-sha256",
     "org.tickflow.phase2.responses-contract-sha256",
     "org.tickflow.phase2.proxy-policy-sha256",
+    "org.tickflow.phase2.runtime-contract-sha256",
 }
 _IMAGE_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -90,6 +97,7 @@ class ArtifactInputHashes(_StrictFrozenModel):
     dockerfile_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     responses_contract_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     proxy_policy_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    runtime_contract_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     launcher_source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
@@ -113,6 +121,7 @@ class ImageInspectionEvidence(_StrictFrozenModel):
     proxy_source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     responses_contract_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     proxy_policy_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    runtime_contract_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     runtime_user: Literal["65532:65532"]
     entrypoint: tuple[str, ...]
     base_rootfs_prefix_verified: Literal[True]
@@ -144,6 +153,7 @@ class ImageContentEvidence(_StrictFrozenModel):
     cleanup_complete: Literal[True]
     proxy_source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     responses_contract_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    runtime_contract_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class OpenAIProxyArtifactCandidate(_StrictFrozenModel):
@@ -259,6 +269,12 @@ def compute_artifact_input_hashes(repo_root: Path) -> ArtifactInputHashes:
     )
     if contract_bytes != canonical_proxy_contract_bytes():
         raise OpenAIProxyArtifactError("artifact_contract_invalid")
+    runtime_contract_bytes = _read_regular(
+        root / _RUNTIME_CONTRACT_RELATIVE,
+        "artifact_runtime_contract_invalid",
+    )
+    if runtime_contract_bytes != canonical_runtime_contract_bytes():
+        raise OpenAIProxyArtifactError("artifact_runtime_contract_invalid")
     return ArtifactInputHashes(
         proxy_source_sha256=_sha256(
             _read_regular(root / _PROXY_RELATIVE, "artifact_proxy_source_invalid")
@@ -268,6 +284,7 @@ def compute_artifact_input_hashes(repo_root: Path) -> ArtifactInputHashes:
         ),
         responses_contract_sha256=_sha256(contract_bytes),
         proxy_policy_sha256=proxy_policy_sha256(),
+        runtime_contract_sha256=runtime_contract_sha256(),
         launcher_source_sha256=_sha256(
             _read_regular(root / _LAUNCHER_RELATIVE, "artifact_launcher_invalid")
         ),
@@ -318,6 +335,8 @@ def build_offline_image_command(
         f"RESPONSES_CONTRACT_SHA256={hashes.responses_contract_sha256}",
         "--build-arg",
         f"PROXY_POLICY_SHA256={hashes.proxy_policy_sha256}",
+        "--build-arg",
+        f"RUNTIME_CONTRACT_SHA256={hashes.runtime_contract_sha256}",
         str(root / _CONTEXT_RELATIVE),
     ]
 
@@ -388,6 +407,9 @@ def inspect_openai_proxy_image(
             hashes.responses_contract_sha256
         ),
         "org.tickflow.phase2.proxy-policy-sha256": hashes.proxy_policy_sha256,
+        "org.tickflow.phase2.runtime-contract-sha256": (
+            hashes.runtime_contract_sha256
+        ),
     }
     if (
         not isinstance(expected_image_id, str)
@@ -404,7 +426,7 @@ def inspect_openai_proxy_image(
         or set(labels) != _LABELS
         or dict(labels) != expected_labels
         or not isinstance(layers, list)
-        or len(layers) != len(base.rootfs_layers) + 5
+        or len(layers) != len(base.rootfs_layers) + 6
         or tuple(layers[: len(base.rootfs_layers)]) != base.rootfs_layers
         or any(
             not isinstance(layer, str) or _IMAGE_ID.fullmatch(layer) is None
@@ -429,6 +451,7 @@ def inspect_openai_proxy_image(
         proxy_source_sha256=hashes.proxy_source_sha256,
         responses_contract_sha256=hashes.responses_contract_sha256,
         proxy_policy_sha256=hashes.proxy_policy_sha256,
+        runtime_contract_sha256=hashes.runtime_contract_sha256,
         runtime_user=RUNTIME_USER,
         entrypoint=ENTRYPOINT,
         base_rootfs_prefix_verified=True,
@@ -506,6 +529,7 @@ def verify_image_contents(
     failure: OpenAIProxyArtifactError | None = None
     source_hash = ""
     contract_hash = ""
+    runtime_contract_hash = ""
     try:
         with tempfile.TemporaryDirectory(
             prefix="tickflow-phase2-openai-proxy-verify-"
@@ -514,6 +538,7 @@ def verify_image_contents(
             staging.chmod(0o700)
             source_copy = staging / "proxy.py"
             contract_copy = staging / "responses-contract.json"
+            runtime_contract_copy = staging / "runtime-contract.json"
             _execute(
                 executor,
                 [
@@ -524,6 +549,16 @@ def verify_image_contents(
                     "--network",
                     "none",
                     image_id,
+                ],
+                check=True,
+            )
+            _execute(
+                executor,
+                [
+                    "docker",
+                    "cp",
+                    f"{container_name}:/proxy/runtime-contract.json",
+                    str(runtime_contract_copy),
                 ],
                 check=True,
             )
@@ -555,8 +590,13 @@ def verify_image_contents(
                 contract_copy,
                 "artifact_image_content_invalid",
             )
+            runtime_contract_bytes = _read_regular(
+                runtime_contract_copy,
+                "artifact_image_content_invalid",
+            )
             source_hash = _sha256(source_bytes)
             contract_hash = _sha256(contract_bytes)
+            runtime_contract_hash = _sha256(runtime_contract_bytes)
             if (
                 source_bytes
                 != _read_regular(root / _PROXY_RELATIVE, "artifact_proxy_source_invalid")
@@ -564,6 +604,12 @@ def verify_image_contents(
                 != _read_regular(root / _CONTRACT_RELATIVE, "artifact_contract_invalid")
                 or source_hash != current.proxy_source_sha256
                 or contract_hash != current.responses_contract_sha256
+                or runtime_contract_bytes
+                != _read_regular(
+                    root / _RUNTIME_CONTRACT_RELATIVE,
+                    "artifact_runtime_contract_invalid",
+                )
+                or runtime_contract_hash != current.runtime_contract_sha256
             ):
                 raise OpenAIProxyArtifactError("artifact_image_content_invalid")
     except OpenAIProxyArtifactError as exc:
@@ -587,6 +633,7 @@ def verify_image_contents(
         cleanup_complete=True,
         proxy_source_sha256=source_hash,
         responses_contract_sha256=contract_hash,
+        runtime_contract_sha256=runtime_contract_hash,
     )
 
 
@@ -606,8 +653,10 @@ def build_artifact_candidate(
         image.proxy_source_sha256 != hashes.proxy_source_sha256
         or image.responses_contract_sha256 != hashes.responses_contract_sha256
         or image.proxy_policy_sha256 != hashes.proxy_policy_sha256
+        or image.runtime_contract_sha256 != hashes.runtime_contract_sha256
         or contents.proxy_source_sha256 != hashes.proxy_source_sha256
         or contents.responses_contract_sha256 != hashes.responses_contract_sha256
+        or contents.runtime_contract_sha256 != hashes.runtime_contract_sha256
         or not image.image_valid
         or not image.history_clean
         or not contents.content_valid

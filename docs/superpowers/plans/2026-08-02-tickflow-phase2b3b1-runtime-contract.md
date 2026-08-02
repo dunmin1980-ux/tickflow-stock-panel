@@ -90,13 +90,13 @@
 - Produces: `run_single_symbol_canary(...) -> CanaryRunResult`, `DockerCanaryBackend`, `read_keychain_secret_once()`, and offline `MockCanaryBackend` tests.
 - Consumes: approved artifact identity, fixed Facts/Projection, ledger/lock, runtime contract, Host Claims validator, and deterministic renderer.
 
-- [ ] Write failing lifecycle tests for precheck through terminal cleanup and prove the Secret reader is called once only after every non-secret gate.
-- [ ] Write the 20 required Mock fault scenarios and assert attempt count, ledger state, route, no retry, and cleanup for each.
-- [ ] Implement the minimal Orchestrator state machine and injected backend protocol.
-- [ ] Implement Docker command construction with no Host ports/socket, two networks, fixed image IDs, bounded waits, and cleanup deadline.
-- [ ] Implement Keychain-to-mode-0600-file lifecycle without logging/hash/length metadata.
-- [ ] Implement Host Candidate validation, deterministic rendering, isolated Canary routing, and sanitized evidence.
-- [ ] Run focused tests and commit.
+- [x] Write failing lifecycle tests for precheck through terminal cleanup and prove the Secret reader is called once only after every non-secret gate.
+- [x] Write the 20 required Mock fault scenarios and assert attempt count, ledger state, route, no retry, and cleanup for each.
+- [x] Implement the minimal Orchestrator state machine and injected backend protocol.
+- [x] Implement Docker command construction with no Host ports/socket, two networks, fixed image IDs, bounded waits, and cleanup deadline.
+- [x] Implement Keychain-to-mode-0600-file lifecycle without logging/hash/length metadata.
+- [x] Implement Host Candidate validation, deterministic rendering, isolated Canary routing, and sanitized evidence.
+- [x] Run focused tests and commit.
 
 ### Task 5: Immutable Runtime Artifact Candidate
 
@@ -111,11 +111,11 @@
 - Produces: strict aggregate candidate and fresh-build evidence for both images.
 - Consumes: exact source/Dockerfile/contract/runbook hashes and pinned local base image.
 
-- [ ] Write failing tests for exact input set, no-cache/network-none/pull-false commands, image labels/content/history, RootFS prefix, and old-candidate preservation.
-- [ ] Implement fresh offline builds and aggregate candidate generation.
-- [ ] Build both images with `--network none --pull=false --no-cache`, inspect content/history, and verify input hashes before/after.
-- [ ] Securely rename the old local approval to a superseded mode-0600 audit file without reading Provider credentials.
-- [ ] Rerun artifact verification and commit.
+- [x] Write failing tests for exact input set, no-cache/network-none/pull-false commands, image labels/content/history, RootFS prefix, and old-candidate preservation.
+- [x] Implement fresh offline builds and aggregate candidate generation.
+- [x] Build both images with `--network none --pull=false --no-cache`, inspect content/history, and verify input hashes before/after.
+- [x] Securely rename the old local approval to a superseded mode-0600 audit file without reading Provider credentials.
+- [x] Rerun artifact verification and commit.
 
 ### Task 6: Verification, Review, and Reapproval Evidence
 
@@ -128,10 +128,10 @@
 - Produces: `PHASE2B_CANARY_RUNTIME_CONTRACT_READY_FOR_REAPPROVAL` and the exact new hash set.
 - Consumes: focused/full tests, artifact evidence, protected-evidence hashes, residue scans, and an independent code review.
 
-- [ ] Run the two required focused suites plus Relay/artifact suites.
-- [ ] Run the full backend suite, compileall, Ruff F821, runtime-contract `--check`, and artifact `--verify`.
-- [ ] Run all protected-evidence, sensitive-shape, Secret-residue, container/network/process-residue, and old-candidate hash checks.
-- [ ] Perform independent security review of timeout propagation, ledger transitions, lock recovery, Secret lifecycle, candidate publication, cleanup, and second-attempt paths.
-- [ ] Fix all Critical/Important findings and rerun affected plus full verification.
-- [ ] Write the report and runbook with Provider/AI/TickFlow/public-network counts at zero.
+- [x] Run the two required focused suites plus Relay/artifact suites.
+- [x] Run the full backend suite, compileall, Ruff F821, runtime-contract `--check`, and artifact `--verify`.
+- [x] Run all protected-evidence, sensitive-shape, Secret-residue, container/network/process-residue, and old-candidate hash checks.
+- [x] Perform independent security review of timeout propagation, ledger transitions, lock recovery, Secret lifecycle, candidate publication, cleanup, and second-attempt paths.
+- [x] Fix all Critical/Important findings and rerun affected plus full verification.
+- [x] Write the report and runbook with Provider/AI/TickFlow/public-network counts at zero.
 - [ ] Commit, push the branch, verify remote Head, and stop without installing the new approval or making a real request.

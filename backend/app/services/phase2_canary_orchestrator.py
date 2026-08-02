@@ -1225,6 +1225,8 @@ def run_single_symbol_canary(
                 timestamp=wall_clock(),
             )
         relay = _collect_candidate(context, projection)
+        if monotonic() > host_deadline:
+            raise BackendError("ORCHESTRATOR_TIMEOUT")
         ledger = store.transition(
             LedgerState.CANDIDATE_COLLECTED,
             timestamp=wall_clock(),
@@ -1234,6 +1236,8 @@ def run_single_symbol_canary(
             relay["claims_candidate"],
             projection,
         )
+        if monotonic() > host_deadline:
+            raise BackendError("ORCHESTRATOR_TIMEOUT")
         host_validation_status = "VALID"
         route_paths = _publish_route(
             config.canary_output_root,

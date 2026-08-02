@@ -348,13 +348,16 @@ class MockProviderHandler(BaseHTTPRequestHandler):
         body: bytes = b"",
         headers: dict[str, str] | None = None,
     ) -> None:
-        self.send_response(status_code)
-        for name, value in (headers or {}).items():
-            self.send_header(name, value)
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        if body:
-            self.wfile.write(body)
+        try:
+            self.send_response(status_code)
+            for name, value in (headers or {}).items():
+                self.send_header(name, value)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if body:
+                self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def _reject_method(self) -> None:
         _write_receipt(
