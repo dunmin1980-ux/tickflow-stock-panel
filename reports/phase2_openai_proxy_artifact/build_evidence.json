@@ -8,7 +8,7 @@
   "iidfile_verified": true,
   "image_contents_valid": true,
   "image_history_clean": true,
-  "image_id": "sha256:0658d30ae7a2588775a650b71d66a409a18ff36db6bdae22dfce9d75e4397bd3",
+  "image_id": "sha256:084d13d2524e5992e0034956aad5d18dbb30909b028dea42a9d3acbb1ff9bfe0",
   "image_identity_valid": true,
   "image_name": "tickflow-phase2-openai-egress-proxy:canary-v1",
   "input_hashes_stable": true,

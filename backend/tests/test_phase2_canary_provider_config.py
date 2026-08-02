@@ -60,6 +60,7 @@ _EXPECTED_PREFLIGHT_DELTA = {
     "reports/phase2_openai_proxy_artifact/approval_candidate.json": "A",
     "reports/phase2_openai_proxy_artifact/build_evidence.json": "A",
     "reports/tickflow_phase2b_canary_provider_preflight_eval.md": "M",
+    "reports/tickflow_phase2b_single_symbol_canary_eval.md": "A",
 }
 
 

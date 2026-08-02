@@ -6,7 +6,7 @@
     "/usr/bin/python3",
     "/proxy/proxy.py"
   ],
-  "image_id": "sha256:0658d30ae7a2588775a650b71d66a409a18ff36db6bdae22dfce9d75e4397bd3",
+  "image_id": "sha256:084d13d2524e5992e0034956aad5d18dbb30909b028dea42a9d3acbb1ff9bfe0",
   "image_name": "tickflow-phase2-openai-egress-proxy:canary-v1",
   "launcher_source_sha256": "43eaf09a31cdcf94c0d4d6e60eef8c41a6531f6dc48a90dd554cedfb5fa49e9c",
   "proxy_policy_sha256": "3d4c996e80f52bc37d33eea12cf728a9a9c24f0f6aeef5a114833ae245dd5489",

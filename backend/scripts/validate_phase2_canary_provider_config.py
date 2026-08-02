@@ -126,6 +126,7 @@ _ALLOWED_PREFLIGHT_DELTA = {
     "reports/phase2_openai_proxy_artifact/approval_candidate.json": "A",
     "reports/phase2_openai_proxy_artifact/build_evidence.json": "A",
     "reports/tickflow_phase2b_canary_provider_preflight_eval.md": "M",
+    "reports/tickflow_phase2b_single_symbol_canary_eval.md": "A",
 }
 _PROXY_ARTIFACT_APPROVAL_REQUIRED = "PHASE2B_PROXY_ARTIFACT_APPROVAL_REQUIRED"
 _SYNTHETIC_PROXY_IMAGE_ID = "sha256:" + "0" * 64
