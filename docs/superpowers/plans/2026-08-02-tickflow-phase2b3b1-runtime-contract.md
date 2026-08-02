@@ -34,11 +34,11 @@
 - Produces: `CanaryRuntimeContract`, `load_runtime_contract()`, `canonical_runtime_contract_bytes()`, and `runtime_contract_sha256()`.
 - Consumes: no runtime configuration or environment variables.
 
-- [ ] Write strict tests for exact values, unknown/missing fields, timeout ordering, retry/attempt invariants, byte-identical generated copies, and environment independence.
-- [ ] Run the focused file and require import/behavior failures.
-- [ ] Implement the frozen strict model, no-follow bounded reader, canonical bytes, hash helper, and `--write/--check` CLI.
-- [ ] Generate both Docker copies and rerun focused tests to GREEN.
-- [ ] Commit the contract slice.
+- [x] Write strict tests for exact values, unknown/missing fields, timeout ordering, retry/attempt invariants, byte-identical generated copies, and environment independence.
+- [x] Run the focused file and require import/behavior failures.
+- [x] Implement the frozen strict model, no-follow bounded reader, canonical bytes, hash helper, and `--write/--check` CLI.
+- [x] Generate both Docker copies and rerun focused tests to GREEN.
+- [x] Commit the contract slice.
 
 ### Task 2: Atomic Candidate Relay
 
