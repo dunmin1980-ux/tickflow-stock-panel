@@ -134,4 +134,4 @@
 - [x] Perform independent security review of timeout propagation, ledger transitions, lock recovery, Secret lifecycle, candidate publication, cleanup, and second-attempt paths.
 - [x] Fix all Critical/Important findings and rerun affected plus full verification.
 - [x] Write the report and runbook with Provider/AI/TickFlow/public-network counts at zero.
-- [ ] Commit, push the branch, verify remote Head, and stop without installing the new approval or making a real request.
+- [x] Commit, push the branch, verify remote Head, and stop without installing the new approval or making a real request.
