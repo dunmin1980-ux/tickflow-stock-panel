@@ -26,7 +26,10 @@ from app.schemas.phase2_canary_provider_config import (
     build_responses_request_contract,
 )
 from app.schemas.phase2_claims import ALLOWED_CLAIM_TYPES
-from app.schemas.phase2_provider_relay import GenerationControls
+from app.services.phase2_canary_runtime_contract import (
+    load_runtime_contract,
+    runtime_contract_sha256,
+)
 from app.services.phase2_claims_service import PREDICATE_RULES
 
 _CONTRACT_PATH = Path(
@@ -61,7 +64,9 @@ class OpenAIProxyPolicy(_StrictFrozenModel):
     tools: tuple[Any, ...] = ()
     retry_count: Literal[0] = 0
     maximum_attempts: Literal[1] = 1
-    timeout_seconds: Literal[60] = 60
+    connect_timeout_seconds: Literal[10] = 10
+    read_timeout_seconds: Literal[60] = 60
+    total_timeout_seconds: Literal[60] = 60
     maximum_bytes: Literal[1_048_576] = 1_048_576
     approved_symbol: Literal["000403.SZ"] = "000403.SZ"
 
@@ -131,6 +136,7 @@ def canonical_contract_payload(value: Mapping[str, Any]) -> bytes:
 
 
 def _relay_contract() -> dict[str, Any]:
+    runtime = load_runtime_contract()
     return {
         "protocol_version": 1,
         "claims_schema_version": 1,
@@ -139,7 +145,18 @@ def _relay_contract() -> dict[str, Any]:
         "approved_trade_date": "2026-07-31",
         "allowed_claim_types": sorted(ALLOWED_CLAIM_TYPES),
         "allowed_predicates": sorted(PREDICATE_RULES),
-        "generation": GenerationControls().model_dump(mode="json"),
+        "generation": {
+            "temperature": 0,
+            "response_format": "typed_claims_json",
+            "tool_use": False,
+            "web_browsing": False,
+            "file_tools": False,
+            "function_calling": False,
+            "streaming": False,
+            "retry_count": runtime.retry_count,
+            "maximum_output_bytes": 1_048_576,
+            "timeout_seconds": runtime.relay_candidate_wait_timeout_seconds,
+        },
     }
 
 
@@ -149,6 +166,7 @@ def _contract_without_hash() -> dict[str, Any]:
     ]["format"]
     return {
         "contract_schema_version": 1,
+        "runtime_contract_sha256": runtime_contract_sha256(),
         "policy": OpenAIProxyPolicy().model_dump(mode="json"),
         "relay_contract": _relay_contract(),
         "fixed_instructions": list(_FIXED_INSTRUCTIONS),
@@ -180,6 +198,7 @@ def validate_proxy_contract(value: Any) -> dict[str, Any]:
         raise ValueError("proxy_contract_not_object")
     if set(value) != {
         "contract_schema_version",
+        "runtime_contract_sha256",
         "policy",
         "relay_contract",
         "fixed_instructions",
@@ -188,6 +207,8 @@ def validate_proxy_contract(value: Any) -> dict[str, Any]:
     }:
         raise ValueError("proxy_contract_fields_invalid")
     expected = build_proxy_contract()
+    if value.get("runtime_contract_sha256") != runtime_contract_sha256():
+        raise ValueError("proxy_runtime_contract_sha256_mismatch")
     digest = value.get("contract_sha256")
     if not isinstance(digest, str):
         raise ValueError("proxy_contract_sha256_invalid")

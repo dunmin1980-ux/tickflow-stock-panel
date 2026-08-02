@@ -57,11 +57,11 @@
 - Produces: one-shot Relay exit behavior, atomic `candidate.json`, atomic `candidate.ready.json`, and sanitized `relay-receipt.json`.
 - Consumes: request/projection files, the shared runtime contract, and the existing typed Relay envelope.
 
-- [ ] Write failing tests for 75-second wait, 1/59/60/>60 boundaries with a fake clock, no retry, response bindings, partial write, marker ordering, duplicate Candidate, and sanitized receipts.
-- [ ] Implement the dedicated Relay using only the standard library and no Secret mount.
-- [ ] Update Proxy timeout loading to the canonical contract and enforce 10/60/60 monotonic deadlines.
-- [ ] Regenerate the Responses contract so Relay generation controls bind to 75 seconds while Provider policy remains 60 seconds.
-- [ ] Run Relay and Proxy suites to GREEN and commit.
+- [x] Write failing tests for 75-second wait, 1/59/60/>60 boundaries with a fake clock, no retry, response bindings, partial write, marker ordering, duplicate Candidate, and sanitized receipts.
+- [x] Implement the dedicated Relay using only the standard library and no Secret mount.
+- [x] Update Proxy timeout loading to the canonical contract and enforce 10/60/60 monotonic deadlines.
+- [x] Regenerate the Responses contract so Relay generation controls bind to 75 seconds while Provider policy remains 60 seconds.
+- [x] Run Relay and Proxy suites to GREEN and commit.
 
 ### Task 3: Ledger and Exclusive Lock
 

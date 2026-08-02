@@ -1,6 +1,6 @@
 {
   "contract_schema_version": 1,
-  "contract_sha256": "da840ca12a4df5278cd4f1b01fef395b553186d6b1fe5df2d895b0c151ea6427",
+  "contract_sha256": "618596c2d512aef42460c7feaf54a4278cf7af5b48609553ecfca75f78c4b944",
   "fixed_instructions": [
     "Use only supplied projection facts and pointers.",
     "Return exactly one schema-valid candidate object.",
@@ -9,6 +9,7 @@
   ],
   "policy": {
     "approved_symbol": "000403.SZ",
+    "connect_timeout_seconds": 10,
     "endpoint_host": "api.openai.com",
     "endpoint_path": "/v1/responses",
     "endpoint_port": 443,
@@ -19,12 +20,13 @@
     "minimum_tls_version": "TLSv1_2",
     "model_id": "gpt-5.6-terra",
     "provider_id": "openai",
+    "read_timeout_seconds": 60,
     "retry_count": 0,
     "store": false,
     "stream": false,
-    "timeout_seconds": 60,
     "tls_verification": true,
-    "tools": []
+    "tools": [],
+    "total_timeout_seconds": 60
   },
   "relay_contract": {
     "allowed_claim_types": [
@@ -92,7 +94,7 @@
       "retry_count": 0,
       "streaming": false,
       "temperature": 0,
-      "timeout_seconds": 2,
+      "timeout_seconds": 75,
       "tool_use": false,
       "web_browsing": false
     },
@@ -1107,5 +1109,6 @@
     },
     "strict": true,
     "type": "json_schema"
-  }
+  },
+  "runtime_contract_sha256": "34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68"
 }

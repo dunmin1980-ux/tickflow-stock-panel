@@ -7,6 +7,7 @@ import json
 import socket
 import ssl
 import sys
+from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
 from types import ModuleType
@@ -16,11 +17,14 @@ import pytest
 from pydantic import ValidationError
 
 from app.schemas.phase2_claims import ALLOWED_CLAIM_TYPES, WorkerClaimsCandidate
-from app.schemas.phase2_provider_relay import GenerationControls
 from app.services.phase2_ai_worker_protocol import (
     FakeClaimsWorker,
     build_worker_projection,
     compute_projection_sha256,
+)
+from app.services.phase2_canary_runtime_contract import (
+    load_runtime_contract,
+    runtime_contract_sha256,
 )
 from app.services.phase2_claims_service import PREDICATE_RULES
 from app.services.phase2_openai_proxy_contract import (
@@ -43,6 +47,9 @@ PROXY_PATH = REPO_ROOT / "docker/phase2-openai-egress-proxy/proxy.py"
 CONTRACT_PATH = (
     REPO_ROOT / "docker/phase2-openai-egress-proxy/responses-contract.json"
 )
+RUNTIME_CONTRACT_PATH = (
+    REPO_ROOT / "docker/phase2-openai-egress-proxy/runtime-contract.json"
+)
 FACTS_PATH = REPO_ROOT / "reports/phase2_facts/000403SZ_facts.json"
 FIXED_REQUEST_ID = "a" * 32
 
@@ -61,7 +68,9 @@ EXPECTED_POLICY = {
     "tools": [],
     "retry_count": 0,
     "maximum_attempts": 1,
-    "timeout_seconds": 60,
+    "connect_timeout_seconds": 10,
+    "read_timeout_seconds": 60,
+    "total_timeout_seconds": 60,
     "maximum_bytes": 1_048_576,
     "approved_symbol": "000403.SZ",
 }
@@ -88,7 +97,9 @@ def test_proxy_policy_is_closed_and_exact() -> None:
         ("tools", ["web_search"]),
         ("retry_count", 1),
         ("maximum_attempts", 2),
-        ("timeout_seconds", 30),
+        ("connect_timeout_seconds", 30),
+        ("read_timeout_seconds", 30),
+        ("total_timeout_seconds", 30),
         ("maximum_bytes", 2_048_576),
         ("approved_symbol", "600489.SH"),
     ],
@@ -126,8 +137,20 @@ def test_contract_bytes_are_deterministic_and_schema_bound() -> None:
         "approved_trade_date": "2026-07-31",
         "allowed_claim_types": sorted(ALLOWED_CLAIM_TYPES),
         "allowed_predicates": sorted(PREDICATE_RULES),
-        "generation": GenerationControls().model_dump(mode="json"),
+        "generation": {
+            "temperature": 0,
+            "response_format": "typed_claims_json",
+            "tool_use": False,
+            "web_browsing": False,
+            "file_tools": False,
+            "function_calling": False,
+            "streaming": False,
+            "retry_count": 0,
+            "maximum_output_bytes": 1_048_576,
+            "timeout_seconds": 75,
+        },
     }
+    assert contract["runtime_contract_sha256"] == runtime_contract_sha256()
 
 
 def test_contract_validation_rejects_self_hash_drift() -> None:
@@ -186,12 +209,21 @@ def proxy_module() -> ModuleType:
         spec.loader.exec_module(module)
     finally:
         sys.dont_write_bytecode = previous
+    module.RUNTIME_CONTRACT_PATH = RUNTIME_CONTRACT_PATH
     return module
 
 
 @pytest.fixture(scope="module")
 def contract(proxy_module: ModuleType) -> dict[str, Any]:
-    return proxy_module.load_contract(str(CONTRACT_PATH))
+    return proxy_module.load_contract(
+        str(CONTRACT_PATH),
+        str(RUNTIME_CONTRACT_PATH),
+    )
+
+
+@pytest.fixture(scope="module")
+def runtime_contract() -> dict[str, Any]:
+    return load_runtime_contract(RUNTIME_CONTRACT_PATH).model_dump(mode="json")
 
 
 @pytest.fixture(scope="module")
@@ -206,9 +238,14 @@ def projection() -> dict[str, Any]:
 
 
 @pytest.fixture(scope="module")
-def relay_envelope(projection: dict[str, Any]) -> dict[str, Any]:
+def relay_envelope(
+    projection: dict[str, Any],
+    contract: dict[str, Any],
+) -> dict[str, Any]:
     request = build_relay_request(projection, request_id=FIXED_REQUEST_ID)
-    return build_provider_envelope(request, projection).model_dump(mode="json")
+    envelope = build_provider_envelope(request, projection).model_dump(mode="json")
+    envelope["generation"] = contract["relay_contract"]["generation"]
+    return envelope
 
 
 @pytest.fixture(scope="module")
@@ -384,7 +421,7 @@ def test_relay_envelope_mutations_fail_closed_before_transport(
     elif case == "maximum_bytes_changed":
         value["generation"]["maximum_output_bytes"] = 2_048_576
     elif case == "timeout_changed":
-        value["generation"]["timeout_seconds"] = 60
+        value["generation"]["timeout_seconds"] = 2
     elif case == "non_finite":
         value["projection"]["safe_facts"]["daily"]["open"] = float("nan")
     else:  # pragma: no cover - parameter list is closed above
@@ -626,6 +663,7 @@ class _FakeHTTPSResponse:
         status: int = 200,
         content_type: str = "application/json; charset=utf-8",
         content_length: str | None = None,
+        on_read: Callable[[], None] | None = None,
     ) -> None:
         self.status = status
         self.body = body
@@ -633,13 +671,24 @@ class _FakeHTTPSResponse:
         if content_length is not None:
             self.headers["Content-Length"] = content_length
         self.read_limits: list[int] = []
+        self.on_read = on_read
 
     def getheader(self, name: str) -> str | None:
         return self.headers.get(name)
 
     def read(self, amount: int) -> bytes:
         self.read_limits.append(amount)
+        if self.on_read is not None:
+            self.on_read()
         return self.body[:amount]
+
+
+class _FakeSocket:
+    def __init__(self) -> None:
+        self.timeouts: list[float] = []
+
+    def settimeout(self, value: float) -> None:
+        self.timeouts.append(value)
 
 
 class _FakeHTTPSConnection:
@@ -654,6 +703,11 @@ class _FakeHTTPSConnection:
         self.requests: list[tuple[str, str, bytes, dict[str, str]]] = []
         self.getresponse_count = 0
         self.close_count = 0
+        self.connect_count = 0
+        self.sock = _FakeSocket()
+
+    def connect(self) -> None:
+        self.connect_count += 1
 
     def request(
         self,
@@ -677,14 +731,14 @@ class _FakeHTTPSConnection:
 class _FakeConnectionFactory:
     def __init__(self, connection: _FakeHTTPSConnection) -> None:
         self.connection = connection
-        self.created: list[tuple[str, int, int]] = []
+        self.created: list[tuple[str, int, float]] = []
         self.contexts: list[ssl.SSLContext] = []
 
     def __call__(
         self,
         host: str,
         port: int,
-        timeout: int,
+        timeout: float,
         context: ssl.SSLContext,
     ) -> _FakeHTTPSConnection:
         self.created.append((host, port, timeout))
@@ -741,7 +795,7 @@ def test_transport_uses_one_verified_https_request(
 
     assert status == 200
     assert raw == response_body
-    assert factory.created == [("api.openai.com", 443, 60)]
+    assert factory.created == [("api.openai.com", 443, 10)]
     assert factory.contexts == [tls_context]
     assert connection.requests == [
         (
@@ -756,8 +810,59 @@ def test_transport_uses_one_verified_https_request(
         )
     ]
     assert connection.getresponse_count == 1
+    assert connection.connect_count == 1
     assert connection.close_count == 1
     assert response.read_limits == [proxy_module.MAXIMUM_BYTES + 1]
+    assert connection.sock.timeouts
+    assert all(0 < value <= 60 for value in connection.sock.timeouts)
+
+
+@pytest.mark.parametrize(
+    ("elapsed_seconds", "accepted"),
+    [(1.0, True), (59.0, True), (60.0, True), (60.000_001, False)],
+)
+def test_provider_total_deadline_uses_monotonic_clock_without_retry(
+    elapsed_seconds: float,
+    accepted: bool,
+    proxy_module: ModuleType,
+    runtime_contract: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = [100.0]
+    response = _FakeHTTPSResponse(
+        b"{}",
+        on_read=lambda: now.__setitem__(0, 100.0 + elapsed_seconds),
+    )
+    connection = _FakeHTTPSConnection(response)
+    factory = _FakeConnectionFactory(connection)
+    monkeypatch.setattr(
+        proxy_module,
+        "create_tls_context",
+        lambda: ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT),
+    )
+
+    if accepted:
+        assert proxy_module.perform_provider_request(
+            b"{}",
+            "synthetic-value",
+            connection_factory=factory,
+            runtime_contract=runtime_contract,
+            monotonic=lambda: now[0],
+        ) == (200, b"{}")
+    else:
+        with pytest.raises(proxy_module.ProxyError) as raised:
+            proxy_module.perform_provider_request(
+                b"{}",
+                "synthetic-value",
+                connection_factory=factory,
+                runtime_contract=runtime_contract,
+                monotonic=lambda: now[0],
+            )
+        assert raised.value.category == "TIMEOUT"
+        assert raised.value.provider_attempt_count == 1
+    assert len(factory.created) == 1
+    assert connection.connect_count == 1
+    assert connection.close_count == 1
 
 
 @pytest.mark.parametrize(

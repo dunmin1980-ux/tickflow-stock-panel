@@ -11,6 +11,7 @@ import os
 import re
 import ssl
 import stat
+import time
 from collections.abc import Callable, Mapping
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -26,14 +27,14 @@ FOLLOW_REDIRECTS = False
 RETRY_COUNT = 0
 MAXIMUM_ATTEMPTS = 1
 MAXIMUM_BYTES = 1_048_576
-TIMEOUT_SECONDS = 60
 CONTRACT_PATH = Path("/proxy/responses-contract.json")
+RUNTIME_CONTRACT_PATH = Path("/proxy/runtime-contract.json")
 AUTH_PATH = Path("/run/phase2/provider-auth")
 RECEIPT_PATH = Path("/output/receipt.json")
 AUTH_MAXIMUM_BYTES = 16_384
 
 _EXPECTED_CONTRACT_SHA256 = (
-    "da840ca12a4df5278cd4f1b01fef395b553186d6b1fe5df2d895b0c151ea6427"
+    "618596c2d512aef42460c7feaf54a4278cf7af5b48609553ecfca75f78c4b944"
 )
 _HEX_32 = re.compile(r"^[0-9a-f]{32}$")
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")
@@ -49,25 +50,39 @@ _CONTRACT_FIELDS = {
     "policy",
     "relay_contract",
     "response_format",
+    "runtime_contract_sha256",
 }
-_POLICY = {
-    "provider_id": "openai",
-    "model_id": MODEL_ID,
-    "endpoint_host": UPSTREAM_HOST,
-    "endpoint_port": UPSTREAM_PORT,
-    "endpoint_path": UPSTREAM_PATH,
-    "http_method": ALLOWED_METHOD,
-    "tls_verification": True,
-    "minimum_tls_version": "TLSv1_2",
-    "follow_redirects": FOLLOW_REDIRECTS,
-    "stream": False,
-    "store": False,
-    "tools": [],
-    "retry_count": RETRY_COUNT,
-    "maximum_attempts": MAXIMUM_ATTEMPTS,
-    "timeout_seconds": TIMEOUT_SECONDS,
-    "maximum_bytes": MAXIMUM_BYTES,
-    "approved_symbol": "000403.SZ",
+_RUNTIME_CONTRACT_FIELDS = {
+    "canary_runtime_contract_version",
+    "cleanup_timeout_seconds",
+    "host_orchestrator_timeout_seconds",
+    "maximum_provider_attempts",
+    "provider_connect_timeout_seconds",
+    "provider_read_timeout_seconds",
+    "provider_total_timeout_seconds",
+    "relay_candidate_wait_timeout_seconds",
+    "retry_count",
+}
+_POLICY_FIELDS = {
+    "provider_id",
+    "model_id",
+    "endpoint_host",
+    "endpoint_port",
+    "endpoint_path",
+    "http_method",
+    "tls_verification",
+    "minimum_tls_version",
+    "follow_redirects",
+    "stream",
+    "store",
+    "tools",
+    "retry_count",
+    "maximum_attempts",
+    "connect_timeout_seconds",
+    "read_timeout_seconds",
+    "total_timeout_seconds",
+    "maximum_bytes",
+    "approved_symbol",
 }
 _RELAY_FIELDS = {
     "protocol_version",
@@ -314,6 +329,83 @@ def _read_regular(path: Path, maximum_bytes: int, category: str) -> bytes:
         os.close(descriptor)
 
 
+def validate_runtime_contract(value: Any) -> dict[str, Any]:
+    """Validate the shared runtime policy without environment overrides."""
+    if not isinstance(value, dict) or set(value) != _RUNTIME_CONTRACT_FIELDS:
+        raise ProxyError("RUNTIME_CONTRACT_BLOCKED")
+    integer_fields = _RUNTIME_CONTRACT_FIELDS - {
+        "canary_runtime_contract_version",
+    }
+    if any(
+        isinstance(value.get(field), bool)
+        or not isinstance(value.get(field), int)
+        for field in integer_fields
+    ):
+        raise ProxyError("RUNTIME_CONTRACT_BLOCKED")
+    connect = value["provider_connect_timeout_seconds"]
+    read = value["provider_read_timeout_seconds"]
+    total = value["provider_total_timeout_seconds"]
+    relay = value["relay_candidate_wait_timeout_seconds"]
+    host = value["host_orchestrator_timeout_seconds"]
+    cleanup = value["cleanup_timeout_seconds"]
+    if (
+        value["canary_runtime_contract_version"] != 1
+        or min(connect, read, total, relay, host, cleanup) <= 0
+        or connect > total
+        or read > total
+        or not total < relay < host
+        or value["retry_count"] != 0
+        or value["maximum_provider_attempts"] != 1
+    ):
+        raise ProxyError("RUNTIME_CONTRACT_BLOCKED")
+    return dict(value)
+
+
+def load_runtime_contract(
+    path: str = "/proxy/runtime-contract.json",
+) -> dict[str, Any]:
+    raw = _read_regular(
+        Path(path),
+        16_384,
+        "RUNTIME_CONTRACT_BLOCKED",
+    )
+    value = strict_object(raw, "RUNTIME_CONTRACT_BLOCKED")
+    validated = validate_runtime_contract(value)
+    if raw != _canonical_bytes(validated):
+        raise ProxyError("RUNTIME_CONTRACT_BLOCKED")
+    return validated
+
+
+def _runtime_contract_sha256(value: Mapping[str, Any]) -> str:
+    return hashlib.sha256(_canonical_bytes(value)).hexdigest()
+
+
+def _policy(runtime: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "provider_id": "openai",
+        "model_id": MODEL_ID,
+        "endpoint_host": UPSTREAM_HOST,
+        "endpoint_port": UPSTREAM_PORT,
+        "endpoint_path": UPSTREAM_PATH,
+        "http_method": ALLOWED_METHOD,
+        "tls_verification": True,
+        "minimum_tls_version": "TLSv1_2",
+        "follow_redirects": FOLLOW_REDIRECTS,
+        "stream": False,
+        "store": False,
+        "tools": [],
+        "retry_count": runtime["retry_count"],
+        "maximum_attempts": runtime["maximum_provider_attempts"],
+        "connect_timeout_seconds": runtime[
+            "provider_connect_timeout_seconds"
+        ],
+        "read_timeout_seconds": runtime["provider_read_timeout_seconds"],
+        "total_timeout_seconds": runtime["provider_total_timeout_seconds"],
+        "maximum_bytes": MAXIMUM_BYTES,
+        "approved_symbol": "000403.SZ",
+    }
+
+
 def _schema_ref_name(reference: Any, root: Mapping[str, Any]) -> str:
     if not isinstance(reference, str) or not reference.startswith("#/$defs/"):
         raise ProxyError("RESPONSE_SCHEMA_BLOCKED")
@@ -412,7 +504,10 @@ def _validate_schema_definition(
             raise ProxyError("RESPONSE_SCHEMA_BLOCKED")
 
 
-def _validate_contract(value: dict[str, Any]) -> dict[str, Any]:
+def _validate_contract(
+    value: dict[str, Any],
+    runtime_contract: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     if set(value) != _CONTRACT_FIELDS or value.get("contract_schema_version") != 1:
         raise ProxyError("REQUEST_SCHEMA_BLOCKED")
     digest = value.get("contract_sha256")
@@ -424,7 +519,18 @@ def _validate_contract(value: dict[str, Any]) -> dict[str, Any]:
     payload = dict(value)
     payload.pop("contract_sha256")
     actual = hashlib.sha256(_canonical_bytes(payload)).hexdigest()
-    if not hmac.compare_digest(digest, actual) or value.get("policy") != _POLICY:
+    policy = value.get("policy")
+    if not hmac.compare_digest(digest, actual) or not isinstance(policy, dict):
+        raise ProxyError("REQUEST_SCHEMA_BLOCKED")
+    if runtime_contract is not None:
+        runtime = validate_runtime_contract(dict(runtime_contract))
+        if (
+            value.get("runtime_contract_sha256")
+            != _runtime_contract_sha256(runtime)
+            or policy != _policy(runtime)
+        ):
+            raise ProxyError("REQUEST_SCHEMA_BLOCKED")
+    elif set(policy) != _POLICY_FIELDS:
         raise ProxyError("REQUEST_SCHEMA_BLOCKED")
     relay = value.get("relay_contract")
     instructions = value.get("fixed_instructions")
@@ -435,7 +541,7 @@ def _validate_contract(value: dict[str, Any]) -> dict[str, Any]:
         or relay.get("protocol_version") != 1
         or relay.get("claims_schema_version") != 1
         or relay.get("response_format") != "typed_claims_json"
-        or relay.get("approved_symbol") != _POLICY["approved_symbol"]
+        or relay.get("approved_symbol") != policy.get("approved_symbol")
         or relay.get("approved_trade_date") != "2026-07-31"
         or not _canonical_string_list(relay.get("allowed_claim_types"))
         or not _canonical_string_list(relay.get("allowed_predicates"))
@@ -461,13 +567,18 @@ def _validate_contract(value: dict[str, Any]) -> dict[str, Any]:
     return value
 
 
-def load_contract(path: str = "/proxy/responses-contract.json") -> dict[str, Any]:
+def load_contract(
+    path: str = "/proxy/responses-contract.json",
+    runtime_contract_path: str = "/proxy/runtime-contract.json",
+) -> dict[str, Any]:
     """Load the exact source-controlled request/response contract."""
+    runtime = load_runtime_contract(runtime_contract_path)
     return _validate_contract(
         strict_object(
             _read_regular(Path(path), MAXIMUM_BYTES, "REQUEST_SCHEMA_BLOCKED"),
             "REQUEST_SCHEMA_BLOCKED",
-        )
+        ),
+        runtime,
     )
 
 
@@ -839,7 +950,7 @@ def extract_candidate(
 
 
 ConnectionFactory = Callable[
-    [str, int, int, ssl.SSLContext],
+    [str, int, float, ssl.SSLContext],
     http.client.HTTPSConnection,
 ]
 ProviderRequester = Callable[[bytes, str], tuple[int, bytes]]
@@ -859,7 +970,7 @@ def create_tls_context() -> ssl.SSLContext:
 def default_connection_factory(
     host: str,
     port: int,
-    timeout: int,
+    timeout: float,
     context: ssl.SSLContext,
 ) -> http.client.HTTPSConnection:
     return http.client.HTTPSConnection(
@@ -911,6 +1022,8 @@ def perform_provider_request(
     auth_value: str,
     *,
     connection_factory: ConnectionFactory = default_connection_factory,
+    runtime_contract: Mapping[str, Any] | None = None,
+    monotonic: Callable[[], float] = time.monotonic,
 ) -> tuple[int, bytes]:
     """Perform exactly one verified HTTPS request with no redirect or retry."""
     if not isinstance(body, bytes) or not 0 < len(body) <= MAXIMUM_BYTES:
@@ -922,14 +1035,36 @@ def perform_provider_request(
         or any(character in auth_value for character in ("\x00", "\r", "\n"))
     ):
         raise ProxyError("AUTH_BLOCKED")
+    runtime = (
+        validate_runtime_contract(dict(runtime_contract))
+        if runtime_contract is not None
+        else load_runtime_contract(str(RUNTIME_CONTRACT_PATH))
+    )
+    started = monotonic()
+    deadline = started + runtime["provider_total_timeout_seconds"]
+
+    def remaining(read_limit: int) -> float:
+        available = deadline - monotonic()
+        if available < 0:
+            raise ProxyError("TIMEOUT", provider_attempt_count=1)
+        return max(0.001, min(float(read_limit), available))
+
     connection: http.client.HTTPSConnection | None = None
     try:
         context = create_tls_context()
         connection = connection_factory(
             UPSTREAM_HOST,
             UPSTREAM_PORT,
-            TIMEOUT_SECONDS,
+            float(runtime["provider_connect_timeout_seconds"]),
             context,
+        )
+        connection.connect()
+        if monotonic() > deadline:
+            raise ProxyError("TIMEOUT", provider_attempt_count=1)
+        if connection.sock is None:
+            raise ProxyError("UPSTREAM_REJECTED", provider_attempt_count=1)
+        connection.sock.settimeout(
+            remaining(runtime["provider_read_timeout_seconds"])
         )
         connection.request(
             ALLOWED_METHOD,
@@ -940,6 +1075,9 @@ def perform_provider_request(
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {auth_value}",
             },
+        )
+        connection.sock.settimeout(
+            remaining(runtime["provider_read_timeout_seconds"])
         )
         response = connection.getresponse()
         status_code = response.status
@@ -987,7 +1125,16 @@ def perform_provider_request(
                     provider_http_status=status_code,
                     provider_attempt_count=1,
                 )
+        connection.sock.settimeout(
+            remaining(runtime["provider_read_timeout_seconds"])
+        )
         raw = response.read(MAXIMUM_BYTES + 1)
+        if monotonic() > deadline:
+            raise ProxyError(
+                "TIMEOUT",
+                provider_http_status=status_code,
+                provider_attempt_count=1,
+            )
         if len(raw) > MAXIMUM_BYTES:
             raise ProxyError(
                 "RESPONSE_SIZE_BLOCKED",
