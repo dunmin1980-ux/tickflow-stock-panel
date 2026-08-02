@@ -3,17 +3,19 @@
 ## 1. 最终状态
 
 ```text
-CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL
+PHASE2B_CANARY_RUNTIME_CONTRACT_BLOCKED
 ```
 
-`store=false` 完整工件哈希已获用户明确批准，非敏感批准文件已安全安装，最终纯离线门禁已通过。真实 Provider Canary 仍未执行；不得把本报告解释为 Provider、TLS 实时握手或模型可用性测试。
+用户已明确授权唯一一次真实 Provider Canary，但执行前最后门禁发现已批准运行合同无法完成一次可追溯的端到端请求：OpenAI Proxy 上游超时为 `60s`，Provider Relay 同步等待超时仍固定为 `2s`，且仓库内只有 future Canary 的纯命令合同，没有已验收的真实一次性编排器。
+
+根据“任一门禁不通过即失败关闭”的授权边界，本轮在读取 Secret、启动容器和公网连接之前停止。唯一真实请求未执行，授权未被消耗。
 
 ## 2. 执行摘要
 
 | 项目 | 结果 |
 |---|---|
 | 开工前 Head | `9bba2fd98750350fa00b9b019f0d669445d4a98f` |
-| 离线批准前 Head | `1c50e5b139b2e327357195f380e576ba754083fe` |
+| 执行门禁 Head | `32818aa17b5d53c849f67b05da83073dd7b463e4` |
 | 标的 | `000403.SZ 派林生物` |
 | Trade date | `2026-07-31` |
 | Provider | `openai` |
@@ -23,7 +25,7 @@ CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL
 | AI calls | `0` |
 | Retry | `0` |
 | Provider HTTP | `NOT_RUN` |
-| Provider store | `false`，已绑定在待审批新工件 |
+| Provider store | `false`，已绑定在批准工件 |
 | TLS | `NOT_RUN` |
 | Egress | `NOT_RUN` |
 | Candidate | `NOT_CREATED` |
@@ -49,16 +51,18 @@ CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL
 | Integrated Gold | `DISABLED / external_send_count=0` |
 | Three-symbol real batch | `NOT_APPROVED` |
 
-## 3. 离线 READY 证据
+## 3. 失败关闭证据
 
-最终离线门禁已验证：Provider config `VALID`、Keychain Secret 仅存在性为 `PRESENT`、Secret content read `NO`、strict JSON Schema `READY`、`store=false`、重定向禁用、出站策略通过离线工件校验、镜像内容与批准标识一致、历史证据未变、运行时残留为 `0`。
+批准前置项仍通过：Git Head 为 `32818aa17b5d53c849f67b05da83073dd7b463e4`，Approval Candidate SHA-256 为 `c7614947da89cae8727ed3c59d1e965dd73bc95450953d3e59c1a89dd0b9f96d`，工作区原始状态为 clean，Provider config、Keychain 存在性、strict JSON Schema、`store=false`、镜像内容、出站策略和九组历史证据均通过离线校验。
 
-当前 TLS 和 Egress 结论只是离线工件证据，不是实时公网证据。本报告不保存完整请求、响应、Authorization header、Secret 或本地绝对路径。
+阻断条件为：Relay 的 `HTTPConnection(..., timeout=2)` 会在 Proxy 最长 `60s` 的同步 Provider 请求完成前先失败。此时 Provider 尝试可能已发生但响应无法回收给 Host Validator，与 `provider_attempt_count=1`、不重试和必须生成 Candidate 证据的合同冲突。
+
+脱敏运行证据保存在 `reports/phase2_provider_canary/runtime_evidence.json`。本报告不保存完整请求、响应、Authorization header、Secret 或本地绝对路径。
 
 ## 4. 下一动作
 
 ```text
-REQUEST_FINAL_SINGLE_CALL_APPROVAL
+REMEDIATE_AND_REAPPROVE_END_TO_END_RUNTIME_CONTRACT
 ```
 
-必须再次收到明确的唯一真实调用授权，才允许专用启动器读取一次 Keychain Secret 并发起一次 Provider 请求。
+先将 Relay 等待合同与 Provider `60s` 超时一致，建立可测试、可清理、仅允许一次 Provider attempt 的 Host 编排器，然后重建并重新审批受影响的 Relay / Proxy / Launcher 哈希。新批准完成前不得读取 Secret 或发起 Provider 请求。

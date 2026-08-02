@@ -1,0 +1,44 @@
+{
+  "ai_call_count": 0,
+  "approval_candidate_sha256": "c7614947da89cae8727ed3c59d1e965dd73bc95450953d3e59c1a89dd0b9f96d",
+  "approved_head": "32818aa17b5d53c849f67b05da83073dd7b463e4",
+  "blockers": [
+    "relay_timeout_shorter_than_provider_timeout",
+    "approved_live_orchestrator_absent"
+  ],
+  "can_publish": false,
+  "cleanup": {
+    "container_residue_count": 0,
+    "network_residue_count": 0,
+    "request_response_staging_residue_count": 0,
+    "secret_temporary_file_residue_count": 0
+  },
+  "cloud_redeploy": false,
+  "completed_at": "2026-08-02T11:23:33+08:00",
+  "exact_model": "gpt-5.6-terra",
+  "historical_evidence": "UNCHANGED",
+  "integrated_gold": {
+    "enabled": false,
+    "external_send_count": 0
+  },
+  "keychain_secret_content_read": false,
+  "keychain_secret_presence": "PRESENT",
+  "manual_review": "NOT_STARTED",
+  "obsidian_real_vault_write": false,
+  "paper_trading": "NOT_STARTED",
+  "provider": "openai",
+  "provider_attempt_count": 0,
+  "provider_http": "NOT_RUN",
+  "provider_store": false,
+  "provider_timeout_seconds": 60,
+  "relay_timeout_seconds": 2,
+  "retry_count": 0,
+  "secret_artifact_hit_count": 0,
+  "secret_log_hit_count": 0,
+  "started_at": "2026-08-02T11:23:33+08:00",
+  "status": "PHASE2B_CANARY_RUNTIME_CONTRACT_BLOCKED",
+  "symbol": "000403.SZ",
+  "three_symbol_batch": "NOT_APPROVED",
+  "tickflow_request_count": 0,
+  "trade_date": "2026-07-31"
+}
