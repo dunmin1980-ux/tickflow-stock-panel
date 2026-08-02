@@ -3,10 +3,10 @@
 ## 1. 结论
 
 ```text
-PHASE2B_PROXY_ARTIFACT_APPROVAL_REQUIRED
+CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL
 ```
 
-独立 OpenAI Proxy 已完成纯离线实现、无网络构建、不可变镜像校验和独立代码复审。当前只缺用户对本报告所列精确工件哈希的明确批准；本轮未安装本地批准文件，也未执行 Provider Canary。
+用户已明确批准第 3 节完整工件哈希集合。独立 OpenAI Proxy 已完成纯离线实现、无网络构建、不可变镜像校验、独立代码复审和本地非敏感批准安装；最终纯离线预门禁返回 `CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL`。
 
 本轮没有读取 Keychain Secret 内容，没有记录 Secret 长度、前后缀或哈希，没有发起 Provider、AI、TickFlow 或其他公网请求。
 
@@ -18,8 +18,9 @@ PHASE2B_PROXY_ARTIFACT_APPROVAL_REQUIRED
 | Exact Model | `gpt-5.6-terra` |
 | Endpoint | `POST https://api.openai.com:443/v1/responses` |
 | Symbol | `000403.SZ` |
-| TLS verification | `true`，最低 `TLSv1.2` |
+| TLS verification | `READY`，离线工件证据；最低 `TLSv1.2` |
 | Redirect | `disabled` |
+| Egress allowlist | `PASSED`，离线应用策略证据 |
 | Streaming | `false` |
 | Tools / Web / Files | `disabled` |
 | Retry | `0` |
@@ -33,7 +34,7 @@ Proxy 只接受严格 `application/json`，可选参数仅允许单个 UTF-8 cha
 
 ## 3. 精确工件哈希
 
-以下值来自 `approval_candidate.json`，必须作为一个整体批准，不允许只批准镜像标签或部分文件：
+以下值来自 `approval_candidate.json`，已由用户作为一个完整集合明确批准：
 
 | 工件 | SHA-256 / 不可变标识 |
 |---|---|
@@ -82,9 +83,10 @@ Proxy 只接受严格 `application/json`，可选参数仅允许单个 UTF-8 cha
 | Proxy container residue | `0` |
 | Proxy network residue | `0` |
 | Proxy process residue | `0` |
-| 本地工件批准文件 | `NOT_INSTALLED` |
+| 本地工件批准文件 | `APPROVED / REGULAR_FILE / MODE_0600` |
+| 批准目录 | `MODE_0700 / OWNER_MATCHES / NO_SYMLINK` |
 
-存在性检查只允许使用不输出 Secret 的 Keychain 查询方式。真实执行仍被精确工件批准门禁阻断。
+存在性检查只使用不输出 Secret 的 Keychain 查询方式。本地批准文件只包含已提交候选对象和 `approval_status=APPROVED`，不包含 Provider 配置或 Secret。
 
 ## 6. 历史证据与外部行为
 
@@ -116,17 +118,28 @@ Proxy 只接受严格 `application/json`，可选参数仅允许单个 UTF-8 cha
 | Immutable artifact verify | `PASSED` |
 | 高置信敏感形态扫描 | `CLEAN` |
 | 独立安全代码复审 | `NO ACTIONABLE FINDINGS` |
+| Final offline preflight | `PASSED` |
 
 ## 8. 当前停止点
 
 ```text
-status=PHASE2B_PROXY_ARTIFACT_APPROVAL_REQUIRED
-provider_attempt_count=0
-ai_call_count=0
-provider_http=NOT_RUN
-tickflow_api_request_count=0
-real_public_network_success_count=0
-next_action=APPROVE_EXACT_PROXY_ARTIFACT_HASHES
+Provider=openai
+Exact Model=gpt-5.6-terra
+Endpoint Alias=openai_responses_v1
+Provider config=VALID
+Keychain Secret=PRESENT
+Secret content read=NO
+Temporary single-file injection=PASSED
+Strict JSON Schema=READY
+TLS=READY
+Redirect=DISABLED
+Egress allowlist=PASSED
+Provider attempts=0
+AI calls=0
+Provider HTTP=NOT_RUN
+Next action=REQUEST_FINAL_SINGLE_CALL_APPROVAL
 ```
 
-在用户明确批准第 3 节完整哈希集合之前，不得安装 `proxy-artifact-approval.json`，不得进入最终 READY，也不得执行单票真实 Provider Canary。
+TLS 和出站白名单的 `READY/PASSED` 结论来自不可变镜像、源码、合同和应用策略的纯离线校验，不代表已经进行 TLS 握手、DNS 解析或 Provider 连接。
+
+本阶段在 `CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL` 停止。未获得下一次明确的单次真实调用批准前，不得构造真实 Authorization header、启动未来运行时或执行 Provider 请求。

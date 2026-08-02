@@ -1185,7 +1185,7 @@ the user explicitly approves the exact candidate hashes.
 - Produces: final `CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL` evidence and pushed branch.
 - Consumes: user's exact approval of Task 7 hashes.
 
-- [ ] **Step 1: Confirm approval matches the current candidate exactly**
+- [x] **Step 1: Confirm approval matches the current candidate exactly**
 
 Compare the user-approved image ID and all SHA-256 values to the committed
 candidate. Require the commit that last changed the candidate to remain an
@@ -1194,7 +1194,7 @@ the candidate to remain unchanged. If any approved value or covered byte
 differs, return
 `PHASE2B_PROXY_ARTIFACT_APPROVAL_MISMATCH` and stop.
 
-- [ ] **Step 2: Install the non-sensitive approval file securely**
+- [x] **Step 2: Install the non-sensitive approval file securely**
 
 Write only the committed candidate object plus
 `approval_status="APPROVED"` through a mode-0600 temporary regular file in the
@@ -1202,7 +1202,7 @@ existing mode-0700 directory, `fsync` file and directory, and atomically
 rename. Reject symlink parents. Do not read or modify the Provider approval
 file or Keychain item.
 
-- [ ] **Step 3: Execute final offline preflight once**
+- [x] **Step 3: Execute final offline preflight once**
 
 ```bash
 cd "$(git rev-parse --show-toplevel)/backend"
@@ -1221,7 +1221,7 @@ offline, redirects disabled, egress policy passed offline, all protected
 evidence unchanged, zero residue, zero Provider/AI/TickFlow/public-network
 actions, and `provider_http=NOT_RUN`.
 
-- [ ] **Step 4: Re-run final focused/static checks**
+- [x] **Step 4: Re-run final focused/static checks**
 
 ```bash
 cd "$(git rev-parse --show-toplevel)/backend"
@@ -1241,7 +1241,7 @@ Expected: all checks pass. The Step 3 preflight has already rerun the exact
 synthetic-value scan, approval-file sensitive-shape scan, worktree scan, and
 residue scan after installing the non-sensitive approval file.
 
-- [ ] **Step 5: Update final report and plan state**
+- [x] **Step 5: Update final report and plan state**
 
 The report must use the user-required public summary:
 
@@ -1266,7 +1266,7 @@ Next action=REQUEST_FINAL_SINGLE_CALL_APPROVAL
 The detailed report must state that TLS and egress readiness are offline
 artifact evidence, not a live handshake or connection.
 
-- [ ] **Step 6: Commit, push, and stop**
+- [x] **Step 6: Commit, push, and stop**
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
