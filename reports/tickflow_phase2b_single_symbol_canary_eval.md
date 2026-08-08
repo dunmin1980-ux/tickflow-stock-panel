@@ -1,68 +1,102 @@
-# TickFlow Phase 2B 单票 Provider Canary 执行报告
+# TickFlow Phase 2B-3B2 Single-Symbol Provider Canary Evaluation
 
-## 1. 最终状态
+## 1. Final Status
 
 ```text
-PHASE2B_CANARY_RUNTIME_CONTRACT_BLOCKED
+ATTEMPT_CONSUMED_UNKNOWN
 ```
 
-用户已明确授权唯一一次真实 Provider Canary，但执行前最后门禁发现已批准运行合同无法完成一次可追溯的端到端请求：OpenAI Proxy 上游超时为 `60s`，Provider Relay 同步等待超时仍固定为 `2s`，且仓库内只有 future Canary 的纯命令合同，没有已验收的真实一次性编排器。
+The approved one-shot launcher was executed exactly once for `000403.SZ`.
+`NETWORK_DISPATCH_STARTED` was durably recorded, so the authorization is
+permanently consumed. No Provider response, HTTP status, Candidate, Claims, or
+rendered Markdown was recovered. The request must not be retried.
 
-根据“任一门禁不通过即失败关闭”的授权边界，本轮在读取 Secret、启动容器和公网连接之前停止。唯一真实请求未执行，授权未被消耗。
+## 2. Approved Identity
 
-## 2. 执行摘要
-
-| 项目 | 结果 |
+| Field | Value |
 |---|---|
-| 开工前 Head | `9bba2fd98750350fa00b9b019f0d669445d4a98f` |
-| 执行门禁 Head | `32818aa17b5d53c849f67b05da83073dd7b463e4` |
-| 标的 | `000403.SZ 派林生物` |
+| Current Head | `c3a71dee4fc543a980e1fc48c2b0bde9ea687169` |
+| Runtime Approval Candidate | `e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b` |
+| Runtime Contract | `34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68` |
+| Request ID | `d59766101b63450e8148541d589a90bf` |
+| Symbol | `000403.SZ` |
+| Name | `派林生物` |
 | Trade date | `2026-07-31` |
 | Provider | `openai` |
-| Exact Model | `gpt-5.6-terra` |
-| Endpoint Alias | `openai_responses_v1` |
-| Provider attempts | `0` |
-| AI calls | `0` |
+| Exact model | `gpt-5.6-terra` |
+| Endpoint policy | `POST https://api.openai.com:443/v1/responses` |
+
+## 3. Runtime Outcome
+
+| Check | Result |
+|---|---|
+| Provider attempts | `1` |
+| AI calls | `UNKNOWN`, maximum `1` |
 | Retry | `0` |
-| Provider HTTP | `NOT_RUN` |
-| Provider store | `false`，已绑定在批准工件 |
-| TLS | `NOT_RUN` |
-| Egress | `NOT_RUN` |
-| Candidate | `NOT_CREATED` |
+| Provider HTTP | `UNKNOWN` |
+| Provider response received | `NO` |
+| TLS result | `NOT_PROVEN` |
+| Egress policy | `ALLOWLIST_ONLY`; dispatch outcome unknown |
+| Candidate | `REJECTED_NOT_PRODUCED` |
 | Claims | `NOT_RUN` |
 | Claim count | `0` |
 | Facts Pointer bindings | `0` |
-| Unsupported Claims | `0` |
-| Free-text fields | `0` |
-| Trading Claims | `0` |
+| Unsupported Claims | `0` observed; no Candidate |
+| Free-text fields | `0` observed; no Candidate |
+| Trading Claims | `0` observed; no Candidate |
 | Raw/QFQ | `NOT_RUN` |
-| Renderer | `NOT_RUN` |
-| Machine validation | `NOT_RUN` |
-| Manual review | `NOT_STARTED` |
-| Canary route | `NOT_CREATED` |
-| Secret hits | `0` |
-| Container residue | `0` |
+| Renderer | `BLOCKED` |
+| Machine validation | `FAILED` |
+| Manual review | `PENDING / BLOCKED_NO_CANDIDATE` |
+| Canary route | `REJECTED` |
+| Can publish | `false` |
+
+The sanitized evidence cannot distinguish DNS, TLS, transport, Proxy, or Relay
+failure after dispatch. The contract therefore requires
+`ATTEMPT_CONSUMED_UNKNOWN` rather than an inferred cause.
+
+## 4. Durable Ledger
+
+```text
+state=ATTEMPT_CONSUMED_UNKNOWN
+provider_attempt_count=1
+retry_count=0
+dispatch_started_at=2026-08-08T08:23:32.214310Z
+response_received_at=null
+candidate_ready_at=null
+host_validation_completed_at=null
+```
+
+The ledger is retained as audit evidence. It must not be deleted or altered to
+enable another request.
+
+## 5. Cleanup and Security
+
+| Check | Result |
+|---|---|
+| Exclusive lock | `RELEASED` |
+| Proxy/Relay container residue | `0` |
 | Network residue | `0` |
-| Temporary file residue | `0` |
+| Secret temporary file residue | `0` |
+| Request/response/staging residue | `0` |
+| Secret hits in evidence | `0` |
+| Historical evidence | `UNCHANGED` |
 | TickFlow requests | `0` |
 | Obsidian real Vault write | `NO` |
 | Paper Trading | `NOT_STARTED` |
 | Cloud redeploy | `NO` |
 | Integrated Gold | `DISABLED / external_send_count=0` |
-| Three-symbol real batch | `NOT_APPROVED` |
+| Three-symbol batch | `NOT_APPROVED` |
 
-## 3. 失败关闭证据
+No Secret, Authorization header, complete request, or Provider response was
+written to the report or ledger.
 
-批准前置项仍通过：Git Head 为 `32818aa17b5d53c849f67b05da83073dd7b463e4`，Approval Candidate SHA-256 为 `c7614947da89cae8727ed3c59d1e965dd73bc95450953d3e59c1a89dd0b9f96d`，工作区原始状态为 clean，Provider config、Keychain 存在性、strict JSON Schema、`store=false`、镜像内容、出站策略和九组历史证据均通过离线校验。
-
-阻断条件为：Relay 的 `HTTPConnection(..., timeout=2)` 会在 Proxy 最长 `60s` 的同步 Provider 请求完成前先失败。此时 Provider 尝试可能已发生但响应无法回收给 Host Validator，与 `provider_attempt_count=1`、不重试和必须生成 Candidate 证据的合同冲突。
-
-脱敏运行证据保存在 `reports/phase2_provider_canary/runtime_evidence.json`。本报告不保存完整请求、响应、Authorization header、Secret 或本地绝对路径。
-
-## 4. 下一动作
+## 6. Required Next Action
 
 ```text
-REMEDIATE_AND_REAPPROVE_END_TO_END_RUNTIME_CONTRACT
+DIAGNOSE_BLOCKER
 ```
 
-先将 Relay 等待合同与 Provider `60s` 超时一致，建立可测试、可清理、仅允许一次 Provider attempt 的 Host 编排器，然后重建并重新审批受影响的 Relay / Proxy / Launcher 哈希。新批准完成前不得读取 Secret 或发起 Provider 请求。
+Diagnosis must remain offline and read-only against the retained evidence. This
+report does not authorize a second Provider request, another symbol, a model or
+Prompt change, or a direct HTTP probe.

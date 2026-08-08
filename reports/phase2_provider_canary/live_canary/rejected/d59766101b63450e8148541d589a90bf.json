@@ -1,0 +1,7 @@
+{
+  "can_publish": false,
+  "error_category": "ATTEMPT_CONSUMED_UNKNOWN",
+  "request_id": "d59766101b63450e8148541d589a90bf",
+  "retry_count": 0,
+  "route": "rejected"
+}

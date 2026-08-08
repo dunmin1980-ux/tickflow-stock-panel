@@ -1,0 +1,298 @@
+{
+  "diagnosis_schema_version": 1,
+  "generated_at": "2026-08-08T13:09:18Z",
+  "status": "PHASE2B_CANARY_OBSERVABILITY_GAP_IDENTIFIED",
+  "classification": "DISPATCH_LEDGER_ONLY",
+  "request_id": "d59766101b63450e8148541d589a90bf",
+  "symbol": "000403.SZ",
+  "provider": "openai",
+  "model": "gpt-5.6-terra",
+  "attempt": "CONSUMED",
+  "last_proven_forward_stage": "RELAY_RUNNING",
+  "root_cause": "ROOT_CAUSE_NOT_PROVABLE_WITH_CURRENT_EVIDENCE",
+  "local_diagnostic_defects": [
+    {
+      "code": "RELAY_FAILURE_COLLAPSED_TO_TIMEOUT",
+      "description": "The Docker command wrapper maps timeout, process-launch errors, and any nonzero Relay exit to the same RELAY_TIMEOUT category. The observed Relay lifetime was far below the 75-second contract, so the terminal label does not prove a timeout."
+    },
+    {
+      "code": "EPHEMERAL_RECEIPTS_REMOVED_BEFORE_ARCHIVE",
+      "description": "The unknown-dispatch error path cleans the work directory before Relay receipt, Proxy receipt, bounded child metadata, or stderr are archived."
+    }
+  ],
+  "counters": {
+    "provider_attempt_count_total": 1,
+    "new_provider_attempt_count": 0,
+    "new_ai_call_count": 0,
+    "new_public_network_success_count": 0,
+    "new_tickflow_request_count": 0,
+    "retry_count": 0
+  },
+  "durations_seconds": {
+    "ledger_prepared_to_dispatch": 2.226675,
+    "dispatch_to_terminal_ledger": 4.556997,
+    "relay_start_api_completion_to_task_delete_event": 3.709159
+  },
+  "timeline_clock": {
+    "wall_clock": "UTC",
+    "monotonic_evidence": "NOT_PERSISTED"
+  },
+  "timeline": [
+    {
+      "order": 1,
+      "timestamp": "2026-08-08T08:23:29.987635Z",
+      "timestamp_semantics": "completed_before_or_at",
+      "component": "host_orchestrator",
+      "event": "PRECHECK_PASSED",
+      "stage": "PRECHECK",
+      "evidence_strength": "PROVEN_BY_DURABLE_LEDGER_AND_CODE_PATH",
+      "source_file": "~/Library/Application Support/TickFlowPhase2Canary/runtime-v1/attempt-ledger.json",
+      "source_sha256": "ded0f39813dd70657cedd6a8c92669d3508480e97efc6ed44b1a45f9470b5772"
+    },
+    {
+      "order": 2,
+      "timestamp": "2026-08-08T08:23:29.987635Z",
+      "timestamp_semantics": "acquired_before_or_at",
+      "component": "host_orchestrator",
+      "event": "LOCK_ACQUIRED",
+      "stage": "LOCK_ACQUIRED",
+      "evidence_strength": "PROVEN_BY_DURABLE_LEDGER_AND_CODE_PATH",
+      "source_file": "backend/app/services/phase2_canary_orchestrator.py",
+      "source_sha256": "4e7607b2c185faab69a2aa5c930e4a61c970fa271882ce4c8a1ce1d67f7cfa5a"
+    },
+    {
+      "order": 3,
+      "timestamp": "2026-08-08T08:23:29.987635Z",
+      "timestamp_semantics": "exact",
+      "component": "attempt_ledger",
+      "event": "LEDGER_PREPARED",
+      "stage": "LEDGER_PREPARED",
+      "evidence_strength": "DURABLE",
+      "source_file": "~/Library/Application Support/TickFlowPhase2Canary/runtime-v1/attempt-ledger.json",
+      "source_sha256": "ded0f39813dd70657cedd6a8c92669d3508480e97efc6ed44b1a45f9470b5772"
+    },
+    {
+      "order": 4,
+      "timestamp": "2026-08-08T08:23:31.554655Z",
+      "timestamp_semantics": "request_started",
+      "component": "proxy",
+      "event": "PROXY_START_REQUESTED",
+      "stage": "PROXY_RUNNING",
+      "evidence_strength": "DOCKER_API_LOG",
+      "source_file": "~/Library/Containers/com.docker.docker/Data/log/host/monitor.log.1",
+      "source_sha256": "f0434421b104a3b91832a5c9c279a341b8a87f0a334d2203c9181c347f09c689"
+    },
+    {
+      "order": 5,
+      "timestamp": "2026-08-08T08:23:32.186070Z",
+      "timestamp_semantics": "docker_start_completed",
+      "component": "proxy",
+      "event": "PROXY_RUNNING",
+      "stage": "PROXY_RUNNING",
+      "evidence_strength": "DOCKER_API_LOG",
+      "source_file": "~/Library/Containers/com.docker.docker/Data/log/host/monitor.log.1",
+      "source_sha256": "f0434421b104a3b91832a5c9c279a341b8a87f0a334d2203c9181c347f09c689"
+    },
+    {
+      "order": 6,
+      "timestamp": "2026-08-08T08:23:32.214310Z",
+      "timestamp_semantics": "exact",
+      "component": "attempt_ledger",
+      "event": "NETWORK_DISPATCH_STARTED",
+      "stage": "NETWORK_DISPATCH_STARTED",
+      "evidence_strength": "DURABLE",
+      "source_file": "~/Library/Application Support/TickFlowPhase2Canary/runtime-v1/attempt-ledger.json",
+      "source_sha256": "ded0f39813dd70657cedd6a8c92669d3508480e97efc6ed44b1a45f9470b5772"
+    },
+    {
+      "order": 7,
+      "timestamp": "2026-08-08T08:23:32.344128Z",
+      "timestamp_semantics": "request_started",
+      "component": "relay",
+      "event": "RELAY_START_REQUESTED_WITH_ATTACH",
+      "stage": "RELAY_RUNNING",
+      "evidence_strength": "DOCKER_API_LOG",
+      "source_file": "~/Library/Containers/com.docker.docker/Data/log/host/monitor.log.1",
+      "source_sha256": "f0434421b104a3b91832a5c9c279a341b8a87f0a334d2203c9181c347f09c689"
+    },
+    {
+      "order": 8,
+      "timestamp": "2026-08-08T08:23:32.911644Z",
+      "timestamp_semantics": "docker_start_completed",
+      "component": "relay",
+      "event": "RELAY_RUNNING",
+      "stage": "RELAY_RUNNING",
+      "evidence_strength": "DOCKER_API_LOG",
+      "source_file": "~/Library/Containers/com.docker.docker/Data/log/host/monitor.log.1",
+      "source_sha256": "f0434421b104a3b91832a5c9c279a341b8a87f0a334d2203c9181c347f09c689"
+    },
+    {
+      "order": 9,
+      "timestamp": "2026-08-08T08:23:36.620803Z",
+      "timestamp_semantics": "task_delete_observed",
+      "component": "relay",
+      "event": "RELAY_EXITED_BEFORE_75_SECOND_LIMIT",
+      "stage": "RELAY_RUNNING",
+      "evidence_strength": "DOCKER_CONTAINERD_LOG",
+      "source_file": "~/Library/Containers/com.docker.docker/Data/log/vm/init.log.0",
+      "source_sha256": "0114e68f40593d8a79081e782919fc8586461fe7731efe95a493b5304da42035"
+    },
+    {
+      "order": 10,
+      "timestamp": "2026-08-08T08:23:36.771307Z",
+      "timestamp_semantics": "exact",
+      "component": "attempt_ledger",
+      "event": "ATTEMPT_CONSUMED_UNKNOWN",
+      "stage": "TERMINAL",
+      "evidence_strength": "DURABLE",
+      "source_file": "~/Library/Application Support/TickFlowPhase2Canary/runtime-v1/attempt-ledger.json",
+      "source_sha256": "ded0f39813dd70657cedd6a8c92669d3508480e97efc6ed44b1a45f9470b5772"
+    },
+    {
+      "order": 11,
+      "timestamp": "2026-08-08T08:23:36.841918Z",
+      "timestamp_semantics": "cleanup_started",
+      "component": "host_orchestrator",
+      "event": "RELAY_FORCE_REMOVE_REQUESTED",
+      "stage": "CLEANUP",
+      "evidence_strength": "DOCKER_API_LOG",
+      "source_file": "~/Library/Containers/com.docker.docker/Data/log/host/monitor.log.1",
+      "source_sha256": "f0434421b104a3b91832a5c9c279a341b8a87f0a334d2203c9181c347f09c689"
+    },
+    {
+      "order": 12,
+      "timestamp": "2026-08-08T08:23:36.964298Z",
+      "timestamp_semantics": "cleanup_started",
+      "component": "host_orchestrator",
+      "event": "PROXY_FORCE_REMOVE_REQUESTED",
+      "stage": "CLEANUP",
+      "evidence_strength": "DOCKER_API_LOG",
+      "source_file": "~/Library/Containers/com.docker.docker/Data/log/host/monitor.log.1",
+      "source_sha256": "f0434421b104a3b91832a5c9c279a341b8a87f0a334d2203c9181c347f09c689"
+    }
+  ],
+  "stage_matrix": {
+    "PRECHECK": "PROVEN",
+    "LOCK_ACQUIRED": "PROVEN",
+    "LEDGER_PREPARED": "PROVEN",
+    "NETWORK_DISPATCH_STARTED": "PROVEN",
+    "PROXY_RUNNING": "PROVEN",
+    "RELAY_RUNNING": "PROVEN",
+    "DNS": "UNKNOWN",
+    "TCP_CONNECT": "UNKNOWN",
+    "TLS_HANDSHAKE": "UNKNOWN",
+    "HTTP_REQUEST_SENT": "UNKNOWN",
+    "HTTP_RESPONSE_HEADERS": "UNKNOWN",
+    "HTTP_RESPONSE_BODY": "UNKNOWN",
+    "CANDIDATE_CREATED": "UNKNOWN",
+    "HOST_VALIDATION": "NOT_COMPLETED"
+  },
+  "component_findings": {
+    "host_orchestrator": {
+      "network_dispatch_started_persisted": true,
+      "host_timeout": false,
+      "final_exit_reason": "RELAY_COMMAND_NONZERO_OR_ERROR_MISCLASSIFIED_AS_RELAY_TIMEOUT",
+      "child_exit_code": "NOT_PERSISTED",
+      "cleanup_before_candidate_recovery": true
+    },
+    "relay": {
+      "started": true,
+      "connected_to_proxy": "UNKNOWN",
+      "request_written": "UNKNOWN",
+      "response_wait_started": "UNKNOWN",
+      "waited_full_75_seconds": false,
+      "exited_early": true,
+      "exit_code": "NONZERO_EXACT_VALUE_NOT_PERSISTED",
+      "stderr_archived": false,
+      "receipt_archived": false,
+      "candidate_temp_or_ready_marker_ever_existed": "UNKNOWN"
+    },
+    "proxy": {
+      "container_started": true,
+      "process_remained_until_host_cleanup": true,
+      "listener_ready": "UNKNOWN",
+      "relay_request_received": "UNKNOWN",
+      "provider_transaction_started": "UNKNOWN",
+      "dns": "NOT_PROVEN",
+      "tcp": "NOT_PROVEN",
+      "tls": "NOT_PROVEN",
+      "http_request_sent": "NOT_PROVEN",
+      "http_response_received": "NOT_PROVEN",
+      "response_body_received": "NOT_PROVEN",
+      "provider_response_metadata_archived": false,
+      "receipt_archived": false,
+      "proxy_timeout": false
+    }
+  },
+  "timeouts": {
+    "host_timeout": "NO",
+    "relay_timeout": "NO",
+    "proxy_timeout": "NO",
+    "reason": "The Relay task ended and the ledger became terminal about 4.56 seconds after dispatch, below the 60, 75, and 90 second contract limits."
+  },
+  "candidate": {
+    "ever_produced": "UNKNOWN",
+    "recovered": false,
+    "host_validation": "NOT_RUN"
+  },
+  "missing_observability": {
+    "minimum_stage_events": [
+      "provider_connect_started",
+      "provider_connect_completed",
+      "tls_completed",
+      "request_write_started",
+      "request_write_completed",
+      "response_headers_received",
+      "response_body_completed"
+    ],
+    "allowed_fields": [
+      "boolean",
+      "timestamp",
+      "http_status",
+      "byte_counts"
+    ],
+    "sensitive_body_logging_allowed": false
+  },
+  "openai_project_usage_check": "PENDING",
+  "historical_evidence": {
+    "status": "UNCHANGED",
+    "protected_file_count": 66,
+    "head_manifest_sha256": "3af93021cd94d0ef771a35d8dcc7fd03dd1e150718891a81b124929494c0ce46",
+    "worktree_manifest_sha256": "3af93021cd94d0ef771a35d8dcc7fd03dd1e150718891a81b124929494c0ce46"
+  },
+  "source_artifacts": [
+    {
+      "path": "~/Library/Application Support/TickFlowPhase2Canary/runtime-v1/attempt-ledger.json",
+      "sha256": "ded0f39813dd70657cedd6a8c92669d3508480e97efc6ed44b1a45f9470b5772"
+    },
+    {
+      "path": "reports/phase2_provider_canary/live_canary/evidence/d59766101b63450e8148541d589a90bf.json",
+      "sha256": "0ef11071083053ac7db825b39492e7e5d24ce27d32cc40c6daa90f43138603e4"
+    },
+    {
+      "path": "reports/phase2_provider_canary/live_canary/rejected/d59766101b63450e8148541d589a90bf.json",
+      "sha256": "ad7bada723a39a4fd0b266a3740e59f3e040d4ce81e79e6e594b6a2b3785e2f4"
+    },
+    {
+      "path": "~/Library/Containers/com.docker.docker/Data/log/host/monitor.log.1",
+      "sha256": "f0434421b104a3b91832a5c9c279a341b8a87f0a334d2203c9181c347f09c689"
+    },
+    {
+      "path": "~/Library/Containers/com.docker.docker/Data/log/vm/init.log.0",
+      "sha256": "0114e68f40593d8a79081e782919fc8586461fe7731efe95a493b5304da42035"
+    },
+    {
+      "path": "backend/app/services/phase2_canary_orchestrator.py",
+      "sha256": "4e7607b2c185faab69a2aa5c930e4a61c970fa271882ce4c8a1ce1d67f7cfa5a"
+    },
+    {
+      "path": "docker/phase2-canary-relay/relay.py",
+      "sha256": "cafd46a67ba08da1d92c2158771af2d529373a87558bbb392d1b5d9e9f81ee2b"
+    },
+    {
+      "path": "docker/phase2-openai-egress-proxy/proxy.py",
+      "sha256": "3e75b5c4cb97e45d613c1b9c5bfde5d146eb720c88bacb399e20a90d534e5036"
+    }
+  ],
+  "next_action": "ADD_MINIMAL_STAGE_RECEIPTS"
+}
