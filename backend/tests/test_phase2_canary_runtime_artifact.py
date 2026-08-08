@@ -28,8 +28,18 @@ from app.services.phase2_canary_runtime_artifact import (
 from app.services.phase2_claims_service import canonical_json_bytes
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-OLD_CANDIDATE = REPO_ROOT / "reports/phase2_openai_proxy_artifact/approval_candidate.json"
+OLD_CANDIDATE = (
+    REPO_ROOT
+    / "reports/phase2_provider_canary/superseded"
+    / "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b.json"
+)
 OLD_CANDIDATE_SHA256 = (
+    "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b"
+)
+LEGACY_CANDIDATE = (
+    REPO_ROOT / "reports/phase2_openai_proxy_artifact/approval_candidate.json"
+)
+LEGACY_CANDIDATE_SHA256 = (
     "c7614947da89cae8727ed3c59d1e965dd73bc95450953d3e59c1a89dd0b9f96d"
 )
 BASE_LAYERS = tuple("sha256:" + str(index % 10) * 64 for index in range(43))
@@ -147,6 +157,9 @@ def test_old_approval_candidate_is_preserved_exactly() -> None:
     assert hashlib.sha256(OLD_CANDIDATE.read_bytes()).hexdigest() == (
         OLD_CANDIDATE_SHA256
     )
+    assert hashlib.sha256(LEGACY_CANDIDATE.read_bytes()).hexdigest() == (
+        LEGACY_CANDIDATE_SHA256
+    )
 
 
 def test_runtime_artifact_input_hashes_bind_every_runtime_component() -> None:
@@ -161,6 +174,12 @@ def test_runtime_artifact_input_hashes_bind_every_runtime_component() -> None:
     )
     assert hashes.orchestrator_source_sha256 == hashlib.sha256(
         (REPO_ROOT / "backend/app/services/phase2_canary_orchestrator.py").read_bytes()
+    ).hexdigest()
+    assert hashes.observability_source_sha256 == hashlib.sha256(
+        (
+            REPO_ROOT
+            / "backend/app/services/phase2_canary_observability.py"
+        ).read_bytes()
     ).hexdigest()
     assert hashes.launcher_source_sha256 == hashlib.sha256(
         (REPO_ROOT / "backend/scripts/run_phase2_single_symbol_canary.py").read_bytes()

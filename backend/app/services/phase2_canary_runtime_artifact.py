@@ -36,12 +36,13 @@ RELAY_IMAGE_NAME = "tickflow-phase2-canary-relay:runtime-v1"
 RUNTIME_USER = "65532:65532"
 READY_STATUS = "PHASE2B_CANARY_RUNTIME_CONTRACT_READY_FOR_REAPPROVAL"
 OLD_CANDIDATE_SHA256 = (
-    "c7614947da89cae8727ed3c59d1e965dd73bc95450953d3e59c1a89dd0b9f96d"
+    "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b"
 )
 
 _PROXY_CONTEXT = Path("docker/phase2-openai-egress-proxy")
 _RELAY_CONTEXT = Path("docker/phase2-canary-relay")
 _ORCHESTRATOR = Path("backend/app/services/phase2_canary_orchestrator.py")
+_OBSERVABILITY = Path("backend/app/services/phase2_canary_observability.py")
 _LAUNCHER = Path("backend/scripts/run_phase2_single_symbol_canary.py")
 _ARTIFACT_VERIFIER = Path(
     "backend/app/services/phase2_canary_runtime_artifact.py"
@@ -49,7 +50,10 @@ _ARTIFACT_VERIFIER = Path(
 _ARTIFACT_BUILDER = Path("backend/scripts/build_phase2_canary_runtime_offline.py")
 _RUNBOOK = Path("docs/phase2-single-call-orchestrator-runbook.md")
 _FACTS = Path("reports/phase2_facts/000403SZ_facts.json")
-_OLD_CANDIDATE = Path("reports/phase2_openai_proxy_artifact/approval_candidate.json")
+_OLD_CANDIDATE = Path(
+    "reports/phase2_provider_canary/superseded/"
+    "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b.json"
+)
 _PROXY_FILES = {
     "Dockerfile",
     "proxy.py",
@@ -108,6 +112,7 @@ class RuntimeArtifactInputHashes(_StrictFrozenModel):
     relay_dockerfile_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     runtime_contract_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     orchestrator_source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    observability_source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     launcher_source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     artifact_verifier_source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     artifact_builder_source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -212,7 +217,7 @@ class RuntimeArtifactCandidate(_StrictFrozenModel):
     no_cache: Literal[True]
     base_digest_pinned: Literal[True]
     old_approval_candidate_sha256: Literal[
-        "c7614947da89cae8727ed3c59d1e965dd73bc95450953d3e59c1a89dd0b9f96d"
+        "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b"
     ]
     new_approval_installed: Literal[False]
     provider_attempt_count: Literal[0]
@@ -385,6 +390,12 @@ def compute_runtime_artifact_input_hashes(
         runtime_contract_sha256=runtime_hash,
         orchestrator_source_sha256=_sha256(
             _read_regular(root / _ORCHESTRATOR, "artifact_orchestrator_invalid")
+        ),
+        observability_source_sha256=_sha256(
+            _read_regular(
+                root / _OBSERVABILITY,
+                "artifact_observability_invalid",
+            )
         ),
         launcher_source_sha256=_sha256(
             _read_regular(root / _LAUNCHER, "artifact_launcher_invalid")

@@ -1,6 +1,6 @@
 {
   "ai_call_count": 0,
-  "approval_candidate_sha256": "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b",
+  "approval_candidate_sha256": "bc2b8600bf70a735c550427c4ea87bb2b58222dd3b15fe21e08bf7415472f36c",
   "base_digest_pinned": true,
   "base_image": {
     "base_available": true,
@@ -59,28 +59,30 @@
   "input_hashes_stable": true,
   "inputs_after": {
     "artifact_builder_source_sha256": "50ef15ca64304530c74251de04628105dc821f12f207090d60b035a33cba1f52",
-    "artifact_verifier_source_sha256": "39eccd6bcf992cc9c83036d0c1d92529d6e9be779d202557fa2ab94f5eed1494",
+    "artifact_verifier_source_sha256": "82ea6304de37c0569abbdbe3d82301cdfd7d534c8bdfe4bc61b5704a48af8c39",
     "launcher_source_sha256": "7a6dfb2ca4dda9a282e4099433483639dd082afd6ae4cdd5398b4b202cf32259",
-    "orchestrator_source_sha256": "4e7607b2c185faab69a2aa5c930e4a61c970fa271882ce4c8a1ce1d67f7cfa5a",
+    "observability_source_sha256": "369d7615ed4109dd66dee21cf96882d356a2f9f2ad770c9e0307eb603d1eeb82",
+    "orchestrator_source_sha256": "8262c97d1c7e5f2e507840228f9818a1c667db36bc5547d4d5d47dd70b12b7ee",
     "proxy_dockerfile_sha256": "48a633b025bebc739ec96e48484fb841948261893b645d58fcbc5335c85d6f9e",
     "proxy_policy_sha256": "f9819264a0d815644ef8a95d95ff60ac2b930ce40646899cdc565b8bf95b2274",
-    "proxy_source_sha256": "3e75b5c4cb97e45d613c1b9c5bfde5d146eb720c88bacb399e20a90d534e5036",
+    "proxy_source_sha256": "c5d5e5fd9066cb567e0aa358f93a9b5005569d7c47f759512d2936d5ad9d85b1",
     "relay_dockerfile_sha256": "039acb0f4b8c742e45f16fa621f2500c63e4ace5070ef1d55271b32c02629e58",
-    "relay_source_sha256": "cafd46a67ba08da1d92c2158771af2d529373a87558bbb392d1b5d9e9f81ee2b",
+    "relay_source_sha256": "7165181e2a1179d5ca2dfecb65e0080ab887e7f62eb0f9c02e1c052502a6a6cb",
     "responses_contract_sha256": "29cbd048ee6b34e3495fc1a5f8d1bff0a1f7e0c466006c2f40082e1f00481526",
     "runbook_sha256": "cb65e5ba3ce242003c5198822ee0a6b2302d86ef889f2b885758c952e85f07fe",
     "runtime_contract_sha256": "34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68"
   },
   "inputs_before": {
     "artifact_builder_source_sha256": "50ef15ca64304530c74251de04628105dc821f12f207090d60b035a33cba1f52",
-    "artifact_verifier_source_sha256": "39eccd6bcf992cc9c83036d0c1d92529d6e9be779d202557fa2ab94f5eed1494",
+    "artifact_verifier_source_sha256": "82ea6304de37c0569abbdbe3d82301cdfd7d534c8bdfe4bc61b5704a48af8c39",
     "launcher_source_sha256": "7a6dfb2ca4dda9a282e4099433483639dd082afd6ae4cdd5398b4b202cf32259",
-    "orchestrator_source_sha256": "4e7607b2c185faab69a2aa5c930e4a61c970fa271882ce4c8a1ce1d67f7cfa5a",
+    "observability_source_sha256": "369d7615ed4109dd66dee21cf96882d356a2f9f2ad770c9e0307eb603d1eeb82",
+    "orchestrator_source_sha256": "8262c97d1c7e5f2e507840228f9818a1c667db36bc5547d4d5d47dd70b12b7ee",
     "proxy_dockerfile_sha256": "48a633b025bebc739ec96e48484fb841948261893b645d58fcbc5335c85d6f9e",
     "proxy_policy_sha256": "f9819264a0d815644ef8a95d95ff60ac2b930ce40646899cdc565b8bf95b2274",
-    "proxy_source_sha256": "3e75b5c4cb97e45d613c1b9c5bfde5d146eb720c88bacb399e20a90d534e5036",
+    "proxy_source_sha256": "c5d5e5fd9066cb567e0aa358f93a9b5005569d7c47f759512d2936d5ad9d85b1",
     "relay_dockerfile_sha256": "039acb0f4b8c742e45f16fa621f2500c63e4ace5070ef1d55271b32c02629e58",
-    "relay_source_sha256": "cafd46a67ba08da1d92c2158771af2d529373a87558bbb392d1b5d9e9f81ee2b",
+    "relay_source_sha256": "7165181e2a1179d5ca2dfecb65e0080ab887e7f62eb0f9c02e1c052502a6a6cb",
     "responses_contract_sha256": "29cbd048ee6b34e3495fc1a5f8d1bff0a1f7e0c466006c2f40082e1f00481526",
     "runbook_sha256": "cb65e5ba3ce242003c5198822ee0a6b2302d86ef889f2b885758c952e85f07fe",
     "runtime_contract_sha256": "34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68"
@@ -88,7 +90,7 @@
   "network_residue_count": 0,
   "new_approval_installed": false,
   "no_cache": true,
-  "old_approval_candidate_sha256": "c7614947da89cae8727ed3c59d1e965dd73bc95450953d3e59c1a89dd0b9f96d",
+  "old_approval_candidate_sha256": "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b",
   "provider_attempt_count": 0,
   "provider_http": "NOT_RUN",
   "proxy_contents": {
@@ -97,7 +99,7 @@
     "responses_contract_sha256": "29cbd048ee6b34e3495fc1a5f8d1bff0a1f7e0c466006c2f40082e1f00481526",
     "role": "proxy",
     "runtime_contract_sha256": "34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68",
-    "source_sha256": "3e75b5c4cb97e45d613c1b9c5bfde5d146eb720c88bacb399e20a90d534e5036"
+    "source_sha256": "c5d5e5fd9066cb567e0aa358f93a9b5005569d7c47f759512d2936d5ad9d85b1"
   },
   "proxy_image": {
     "base_image_digest": "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5",
@@ -108,7 +110,7 @@
       "/proxy/proxy.py"
     ],
     "history_clean": true,
-    "image_id": "sha256:8fef193a24525906bbd0caa5f15ba52009e0b3e76c66bea913875c6941f3eb6e",
+    "image_id": "sha256:4ae692f264e8450b03e53f31a67f8e328faeba825420ea7d5cbc9fc867e8c443",
     "image_name": "tickflow-phase2-openai-egress-proxy:runtime-v1",
     "image_valid": true,
     "proxy_policy_sha256": "f9819264a0d815644ef8a95d95ff60ac2b930ce40646899cdc565b8bf95b2274",
@@ -117,7 +119,7 @@
     "rootfs_layer_count": 49,
     "runtime_contract_sha256": "34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68",
     "runtime_user": "65532:65532",
-    "source_sha256": "3e75b5c4cb97e45d613c1b9c5bfde5d146eb720c88bacb399e20a90d534e5036"
+    "source_sha256": "c5d5e5fd9066cb567e0aa358f93a9b5005569d7c47f759512d2936d5ad9d85b1"
   },
   "pull_allowed": false,
   "real_public_network_success_count": 0,
@@ -127,7 +129,7 @@
     "responses_contract_sha256": null,
     "role": "relay",
     "runtime_contract_sha256": "34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68",
-    "source_sha256": "cafd46a67ba08da1d92c2158771af2d529373a87558bbb392d1b5d9e9f81ee2b"
+    "source_sha256": "7165181e2a1179d5ca2dfecb65e0080ab887e7f62eb0f9c02e1c052502a6a6cb"
   },
   "relay_image": {
     "base_image_digest": "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5",
@@ -138,7 +140,7 @@
       "/relay/relay.py"
     ],
     "history_clean": true,
-    "image_id": "sha256:a9aedf3ed19689ecd967e00ded38a9e41e644e78a3de256602fc47983588be24",
+    "image_id": "sha256:d842b4b6081d9473999154989986b0472708c6badc3687345e993fac8c7a624c",
     "image_name": "tickflow-phase2-canary-relay:runtime-v1",
     "image_valid": true,
     "proxy_policy_sha256": null,
@@ -147,7 +149,7 @@
     "rootfs_layer_count": 49,
     "runtime_contract_sha256": "34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68",
     "runtime_user": "65532:65532",
-    "source_sha256": "cafd46a67ba08da1d92c2158771af2d529373a87558bbb392d1b5d9e9f81ee2b"
+    "source_sha256": "7165181e2a1179d5ca2dfecb65e0080ab887e7f62eb0f9c02e1c052502a6a6cb"
   },
   "runtime_build_evidence_schema_version": 1,
   "status": "PHASE2B_CANARY_RUNTIME_CONTRACT_READY_FOR_REAPPROVAL",
