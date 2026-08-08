@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import re
 import subprocess
 from dataclasses import dataclass
@@ -97,7 +96,7 @@ def sanitize_bounded_stderr(
     *,
     maximum_bytes: int = MAX_BOUNDED_STDERR_BYTES,
 ) -> BoundedStderrEvidence:
-    """Return a UTF-8-safe excerpt, or no body when a secret shape is present."""
+    """Return metadata only; child stderr text is never persisted."""
     if isinstance(maximum_bytes, bool) or not isinstance(maximum_bytes, int):
         raise ValueError("stderr_limit_invalid")
     if maximum_bytes <= 0 or maximum_bytes > MAX_BOUNDED_STDERR_BYTES:
@@ -113,37 +112,14 @@ def sanitize_bounded_stderr(
             sensitive_hit_count=0,
         )
 
-    decoded = raw.decode("utf-8", errors="replace")
-    hits = len(_SENSITIVE_STDERR.findall(decoded))
-    if hits:
-        return BoundedStderrEvidence(
-            stderr_excerpt=None,
-            stderr_sha256=None,
-            stderr_byte_count=0,
-            stderr_truncated=len(raw) > maximum_bytes,
-            stderr_redacted=True,
-            sensitive_hit_count=hits,
-        )
-
-    bounded = raw[:maximum_bytes]
-    excerpt = bounded.decode("utf-8", errors="ignore")
-    sanitized = excerpt.encode("utf-8")
-    if not sanitized:
-        return BoundedStderrEvidence(
-            stderr_excerpt=None,
-            stderr_sha256=None,
-            stderr_byte_count=0,
-            stderr_truncated=len(raw) > maximum_bytes,
-            stderr_redacted=False,
-            sensitive_hit_count=0,
-        )
+    hits = len(_SENSITIVE_STDERR.findall(raw.decode("utf-8", errors="replace")))
     return BoundedStderrEvidence(
-        stderr_excerpt=excerpt,
-        stderr_sha256=hashlib.sha256(sanitized).hexdigest(),
-        stderr_byte_count=len(sanitized),
-        stderr_truncated=len(raw) > len(sanitized),
-        stderr_redacted=False,
-        sensitive_hit_count=0,
+        stderr_excerpt=None,
+        stderr_sha256=None,
+        stderr_byte_count=0,
+        stderr_truncated=len(raw) > maximum_bytes,
+        stderr_redacted=True,
+        sensitive_hit_count=hits,
     )
 
 
@@ -196,6 +172,8 @@ def classify_completed_child(
     component: str,
     result: subprocess.CompletedProcess[str],
     timing: ChildExecutionTiming,
+    *,
+    interpret_positive_signal: bool = False,
 ) -> ChildProcessEvidence:
     returncode = result.returncode
     if isinstance(returncode, bool) or not isinstance(returncode, int):
@@ -214,6 +192,15 @@ def classify_completed_child(
             timing,
             exit_code=None,
             signal=-returncode,
+            stderr=result.stderr,
+        )
+    if interpret_positive_signal and 128 < returncode <= 192:
+        return _evidence(
+            component,
+            ChildState.SIGNALLED,
+            timing,
+            exit_code=returncode,
+            signal=returncode - 128,
             stderr=result.stderr,
         )
     state = ChildState.EXITED_ZERO if returncode == 0 else ChildState.NONZERO_EXIT

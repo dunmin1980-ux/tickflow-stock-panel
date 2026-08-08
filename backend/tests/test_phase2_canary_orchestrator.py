@@ -665,6 +665,70 @@ def test_receipt_fault_is_archived_without_copying_untrusted_body(
     assert "Authorization" not in serialized
 
 
+def test_stage_receipt_is_parsed_from_single_controlled_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    receipt_path = tmp_path / "proxy-receipt.json"
+    events = {
+        name: orchestrator_module._mock_stage_event(
+            name,
+            occurred=True,
+            index=index,
+        )
+        for index, name in enumerate(
+            orchestrator_module._PROXY_EVENTS,
+            start=1,
+        )
+    }
+    receipt_path.write_bytes(
+        canonical_json_bytes(
+            {
+                "receipt_schema_version": 2,
+                "request_id": "a" * 32,
+                "component": "proxy",
+                "method_allowed": True,
+                "path_allowed": True,
+                "auth_present": True,
+                "tls_verification": True,
+                "redirect_followed": False,
+                "provider_attempt_count": 1,
+                "provider_http_status": 200,
+                "retry_count": 0,
+                "response_category": "FORWARDED",
+                "response_size": 2,
+                "response_bytes": 2,
+                "terminal_status": "FORWARDED",
+                **events,
+            }
+        )
+    )
+    reads = 0
+    original = orchestrator_module._read_regular_unrestricted
+
+    def count_read(path: Path, category: str) -> bytes:
+        nonlocal reads
+        reads += 1
+        return original(path, category)
+
+    monkeypatch.setattr(
+        orchestrator_module,
+        "_read_regular_unrestricted",
+        count_read,
+    )
+
+    raw, value, status, _events = orchestrator_module._load_stage_receipt(
+        receipt_path,
+        component="proxy",
+        request_id="a" * 32,
+    )
+
+    assert raw is not None
+    assert value is not None
+    assert status == "VALID"
+    assert reads == 1
+
+
 def test_archive_precedes_terminal_ledger_transition(
     orchestrator_config: CanaryOrchestratorConfig,
     artifacts: ApprovedCanaryArtifacts,
@@ -1174,9 +1238,19 @@ class _RecordingExecutor:
                 "",
             )
         if command[:3] == ["docker", "container", "inspect"]:
-            return subprocess.CompletedProcess(command, 1, "", "not found")
+            return subprocess.CompletedProcess(
+                command,
+                1,
+                "[]\n",
+                f"Error response from daemon: No such container: {command[-1]}",
+            )
         if command[:3] == ["docker", "network", "inspect"]:
-            return subprocess.CompletedProcess(command, 1, "", "not found")
+            return subprocess.CompletedProcess(
+                command,
+                1,
+                "[]\n",
+                f"Error response from daemon: network {command[-1]} not found",
+            )
         return subprocess.CompletedProcess(command, 0, "", "")
 
 
@@ -1196,12 +1270,27 @@ class _ChildOutcomeExecutor(_RecordingExecutor):
                 raise subprocess.TimeoutExpired(command, timeout, stderr="deadline")
             if self.outcome == "relay_nonzero":
                 return subprocess.CompletedProcess(command, 1, "", "relay failed")
+            if self.outcome == "relay_signal":
+                return subprocess.CompletedProcess(command, 137, "", "killed")
             return subprocess.CompletedProcess(command, 0, "", "")
         if command[:2] == ["docker", "inspect"] and "--format" in command:
             state = {
-                "Running": self.outcome != "proxy_nonzero",
-                "ExitCode": 7 if self.outcome == "proxy_nonzero" else 0,
-                "Error": "proxy failed" if self.outcome == "proxy_nonzero" else "",
+                "Running": self.outcome
+                not in {"proxy_nonzero", "proxy_signal"},
+                "ExitCode": (
+                    137
+                    if self.outcome == "proxy_signal"
+                    else 7
+                    if self.outcome == "proxy_nonzero"
+                    else 0
+                ),
+                "Error": (
+                    "killed"
+                    if self.outcome == "proxy_signal"
+                    else "proxy failed"
+                    if self.outcome == "proxy_nonzero"
+                    else ""
+                ),
             }
             return subprocess.CompletedProcess(command, 0, json.dumps(state), "")
         if command[:3] == ["docker", "container", "inspect"]:
@@ -1303,8 +1392,8 @@ def test_docker_backend_dispatches_relay_once_and_cleanup_is_bounded(
         )
         for index, name in enumerate(orchestrator_module._PROXY_EVENTS, start=1)
     }
-    (runtime_context.proxy_output_dir / "proxy-receipt.json").write_text(
-        json.dumps(
+    (runtime_context.proxy_output_dir / "proxy-receipt.json").write_bytes(
+        canonical_json_bytes(
             {
                 "receipt_schema_version": 2,
                 "request_id": runtime_context.request_id,
@@ -1324,8 +1413,6 @@ def test_docker_backend_dispatches_relay_once_and_cleanup_is_bounded(
                 **events,
             }
         )
-        + "\n",
-        encoding="utf-8",
     )
 
     dispatch = backend.dispatch(runtime_context, deadline=90.0)
@@ -1348,7 +1435,9 @@ def test_docker_backend_dispatches_relay_once_and_cleanup_is_bounded(
     [
         ("relay_nonzero", "RELAY_NONZERO_EXIT"),
         ("relay_timeout", "RELAY_TIMEOUT"),
+        ("relay_signal", "RELAY_SIGNALLED"),
         ("proxy_nonzero", "PROXY_NONZERO_EXIT"),
+        ("proxy_signal", "PROXY_SIGNALLED"),
     ],
 )
 def test_docker_child_outcomes_are_not_collapsed_to_timeout(
@@ -1365,6 +1454,117 @@ def test_docker_child_outcomes_are_not_collapsed_to_timeout(
 
     assert raised.value.category == category
     assert raised.value.unknown_dispatch_state is False
+
+
+class _CleanupInspectionErrorExecutor(_RecordingExecutor):
+    def __call__(
+        self,
+        command: list[str],
+        timeout: float,
+    ) -> subprocess.CompletedProcess[str]:
+        self.calls.append((command, timeout))
+        if tuple(command[:3]) in {
+            ("docker", "container", "inspect"),
+            ("docker", "network", "inspect"),
+        }:
+            return subprocess.CompletedProcess(
+                command,
+                1,
+                "",
+                "permission denied while contacting daemon",
+            )
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+
+def test_cleanup_inspection_error_cannot_prove_zero_residue(
+    runtime_context: CanaryRuntimeContext,
+) -> None:
+    executor = _CleanupInspectionErrorExecutor()
+    backend = DockerCanaryBackend(executor=executor, monotonic=lambda: 0.0)
+    backend._names = backend._runtime_names(runtime_context.request_id)
+
+    result = backend.cleanup(runtime_context, deadline=15.0)
+
+    assert result.completed is False
+    assert result.container_residue_count == 2
+    assert result.network_residue_count == 2
+
+
+class _CleanupRemovalErrorExecutor(_RecordingExecutor):
+    def __call__(
+        self,
+        command: list[str],
+        timeout: float,
+    ) -> subprocess.CompletedProcess[str]:
+        if command[:3] in (
+            ["docker", "rm", "--force"],
+            ["docker", "network", "rm"],
+        ):
+            self.calls.append((command, timeout))
+            return subprocess.CompletedProcess(
+                command,
+                1,
+                "",
+                "permission denied while contacting daemon",
+            )
+        return super().__call__(command, timeout)
+
+
+def test_cleanup_removal_error_is_not_reported_complete(
+    runtime_context: CanaryRuntimeContext,
+) -> None:
+    executor = _CleanupRemovalErrorExecutor()
+    backend = DockerCanaryBackend(executor=executor, monotonic=lambda: 0.0)
+    backend._names = backend._runtime_names(runtime_context.request_id)
+
+    result = backend.cleanup(runtime_context, deadline=15.0)
+
+    assert result.completed is False
+    assert result.container_residue_count == 0
+    assert result.network_residue_count == 0
+
+
+def test_cleanup_without_cached_names_proves_deterministic_absence(
+    runtime_context: CanaryRuntimeContext,
+) -> None:
+    executor = _RecordingExecutor()
+    backend = DockerCanaryBackend(executor=executor, monotonic=lambda: 0.0)
+
+    result = backend.cleanup(runtime_context, deadline=15.0)
+
+    assert result.completed is True
+    assert len(executor.calls) == 8
+    assert any(
+        command[:3] == ["docker", "container", "inspect"]
+        for command, _timeout in executor.calls
+    )
+    assert any(
+        command[:3] == ["docker", "network", "inspect"]
+        for command, _timeout in executor.calls
+    )
+
+
+def test_archives_exact_proxy_receipt_validated_during_dispatch(
+    runtime_context: CanaryRuntimeContext,
+) -> None:
+    fixture_backend = MockCanaryBackend(
+        scenario="provider_1s",
+        relay_response={},
+    )
+    fixture_backend._write_receipts(runtime_context)
+    proxy_receipt_path = runtime_context.proxy_output_dir / "proxy-receipt.json"
+    validated_bytes = proxy_receipt_path.read_bytes()
+    executor = _RecordingExecutor()
+    backend = DockerCanaryBackend(executor=executor, monotonic=lambda: 0.0)
+    backend.prepare(runtime_context, deadline=90.0)
+
+    backend.dispatch(runtime_context, deadline=90.0)
+    proxy_receipt_path.write_text('{"replaced":true}\n', encoding="utf-8")
+    archive = backend.archive_evidence(runtime_context, deadline=15.0)
+
+    archived = runtime_context.receipt_archive_dir / "proxy-receipt.json"
+    assert archive.status == "ARCHIVED"
+    assert archived.read_bytes() == validated_bytes
 
 
 def test_keychain_reader_uses_fixed_service_once_without_shell_or_output_logging() -> None:

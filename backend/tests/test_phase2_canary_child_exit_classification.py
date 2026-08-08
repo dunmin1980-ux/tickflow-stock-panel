@@ -41,8 +41,9 @@ def test_positive_return_code_is_nonzero_not_timeout(
     assert evidence.exit_code == 1
     assert evidence.signal is None
     assert evidence.elapsed_ms == 1500
-    assert evidence.stderr.stderr_excerpt == "relay failed locally"
-    assert evidence.stderr.stderr_redacted is False
+    assert evidence.stderr.stderr_excerpt is None
+    assert evidence.stderr.stderr_sha256 is None
+    assert evidence.stderr.stderr_redacted is True
 
 
 def test_negative_return_code_is_signal(timing: ChildExecutionTiming) -> None:
@@ -59,6 +60,29 @@ def test_negative_return_code_is_signal(timing: ChildExecutionTiming) -> None:
     assert evidence.terminal_reason == "RELAY_SIGNALLED"
     assert evidence.exit_code is None
     assert evidence.signal == 15
+
+
+def test_container_signal_exit_code_is_classified_explicitly(
+    timing: ChildExecutionTiming,
+) -> None:
+    result = subprocess.CompletedProcess(
+        ["docker", "start", "--attach", "relay"],
+        137,
+        stdout="",
+        stderr="killed",
+    )
+
+    evidence = classify_completed_child(
+        "relay",
+        result,
+        timing,
+        interpret_positive_signal=True,
+    )
+
+    assert evidence.child_state == "CHILD_SIGNALLED"
+    assert evidence.terminal_reason == "RELAY_SIGNALLED"
+    assert evidence.exit_code == 137
+    assert evidence.signal == 9
 
 
 @pytest.mark.parametrize(
@@ -154,15 +178,20 @@ def test_bounded_stderr_is_utf8_safe_and_limited() -> None:
 
     evidence = sanitize_bounded_stderr(raw)
 
-    assert evidence.stderr_redacted is False
+    assert evidence.stderr_redacted is True
     assert evidence.stderr_truncated is True
-    assert evidence.stderr_excerpt is not None
-    assert len(evidence.stderr_excerpt.encode("utf-8")) <= MAX_BOUNDED_STDERR_BYTES
-    assert evidence.stderr_excerpt.encode("utf-8").decode("utf-8") == (
-        evidence.stderr_excerpt
-    )
-    assert evidence.stderr_sha256 is not None
-    assert len(evidence.stderr_sha256) == 64
+    assert evidence.stderr_excerpt is None
+    assert evidence.stderr_sha256 is None
+    assert evidence.stderr_byte_count == 0
+
+
+def test_unlabelled_sensitive_stderr_is_never_persisted() -> None:
+    evidence = sanitize_bounded_stderr("opaque-credential-value-with-no-label")
+
+    assert evidence.stderr_redacted is True
+    assert evidence.stderr_excerpt is None
+    assert evidence.stderr_sha256 is None
+    assert evidence.stderr_byte_count == 0
 
 
 @pytest.mark.parametrize(

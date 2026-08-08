@@ -66,6 +66,30 @@ _CLAIMS_SCHEMA_SHA256 = (
 _RENDERER_SHA256 = (
     "53d94e60fce7914582c85beea977ca65f7a6713c7066ee65df2c84a8ec6c361e"
 )
+_HISTORICAL_CANARY_REQUEST_ID = "d59766101b63450e8148541d589a90bf"
+_CANARY_FROZEN_EVIDENCE_SHA256 = {
+    Path("consumed_unknown_diagnosis.json"): (
+        "be69267d764634ce39ae8311ddbf2dcba11b1709baa5c999aad11bcd17e8d529"
+    ),
+    Path("manual_review_checklist.md"): (
+        "070c10bae529044e96e38a9bee439f3da9c03011cace3a20181f0de1435ab77c"
+    ),
+    Path("runtime_evidence.json"): (
+        "52fdc98ca6467aadf52bbb47666d154c47d7c6ebbdaa81de69fe7a132d0e5c9b"
+    ),
+    Path(
+        "live_canary/evidence/"
+        f"{_HISTORICAL_CANARY_REQUEST_ID}.json"
+    ): "0ef11071083053ac7db825b39492e7e5d24ce27d32cc40c6daa90f43138603e4",
+    Path(
+        "live_canary/rejected/"
+        f"{_HISTORICAL_CANARY_REQUEST_ID}.json"
+    ): "ad7bada723a39a4fd0b266a3740e59f3e040d4ce81e79e6e594b6a2b3785e2f4",
+    Path(
+        "superseded/"
+        "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b.json"
+    ): "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b",
+}
 _PROTECTED_EXPECTED = {
     "phase1_observation": (
         36,
@@ -1186,6 +1210,35 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _valid_observability_candidate(path: Path, canary_root: Path) -> bool:
+    if not path.exists():
+        return True
+    try:
+        raw, value = _load_json_object(path)
+        candidate = canary_root / "runtime_contract_candidate.json"
+        expected_candidate = _sha256(candidate)
+    except (CanaryPreflightError, OSError):
+        return False
+    return bool(
+        raw == canonical_json_bytes(value)
+        and value.get("observability_evidence_schema_version") == 1
+        and value.get("status")
+        == "PHASE2B_CANARY_OBSERVABILITY_READY_FOR_REAPPROVAL"
+        and value.get("historical_consumed_request")
+        == _HISTORICAL_CANARY_REQUEST_ID
+        and value.get("historical_attempt") == "CONSUMED"
+        and value.get("new_provider_attempt_count") == 0
+        and value.get("new_ai_call_count") == 0
+        and value.get("new_public_network_success_count") == 0
+        and value.get("new_tickflow_request_count") == 0
+        and value.get("provider_http") == "NOT_RUN_THIS_ROUND"
+        and value.get("historical_evidence") == "UNCHANGED"
+        and value.get("old_approval") == "SUPERSEDED_AND_PRESERVED"
+        and value.get("new_approval_installed") is False
+        and value.get("new_approval_candidate_sha256") == expected_candidate
+    )
+
+
 def _aggregate_sha256(repo_root: Path, paths: list[Path]) -> str:
     lines = b"".join(
         (
@@ -1338,6 +1391,8 @@ def validate_offline_canary_inputs(repo_root: Path) -> OfflineCanaryEvidence:
         Path("runtime_evidence.json"),
         Path("runtime_contract_candidate.json"),
         Path("runtime_contract_build_evidence.json"),
+        Path("observability_candidate.json"),
+        *_CANARY_FROZEN_EVIDENCE_SHA256,
     }
     canary_files = (
         {
@@ -1348,7 +1403,21 @@ def validate_offline_canary_inputs(repo_root: Path) -> OfflineCanaryEvidence:
         if canary_root.exists()
         else set()
     )
-    canary_output_empty = canary_files <= allowed_offline_evidence
+    frozen_evidence_valid = all(
+        (canary_root / relative).is_file()
+        and not (canary_root / relative).is_symlink()
+        and _sha256(canary_root / relative) == expected
+        for relative, expected in _CANARY_FROZEN_EVIDENCE_SHA256.items()
+    )
+    observability_candidate_valid = _valid_observability_candidate(
+        canary_root / "observability_candidate.json",
+        canary_root,
+    )
+    canary_output_empty = bool(
+        canary_files <= allowed_offline_evidence
+        and frozen_evidence_valid
+        and observability_candidate_valid
+    )
     if not canary_output_empty:
         errors.append("canary_output_not_empty")
 

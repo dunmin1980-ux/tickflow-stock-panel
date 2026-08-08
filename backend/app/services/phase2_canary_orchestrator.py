@@ -841,9 +841,7 @@ def _publish_private_file(path: Path, raw: bytes) -> None:
             temporary.unlink(missing_ok=True)
 
 
-def _strict_json_object(path: Path, category: str) -> dict[str, Any]:
-    raw = _read_regular_unrestricted(path, category)
-
+def _strict_json_bytes(raw: bytes, category: str) -> dict[str, Any]:
     def reject_constant(_value: str) -> None:
         raise ValueError("non-finite")
 
@@ -855,6 +853,13 @@ def _strict_json_object(path: Path, category: str) -> dict[str, Any]:
     if text[end:].strip() or not isinstance(value, dict):
         raise OrchestratorError(category)
     return value
+
+
+def _strict_json_object(path: Path, category: str) -> dict[str, Any]:
+    return _strict_json_bytes(
+        _read_regular_unrestricted(path, category),
+        category,
+    )
 
 
 def _read_regular_unrestricted(path: Path, category: str) -> bytes:
@@ -971,17 +976,31 @@ def _load_stage_receipt(
         return None, None, "RECEIPT_MISSING", ()
     try:
         raw = _read_regular_unrestricted(path, "RECEIPT_MALFORMED")
-        value = _strict_json_object(path, "RECEIPT_MALFORMED")
-        events = _validate_stage_receipt(
-            value,
+        value, events = _parse_stage_receipt_bytes(
+            raw,
             component=component,
             request_id=request_id,
         )
-        if raw != canonical_json_bytes(value):
-            raise OrchestratorError("RECEIPT_MALFORMED")
     except OrchestratorError:
         return None, None, "RECEIPT_MALFORMED", ()
     return raw, value, "VALID", events
+
+
+def _parse_stage_receipt_bytes(
+    raw: bytes,
+    *,
+    component: Literal["relay", "proxy"],
+    request_id: str,
+) -> tuple[dict[str, Any], tuple[str, ...]]:
+    value = _strict_json_bytes(raw, "RECEIPT_MALFORMED")
+    events = _validate_stage_receipt(
+        value,
+        component=component,
+        request_id=request_id,
+    )
+    if raw != canonical_json_bytes(value):
+        raise OrchestratorError("RECEIPT_MALFORMED")
+    return value, events
 
 
 def _abnormal_child_reason(
@@ -1000,6 +1019,7 @@ def _abnormal_child_reason(
 def _archive_stage_evidence(
     context: CanaryRuntimeContext,
     child_evidence: Mapping[str, ChildProcessEvidence],
+    validated_receipts: Mapping[str, bytes] | None = None,
 ) -> ArchiveResult:
     sources = {
         "relay": context.output_dir / "relay-receipt.json",
@@ -1009,11 +1029,24 @@ def _archive_stage_evidence(
     statuses: dict[str, str] = {}
     proven_events: dict[str, tuple[str, ...]] = {}
     for component in ("relay", "proxy"):
-        raw, _value, status, events = _load_stage_receipt(
-            sources[component],
-            component=component,
-            request_id=context.request_id,
-        )
+        cached = (validated_receipts or {}).get(component)
+        if cached is None:
+            raw, _value, status, events = _load_stage_receipt(
+                sources[component],
+                component=component,
+                request_id=context.request_id,
+            )
+        else:
+            try:
+                _value, events = _parse_stage_receipt_bytes(
+                    cached,
+                    component=component,
+                    request_id=context.request_id,
+                )
+            except OrchestratorError:
+                raw, status, events = None, "RECEIPT_MALFORMED", ()
+            else:
+                raw, status = cached, "VALID"
         statuses[component] = status
         proven_events[component] = events
         if raw is not None:
@@ -2190,6 +2223,7 @@ class DockerCanaryBackend:
         self.wall_clock = wall_clock
         self._names: dict[str, str] = {}
         self._child_evidence: dict[str, ChildProcessEvidence] = {}
+        self._validated_receipts: dict[str, bytes] = {}
         self._proxy_started_at: tuple[str, int] | None = None
 
     def _remaining(self, deadline: float, category: str) -> float:
@@ -2256,7 +2290,12 @@ class DockerCanaryBackend:
             started_monotonic_ns=started_monotonic_ns,
             exited_monotonic_ns=max(started_monotonic_ns, self.monotonic_ns()),
         )
-        evidence = classify_completed_child(component, result, timing)
+        evidence = classify_completed_child(
+            component,
+            result,
+            timing,
+            interpret_positive_signal=True,
+        )
         self._child_evidence[component] = evidence
         if evidence.child_state is not ChildState.EXITED_ZERO:
             raise BackendError(
@@ -2319,6 +2358,7 @@ class DockerCanaryBackend:
                         ),
                     ),
                     timing,
+                    interpret_positive_signal=True,
                 )
         except Exception as exc:
             timing = ChildExecutionTiming(
@@ -2350,6 +2390,7 @@ class DockerCanaryBackend:
     ) -> None:
         self._names = self._runtime_names(context.request_id)
         self._child_evidence = {}
+        self._validated_receipts = {}
         self._proxy_started_at = None
         names = self._names
         commands = [
@@ -2461,18 +2502,13 @@ class DockerCanaryBackend:
                     proxy_evidence.child_state is ChildState.EXIT_UNKNOWN
                 ),
             )
-        receipt = _strict_json_object(
+        raw, receipt, receipt_status, _events = _load_stage_receipt(
             context.proxy_output_dir / "proxy-receipt.json",
-            "PROXY_RECEIPT_INVALID",
+            component="proxy",
+            request_id=context.request_id,
         )
-        try:
-            _validate_stage_receipt(
-                receipt,
-                component="proxy",
-                request_id=context.request_id,
-            )
-        except OrchestratorError as exc:
-            raise BackendError("PROXY_RECEIPT_INVALID") from exc
+        if receipt_status != "VALID" or raw is None or receipt is None:
+            raise BackendError("PROXY_RECEIPT_INVALID")
         attempts = receipt.get("provider_attempt_count")
         retry = receipt.get("retry_count")
         status = receipt.get("provider_http_status")
@@ -2485,6 +2521,7 @@ class DockerCanaryBackend:
             or category != "FORWARDED"
         ):
             raise BackendError("PROXY_RECEIPT_INVALID")
+        self._validated_receipts["proxy"] = raw
         return BackendDispatchResult(
             provider_http_status=status,
             response_received=True,
@@ -2497,41 +2534,81 @@ class DockerCanaryBackend:
         deadline: float,
     ) -> ArchiveResult:
         self._capture_proxy_evidence(deadline=deadline)
-        return _archive_stage_evidence(context, self._child_evidence)
+        return _archive_stage_evidence(
+            context,
+            self._child_evidence,
+            self._validated_receipts,
+        )
 
     def _cleanup_command(
         self,
         command: list[str],
         *,
+        resource_kind: Literal["container", "network"],
+        resource_name: str,
         deadline: float,
     ) -> bool:
         remaining = deadline - self.monotonic()
         if remaining <= 0:
             return False
         try:
-            self.executor(command, remaining)
+            result = self.executor(command, remaining)
         except (OSError, subprocess.SubprocessError):
             return False
-        return True
+        return result.returncode == 0 or self._docker_absence_proven(
+            result,
+            resource_kind=resource_kind,
+            resource_name=resource_name,
+        )
+
+    @staticmethod
+    def _docker_absence_proven(
+        result: subprocess.CompletedProcess[str],
+        *,
+        resource_kind: Literal["container", "network"],
+        resource_name: str,
+    ) -> bool:
+        if (
+            result.returncode != 1
+            or not isinstance(result.stdout, str)
+            or result.stdout.strip() not in {"", "[]"}
+            or not isinstance(result.stderr, str)
+        ):
+            return False
+        expected = {
+            "container": {
+                f"Error response from daemon: No such container: {resource_name}",
+                f"Error: No such container: {resource_name}",
+                f"Error: No such object: {resource_name}",
+            },
+            "network": {
+                f"Error response from daemon: network {resource_name} not found",
+                f"Error: No such network: {resource_name}",
+                f"Error: No such object: {resource_name}",
+            },
+        }[resource_kind]
+        return result.stderr.strip() in expected
 
     def cleanup(
         self,
-        _context: CanaryRuntimeContext,
+        context: CanaryRuntimeContext,
         *,
         deadline: float,
     ) -> CleanupResult:
-        names = self._names
-        if not names:
-            return CleanupResult(completed=True)
+        names = self._names or self._runtime_names(context.request_id)
         completed = True
         for role in ("relay", "proxy"):
             completed = self._cleanup_command(
                 ["docker", "rm", "--force", names[role]],
+                resource_kind="container",
+                resource_name=names[role],
                 deadline=deadline,
             ) and completed
         for role in ("relay_network", "egress_network"):
             completed = self._cleanup_command(
                 ["docker", "network", "rm", names[role]],
+                resource_kind="network",
+                resource_name=names[role],
                 deadline=deadline,
             ) and completed
         container_residue = 0
@@ -2552,7 +2629,15 @@ class DockerCanaryBackend:
                 )
             except (OSError, subprocess.SubprocessError):
                 result = None
-            if result is None or result.returncode == 0:
+            if (
+                result is None
+                or result.returncode == 0
+                or not self._docker_absence_proven(
+                    result,
+                    resource_kind="container",
+                    resource_name=names[role],
+                )
+            ):
                 container_residue += 1
         for role in ("relay_network", "egress_network"):
             remaining = deadline - self.monotonic()
@@ -2570,7 +2655,15 @@ class DockerCanaryBackend:
                 )
             except (OSError, subprocess.SubprocessError):
                 result = None
-            if result is None or result.returncode == 0:
+            if (
+                result is None
+                or result.returncode == 0
+                or not self._docker_absence_proven(
+                    result,
+                    resource_kind="network",
+                    resource_name=names[role],
+                )
+            ):
                 network_residue += 1
         return CleanupResult(
             completed=completed and not container_residue and not network_residue,
