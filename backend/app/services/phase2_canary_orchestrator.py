@@ -17,7 +17,8 @@ import tempfile
 import time
 import uuid
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal, Protocol
@@ -27,6 +28,14 @@ from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 from app.schemas.phase2_claims import ClaimsDocument, WorkerClaimsCandidate
 from app.services.phase2_ai_worker_protocol import (
     compute_projection_sha256,
+)
+from app.services.phase2_canary_observability import (
+    ChildExecutionTiming,
+    ChildProcessEvidence,
+    ChildState,
+    classify_child_exception,
+    classify_completed_child,
+    classify_running_child,
 )
 from app.services.phase2_canary_runtime_contract import (
     load_runtime_contract,
@@ -52,6 +61,80 @@ _DIRECTORY = getattr(os, "O_DIRECTORY", 0)
 _MAXIMUM_LEDGER_BYTES = 65_536
 _LEDGER_NAME = "attempt-ledger.json"
 _LOCK_NAME = ".runtime.lock"
+_EVENT_FIELDS = {
+    "event",
+    "occurred",
+    "wall_time",
+    "monotonic_ns",
+    "http_status",
+    "byte_count",
+}
+_PROXY_EVENTS = (
+    "process_started",
+    "provider_connect_started",
+    "provider_connect_completed",
+    "tls_completed",
+    "request_write_started",
+    "request_write_completed",
+    "response_headers_received",
+    "response_body_completed",
+)
+_RELAY_EVENTS = (
+    "relay_started",
+    "proxy_connect_started",
+    "proxy_connect_completed",
+    "request_submitted",
+    "response_wait_started",
+    "response_received",
+    "candidate_write_started",
+    "candidate_write_completed",
+    "candidate_ready_published",
+)
+_PROXY_RECEIPT_FIELDS = {
+    "receipt_schema_version",
+    "request_id",
+    "component",
+    "method_allowed",
+    "path_allowed",
+    "auth_present",
+    "tls_verification",
+    "redirect_followed",
+    "provider_attempt_count",
+    "retry_count",
+    "provider_http_status",
+    "response_category",
+    "response_size",
+    "response_bytes",
+    "terminal_status",
+    *_PROXY_EVENTS,
+}
+_RELAY_RECEIPT_FIELDS = {
+    "receipt_schema_version",
+    "request_id",
+    "component",
+    "status",
+    "exit_code",
+    "terminal_status",
+    "error_category",
+    "proxy_http_status",
+    "proxy_request_count",
+    "retry_count",
+    "response_size",
+    "response_sha256",
+    "started_at",
+    "completed_at",
+    *_RELAY_EVENTS,
+}
+_SENSITIVE_EVIDENCE = re.compile(
+    r"Authorization\s*:|Bearer\s+[^\s]+|"
+    r"(?:api[_-]?key|openai_api_key|secret|token|password|credential)"
+    r"\s*[:=]\s*[^\s]+|\bsk-(?:proj-)?[A-Za-z0-9_-]{12,}",
+    re.IGNORECASE,
+)
+
+
+def _wall_timestamp() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 class OrchestratorError(RuntimeError):
@@ -599,6 +682,8 @@ class CanaryRuntimeContext:
     request_path: Path
     projection_path: Path
     output_dir: Path
+    proxy_output_dir: Path
+    receipt_archive_dir: Path
     secret_path: Path
     proxy_image_id: str
     relay_image_id: str
@@ -619,6 +704,15 @@ class CleanupResult:
     network_residue_count: int = 0
 
 
+@dataclass(frozen=True)
+class ArchiveResult:
+    completed: bool
+    status: str
+    archive_dir: Path | None = None
+    last_proven_stage: str | None = None
+    child_terminal_reason: str | None = None
+
+
 class CanaryBackend(Protocol):
     def prepare(
         self,
@@ -633,6 +727,13 @@ class CanaryBackend(Protocol):
         *,
         deadline: float,
     ) -> BackendDispatchResult: ...
+
+    def archive_evidence(
+        self,
+        context: CanaryRuntimeContext,
+        *,
+        deadline: float,
+    ) -> ArchiveResult: ...
 
     def cleanup(
         self,
@@ -668,6 +769,9 @@ class CanaryRunResult:
     network_residue_count: int
     secret_file_residue_count: int
     temporary_file_residue_count: int
+    receipt_archive_status: str
+    last_proven_stage: str | None
+    child_terminal_reason: str | None
     error_category: str | None
 
 
@@ -782,6 +886,242 @@ def _read_regular_unrestricted(path: Path, category: str) -> bytes:
     ):
         raise OrchestratorError(category)
     return raw
+
+
+def _valid_stage_event(value: object, expected_name: str) -> bool:
+    if not isinstance(value, dict) or set(value) != _EVENT_FIELDS:
+        return False
+    occurred = value.get("occurred")
+    wall_time = value.get("wall_time")
+    monotonic_ns = value.get("monotonic_ns")
+    http_status = value.get("http_status")
+    byte_count = value.get("byte_count")
+    if value.get("event") != expected_name or not isinstance(occurred, bool):
+        return False
+    if not occurred:
+        return all(
+            item is None
+            for item in (wall_time, monotonic_ns, http_status, byte_count)
+        )
+    if (
+        not isinstance(wall_time, str)
+        or not wall_time
+        or isinstance(monotonic_ns, bool)
+        or not isinstance(monotonic_ns, int)
+        or monotonic_ns < 0
+    ):
+        return False
+    if http_status is not None and (
+        isinstance(http_status, bool)
+        or not isinstance(http_status, int)
+        or not 100 <= http_status <= 599
+    ):
+        return False
+    return not (
+        byte_count is not None
+        and (
+            isinstance(byte_count, bool)
+            or not isinstance(byte_count, int)
+            or byte_count < 0
+        )
+    )
+
+
+def _validate_stage_receipt(
+    value: dict[str, Any],
+    *,
+    component: Literal["relay", "proxy"],
+    request_id: str,
+) -> tuple[str, ...]:
+    events = _RELAY_EVENTS if component == "relay" else _PROXY_EVENTS
+    fields = (
+        _RELAY_RECEIPT_FIELDS
+        if component == "relay"
+        else _PROXY_RECEIPT_FIELDS
+    )
+    if (
+        set(value) != fields
+        or value.get("receipt_schema_version") != 2
+        or value.get("request_id") != request_id
+        or value.get("component") != component
+        or value.get("retry_count") != 0
+        or any(
+            not _valid_stage_event(value.get(name), name) for name in events
+        )
+    ):
+        raise OrchestratorError("RECEIPT_MALFORMED")
+    serialized = canonical_json_bytes(value).decode("utf-8")
+    if _SENSITIVE_EVIDENCE.search(serialized):
+        raise OrchestratorError("RECEIPT_MALFORMED")
+    return tuple(
+        name
+        for name in events
+        if isinstance(value.get(name), dict)
+        and value[name].get("occurred") is True
+    )
+
+
+def _load_stage_receipt(
+    path: Path,
+    *,
+    component: Literal["relay", "proxy"],
+    request_id: str,
+) -> tuple[bytes | None, dict[str, Any] | None, str, tuple[str, ...]]:
+    if not path.exists() or path.is_symlink():
+        return None, None, "RECEIPT_MISSING", ()
+    try:
+        raw = _read_regular_unrestricted(path, "RECEIPT_MALFORMED")
+        value = _strict_json_object(path, "RECEIPT_MALFORMED")
+        events = _validate_stage_receipt(
+            value,
+            component=component,
+            request_id=request_id,
+        )
+        if raw != canonical_json_bytes(value):
+            raise OrchestratorError("RECEIPT_MALFORMED")
+    except OrchestratorError:
+        return None, None, "RECEIPT_MALFORMED", ()
+    return raw, value, "VALID", events
+
+
+def _abnormal_child_reason(
+    child_evidence: Mapping[str, ChildProcessEvidence],
+) -> str | None:
+    for component in ("relay", "proxy"):
+        evidence = child_evidence.get(component)
+        if evidence is not None and evidence.child_state not in {
+            ChildState.RUNNING,
+            ChildState.EXITED_ZERO,
+        }:
+            return evidence.terminal_reason
+    return None
+
+
+def _archive_stage_evidence(
+    context: CanaryRuntimeContext,
+    child_evidence: Mapping[str, ChildProcessEvidence],
+) -> ArchiveResult:
+    sources = {
+        "relay": context.output_dir / "relay-receipt.json",
+        "proxy": context.proxy_output_dir / "proxy-receipt.json",
+    }
+    loaded: dict[str, bytes] = {}
+    statuses: dict[str, str] = {}
+    proven_events: dict[str, tuple[str, ...]] = {}
+    for component in ("relay", "proxy"):
+        raw, _value, status, events = _load_stage_receipt(
+            sources[component],
+            component=component,
+            request_id=context.request_id,
+        )
+        statuses[component] = status
+        proven_events[component] = events
+        if raw is not None:
+            loaded[component] = raw
+
+    if "RECEIPT_MALFORMED" in statuses.values():
+        archive_status = "RECEIPT_MALFORMED"
+    elif "RECEIPT_MISSING" in statuses.values():
+        archive_status = "RECEIPT_MISSING"
+    elif set(child_evidence) != {"relay", "proxy"}:
+        archive_status = "CHILD_EVIDENCE_MISSING"
+    else:
+        archive_status = "ARCHIVED"
+
+    last_proven_stage = None
+    for component in ("proxy", "relay"):
+        if proven_events[component]:
+            last_proven_stage = proven_events[component][-1]
+            break
+    child_terminal_reason = _abnormal_child_reason(child_evidence)
+    child_payload = {
+        "child_metadata_schema_version": 1,
+        "request_id": context.request_id,
+        "relay": (
+            asdict(child_evidence["relay"])
+            if "relay" in child_evidence
+            else None
+        ),
+        "proxy": (
+            asdict(child_evidence["proxy"])
+            if "proxy" in child_evidence
+            else None
+        ),
+    }
+    status_payload = {
+        "archive_status_schema_version": 1,
+        "request_id": context.request_id,
+        "archive_status": archive_status,
+        "relay_receipt_status": statuses["relay"],
+        "proxy_receipt_status": statuses["proxy"],
+        "child_metadata_status": (
+            "VALID"
+            if set(child_evidence) == {"relay", "proxy"}
+            else "MISSING"
+        ),
+        "last_proven_stage": last_proven_stage,
+        "child_terminal_reason": child_terminal_reason,
+        "retry_count": 0,
+    }
+    for value in (child_payload, status_payload):
+        if _SENSITIVE_EVIDENCE.search(
+            canonical_json_bytes(value).decode("utf-8")
+        ):
+            raise OrchestratorError("RECEIPT_SECURITY_BLOCKED")
+
+    target = context.receipt_archive_dir
+    parent = target.parent
+    parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if (
+        parent.is_symlink()
+        or not parent.is_dir()
+        or stat.S_IMODE(parent.stat().st_mode) != 0o700
+        or target.exists()
+        or target.is_symlink()
+    ):
+        raise OrchestratorError("RECEIPT_ARCHIVE_FAILED")
+    staging = parent / f".{target.name}.{uuid.uuid4().hex}.partial"
+    try:
+        staging.mkdir(mode=0o700)
+        for component, raw in loaded.items():
+            _write_private_file(staging / f"{component}-receipt.json", raw)
+        _write_private_file(
+            staging / "child-metadata.json",
+            canonical_json_bytes(child_payload),
+        )
+        _write_private_file(
+            staging / "archive-status.json",
+            canonical_json_bytes(status_payload),
+        )
+        staging_descriptor = os.open(
+            staging,
+            os.O_RDONLY | _DIRECTORY | _NOFOLLOW,
+        )
+        try:
+            os.fsync(staging_descriptor)
+        finally:
+            os.close(staging_descriptor)
+        os.replace(staging, target)
+        parent_descriptor = os.open(
+            parent,
+            os.O_RDONLY | _DIRECTORY | _NOFOLLOW,
+        )
+        try:
+            os.fsync(parent_descriptor)
+        finally:
+            os.close(parent_descriptor)
+    except (OSError, OrchestratorError) as exc:
+        raise OrchestratorError("RECEIPT_ARCHIVE_FAILED") from exc
+    finally:
+        with contextlib.suppress(OSError):
+            shutil.rmtree(staging)
+    return ArchiveResult(
+        completed=True,
+        status=archive_status,
+        archive_dir=target,
+        last_proven_stage=last_proven_stage,
+        child_terminal_reason=child_terminal_reason,
+    )
 
 
 def _collect_candidate(
@@ -956,9 +1296,11 @@ def _result(
     cleanup: CleanupResult | None = None,
     secret_file_residue_count: int = 0,
     temporary_file_residue_count: int = 0,
+    archive: ArchiveResult | None = None,
     error_category: str | None = None,
 ) -> CanaryRunResult:
     cleanup = cleanup or CleanupResult(completed=True)
+    archive = archive or ArchiveResult(completed=False, status="NOT_RUN")
     return CanaryRunResult(
         terminal_state=terminal_state,
         request_id=request_id,
@@ -972,6 +1314,9 @@ def _result(
         network_residue_count=cleanup.network_residue_count,
         secret_file_residue_count=secret_file_residue_count,
         temporary_file_residue_count=temporary_file_residue_count,
+        receipt_archive_status=archive.status,
+        last_proven_stage=archive.last_proven_stage,
+        child_terminal_reason=archive.child_terminal_reason,
         error_category=error_category,
     )
 
@@ -1020,6 +1365,9 @@ def _publish_runtime_evidence(
         "network_residue_count": result.network_residue_count,
         "secret_file_residue_count": result.secret_file_residue_count,
         "temporary_file_residue_count": result.temporary_file_residue_count,
+        "receipt_archive_status": result.receipt_archive_status,
+        "last_proven_stage": result.last_proven_stage,
+        "child_terminal_reason": result.child_terminal_reason,
     }
     _publish_private_file(
         evidence_root / f"{ledger.identity.request_id}.json",
@@ -1074,11 +1422,37 @@ def run_single_symbol_canary(
     store: AttemptLedgerStore | None = None
     context: CanaryRuntimeContext | None = None
     cleanup = CleanupResult(completed=True)
+    archive = ArchiveResult(completed=False, status="NOT_RUN")
     route_paths: tuple[Path, Path] | None = None
     provider_http_status: int | None = None
     host_validation_status = "NOT_RUN"
     prepared = False
     workdir: Path | None = None
+
+    def archive_runtime_evidence() -> ArchiveResult:
+        nonlocal archive
+        if archive.status != "NOT_RUN":
+            return archive
+        if (
+            context is None
+            or ledger is None
+            or ledger.provider_attempt_count == 0
+        ):
+            return archive
+        try:
+            archive = backend.archive_evidence(
+                context,
+                deadline=(
+                    monotonic()
+                    + context.runtime_contract["cleanup_timeout_seconds"]
+                ),
+            )
+        except Exception:
+            archive = ArchiveResult(
+                completed=False,
+                status="RECEIPT_ARCHIVE_FAILED",
+            )
+        return archive
 
     def finalize_runtime() -> tuple[CleanupResult, int, int]:
         nonlocal cleanup, prepared, workdir
@@ -1173,8 +1547,18 @@ def run_single_symbol_canary(
         workdir.chmod(0o700)
         input_dir = workdir / "input"
         output_dir = workdir / "output"
+        proxy_output_dir = workdir / "proxy-output"
         input_dir.mkdir(mode=0o700)
         output_dir.mkdir(mode=0o733)
+        proxy_output_dir.mkdir(mode=0o733)
+        receipts_root = config.canary_output_root / "receipts"
+        receipts_root.mkdir(mode=0o700, exist_ok=True)
+        if (
+            receipts_root.is_symlink()
+            or not receipts_root.is_dir()
+            or stat.S_IMODE(receipts_root.stat().st_mode) != 0o700
+        ):
+            raise OrchestratorError("RECEIPT_ARCHIVE_ROOT_INVALID")
         projection_path = input_dir / "projection.json"
         request_path = input_dir / "request.json"
         secret_path = workdir / "provider-auth"
@@ -1201,6 +1585,8 @@ def run_single_symbol_canary(
             request_path=request_path,
             projection_path=projection_path,
             output_dir=output_dir,
+            proxy_output_dir=proxy_output_dir,
+            receipt_archive_dir=receipts_root / request_id,
             secret_path=secret_path,
             proxy_image_id=artifacts.proxy_image_id,
             relay_image_id=artifacts.relay_image_id,
@@ -1250,6 +1636,9 @@ def run_single_symbol_canary(
             timestamp=wall_clock(),
         )
 
+        archive = archive_runtime_evidence()
+        if not archive.completed or archive.status != "ARCHIVED":
+            raise BackendError(archive.status)
         cleanup, secret_residue, temporary_residue = finalize_runtime()
         if cleanup.timed_out or not cleanup.completed:
             raise OrchestratorError("CLEANUP_TIMEOUT")
@@ -1276,20 +1665,29 @@ def run_single_symbol_canary(
                 cleanup=cleanup,
                 secret_file_residue_count=secret_residue,
                 temporary_file_residue_count=temporary_residue,
+                archive=archive,
             ),
             ledger,
             success_route_paths=route_paths,
         )
     except BackendError as exc:
+        archive = archive_runtime_evidence()
         category = (
             "ATTEMPT_CONSUMED_UNKNOWN"
             if exc.unknown_dispatch_state
             else exc.category
         )
+        unknown_dispatch_state = exc.unknown_dispatch_state
+        if archive.child_terminal_reason is not None:
+            category = archive.child_terminal_reason
+            unknown_dispatch_state = category.endswith("_EXIT_UNKNOWN")
+        if archive.status not in {"NOT_RUN", "ARCHIVED"}:
+            category = archive.status
+            unknown_dispatch_state = False
         if store is not None and ledger is not None:
             target = (
                 LedgerState.ATTEMPT_CONSUMED_UNKNOWN
-                if exc.unknown_dispatch_state
+                if unknown_dispatch_state
                 else (
                     LedgerState.FAILED_AFTER_DISPATCH
                     if ledger.provider_attempt_count
@@ -1300,7 +1698,7 @@ def run_single_symbol_canary(
                 ledger = store.transition(target, timestamp=wall_clock())
         _remove_route(route_paths)
         cleanup, secret_residue, temporary_residue = finalize_runtime()
-        if not exc.unknown_dispatch_state:
+        if not unknown_dispatch_state:
             if cleanup.timed_out or not cleanup.completed:
                 category = "CLEANUP_TIMEOUT"
             elif cleanup.container_residue_count or cleanup.network_residue_count:
@@ -1324,12 +1722,18 @@ def run_single_symbol_canary(
                 cleanup=cleanup,
                 secret_file_residue_count=secret_residue,
                 temporary_file_residue_count=temporary_residue,
+                archive=archive,
                 error_category=category,
             ),
             ledger,
         )
     except Exception as exc:
+        archive = archive_runtime_evidence()
         category = _terminal_category(exc)
+        if archive.child_terminal_reason is not None:
+            category = archive.child_terminal_reason
+        if archive.status not in {"NOT_RUN", "ARCHIVED"}:
+            category = archive.status
         if store is not None and ledger is not None and ledger.state not in _TERMINAL_STATES:
             target = (
                 LedgerState.FAILED_AFTER_DISPATCH
@@ -1363,6 +1767,7 @@ def run_single_symbol_canary(
                 cleanup=cleanup,
                 secret_file_residue_count=secret_residue,
                 temporary_file_residue_count=temporary_residue,
+                archive=archive,
                 error_category=category,
             ),
             ledger,
@@ -1371,6 +1776,26 @@ def run_single_symbol_canary(
         if prepared or workdir is not None:
             finalize_runtime()
         lock.release()
+
+
+def _mock_stage_event(
+    name: str,
+    *,
+    occurred: bool,
+    index: int,
+    http_status: int | None = None,
+    byte_count: int | None = None,
+) -> dict[str, Any]:
+    return {
+        "event": name,
+        "occurred": occurred,
+        "wall_time": (
+            f"2026-08-08T08:23:{index:02d}.000000Z" if occurred else None
+        ),
+        "monotonic_ns": index * 1_000_000_000 if occurred else None,
+        "http_status": http_status if occurred else None,
+        "byte_count": byte_count if occurred else None,
+    }
 
 
 class MockCanaryBackend:
@@ -1406,7 +1831,10 @@ class MockCanaryBackend:
         self.relay_response = dict(relay_response)
         self.prepare_count = 0
         self.dispatch_count = 0
+        self.archive_count = 0
         self.cleanup_count = 0
+        self.lifecycle: list[str] = []
+        self._child_evidence: dict[str, ChildProcessEvidence] = {}
         self._now = 0.0
 
     def monotonic(self) -> float:
@@ -1419,6 +1847,7 @@ class MockCanaryBackend:
         deadline: float,
     ) -> None:
         del deadline
+        self.lifecycle.append("prepare")
         self.prepare_count += 1
         if self.scenario == "host_crash_before_dispatch":
             raise BackendError("HOST_CRASH_BEFORE_DISPATCH")
@@ -1439,6 +1868,172 @@ class MockCanaryBackend:
             ),
         )
 
+    def _write_receipts(self, context: CanaryRuntimeContext) -> None:
+        relay_failed = self.scenario in {
+            "provider_over_60s",
+            "relay_exit_before_candidate",
+            "nonzero_container_exit",
+            "proxy_exit_after_request",
+            "host_crash_after_dispatch",
+            "host_crash_after_response",
+        }
+        candidate_published = self.scenario not in {
+            "provider_over_60s",
+            "relay_exit_before_candidate",
+            "nonzero_container_exit",
+            "proxy_exit_after_request",
+            "host_crash_after_dispatch",
+            "host_crash_after_response",
+            "candidate_partial_write",
+            "candidate_rename_failure",
+            "candidate_missing",
+        }
+        proxy_events: dict[str, dict[str, Any]] = {}
+        for index, name in enumerate(_PROXY_EVENTS, start=1):
+            occurred = not (
+                self.scenario == "proxy_exit_after_request"
+                and name
+                in {
+                    "request_write_completed",
+                    "response_headers_received",
+                    "response_body_completed",
+                }
+            )
+            proxy_events[name] = _mock_stage_event(
+                name,
+                occurred=occurred,
+                index=index,
+                http_status=(
+                    200
+                    if name
+                    in {"response_headers_received", "response_body_completed"}
+                    and occurred
+                    else None
+                ),
+                byte_count=(
+                    1
+                    if name in {"request_write_completed", "response_body_completed"}
+                    and occurred
+                    else None
+                ),
+            )
+        proxy_category = (
+            "REQUEST_WRITE_FAILED"
+            if self.scenario == "proxy_exit_after_request"
+            else "FORWARDED"
+        )
+        proxy_receipt = {
+            "receipt_schema_version": 2,
+            "request_id": context.request_id,
+            "component": "proxy",
+            "method_allowed": True,
+            "path_allowed": True,
+            "auth_present": True,
+            "tls_verification": True,
+            "redirect_followed": False,
+            "provider_attempt_count": 1,
+            "retry_count": 0,
+            "provider_http_status": (
+                None if self.scenario == "proxy_exit_after_request" else 200
+            ),
+            "response_category": proxy_category,
+            "response_size": (
+                None if self.scenario == "proxy_exit_after_request" else 1
+            ),
+            "response_bytes": (
+                None if self.scenario == "proxy_exit_after_request" else 1
+            ),
+            "terminal_status": proxy_category,
+            **proxy_events,
+        }
+        relay_events: dict[str, dict[str, Any]] = {}
+        for index, name in enumerate(_RELAY_EVENTS, start=20):
+            occurred = name not in {
+                "candidate_write_started",
+                "candidate_write_completed",
+                "candidate_ready_published",
+            } or candidate_published
+            relay_events[name] = _mock_stage_event(
+                name,
+                occurred=occurred,
+                index=index,
+                http_status=(200 if name == "response_received" and occurred else None),
+                byte_count=(1 if name in {"request_submitted", "response_received"} and occurred else None),
+            )
+        relay_terminal = (
+            "RELAY_NONZERO_EXIT"
+            if self.scenario in {"relay_exit_before_candidate", "nonzero_container_exit"}
+            else "RELAY_TIMEOUT"
+            if self.scenario == "provider_over_60s"
+            else "REJECTED"
+            if relay_failed
+            else "SUCCEEDED"
+        )
+        relay_receipt = {
+            "receipt_schema_version": 2,
+            "request_id": context.request_id,
+            "component": "relay",
+            "status": "REJECTED" if relay_failed else "SUCCEEDED",
+            "exit_code": 2 if relay_failed else 0,
+            "terminal_status": relay_terminal,
+            "error_category": relay_terminal if relay_failed else None,
+            "proxy_http_status": 200,
+            "proxy_request_count": 1,
+            "retry_count": 0,
+            "response_size": 1,
+            "response_sha256": "0" * 64,
+            "started_at": "2026-08-08T08:23:20.000000Z",
+            "completed_at": "2026-08-08T08:23:40.000000Z",
+            **relay_events,
+        }
+        _write_private_file(
+            context.proxy_output_dir / "proxy-receipt.json",
+            canonical_json_bytes(proxy_receipt),
+        )
+        _write_private_file(
+            context.output_dir / "relay-receipt.json",
+            canonical_json_bytes(relay_receipt),
+        )
+
+    def _record_child_evidence(self) -> None:
+        timing = ChildExecutionTiming(
+            started_at="2026-08-08T08:23:20.000000Z",
+            exited_at="2026-08-08T08:23:40.000000Z",
+            started_monotonic_ns=20_000_000_000,
+            exited_monotonic_ns=40_000_000_000,
+        )
+        relay_code = (
+            1
+            if self.scenario in {"relay_exit_before_candidate", "nonzero_container_exit"}
+            else 0
+        )
+        self._child_evidence["relay"] = classify_completed_child(
+            "relay",
+            subprocess.CompletedProcess(
+                ["mock-relay"],
+                relay_code,
+                stdout="",
+                stderr="mock relay failure" if relay_code else "",
+            ),
+            timing,
+        )
+        if self.scenario == "proxy_exit_after_request":
+            self._child_evidence["proxy"] = classify_completed_child(
+                "proxy",
+                subprocess.CompletedProcess(
+                    ["mock-proxy"],
+                    1,
+                    stdout="",
+                    stderr="mock proxy failure",
+                ),
+                timing,
+            )
+        else:
+            self._child_evidence["proxy"] = classify_running_child(
+                "proxy",
+                timing,
+            )
+
     def dispatch(
         self,
         context: CanaryRuntimeContext,
@@ -1446,9 +2041,12 @@ class MockCanaryBackend:
         deadline: float,
     ) -> BackendDispatchResult:
         del deadline
+        self.lifecycle.append("dispatch")
         self.dispatch_count += 1
         if self.dispatch_count > 1:
             raise AssertionError("mock provider dispatched more than once")
+        self._write_receipts(context)
+        self._record_child_evidence()
         delays = {
             "provider_1s": 1.0,
             "provider_59s": 59.0,
@@ -1490,6 +2088,17 @@ class MockCanaryBackend:
             )
         return BackendDispatchResult(200, True)
 
+    def archive_evidence(
+        self,
+        context: CanaryRuntimeContext,
+        *,
+        deadline: float,
+    ) -> ArchiveResult:
+        del deadline
+        self.lifecycle.append("archive")
+        self.archive_count += 1
+        return _archive_stage_evidence(context, self._child_evidence)
+
     def cleanup(
         self,
         _context: CanaryRuntimeContext,
@@ -1497,6 +2106,7 @@ class MockCanaryBackend:
         deadline: float,
     ) -> CleanupResult:
         del deadline
+        self.lifecycle.append("cleanup")
         self.cleanup_count += 1
         if self.scenario == "cleanup_timeout":
             return CleanupResult(completed=False, timed_out=True)
@@ -1571,10 +2181,16 @@ class DockerCanaryBackend:
         *,
         executor: CommandExecutor = _default_command_executor,
         monotonic: Callable[[], float] = time.monotonic,
+        monotonic_ns: Callable[[], int] = time.monotonic_ns,
+        wall_clock: Callable[[], str] = _wall_timestamp,
     ) -> None:
         self.executor = executor
         self.monotonic = monotonic
+        self.monotonic_ns = monotonic_ns
+        self.wall_clock = wall_clock
         self._names: dict[str, str] = {}
+        self._child_evidence: dict[str, ChildProcessEvidence] = {}
+        self._proxy_started_at: tuple[str, int] | None = None
 
     def _remaining(self, deadline: float, category: str) -> float:
         remaining = deadline - self.monotonic()
@@ -1602,6 +2218,121 @@ class DockerCanaryBackend:
             raise BackendError(category)
         return result
 
+    def _run_child(
+        self,
+        command: list[str],
+        *,
+        component: Literal["relay", "proxy"],
+        deadline: float,
+        maximum_timeout: float | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        started_at = self.wall_clock()
+        started_monotonic_ns = self.monotonic_ns()
+        remaining = self._remaining(deadline, f"{component.upper()}_TIMEOUT")
+        timeout = min(remaining, maximum_timeout or remaining)
+        try:
+            result = self.executor(command, timeout)
+        except Exception as exc:
+            timing = ChildExecutionTiming(
+                started_at=started_at,
+                exited_at=self.wall_clock(),
+                started_monotonic_ns=started_monotonic_ns,
+                exited_monotonic_ns=max(
+                    started_monotonic_ns,
+                    self.monotonic_ns(),
+                ),
+            )
+            evidence = classify_child_exception(component, exc, timing)
+            self._child_evidence[component] = evidence
+            raise BackendError(
+                evidence.terminal_reason,
+                unknown_dispatch_state=(
+                    evidence.child_state is ChildState.EXIT_UNKNOWN
+                ),
+            ) from exc
+        timing = ChildExecutionTiming(
+            started_at=started_at,
+            exited_at=self.wall_clock(),
+            started_monotonic_ns=started_monotonic_ns,
+            exited_monotonic_ns=max(started_monotonic_ns, self.monotonic_ns()),
+        )
+        evidence = classify_completed_child(component, result, timing)
+        self._child_evidence[component] = evidence
+        if evidence.child_state is not ChildState.EXITED_ZERO:
+            raise BackendError(
+                evidence.terminal_reason,
+                unknown_dispatch_state=(
+                    evidence.child_state is ChildState.EXIT_UNKNOWN
+                ),
+            )
+        return result
+
+    def _capture_proxy_evidence(self, *, deadline: float) -> None:
+        if "proxy" in self._child_evidence:
+            return
+        if self._proxy_started_at is None or not self._names:
+            return
+        started_at, started_monotonic_ns = self._proxy_started_at
+        try:
+            remaining = self._remaining(deadline, "PROXY_TIMEOUT")
+            result = self.executor(
+                [
+                    "docker",
+                    "inspect",
+                    "--format",
+                    "{{json .State}}",
+                    self._names["proxy"],
+                ],
+                remaining,
+            )
+            if result.returncode != 0:
+                raise subprocess.SubprocessError("proxy inspect failed")
+            state = json.loads(result.stdout)
+            if not isinstance(state, dict) or not isinstance(
+                state.get("Running"),
+                bool,
+            ):
+                raise RuntimeError("proxy state unknown")
+            timing = ChildExecutionTiming(
+                started_at=started_at,
+                exited_at=self.wall_clock(),
+                started_monotonic_ns=started_monotonic_ns,
+                exited_monotonic_ns=max(
+                    started_monotonic_ns,
+                    self.monotonic_ns(),
+                ),
+            )
+            if state["Running"]:
+                evidence = classify_running_child("proxy", timing)
+            else:
+                exit_code = state.get("ExitCode")
+                evidence = classify_completed_child(
+                    "proxy",
+                    subprocess.CompletedProcess(
+                        ["docker", "inspect", self._names["proxy"]],
+                        exit_code,
+                        stdout="",
+                        stderr=(
+                            state.get("Error")
+                            if isinstance(state.get("Error"), str)
+                            else ""
+                        ),
+                    ),
+                    timing,
+                )
+        except Exception as exc:
+            timing = ChildExecutionTiming(
+                started_at=started_at,
+                exited_at=self.wall_clock(),
+                started_monotonic_ns=started_monotonic_ns,
+                exited_monotonic_ns=max(
+                    started_monotonic_ns,
+                    self.monotonic_ns(),
+                ),
+            )
+            evidence = classify_child_exception("proxy", exc, timing)
+        self._child_evidence["proxy"] = evidence
+
     def _runtime_names(self, request_id: str) -> dict[str, str]:
         suffix = request_id[:12]
         return {
@@ -1618,10 +2349,9 @@ class DockerCanaryBackend:
         deadline: float,
     ) -> None:
         self._names = self._runtime_names(context.request_id)
+        self._child_evidence = {}
+        self._proxy_started_at = None
         names = self._names
-        proxy_receipt = context.output_dir / "proxy-receipt.json"
-        _write_private_file(proxy_receipt, b"{}\n")
-        proxy_receipt.chmod(0o666)
         commands = [
             [
                 "docker",
@@ -1655,8 +2385,8 @@ class DockerCanaryBackend:
                 ),
                 "--mount",
                 _mount(
-                    proxy_receipt,
-                    "/output/receipt.json",
+                    context.proxy_output_dir,
+                    "/output",
                     readonly=False,
                 ),
                 context.proxy_image_id,
@@ -1692,6 +2422,11 @@ class DockerCanaryBackend:
             ["docker", "start", names["proxy"]],
         ]
         for command in commands:
+            if command == ["docker", "start", names["proxy"]]:
+                self._proxy_started_at = (
+                    self.wall_clock(),
+                    self.monotonic_ns(),
+                )
             self._run(
                 command,
                 deadline=deadline,
@@ -1706,28 +2441,38 @@ class DockerCanaryBackend:
     ) -> BackendDispatchResult:
         if not self._names:
             raise BackendError("RUNTIME_NOT_PREPARED")
-        try:
-            self._run(
-                ["docker", "start", "--attach", self._names["relay"]],
-                deadline=deadline,
-                maximum_timeout=float(
-                    context.runtime_contract[
-                        "relay_candidate_wait_timeout_seconds"
-                    ]
+        self._run_child(
+            ["docker", "start", "--attach", self._names["relay"]],
+            component="relay",
+            deadline=deadline,
+            maximum_timeout=float(
+                context.runtime_contract["relay_candidate_wait_timeout_seconds"]
+            ),
+        )
+        self._capture_proxy_evidence(deadline=deadline)
+        proxy_evidence = self._child_evidence.get("proxy")
+        if proxy_evidence is not None and proxy_evidence.child_state not in {
+            ChildState.RUNNING,
+            ChildState.EXITED_ZERO,
+        }:
+            raise BackendError(
+                proxy_evidence.terminal_reason,
+                unknown_dispatch_state=(
+                    proxy_evidence.child_state is ChildState.EXIT_UNKNOWN
                 ),
-                category="RELAY_TIMEOUT",
             )
-        except BackendError as exc:
-            if exc.category == "RELAY_TIMEOUT":
-                raise BackendError(
-                    "RELAY_TIMEOUT",
-                    unknown_dispatch_state=True,
-                ) from exc
-            raise
         receipt = _strict_json_object(
-            context.output_dir / "proxy-receipt.json",
+            context.proxy_output_dir / "proxy-receipt.json",
             "PROXY_RECEIPT_INVALID",
         )
+        try:
+            _validate_stage_receipt(
+                receipt,
+                component="proxy",
+                request_id=context.request_id,
+            )
+        except OrchestratorError as exc:
+            raise BackendError("PROXY_RECEIPT_INVALID") from exc
         attempts = receipt.get("provider_attempt_count")
         retry = receipt.get("retry_count")
         status = receipt.get("provider_http_status")
@@ -1744,6 +2489,15 @@ class DockerCanaryBackend:
             provider_http_status=status,
             response_received=True,
         )
+
+    def archive_evidence(
+        self,
+        context: CanaryRuntimeContext,
+        *,
+        deadline: float,
+    ) -> ArchiveResult:
+        self._capture_proxy_evidence(deadline=deadline)
+        return _archive_stage_evidence(context, self._child_evidence)
 
     def _cleanup_command(
         self,

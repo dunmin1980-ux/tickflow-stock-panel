@@ -22,6 +22,7 @@ _SENSITIVE_STDERR = re.compile(
 
 
 class ChildState(StrEnum):
+    RUNNING = "CHILD_RUNNING"
     EXITED_ZERO = "CHILD_EXITED_ZERO"
     TIMEOUT = "CHILD_TIMEOUT"
     NONZERO_EXIT = "CHILD_NONZERO_EXIT"
@@ -154,6 +155,7 @@ def _component(value: str) -> Literal["relay", "proxy"]:
 
 def _terminal_reason(component: str, state: ChildState) -> str:
     suffix = {
+        ChildState.RUNNING: "RUNNING",
         ChildState.EXITED_ZERO: "EXITED_ZERO",
         ChildState.TIMEOUT: "TIMEOUT",
         ChildState.NONZERO_EXIT: "NONZERO_EXIT",
@@ -225,6 +227,20 @@ def classify_completed_child(
     )
 
 
+def classify_running_child(
+    component: str,
+    timing: ChildExecutionTiming,
+) -> ChildProcessEvidence:
+    return _evidence(
+        component,
+        ChildState.RUNNING,
+        timing,
+        exit_code=None,
+        signal=None,
+        stderr=None,
+    )
+
+
 def classify_child_exception(
     component: str,
     error: BaseException,
@@ -236,7 +252,7 @@ def classify_child_exception(
         stderr = error.stderr
     elif isinstance(error, (FileNotFoundError, PermissionError)):
         state = ChildState.START_FAILED
-    elif isinstance(error, subprocess.SubprocessError):
+    elif isinstance(error, (OSError, subprocess.SubprocessError)):
         state = ChildState.PROCESS_ERROR
     else:
         state = ChildState.EXIT_UNKNOWN
@@ -248,4 +264,3 @@ def classify_child_exception(
         signal=None,
         stderr=stderr,
     )
-

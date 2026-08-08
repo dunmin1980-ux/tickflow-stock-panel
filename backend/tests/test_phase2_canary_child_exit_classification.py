@@ -9,6 +9,7 @@ from app.services.phase2_canary_observability import (
     ChildExecutionTiming,
     classify_child_exception,
     classify_completed_child,
+    classify_running_child,
     sanitize_bounded_stderr,
 )
 
@@ -83,6 +84,11 @@ def test_negative_return_code_is_signal(timing: ChildExecutionTiming) -> None:
             "RELAY_PROCESS_ERROR",
         ),
         (
+            OSError("pipe failed"),
+            "CHILD_PROCESS_ERROR",
+            "RELAY_PROCESS_ERROR",
+        ),
+        (
             RuntimeError("unclassified"),
             "CHILD_EXIT_UNKNOWN",
             "RELAY_EXIT_UNKNOWN",
@@ -116,6 +122,17 @@ def test_proxy_uses_proxy_specific_nonzero_category(
     assert evidence.child_state == "CHILD_NONZERO_EXIT"
     assert evidence.terminal_reason == "PROXY_NONZERO_EXIT"
     assert evidence.component == "proxy"
+
+
+def test_running_proxy_is_not_reported_as_exited_or_timed_out(
+    timing: ChildExecutionTiming,
+) -> None:
+    evidence = classify_running_child("proxy", timing)
+
+    assert evidence.child_state == "CHILD_RUNNING"
+    assert evidence.terminal_reason == "PROXY_RUNNING"
+    assert evidence.exit_code is None
+    assert evidence.signal is None
 
 
 def test_unknown_return_code_is_not_timeout(timing: ChildExecutionTiming) -> None:
@@ -175,4 +192,3 @@ def test_empty_stderr_has_no_excerpt_or_digest() -> None:
     assert evidence.stderr_excerpt is None
     assert evidence.stderr_sha256 is None
     assert evidence.stderr_byte_count == 0
-

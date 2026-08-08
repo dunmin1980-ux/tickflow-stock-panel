@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import stat
@@ -17,6 +18,7 @@ from app.services.phase2_ai_worker_protocol import (
 from app.services.phase2_canary_orchestrator import (
     ApprovedCanaryArtifacts,
     AttemptLedgerStore,
+    BackendError,
     CanaryOrchestratorConfig,
     CanaryRunIdentity,
     CanaryRuntimeContext,
@@ -40,6 +42,26 @@ from app.services.phase2_claims_service import canonical_json_bytes
 FIXED_TIME = "2026-08-02T12:00:00Z"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FACTS_PATH = REPO_ROOT / "reports/phase2_facts/000403SZ_facts.json"
+HISTORICAL_REQUEST_ID = "d59766101b63450e8148541d589a90bf"
+HISTORICAL_HASHES = {
+    "reports/phase2_provider_canary/live_canary/evidence/"
+    f"{HISTORICAL_REQUEST_ID}.json": (
+        "0ef11071083053ac7db825b39492e7e5d24ce27d32cc40c6daa90f43138603e4"
+    ),
+    "reports/phase2_provider_canary/live_canary/rejected/"
+    f"{HISTORICAL_REQUEST_ID}.json": (
+        "ad7bada723a39a4fd0b266a3740e59f3e040d4ce81e79e6e594b6a2b3785e2f4"
+    ),
+    "reports/phase2_provider_canary/consumed_unknown_diagnosis.json": (
+        "be69267d764634ce39ae8311ddbf2dcba11b1709baa5c999aad11bcd17e8d529"
+    ),
+    "reports/tickflow_phase2b_consumed_unknown_diagnosis.md": (
+        "601eb1b07607a09ff662b10793d67bc912b5958df69b28a391826fdcc8628d93"
+    ),
+    "reports/tickflow_phase2b_single_symbol_canary_eval.md": (
+        "a1ec5092f1c7db423d9b27f946c93bb904969b13bb67fb810888ad83ef7e5bd5"
+    ),
+}
 
 
 @pytest.fixture
@@ -205,6 +227,45 @@ def test_recovery_marks_pre_dispatch_and_unknown_dispatch_differently(
 
     assert after_recovered.state is LedgerState.ATTEMPT_CONSUMED_UNKNOWN
     assert after_recovered.provider_attempt_count == 1
+
+
+def test_consumed_historical_attempt_remains_dispatch_ledger_only() -> None:
+    for relative, expected in HISTORICAL_HASHES.items():
+        actual = hashlib.sha256((REPO_ROOT / relative).read_bytes()).hexdigest()
+        assert actual == expected
+    diagnosis = json.loads(
+        (
+            REPO_ROOT
+            / "reports/phase2_provider_canary/consumed_unknown_diagnosis.json"
+        ).read_bytes()
+    )
+    historical_evidence = json.loads(
+        (
+            REPO_ROOT
+            / "reports/phase2_provider_canary/live_canary/evidence"
+            / f"{HISTORICAL_REQUEST_ID}.json"
+        ).read_bytes()
+    )
+    ledger_path = (
+        Path.home()
+        / "Library/Application Support/TickFlowPhase2Canary/runtime-v1"
+        / "attempt-ledger.json"
+    )
+
+    assert diagnosis["classification"] == "DISPATCH_LEDGER_ONLY"
+    assert diagnosis["root_cause"] == (
+        "ROOT_CAUSE_NOT_PROVABLE_WITH_CURRENT_EVIDENCE"
+    )
+    assert historical_evidence["attempt_ledger_state"] == (
+        "ATTEMPT_CONSUMED_UNKNOWN"
+    )
+    assert not any(
+        event in historical_evidence for event in orchestrator_module._PROXY_EVENTS
+    )
+    if ledger_path.exists():
+        assert hashlib.sha256(ledger_path.read_bytes()).hexdigest() == (
+            "ded0f39813dd70657cedd6a8c92669d3508480e97efc6ed44b1a45f9470b5772"
+        )
 
 
 def test_state_root_and_ledger_reject_symlinks_or_unsafe_modes(
@@ -398,6 +459,76 @@ def _run_mock(
     return result, backend
 
 
+class _ReceiptFaultBackend(MockCanaryBackend):
+    def __init__(
+        self,
+        *,
+        receipt_fault: str,
+        relay_response: dict[str, Any],
+    ) -> None:
+        super().__init__(scenario="provider_1s", relay_response=relay_response)
+        self.receipt_fault = receipt_fault
+
+    def dispatch(
+        self,
+        context: CanaryRuntimeContext,
+        *,
+        deadline: float,
+    ) -> Any:
+        result = super().dispatch(context, deadline=deadline)
+        proxy_receipt = context.proxy_output_dir / "proxy-receipt.json"
+        if self.receipt_fault == "missing":
+            proxy_receipt.unlink()
+        elif self.receipt_fault == "malformed":
+            proxy_receipt.write_text('{"invalid":true}\n', encoding="utf-8")
+        return result
+
+
+class _LedgerObservingBackend(MockCanaryBackend):
+    def __init__(
+        self,
+        *,
+        state_root: Path,
+        relay_response: dict[str, Any],
+    ) -> None:
+        super().__init__(scenario="provider_1s", relay_response=relay_response)
+        self.state_root = state_root
+        self.ledger_state_at_archive: LedgerState | None = None
+
+    def archive_evidence(
+        self,
+        context: CanaryRuntimeContext,
+        *,
+        deadline: float,
+    ) -> Any:
+        self.ledger_state_at_archive = AttemptLedgerStore(self.state_root).load().state
+        return super().archive_evidence(context, deadline=deadline)
+
+
+class _SensitiveStderrBackend(MockCanaryBackend):
+    def _record_child_evidence(self) -> None:
+        timing = orchestrator_module.ChildExecutionTiming(
+            started_at="2026-08-08T08:23:20.000000Z",
+            exited_at="2026-08-08T08:23:40.000000Z",
+            started_monotonic_ns=20_000_000_000,
+            exited_monotonic_ns=40_000_000_000,
+        )
+        self._child_evidence["relay"] = orchestrator_module.classify_completed_child(
+            "relay",
+            subprocess.CompletedProcess(
+                ["mock-relay"],
+                1,
+                stdout="",
+                stderr="Authorization: Bearer synthetic-canary-secret-value",
+            ),
+            timing,
+        )
+        self._child_evidence["proxy"] = orchestrator_module.classify_running_child(
+            "proxy",
+            timing,
+        )
+
+
 def test_successful_one_shot_lifecycle_validates_renders_and_cleans(
     orchestrator_config: CanaryOrchestratorConfig,
     artifacts: ApprovedCanaryArtifacts,
@@ -424,7 +555,9 @@ def test_successful_one_shot_lifecycle_validates_renders_and_cleans(
     assert reads == ["read"]
     assert backend.prepare_count == 1
     assert backend.dispatch_count == 1
+    assert backend.archive_count == 1
     assert backend.cleanup_count == 1
+    assert backend.lifecycle == ["prepare", "dispatch", "archive", "cleanup"]
     assert not list(orchestrator_config.work_root.iterdir())
     assert result.secret_file_residue_count == 0
     assert result.container_residue_count == 0
@@ -453,6 +586,164 @@ def test_successful_one_shot_lifecycle_validates_renders_and_cleans(
     )
     serialized += evidence_path.read_text(encoding="utf-8")
     assert "placeholder-canary-secret" not in serialized
+    assert "Authorization" not in serialized
+    receipt_archive = (
+        orchestrator_config.canary_output_root / "receipts" / ("a" * 32)
+    )
+    assert (receipt_archive / "relay-receipt.json").is_file()
+    assert (receipt_archive / "proxy-receipt.json").is_file()
+    assert (receipt_archive / "child-metadata.json").is_file()
+    assert (receipt_archive / "archive-status.json").is_file()
+
+
+def test_cleanup_failure_preserves_archived_receipts(
+    orchestrator_config: CanaryOrchestratorConfig,
+    artifacts: ApprovedCanaryArtifacts,
+    projection: dict[str, Any],
+    relay_response: dict[str, Any],
+) -> None:
+    result, backend = _run_mock(
+        scenario="cleanup_timeout",
+        config=orchestrator_config,
+        artifacts=artifacts,
+        projection=projection,
+        relay_response=relay_response,
+    )
+
+    archive = orchestrator_config.canary_output_root / "receipts" / ("a" * 32)
+    assert result.terminal_state == "CLEANUP_TIMEOUT"
+    assert backend.lifecycle == ["prepare", "dispatch", "archive", "cleanup"]
+    assert (archive / "archive-status.json").is_file()
+    assert (archive / "relay-receipt.json").is_file()
+    assert (archive / "proxy-receipt.json").is_file()
+
+
+@pytest.mark.parametrize(
+    ("receipt_fault", "expected"),
+    [
+        ("missing", "RECEIPT_MISSING"),
+        ("malformed", "RECEIPT_MALFORMED"),
+    ],
+)
+def test_receipt_fault_is_archived_without_copying_untrusted_body(
+    receipt_fault: str,
+    expected: str,
+    orchestrator_config: CanaryOrchestratorConfig,
+    artifacts: ApprovedCanaryArtifacts,
+    projection: dict[str, Any],
+    relay_response: dict[str, Any],
+) -> None:
+    backend = _ReceiptFaultBackend(
+        receipt_fault=receipt_fault,
+        relay_response=relay_response,
+    )
+
+    result = run_single_symbol_canary(
+        config=orchestrator_config,
+        artifacts=artifacts,
+        projection=projection,
+        backend=backend,
+        artifact_verifier=lambda _artifacts: None,
+        secret_reader=lambda: "placeholder-canary-secret",
+        request_id_factory=lambda: "a" * 32,
+        wall_clock=lambda: FIXED_TIME,
+        monotonic=backend.monotonic,
+    )
+
+    archive = orchestrator_config.canary_output_root / "receipts" / ("a" * 32)
+    status = json.loads((archive / "archive-status.json").read_bytes())
+    assert result.terminal_state == expected
+    assert result.receipt_archive_status == expected
+    assert status["archive_status"] == expected
+    assert not (archive / "proxy-receipt.json").exists()
+    assert (archive / "relay-receipt.json").is_file()
+    assert backend.lifecycle == ["prepare", "dispatch", "archive", "cleanup"]
+    serialized = "\n".join(
+        path.read_text(encoding="utf-8") for path in archive.iterdir()
+    )
+    assert "placeholder-canary-secret" not in serialized
+    assert "Authorization" not in serialized
+
+
+def test_archive_precedes_terminal_ledger_transition(
+    orchestrator_config: CanaryOrchestratorConfig,
+    artifacts: ApprovedCanaryArtifacts,
+    projection: dict[str, Any],
+    relay_response: dict[str, Any],
+) -> None:
+    backend = _LedgerObservingBackend(
+        state_root=orchestrator_config.state_root,
+        relay_response=relay_response,
+    )
+
+    result = run_single_symbol_canary(
+        config=orchestrator_config,
+        artifacts=artifacts,
+        projection=projection,
+        backend=backend,
+        artifact_verifier=lambda _artifacts: None,
+        secret_reader=lambda: "placeholder-canary-secret",
+        request_id_factory=lambda: "a" * 32,
+        wall_clock=lambda: FIXED_TIME,
+        monotonic=backend.monotonic,
+    )
+
+    assert result.terminal_state == "SUCCEEDED"
+    assert backend.ledger_state_at_archive is LedgerState.HOST_VALIDATION_COMPLETED
+    assert result.attempt_ledger_state is LedgerState.CLEANUP_COMPLETED
+
+
+def test_pre_dispatch_failure_does_not_publish_false_archive(
+    orchestrator_config: CanaryOrchestratorConfig,
+    artifacts: ApprovedCanaryArtifacts,
+    projection: dict[str, Any],
+    relay_response: dict[str, Any],
+) -> None:
+    result, backend = _run_mock(
+        scenario="host_crash_before_dispatch",
+        config=orchestrator_config,
+        artifacts=artifacts,
+        projection=projection,
+        relay_response=relay_response,
+    )
+
+    target = orchestrator_config.canary_output_root / "receipts" / ("a" * 32)
+    assert result.terminal_state == "HOST_CRASH_BEFORE_DISPATCH"
+    assert backend.archive_count == 0
+    assert not target.exists()
+
+
+def test_sensitive_child_stderr_is_redacted_before_archive(
+    orchestrator_config: CanaryOrchestratorConfig,
+    artifacts: ApprovedCanaryArtifacts,
+    projection: dict[str, Any],
+    relay_response: dict[str, Any],
+) -> None:
+    backend = _SensitiveStderrBackend(
+        scenario="relay_exit_before_candidate",
+        relay_response=relay_response,
+    )
+
+    result = run_single_symbol_canary(
+        config=orchestrator_config,
+        artifacts=artifacts,
+        projection=projection,
+        backend=backend,
+        artifact_verifier=lambda _artifacts: None,
+        secret_reader=lambda: "placeholder-canary-secret",
+        request_id_factory=lambda: "a" * 32,
+        wall_clock=lambda: FIXED_TIME,
+        monotonic=backend.monotonic,
+    )
+
+    archive = orchestrator_config.canary_output_root / "receipts" / ("a" * 32)
+    metadata = json.loads((archive / "child-metadata.json").read_bytes())
+    serialized = (archive / "child-metadata.json").read_text(encoding="utf-8")
+    assert result.terminal_state == "RELAY_NONZERO_EXIT"
+    assert metadata["relay"]["stderr"]["stderr_redacted"] is True
+    assert metadata["relay"]["stderr"]["stderr_excerpt"] is None
+    assert metadata["relay"]["stderr"]["stderr_sha256"] is None
+    assert "synthetic-canary-secret-value" not in serialized
     assert "Authorization" not in serialized
 
 
@@ -546,15 +837,15 @@ def test_host_validation_cannot_publish_after_orchestrator_deadline(
         ),
         (
             "relay_exit_before_candidate",
-            "CANDIDATE_NOT_PRODUCED",
+            "RELAY_NONZERO_EXIT",
             LedgerState.FAILED_AFTER_DISPATCH,
             1,
             "rejected",
         ),
         (
             "proxy_exit_after_request",
-            "ATTEMPT_CONSUMED_UNKNOWN",
-            LedgerState.ATTEMPT_CONSUMED_UNKNOWN,
+            "PROXY_NONZERO_EXIT",
+            LedgerState.FAILED_AFTER_DISPATCH,
             1,
             "rejected",
         ),
@@ -609,7 +900,7 @@ def test_host_validation_cannot_publish_after_orchestrator_deadline(
         ),
         (
             "nonzero_container_exit",
-            "CONTAINER_EXIT_NONZERO",
+            "RELAY_NONZERO_EXIT",
             LedgerState.FAILED_AFTER_DISPATCH,
             1,
             "rejected",
@@ -875,6 +1166,44 @@ class _RecordingExecutor:
         timeout: float,
     ) -> subprocess.CompletedProcess[str]:
         self.calls.append((command, timeout))
+        if command[:2] == ["docker", "inspect"] and "--format" in command:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                json.dumps({"Running": True, "ExitCode": 0, "Error": ""}),
+                "",
+            )
+        if command[:3] == ["docker", "container", "inspect"]:
+            return subprocess.CompletedProcess(command, 1, "", "not found")
+        if command[:3] == ["docker", "network", "inspect"]:
+            return subprocess.CompletedProcess(command, 1, "", "not found")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+
+class _ChildOutcomeExecutor(_RecordingExecutor):
+    def __init__(self, outcome: str) -> None:
+        super().__init__()
+        self.outcome = outcome
+
+    def __call__(
+        self,
+        command: list[str],
+        timeout: float,
+    ) -> subprocess.CompletedProcess[str]:
+        self.calls.append((command, timeout))
+        if command[:3] == ["docker", "start", "--attach"]:
+            if self.outcome == "relay_timeout":
+                raise subprocess.TimeoutExpired(command, timeout, stderr="deadline")
+            if self.outcome == "relay_nonzero":
+                return subprocess.CompletedProcess(command, 1, "", "relay failed")
+            return subprocess.CompletedProcess(command, 0, "", "")
+        if command[:2] == ["docker", "inspect"] and "--format" in command:
+            state = {
+                "Running": self.outcome != "proxy_nonzero",
+                "ExitCode": 7 if self.outcome == "proxy_nonzero" else 0,
+                "Error": "proxy failed" if self.outcome == "proxy_nonzero" else "",
+            }
+            return subprocess.CompletedProcess(command, 0, json.dumps(state), "")
         if command[:3] == ["docker", "container", "inspect"]:
             return subprocess.CompletedProcess(command, 1, "", "not found")
         if command[:3] == ["docker", "network", "inspect"]:
@@ -891,6 +1220,10 @@ def runtime_context(
     root.mkdir(mode=0o700)
     output = root / "output"
     output.mkdir(mode=0o700)
+    proxy_output = root / "proxy-output"
+    proxy_output.mkdir(mode=0o700)
+    receipts = tmp_path / "receipts"
+    receipts.mkdir(mode=0o700)
     request = root / "request.json"
     projection_path = root / "projection.json"
     secret = root / "provider-auth"
@@ -904,6 +1237,8 @@ def runtime_context(
         request_path=request,
         projection_path=projection_path,
         output_dir=output,
+        proxy_output_dir=proxy_output,
+        receipt_archive_dir=receipts / ("a" * 32),
         secret_path=secret,
         proxy_image_id="sha256:" + "4" * 64,
         relay_image_id="sha256:" + "5" * 64,
@@ -950,13 +1285,43 @@ def test_docker_backend_dispatches_relay_once_and_cleanup_is_bounded(
     now = [0.0]
     backend = DockerCanaryBackend(executor=executor, monotonic=lambda: now[0])
     backend.prepare(runtime_context, deadline=90.0)
-    (runtime_context.output_dir / "proxy-receipt.json").write_text(
+    events = {
+        name: orchestrator_module._mock_stage_event(
+            name,
+            occurred=True,
+            index=index,
+            http_status=(
+                200
+                if name in {"response_headers_received", "response_body_completed"}
+                else None
+            ),
+            byte_count=(
+                1
+                if name in {"request_write_completed", "response_body_completed"}
+                else None
+            ),
+        )
+        for index, name in enumerate(orchestrator_module._PROXY_EVENTS, start=1)
+    }
+    (runtime_context.proxy_output_dir / "proxy-receipt.json").write_text(
         json.dumps(
             {
+                "receipt_schema_version": 2,
+                "request_id": runtime_context.request_id,
+                "component": "proxy",
+                "method_allowed": True,
+                "path_allowed": True,
+                "auth_present": True,
+                "tls_verification": True,
+                "redirect_followed": False,
                 "provider_attempt_count": 1,
                 "provider_http_status": 200,
                 "retry_count": 0,
                 "response_category": "FORWARDED",
+                "response_size": 1,
+                "response_bytes": 1,
+                "terminal_status": "FORWARDED",
+                **events,
             }
         )
         + "\n",
@@ -976,6 +1341,30 @@ def test_docker_backend_dispatches_relay_once_and_cleanup_is_bounded(
     assert dispatch.response_received is True
     assert cleanup == CleanupResult(completed=True)
     assert all(timeout <= 75 for command, timeout in executor.calls if "--attach" in command)
+
+
+@pytest.mark.parametrize(
+    ("outcome", "category"),
+    [
+        ("relay_nonzero", "RELAY_NONZERO_EXIT"),
+        ("relay_timeout", "RELAY_TIMEOUT"),
+        ("proxy_nonzero", "PROXY_NONZERO_EXIT"),
+    ],
+)
+def test_docker_child_outcomes_are_not_collapsed_to_timeout(
+    outcome: str,
+    category: str,
+    runtime_context: CanaryRuntimeContext,
+) -> None:
+    executor = _ChildOutcomeExecutor(outcome)
+    backend = DockerCanaryBackend(executor=executor, monotonic=lambda: 0.0)
+    backend.prepare(runtime_context, deadline=90.0)
+
+    with pytest.raises(BackendError, match=category) as raised:
+        backend.dispatch(runtime_context, deadline=90.0)
+
+    assert raised.value.category == category
+    assert raised.value.unknown_dispatch_state is False
 
 
 def test_keychain_reader_uses_fixed_service_once_without_shell_or_output_logging() -> None:
