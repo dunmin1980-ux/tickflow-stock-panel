@@ -69,8 +69,42 @@ _HEX_32 = re.compile(r"^[0-9a-f]{32}$")
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")
 _NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 _DIRECTORY = getattr(os, "O_DIRECTORY", 0)
-
-Requester = Callable[[bytes, int], tuple[int, bytes]]
+_STAGE_EVENT_FIELDS = {
+    "event",
+    "occurred",
+    "wall_time",
+    "monotonic_ns",
+    "http_status",
+    "byte_count",
+}
+_RELAY_EVENTS = (
+    "relay_started",
+    "proxy_connect_started",
+    "proxy_connect_completed",
+    "request_submitted",
+    "response_wait_started",
+    "response_received",
+    "candidate_write_started",
+    "candidate_write_completed",
+    "candidate_ready_published",
+)
+_RECEIPT_FIELDS = {
+    "receipt_schema_version",
+    "request_id",
+    "component",
+    "status",
+    "exit_code",
+    "terminal_status",
+    "error_category",
+    "proxy_http_status",
+    "proxy_request_count",
+    "retry_count",
+    "response_size",
+    "response_sha256",
+    "started_at",
+    "completed_at",
+    *_RELAY_EVENTS,
+}
 
 
 class RelayError(Exception):
@@ -95,6 +129,87 @@ class RelayError(Exception):
 
 def _timestamp() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+class RelayStageRecorder:
+    """Record only sanitized Relay-local progress events."""
+
+    def __init__(
+        self,
+        *,
+        wall_clock: Callable[[], str] = _timestamp,
+        monotonic_ns: Callable[[], int] = time.monotonic_ns,
+    ) -> None:
+        self._wall_clock = wall_clock
+        self._monotonic_ns = monotonic_ns
+        self._events = {
+            name: self._empty_event(name) for name in _RELAY_EVENTS
+        }
+        self.record("relay_started")
+
+    @staticmethod
+    def _empty_event(name: str) -> dict[str, Any]:
+        return {
+            "event": name,
+            "occurred": False,
+            "wall_time": None,
+            "monotonic_ns": None,
+            "http_status": None,
+            "byte_count": None,
+        }
+
+    def record(
+        self,
+        name: str,
+        *,
+        http_status: int | None = None,
+        byte_count: int | None = None,
+    ) -> None:
+        if name not in self._events or self._events[name]["occurred"] is True:
+            raise RelayError("INTERNAL_ERROR")
+        wall_time = self._wall_clock()
+        monotonic_ns = self._monotonic_ns()
+        if (
+            not isinstance(wall_time, str)
+            or not wall_time
+            or isinstance(monotonic_ns, bool)
+            or not isinstance(monotonic_ns, int)
+            or monotonic_ns < 0
+            or (
+                http_status is not None
+                and (
+                    isinstance(http_status, bool)
+                    or not isinstance(http_status, int)
+                    or not 100 <= http_status <= 599
+                )
+            )
+            or (
+                byte_count is not None
+                and (
+                    isinstance(byte_count, bool)
+                    or not isinstance(byte_count, int)
+                    or byte_count < 0
+                )
+            )
+        ):
+            raise RelayError("INTERNAL_ERROR")
+        self._events[name] = {
+            "event": name,
+            "occurred": True,
+            "wall_time": wall_time,
+            "monotonic_ns": monotonic_ns,
+            "http_status": http_status,
+            "byte_count": byte_count,
+        }
+
+    def events(self) -> dict[str, dict[str, Any]]:
+        return {name: dict(value) for name, value in self._events.items()}
+
+
+Requester = Callable[
+    [bytes, int, RelayStageRecorder],
+    tuple[int, bytes],
+]
 
 
 def _canonical_bytes(value: object) -> bytes:
@@ -352,6 +467,7 @@ def publish_candidate(
     request: dict[str, Any],
     projection: dict[str, Any],
     output_dir: str,
+    stage_recorder: RelayStageRecorder | None = None,
 ) -> dict[str, Any]:
     candidate = relay_response.get("claims_candidate")
     if (
@@ -383,12 +499,21 @@ def publish_candidate(
         "request_id": request["request_id"],
     }
     try:
+        if stage_recorder is not None:
+            stage_recorder.record("candidate_write_started")
         _write_atomic(candidate_path, raw, "CANDIDATE_PUBLISH_FAILED")
+        if stage_recorder is not None:
+            stage_recorder.record(
+                "candidate_write_completed",
+                byte_count=len(raw),
+            )
         _write_atomic(
             marker_path,
             _canonical_bytes(marker),
             "READY_MARKER_PUBLISH_FAILED",
         )
+        if stage_recorder is not None:
+            stage_recorder.record("candidate_ready_published")
     except RelayError as exc:
         _remove_published(marker_path)
         _remove_published(candidate_path)
@@ -401,7 +526,11 @@ def publish_candidate(
     return marker
 
 
-def _default_requester(body: bytes, timeout_seconds: int) -> tuple[int, bytes]:
+def _default_requester(
+    body: bytes,
+    timeout_seconds: int,
+    stage_recorder: RelayStageRecorder,
+) -> tuple[int, bytes]:
     deadline = time.monotonic() + timeout_seconds
     connection = http.client.HTTPConnection(
         PROXY_HOST,
@@ -409,6 +538,9 @@ def _default_requester(body: bytes, timeout_seconds: int) -> tuple[int, bytes]:
         timeout=max(0.001, deadline - time.monotonic()),
     )
     try:
+        stage_recorder.record("proxy_connect_started")
+        connection.connect()
+        stage_recorder.record("proxy_connect_completed")
         connection.request(
             "POST",
             PROXY_PATH,
@@ -418,8 +550,10 @@ def _default_requester(body: bytes, timeout_seconds: int) -> tuple[int, bytes]:
                 "Content-Type": "application/json",
             },
         )
+        stage_recorder.record("request_submitted", byte_count=len(body))
         if connection.sock is not None:
             connection.sock.settimeout(max(0.001, deadline - time.monotonic()))
+        stage_recorder.record("response_wait_started")
         response = connection.getresponse()
         status = response.status
         if 300 <= status < 400:
@@ -468,6 +602,11 @@ def _default_requester(body: bytes, timeout_seconds: int) -> tuple[int, bytes]:
                 proxy_request_count=1,
                 http_status=status,
             )
+        stage_recorder.record(
+            "response_received",
+            http_status=status,
+            byte_count=len(raw),
+        )
         return status, raw
     except RelayError:
         raise
@@ -481,13 +620,20 @@ def _receipt(
     *,
     status: str,
     started_at: str,
+    request_id: str | None,
+    stage_recorder: RelayStageRecorder,
     error: RelayError | None,
     response_size: int | None = None,
     response_sha256: str | None = None,
 ) -> dict[str, Any]:
-    return {
-        "receipt_schema_version": 1,
+    terminal_status = error.category if error else "SUCCEEDED"
+    value = {
+        "receipt_schema_version": 2,
+        "request_id": request_id,
+        "component": "relay",
         "status": status,
+        "exit_code": 0 if error is None else 2,
+        "terminal_status": terminal_status,
         "error_category": error.category if error else None,
         "proxy_http_status": error.http_status if error else 200,
         "proxy_request_count": error.proxy_request_count if error else 1,
@@ -496,7 +642,23 @@ def _receipt(
         "response_sha256": error.response_sha256 if error else response_sha256,
         "started_at": started_at,
         "completed_at": _timestamp(),
+        **stage_recorder.events(),
     }
+    if (
+        set(value) != _RECEIPT_FIELDS
+        or (
+            request_id is not None
+            and _HEX_32.fullmatch(request_id) is None
+        )
+        or any(
+            not isinstance(value.get(name), dict)
+            or set(value[name]) != _STAGE_EVENT_FIELDS
+            or value[name].get("event") != name
+            for name in _RELAY_EVENTS
+        )
+    ):
+        raise RelayError("INTERNAL_ERROR")
+    return value
 
 
 def _write_receipt(output: Path, receipt: dict[str, Any]) -> None:
@@ -515,6 +677,8 @@ def run_relay(
     requester: Requester | None = None,
 ) -> dict[str, Any]:
     started_at = _timestamp()
+    stage_recorder = RelayStageRecorder()
+    request_id: str | None = None
     output = Path(output_dir)
     try:
         if (output / "candidate.json").exists() or (
@@ -524,11 +688,13 @@ def run_relay(
         contract = load_runtime_contract(runtime_contract_path)
         projection = _load_projection(Path(projection_path))
         request = _load_request(Path(request_path), projection)
+        request_id = request["request_id"]
         body = _provider_body(request, projection, contract)
         dispatch = requester or _default_requester
         status_code, raw = dispatch(
             body,
             contract["relay_candidate_wait_timeout_seconds"],
+            stage_recorder,
         )
         if not 200 <= status_code < 300:
             raise RelayError(
@@ -547,10 +713,18 @@ def run_relay(
                 response_size=len(raw),
                 response_sha256=response_sha256,
             ) from exc
-        publish_candidate(response, request, projection, output_dir)
+        publish_candidate(
+            response,
+            request,
+            projection,
+            output_dir,
+            stage_recorder,
+        )
         receipt = _receipt(
             status="SUCCEEDED",
             started_at=started_at,
+            request_id=request_id,
+            stage_recorder=stage_recorder,
             error=None,
             response_size=len(raw),
             response_sha256=response_sha256,
@@ -558,13 +732,25 @@ def run_relay(
         _write_receipt(output, receipt)
         return receipt
     except RelayError as exc:
-        receipt = _receipt(status="REJECTED", started_at=started_at, error=exc)
+        receipt = _receipt(
+            status="REJECTED",
+            started_at=started_at,
+            request_id=request_id,
+            stage_recorder=stage_recorder,
+            error=exc,
+        )
         with suppress(RelayError):
             _write_receipt(output, receipt)
         return receipt
     except Exception:
         error = RelayError("INTERNAL_ERROR")
-        receipt = _receipt(status="REJECTED", started_at=started_at, error=error)
+        receipt = _receipt(
+            status="REJECTED",
+            started_at=started_at,
+            request_id=request_id,
+            stage_recorder=stage_recorder,
+            error=error,
+        )
         with suppress(RelayError):
             _write_receipt(output, receipt)
         return receipt

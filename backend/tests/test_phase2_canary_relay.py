@@ -126,9 +126,23 @@ def test_relay_dispatches_once_and_atomically_publishes_candidate(
     )
     calls: list[tuple[bytes, int]] = []
 
-    def requester(body: bytes, timeout_seconds: int) -> tuple[int, bytes]:
+    def requester(
+        body: bytes,
+        timeout_seconds: int,
+        stage_recorder: Any,
+    ) -> tuple[int, bytes]:
         calls.append((body, timeout_seconds))
-        return 200, canonical_json_bytes(relay_response)
+        raw = canonical_json_bytes(relay_response)
+        stage_recorder.record("proxy_connect_started")
+        stage_recorder.record("proxy_connect_completed")
+        stage_recorder.record("request_submitted", byte_count=len(body))
+        stage_recorder.record("response_wait_started")
+        stage_recorder.record(
+            "response_received",
+            http_status=200,
+            byte_count=len(raw),
+        )
+        return 200, raw
 
     receipt = relay_module.run_relay(
         request_path=str(request_path),
@@ -151,6 +165,10 @@ def test_relay_dispatches_once_and_atomically_publishes_candidate(
     }
     assert not list(output.glob("*.partial"))
     assert receipt["status"] == "SUCCEEDED"
+    assert receipt["receipt_schema_version"] == 2
+    assert receipt["request_id"] == REQUEST_ID
+    assert receipt["exit_code"] == 0
+    assert receipt["terminal_status"] == "SUCCEEDED"
     assert receipt["proxy_request_count"] == 1
     assert receipt["retry_count"] == 0
 
@@ -168,9 +186,17 @@ def test_relay_timeout_never_retries_or_publishes_candidate(
     )
     calls = 0
 
-    def requester(_body: bytes, _timeout_seconds: int) -> tuple[int, bytes]:
+    def requester(
+        _body: bytes,
+        _timeout_seconds: int,
+        stage_recorder: Any,
+    ) -> tuple[int, bytes]:
         nonlocal calls
         calls += 1
+        stage_recorder.record("proxy_connect_started")
+        stage_recorder.record("proxy_connect_completed")
+        stage_recorder.record("request_submitted")
+        stage_recorder.record("response_wait_started")
         raise relay_module.RelayError("RELAY_TIMEOUT", proxy_request_count=1)
 
     receipt = relay_module.run_relay(
@@ -183,6 +209,8 @@ def test_relay_timeout_never_retries_or_publishes_candidate(
 
     assert calls == 1
     assert receipt["status"] == "REJECTED"
+    assert receipt["exit_code"] == 2
+    assert receipt["terminal_status"] == "RELAY_TIMEOUT"
     assert receipt["error_category"] == "RELAY_TIMEOUT"
     assert receipt["proxy_request_count"] == 1
     assert receipt["retry_count"] == 0
@@ -204,7 +232,11 @@ def test_existing_candidate_blocks_before_dispatch(
     (output / "candidate.json").write_bytes(b"{}\n")
     calls = 0
 
-    def requester(_body: bytes, _timeout_seconds: int) -> tuple[int, bytes]:
+    def requester(
+        _body: bytes,
+        _timeout_seconds: int,
+        _stage_recorder: Any,
+    ) -> tuple[int, bytes]:
         nonlocal calls
         calls += 1
         return 200, b"{}"

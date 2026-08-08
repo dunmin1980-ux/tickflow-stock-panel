@@ -989,8 +989,8 @@ def test_read_auth_file_rejects_unsafe_inputs(
 @pytest.mark.parametrize(
     ("case", "category", "status"),
     [
-        ("timeout", "TIMEOUT", 200),
-        ("tls", "TLS_BLOCKED", 200),
+        ("timeout", "REQUEST_WRITE_FAILED", 200),
+        ("tls", "REQUEST_WRITE_FAILED", 200),
         ("redirect_301", "REDIRECT_REJECTED", 301),
         ("redirect_307", "REDIRECT_REJECTED", 307),
         ("rate_limit", "RATE_LIMIT_REJECTED", 429),
@@ -1066,8 +1066,23 @@ def test_process_local_request_success_returns_relay_response_and_sanitized_rece
     receipt_path.write_text("{}\n", encoding="utf-8")
     calls: list[tuple[bytes, str]] = []
 
-    def provider_requester(body: bytes, auth: str) -> tuple[int, bytes]:
+    def provider_requester(
+        body: bytes,
+        auth: str,
+        stage_recorder: Any,
+    ) -> tuple[int, bytes]:
         calls.append((body, auth))
+        stage_recorder.record("provider_connect_started")
+        stage_recorder.record("provider_connect_completed")
+        stage_recorder.record("tls_completed")
+        stage_recorder.record("request_write_started")
+        stage_recorder.record("request_write_completed", byte_count=len(body))
+        stage_recorder.record("response_headers_received", http_status=200)
+        stage_recorder.record(
+            "response_body_completed",
+            http_status=200,
+            byte_count=len(provider_body),
+        )
         return 200, provider_body
 
     status, response_body, receipt = proxy_module.process_local_request(
@@ -1097,6 +1112,8 @@ def test_process_local_request_success_returns_relay_response_and_sanitized_rece
     }
     assert set(receipt) == {
         "receipt_schema_version",
+        "request_id",
+        "component",
         "method_allowed",
         "path_allowed",
         "auth_present",
@@ -1107,8 +1124,33 @@ def test_process_local_request_success_returns_relay_response_and_sanitized_rece
         "provider_http_status",
         "response_category",
         "response_size",
+        "response_bytes",
+        "terminal_status",
+        "process_started",
+        "provider_connect_started",
+        "provider_connect_completed",
+        "tls_completed",
+        "request_write_started",
+        "request_write_completed",
+        "response_headers_received",
+        "response_body_completed",
     }
     assert receipt == json.loads(receipt_path.read_bytes())
+    assert receipt["receipt_schema_version"] == 2
+    assert receipt["request_id"] == FIXED_REQUEST_ID
+    assert receipt["component"] == "proxy"
+    assert all(
+        receipt[event]["occurred"] is True
+        for event in (
+            "provider_connect_started",
+            "provider_connect_completed",
+            "tls_completed",
+            "request_write_started",
+            "request_write_completed",
+            "response_headers_received",
+            "response_body_completed",
+        )
+    )
     assert receipt["provider_attempt_count"] == 1
     assert receipt["retry_count"] == 0
     assert receipt["response_category"] == "FORWARDED"
@@ -1144,7 +1186,11 @@ def test_process_local_request_gates_before_auth_or_transport(
     receipt_path.write_text("{}\n", encoding="utf-8")
     calls = 0
 
-    def forbidden_requester(_body: bytes, _auth: str) -> tuple[int, bytes]:
+    def forbidden_requester(
+        _body: bytes,
+        _auth: str,
+        _stage_recorder: Any,
+    ) -> tuple[int, bytes]:
         nonlocal calls
         calls += 1
         raise AssertionError("transport must not run")
@@ -1222,7 +1268,11 @@ def test_process_local_request_maps_transport_failures_without_retry(
     receipt_path.write_text("{}\n", encoding="utf-8")
     calls = 0
 
-    def failing_requester(_body: bytes, _auth: str) -> tuple[int, bytes]:
+    def failing_requester(
+        _body: bytes,
+        _auth: str,
+        _stage_recorder: Any,
+    ) -> tuple[int, bytes]:
         nonlocal calls
         calls += 1
         raise proxy_module.ProxyError(
@@ -1277,7 +1327,11 @@ def test_process_local_request_revalidates_provider_result_boundary(
     receipt_path.write_text("{}\n", encoding="utf-8")
     provider_body = b"x" * 1_048_577 if case == "oversized" else b"{}"
 
-    def provider_requester(_body: bytes, _auth: str) -> tuple[int, bytes]:
+    def provider_requester(
+        _body: bytes,
+        _auth: str,
+        _stage_recorder: Any,
+    ) -> tuple[int, bytes]:
         return provider_status, provider_body
 
     status, response_body, receipt = proxy_module.process_local_request(
@@ -1330,7 +1384,11 @@ def test_process_local_request_rejects_invalid_provider_output(
             response["output"][-1]["content"][0]["text"] = "{}"
         provider_body = json.dumps(response, ensure_ascii=False).encode("utf-8")
 
-    def provider_requester(_body: bytes, _auth: str) -> tuple[int, bytes]:
+    def provider_requester(
+        _body: bytes,
+        _auth: str,
+        _stage_recorder: Any,
+    ) -> tuple[int, bytes]:
         return 200, provider_body
 
     status, response_body, receipt = proxy_module.process_local_request(

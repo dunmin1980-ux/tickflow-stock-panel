@@ -11,8 +11,11 @@ import os
 import re
 import ssl
 import stat
+import tempfile
 import time
 from collections.abc import Callable, Mapping
+from contextlib import suppress
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
@@ -30,7 +33,7 @@ MAXIMUM_BYTES = 1_048_576
 CONTRACT_PATH = Path("/proxy/responses-contract.json")
 RUNTIME_CONTRACT_PATH = Path("/proxy/runtime-contract.json")
 AUTH_PATH = Path("/run/phase2/provider-auth")
-RECEIPT_PATH = Path("/output/receipt.json")
+RECEIPT_PATH = Path("/output/proxy-receipt.json")
 AUTH_MAXIMUM_BYTES = 16_384
 
 _EXPECTED_CONTRACT_SHA256 = (
@@ -43,6 +46,7 @@ _JSON_CONTENT_TYPE = re.compile(
     re.IGNORECASE,
 )
 _NOFOLLOW = os.O_NOFOLLOW if hasattr(os, "O_NOFOLLOW") else 0
+_DIRECTORY = os.O_DIRECTORY if hasattr(os, "O_DIRECTORY") else 0
 _CONTRACT_FIELDS = {
     "contract_schema_version",
     "contract_sha256",
@@ -209,6 +213,8 @@ _SCHEMA_KEYWORDS = {
 _JSON_TYPES = {"object", "array", "string", "integer", "number", "boolean", "null"}
 _RECEIPT_FIELDS = {
     "receipt_schema_version",
+    "request_id",
+    "component",
     "method_allowed",
     "path_allowed",
     "auth_present",
@@ -219,6 +225,33 @@ _RECEIPT_FIELDS = {
     "provider_http_status",
     "response_category",
     "response_size",
+    "response_bytes",
+    "terminal_status",
+    "process_started",
+    "provider_connect_started",
+    "provider_connect_completed",
+    "tls_completed",
+    "request_write_started",
+    "request_write_completed",
+    "response_headers_received",
+    "response_body_completed",
+}
+_PROVIDER_STAGE_EVENTS = (
+    "provider_connect_started",
+    "provider_connect_completed",
+    "tls_completed",
+    "request_write_started",
+    "request_write_completed",
+    "response_headers_received",
+    "response_body_completed",
+)
+_STAGE_EVENT_FIELDS = {
+    "event",
+    "occurred",
+    "wall_time",
+    "monotonic_ns",
+    "http_status",
+    "byte_count",
 }
 _LOCAL_STATUS = {
     "METHOD_BLOCKED": 405,
@@ -236,6 +269,11 @@ _LOCAL_STATUS = {
     "RESPONSE_SCHEMA_BLOCKED": 502,
     "MODEL_IDENTITY_BLOCKED": 502,
     "OUTPUT_EXTRACTION_BLOCKED": 502,
+    "PROVIDER_CONNECT_FAILED": 502,
+    "TLS_FAILED": 502,
+    "REQUEST_WRITE_FAILED": 502,
+    "RESPONSE_HEADERS_NOT_RECEIVED": 502,
+    "RESPONSE_BODY_INCOMPLETE": 502,
 }
 
 
@@ -255,6 +293,86 @@ class ProxyError(Exception):
         self.provider_attempt_count = provider_attempt_count
         self.response_size = response_size
         super().__init__(category)
+
+
+def _wall_timestamp() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+class ProviderStageRecorder:
+    """Record only the approved sanitized Provider boundary events."""
+
+    def __init__(
+        self,
+        *,
+        wall_clock: Callable[[], str] = _wall_timestamp,
+        monotonic_ns: Callable[[], int] = time.monotonic_ns,
+    ) -> None:
+        self._wall_clock = wall_clock
+        self._monotonic_ns = monotonic_ns
+        self._events = {
+            name: self._empty_event(name)
+            for name in ("process_started", *_PROVIDER_STAGE_EVENTS)
+        }
+        self.record("process_started")
+
+    @staticmethod
+    def _empty_event(name: str) -> dict[str, Any]:
+        return {
+            "event": name,
+            "occurred": False,
+            "wall_time": None,
+            "monotonic_ns": None,
+            "http_status": None,
+            "byte_count": None,
+        }
+
+    def record(
+        self,
+        name: str,
+        *,
+        http_status: int | None = None,
+        byte_count: int | None = None,
+    ) -> None:
+        if name not in self._events or self._events[name]["occurred"] is True:
+            raise ProxyError("UPSTREAM_REJECTED")
+        wall_time = self._wall_clock()
+        monotonic_ns = self._monotonic_ns()
+        if (
+            not isinstance(wall_time, str)
+            or not wall_time
+            or isinstance(monotonic_ns, bool)
+            or not isinstance(monotonic_ns, int)
+            or monotonic_ns < 0
+            or (
+                http_status is not None
+                and (
+                    isinstance(http_status, bool)
+                    or not isinstance(http_status, int)
+                    or not 100 <= http_status <= 599
+                )
+            )
+            or (
+                byte_count is not None
+                and (
+                    isinstance(byte_count, bool)
+                    or not isinstance(byte_count, int)
+                    or byte_count < 0
+                )
+            )
+        ):
+            raise ProxyError("UPSTREAM_REJECTED")
+        self._events[name] = {
+            "event": name,
+            "occurred": True,
+            "wall_time": wall_time,
+            "monotonic_ns": monotonic_ns,
+            "http_status": http_status,
+            "byte_count": byte_count,
+        }
+
+    def events(self) -> dict[str, dict[str, Any]]:
+        return {name: dict(value) for name, value in self._events.items()}
 
 
 def _canonical_bytes(value: Any) -> bytes:
@@ -953,7 +1071,10 @@ ConnectionFactory = Callable[
     [str, int, float, ssl.SSLContext],
     http.client.HTTPSConnection,
 ]
-ProviderRequester = Callable[[bytes, str], tuple[int, bytes]]
+ProviderRequester = Callable[
+    [bytes, str, ProviderStageRecorder],
+    tuple[int, bytes],
+]
 
 
 def create_tls_context() -> ssl.SSLContext:
@@ -1020,6 +1141,7 @@ def read_auth_file(path: str = "/run/phase2/provider-auth") -> str:
 def perform_provider_request(
     body: bytes,
     auth_value: str,
+    stage_recorder: ProviderStageRecorder | None = None,
     *,
     connection_factory: ConnectionFactory = default_connection_factory,
     runtime_contract: Mapping[str, Any] | None = None,
@@ -1049,16 +1171,28 @@ def perform_provider_request(
             raise ProxyError("TIMEOUT", provider_attempt_count=1)
         return max(0.001, min(float(read_limit), available))
 
+    recorder = stage_recorder or ProviderStageRecorder()
     connection: http.client.HTTPSConnection | None = None
     try:
         context = create_tls_context()
-        connection = connection_factory(
-            UPSTREAM_HOST,
-            UPSTREAM_PORT,
-            float(runtime["provider_connect_timeout_seconds"]),
-            context,
-        )
-        connection.connect()
+        recorder.record("provider_connect_started")
+        try:
+            connection = connection_factory(
+                UPSTREAM_HOST,
+                UPSTREAM_PORT,
+                float(runtime["provider_connect_timeout_seconds"]),
+                context,
+            )
+            connection.connect()
+        except (ssl.SSLError, ssl.CertificateError) as exc:
+            raise ProxyError("TLS_FAILED", provider_attempt_count=1) from exc
+        except (TimeoutError, OSError, http.client.HTTPException) as exc:
+            raise ProxyError(
+                "PROVIDER_CONNECT_FAILED",
+                provider_attempt_count=1,
+            ) from exc
+        recorder.record("provider_connect_completed")
+        recorder.record("tls_completed")
         if monotonic() > deadline:
             raise ProxyError("TIMEOUT", provider_attempt_count=1)
         if connection.sock is None:
@@ -1066,21 +1200,33 @@ def perform_provider_request(
         connection.sock.settimeout(
             remaining(runtime["provider_read_timeout_seconds"])
         )
-        connection.request(
-            ALLOWED_METHOD,
-            UPSTREAM_PATH,
-            body=body,
-            headers={
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {auth_value}",
-            },
-        )
+        recorder.record("request_write_started")
+        try:
+            connection.request(
+                ALLOWED_METHOD,
+                UPSTREAM_PATH,
+                body=body,
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {auth_value}",
+                },
+            )
+        except (TimeoutError, OSError, http.client.HTTPException) as exc:
+            raise ProxyError("REQUEST_WRITE_FAILED", provider_attempt_count=1) from exc
+        recorder.record("request_write_completed", byte_count=len(body))
         connection.sock.settimeout(
             remaining(runtime["provider_read_timeout_seconds"])
         )
-        response = connection.getresponse()
+        try:
+            response = connection.getresponse()
+        except (TimeoutError, OSError, http.client.HTTPException) as exc:
+            raise ProxyError(
+                "RESPONSE_HEADERS_NOT_RECEIVED",
+                provider_attempt_count=1,
+            ) from exc
         status_code = response.status
+        recorder.record("response_headers_received", http_status=status_code)
         if 300 <= status_code < 400:
             raise ProxyError(
                 "REDIRECT_REJECTED",
@@ -1128,7 +1274,19 @@ def perform_provider_request(
         connection.sock.settimeout(
             remaining(runtime["provider_read_timeout_seconds"])
         )
-        raw = response.read(MAXIMUM_BYTES + 1)
+        try:
+            raw = response.read(MAXIMUM_BYTES + 1)
+        except (TimeoutError, OSError, http.client.HTTPException) as exc:
+            raise ProxyError(
+                "RESPONSE_BODY_INCOMPLETE",
+                provider_http_status=status_code,
+                provider_attempt_count=1,
+            ) from exc
+        recorder.record(
+            "response_body_completed",
+            http_status=status_code,
+            byte_count=len(raw),
+        )
         if monotonic() > deadline:
             raise ProxyError(
                 "TIMEOUT",
@@ -1145,12 +1303,6 @@ def perform_provider_request(
         return status_code, raw
     except ProxyError:
         raise
-    except TimeoutError as exc:
-        raise ProxyError("TIMEOUT", provider_attempt_count=1) from exc
-    except (ssl.SSLError, ssl.CertificateError) as exc:
-        raise ProxyError("TLS_BLOCKED", provider_attempt_count=1) from exc
-    except (OSError, http.client.HTTPException) as exc:
-        raise ProxyError("UPSTREAM_REJECTED", provider_attempt_count=1) from exc
     finally:
         if connection is not None:
             connection.close()
@@ -1159,6 +1311,9 @@ def perform_provider_request(
 def build_receipt(
     *,
     response_category: str,
+    request_id: str | None = None,
+    terminal_status: str | None = None,
+    stage_recorder: ProviderStageRecorder | None = None,
     method_allowed: bool = False,
     path_allowed: bool = False,
     auth_present: bool = False,
@@ -1167,8 +1322,12 @@ def build_receipt(
     response_size: int | None = None,
 ) -> dict[str, Any]:
     """Build the only persisted proxy evidence shape."""
+    recorder = stage_recorder or ProviderStageRecorder()
+    events = recorder.events()
     value = {
-        "receipt_schema_version": 1,
+        "receipt_schema_version": 2,
+        "request_id": request_id,
+        "component": "proxy",
         "method_allowed": method_allowed,
         "path_allowed": path_allowed,
         "auth_present": auth_present,
@@ -1179,11 +1338,20 @@ def build_receipt(
         "provider_http_status": provider_http_status,
         "response_category": response_category,
         "response_size": response_size,
+        "response_bytes": response_size,
+        "terminal_status": terminal_status or response_category,
+        **events,
     }
     if (
         set(value) != _RECEIPT_FIELDS
+        or (
+            request_id is not None
+            and (_HEX_32.fullmatch(request_id) is None)
+        )
         or not isinstance(response_category, str)
         or not response_category
+        or not isinstance(value["terminal_status"], str)
+        or not value["terminal_status"]
         or provider_attempt_count not in {0, 1}
         or (
             provider_http_status is not None
@@ -1193,6 +1361,12 @@ def build_receipt(
             response_size is not None
             and not 0 <= response_size <= MAXIMUM_BYTES + 1
         )
+        or any(
+            not isinstance(value.get(name), Mapping)
+            or set(value[name]) != _STAGE_EVENT_FIELDS
+            or value[name].get("event") != name
+            for name in ("process_started", *_PROVIDER_STAGE_EVENTS)
+        )
     ):
         raise ProxyError("UPSTREAM_REJECTED")
     return value
@@ -1200,17 +1374,40 @@ def build_receipt(
 
 def write_receipt(
     value: Mapping[str, Any],
-    path: str = "/output/receipt.json",
+    path: str = "/output/proxy-receipt.json",
 ) -> None:
-    """Atomically replace the contents of one existing no-follow regular file."""
+    """Publish one sanitized receipt using fsync and same-directory rename."""
     if not isinstance(value, Mapping) or set(value) != _RECEIPT_FIELDS:
         raise ProxyError("UPSTREAM_REJECTED")
+    target = Path(path)
+    try:
+        parent = os.lstat(target.parent)
+        existing = os.lstat(target) if os.path.lexists(target) else None
+    except OSError as exc:
+        raise ProxyError("UPSTREAM_REJECTED") from exc
+    if (
+        stat.S_ISLNK(parent.st_mode)
+        or not stat.S_ISDIR(parent.st_mode)
+        or (
+            existing is not None
+            and (
+                stat.S_ISLNK(existing.st_mode)
+                or not stat.S_ISREG(existing.st_mode)
+            )
+        )
+    ):
+        raise ProxyError("UPSTREAM_REJECTED")
+    descriptor = -1
+    temporary: Path | None = None
     try:
         raw = _canonical_bytes(value)
-        descriptor = os.open(
-            Path(path),
-            os.O_WRONLY | os.O_TRUNC | _NOFOLLOW,
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{target.name}.",
+            suffix=".tmp",
+            dir=target.parent,
         )
+        temporary = Path(temporary_name)
+        os.fchmod(descriptor, 0o600)
     except (OSError, TypeError, ValueError) as exc:
         raise ProxyError("UPSTREAM_REJECTED") from exc
     try:
@@ -1223,10 +1420,23 @@ def write_receipt(
                 raise ProxyError("UPSTREAM_REJECTED")
             offset += written
         os.fsync(descriptor)
+        os.close(descriptor)
+        descriptor = -1
+        os.replace(temporary, target)
+        temporary = None
+        directory = os.open(target.parent, os.O_RDONLY | _DIRECTORY | _NOFOLLOW)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
     except OSError as exc:
         raise ProxyError("UPSTREAM_REJECTED") from exc
     finally:
-        os.close(descriptor)
+        if descriptor >= 0:
+            os.close(descriptor)
+        if temporary is not None:
+            with suppress(OSError):
+                temporary.unlink(missing_ok=True)
 
 
 def _error_body(category: str) -> bytes:
@@ -1251,7 +1461,7 @@ def process_local_request(
     body: bytes,
     contract: Mapping[str, Any],
     auth_path: str = "/run/phase2/provider-auth",
-    receipt_path: str = "/output/receipt.json",
+    receipt_path: str = "/output/proxy-receipt.json",
     provider_requester: ProviderRequester = perform_provider_request,
 ) -> tuple[int, bytes, dict[str, Any]]:
     """Apply every local gate and produce one sanitized receipt."""
@@ -1261,6 +1471,8 @@ def process_local_request(
     provider_attempted = False
     provider_status: int | None = None
     response_size: int | None = None
+    request_id: str | None = None
+    stage_recorder = ProviderStageRecorder()
     try:
         if not method_allowed:
             raise ProxyError("METHOD_BLOCKED")
@@ -1279,13 +1491,18 @@ def process_local_request(
             raise ProxyError("REQUEST_SIZE_BLOCKED")
         envelope = strict_object(body, "REQUEST_SCHEMA_BLOCKED")
         provider_payload = build_provider_request(envelope, contract)
+        request_id = envelope["request"]["request_id"]
         provider_body = _canonical_bytes(provider_payload)
         if len(provider_body) > MAXIMUM_BYTES:
             raise ProxyError("REQUEST_SIZE_BLOCKED")
         auth_value = read_auth_file(auth_path)
         auth_present = True
         provider_attempted = True
-        provider_status, raw_response = provider_requester(provider_body, auth_value)
+        provider_status, raw_response = provider_requester(
+            provider_body,
+            auth_value,
+            stage_recorder,
+        )
         if (
             isinstance(provider_status, bool)
             or not isinstance(provider_status, int)
@@ -1335,6 +1552,9 @@ def process_local_request(
         }
         response_body = _canonical_bytes(relay_response)
         receipt = build_receipt(
+            request_id=request_id,
+            terminal_status="FORWARDED",
+            stage_recorder=stage_recorder,
             method_allowed=True,
             path_allowed=True,
             auth_present=True,
@@ -1351,6 +1571,9 @@ def process_local_request(
             exc.provider_attempt_count,
         )
         receipt = build_receipt(
+            request_id=request_id,
+            terminal_status=exc.category,
+            stage_recorder=stage_recorder,
             method_allowed=method_allowed,
             path_allowed=path_allowed,
             auth_present=auth_present,
