@@ -168,7 +168,8 @@ def test_relay_dispatches_once_and_atomically_publishes_candidate(
     assert receipt["receipt_schema_version"] == 2
     assert receipt["request_id"] == REQUEST_ID
     assert receipt["exit_code"] == 0
-    assert receipt["terminal_status"] == "SUCCEEDED"
+    assert receipt["terminal_status"] == "RELAY_COMPLETED"
+    assert receipt["terminal_reason_source"] == "relay_self"
     assert receipt["proxy_request_count"] == 1
     assert receipt["retry_count"] == 0
 
@@ -211,6 +212,7 @@ def test_relay_timeout_never_retries_or_publishes_candidate(
     assert receipt["status"] == "REJECTED"
     assert receipt["exit_code"] == 2
     assert receipt["terminal_status"] == "RELAY_TIMEOUT"
+    assert receipt["terminal_reason_source"] == "relay_self"
     assert receipt["error_category"] == "RELAY_TIMEOUT"
     assert receipt["proxy_request_count"] == 1
     assert receipt["retry_count"] == 0

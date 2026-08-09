@@ -1,0 +1,22 @@
+{
+  "ai_call_count": 0,
+  "expected_fixed_error_category": "RELAY_PROXY_CONNECT_FAILED",
+  "historical_evidence_frozen_baseline_verified": true,
+  "historical_evidence_sha256": "bcabab31b35bf8805b1474d508f1e8067c62299aa7d501425f98cb77e8b1a01e",
+  "historical_request_id": "3d3e6adbe5b74c98ad18a2efe0fd1d0c",
+  "injected_errno": 111,
+  "injected_failure": "ConnectionRefusedError",
+  "observed_old_error_category": "RELAY_TIMEOUT",
+  "pre_fix_replay_schema_version": 1,
+  "provider_attempt_count": 0,
+  "proxy_request_count": 1,
+  "public_network_request_count": 0,
+  "relay_source_commit": "c54b8277ead1c44b95ea0ff5c0776d9948c8c3fd",
+  "relay_source_path": "docker/phase2-canary-relay/relay.py",
+  "relay_source_sha256": "cafd46a67ba08da1d92c2158771af2d529373a87558bbb392d1b5d9e9f81ee2b",
+  "replay_mode": "DETERMINISTIC_LOCAL_FAULT_REPLAY",
+  "status": "PRE_FIX_FAILURE_REPRODUCED",
+  "superseded_candidate_has_readiness_contract": false,
+  "superseded_candidate_schema_version": 1,
+  "superseded_candidate_sha256": "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b"
+}

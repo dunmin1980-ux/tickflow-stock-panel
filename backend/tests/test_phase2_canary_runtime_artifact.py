@@ -31,10 +31,15 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 OLD_CANDIDATE = (
     REPO_ROOT
     / "reports/phase2_provider_canary/superseded"
-    / "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b.json"
+    / "45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127.json"
 )
 OLD_CANDIDATE_SHA256 = (
-    "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b"
+    "45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127"
+)
+PREVIOUS_CANDIDATE = (
+    REPO_ROOT
+    / "reports/phase2_provider_canary/superseded"
+    / "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b.json"
 )
 LEGACY_CANDIDATE = (
     REPO_ROOT / "reports/phase2_openai_proxy_artifact/approval_candidate.json"
@@ -43,7 +48,8 @@ LEGACY_CANDIDATE_SHA256 = (
     "c7614947da89cae8727ed3c59d1e965dd73bc95450953d3e59c1a89dd0b9f96d"
 )
 BASE_LAYERS = tuple("sha256:" + str(index % 10) * 64 for index in range(43))
-ADDED_LAYERS = tuple("sha256:" + character * 64 for character in "abcdef")
+PROXY_ADDED_LAYERS = tuple("sha256:" + character * 64 for character in "abcdef0")
+RELAY_ADDED_LAYERS = tuple("sha256:" + character * 64 for character in "abcdef")
 
 
 def _base_inspect() -> list[dict[str, Any]]:
@@ -82,6 +88,9 @@ def _image_inspect(
             "org.tickflow.phase2.runtime-contract-sha256": (
                 hashes.runtime_contract_sha256
             ),
+            "org.tickflow.phase2.readiness-contract-sha256": (
+                hashes.readiness_contract_sha256
+            ),
         }
     else:
         image_name = RELAY_IMAGE_NAME
@@ -106,7 +115,10 @@ def _image_inspect(
             "RepoTags": [image_name],
             "RootFS": {
                 "Type": "layers",
-                "Layers": [*BASE_LAYERS, *ADDED_LAYERS],
+                "Layers": [
+                    *BASE_LAYERS,
+                    *(PROXY_ADDED_LAYERS if role == "proxy" else RELAY_ADDED_LAYERS),
+                ],
             },
             "Config": {
                 "User": "65532:65532",
@@ -147,6 +159,9 @@ def _content_evidence(role: str, hashes: Any) -> RuntimeImageContentEvidence:
             else hashes.relay_source_sha256
         ),
         runtime_contract_sha256=hashes.runtime_contract_sha256,
+        readiness_contract_sha256=(
+            hashes.readiness_contract_sha256 if role == "proxy" else None
+        ),
         responses_contract_sha256=(
             hashes.responses_contract_sha256 if role == "proxy" else None
         ),
@@ -156,6 +171,9 @@ def _content_evidence(role: str, hashes: Any) -> RuntimeImageContentEvidence:
 def test_old_approval_candidate_is_preserved_exactly() -> None:
     assert hashlib.sha256(OLD_CANDIDATE.read_bytes()).hexdigest() == (
         OLD_CANDIDATE_SHA256
+    )
+    assert hashlib.sha256(PREVIOUS_CANDIDATE.read_bytes()).hexdigest() == (
+        "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b"
     )
     assert hashlib.sha256(LEGACY_CANDIDATE.read_bytes()).hexdigest() == (
         LEGACY_CANDIDATE_SHA256
@@ -172,6 +190,12 @@ def test_runtime_artifact_input_hashes_bind_every_runtime_component() -> None:
     assert hashes.runtime_contract_sha256 == (
         "34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68"
     )
+    assert hashes.readiness_contract_sha256 == hashlib.sha256(
+        (
+            REPO_ROOT
+            / "docker/phase2-openai-egress-proxy/readiness-contract.json"
+        ).read_bytes()
+    ).hexdigest()
     assert hashes.orchestrator_source_sha256 == hashlib.sha256(
         (REPO_ROOT / "backend/app/services/phase2_canary_orchestrator.py").read_bytes()
     ).hexdigest()
@@ -223,6 +247,10 @@ def test_build_commands_are_fresh_offline_and_secret_free(tmp_path: Path) -> Non
         assert "Authorization" not in serialized
         assert "provider-auth" not in serialized
         assert "api_key" not in serialized.lower()
+    assert any(
+        item == f"READINESS_CONTRACT_SHA256={hashes.readiness_contract_sha256}"
+        for item in proxy_command
+    )
 
 
 @pytest.mark.parametrize("role", ["proxy", "relay"])
@@ -235,7 +263,7 @@ def test_image_inspection_binds_identity_history_and_base_prefix(role: str) -> N
     assert evidence.history_clean is True
     assert evidence.base_rootfs_prefix_verified is True
     assert evidence.runtime_user == "65532:65532"
-    assert evidence.rootfs_layer_count == 49
+    assert evidence.rootfs_layer_count == (50 if role == "proxy" else 49)
 
 
 def test_image_inspection_rejects_sensitive_history() -> None:
@@ -270,6 +298,10 @@ def test_image_content_verification_copies_without_starting_container(
         ),
         "/proxy/runtime-contract.json": (
             REPO_ROOT / "docker/phase2-openai-egress-proxy/runtime-contract.json"
+        ),
+        "/proxy/readiness-contract.json": (
+            REPO_ROOT
+            / "docker/phase2-openai-egress-proxy/readiness-contract.json"
         ),
         "/relay/relay.py": REPO_ROOT / "docker/phase2-canary-relay/relay.py",
         "/relay/runtime-contract.json": (
@@ -327,6 +359,7 @@ def test_candidate_is_deterministic_and_has_exact_launcher_identity() -> None:
         "proxy_image_id",
         "relay_image_id",
         "timeout_contract_sha256",
+        "readiness_contract_sha256",
         "orchestrator_source_sha256",
     }
     assert candidate.provider_attempt_count == 0

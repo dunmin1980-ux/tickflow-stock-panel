@@ -27,6 +27,12 @@ from app.schemas.phase2_canary_provider_config import (
     validate_exact_egress,
 )
 from app.services.phase2_ai_worker_protocol import build_worker_projection
+from app.services.phase2_canary_runtime_artifact import (
+    RuntimeArtifactCandidate,
+    RuntimeArtifactError,
+    RuntimeArtifactInputHashes,
+    compute_runtime_artifact_input_hashes,
+)
 from app.services.phase2_claims_service import canonical_json_bytes
 from app.services.phase2_facts import validate_facts_document
 from app.services.phase2_openai_canary_runner import (
@@ -132,26 +138,136 @@ _PREFLIGHT_BASE_HEAD = "165dc46ec9c10806ddcc4ff5d2171bc24ec7a87e"
 _PREFLIGHT_BRANCH = "codex/tickflow-phase2-ai-review"
 _ALLOWED_PREFLIGHT_DELTA = {
     "backend/app/schemas/phase2_canary_provider_config.py": "M",
-    "backend/app/services/phase2_openai_proxy_contract.py": "A",
-    "backend/app/services/phase2_openai_proxy_artifact.py": "A",
+    "backend/app/services/phase2_canary_observability.py": "A",
+    "backend/app/services/phase2_canary_orchestrator.py": "A",
+    "backend/app/services/phase2_canary_runtime_artifact.py": "A",
+    "backend/app/services/phase2_canary_runtime_contract.json": "A",
+    "backend/app/services/phase2_canary_runtime_contract.py": "A",
     "backend/app/services/phase2_openai_canary_runner.py": "A",
+    "backend/app/services/phase2_openai_proxy_artifact.py": "A",
+    "backend/app/services/phase2_openai_proxy_contract.py": "A",
+    "backend/scripts/build_phase2_canary_runtime_offline.py": "A",
     "backend/scripts/build_phase2_openai_proxy_offline.py": "A",
+    "backend/scripts/run_phase2_canary_local_path_mock_e2e.py": "A",
+    "backend/scripts/run_phase2_single_symbol_canary.py": "A",
     "backend/scripts/validate_phase2_canary_provider_config.py": "M",
-    "backend/tests/test_phase2_openai_proxy_contract.py": "A",
-    "backend/tests/test_phase2_openai_proxy_artifact.py": "A",
-    "backend/tests/test_phase2_openai_canary_runner.py": "A",
+    "backend/tests/test_phase2_canary_child_exit_classification.py": "A",
+    "backend/tests/test_phase2_canary_local_path_mock_e2e.py": "A",
+    "backend/tests/test_phase2_canary_orchestrator.py": "A",
     "backend/tests/test_phase2_canary_provider_config.py": "M",
+    "backend/tests/test_phase2_canary_relay.py": "A",
+    "backend/tests/test_phase2_canary_runtime_artifact.py": "A",
+    "backend/tests/test_phase2_canary_runtime_contract.py": "A",
+    "backend/tests/test_phase2_canary_stage_receipts.py": "A",
+    "backend/tests/test_phase2_openai_canary_runner.py": "A",
+    "backend/tests/test_phase2_openai_proxy_artifact.py": "A",
+    "backend/tests/test_phase2_openai_proxy_contract.py": "A",
+    "backend/tests/test_phase2_proxy_readiness.py": "A",
+    "backend/tests/test_phase2_relay_proxy_contract.py": "A",
+    "docker/phase2-canary-relay/Dockerfile": "A",
+    "docker/phase2-canary-relay/output.placeholder": "A",
+    "docker/phase2-canary-relay/projection.placeholder.json": "A",
+    "docker/phase2-canary-relay/relay.py": "A",
+    "docker/phase2-canary-relay/request.placeholder.json": "A",
+    "docker/phase2-canary-relay/runtime-contract.json": "A",
+    "docker/phase2-mock-provider/mock_provider.py": "M",
     "docker/phase2-openai-egress-proxy/Dockerfile": "A",
     "docker/phase2-openai-egress-proxy/proxy.py": "A",
-    "docker/phase2-openai-egress-proxy/responses-contract.json": "A",
-    "docker/phase2-openai-egress-proxy/secret.placeholder": "A",
+    "docker/phase2-openai-egress-proxy/readiness-contract.json": "A",
     "docker/phase2-openai-egress-proxy/receipt.placeholder.json": "A",
+    "docker/phase2-openai-egress-proxy/responses-contract.json": "A",
+    "docker/phase2-openai-egress-proxy/runtime-contract.json": "A",
+    "docker/phase2-openai-egress-proxy/secret.placeholder": "A",
+    "docs/phase2-single-call-orchestrator-runbook.md": "A",
     "docs/superpowers/plans/2026-08-02-tickflow-phase2b3b-openai-proxy.md": "A",
+    "docs/superpowers/plans/2026-08-02-tickflow-phase2b3b1-runtime-contract.md": "A",
+    "docs/superpowers/plans/2026-08-08-tickflow-phase2b3b4-observability.md": "A",
+    "docs/superpowers/plans/2026-08-09-tickflow-phase2b3b6-runtime-approval-closure.md": "A",
+    "docs/superpowers/specs/2026-08-02-tickflow-phase2b3b1-runtime-contract-design.md": "A",
+    "docs/superpowers/specs/2026-08-08-tickflow-phase2b3b4-observability-design.md": "A",
     "reports/phase2_openai_proxy_artifact/approval_candidate.json": "A",
     "reports/phase2_openai_proxy_artifact/build_evidence.json": "A",
+    "reports/phase2_provider_canary/consumed_unknown_diagnosis.json": "A",
+    "reports/phase2_provider_canary/live_canary/evidence/3d3e6adbe5b74c98ad18a2efe0fd1d0c.json": "A",
+    "reports/phase2_provider_canary/live_canary/evidence/d59766101b63450e8148541d589a90bf.json": "A",
+    "reports/phase2_provider_canary/live_canary/receipts/3d3e6adbe5b74c98ad18a2efe0fd1d0c/archive-status.json": "A",
+    "reports/phase2_provider_canary/live_canary/receipts/3d3e6adbe5b74c98ad18a2efe0fd1d0c/child-metadata.json": "A",
+    "reports/phase2_provider_canary/live_canary/receipts/3d3e6adbe5b74c98ad18a2efe0fd1d0c/relay-receipt.json": "A",
+    "reports/phase2_provider_canary/live_canary/rejected/3d3e6adbe5b74c98ad18a2efe0fd1d0c.json": "A",
+    "reports/phase2_provider_canary/live_canary/rejected/d59766101b63450e8148541d589a90bf.json": "A",
+    "reports/phase2_provider_canary/local_path_mock_e2e.json": "A",
+    "reports/phase2_provider_canary/local_path_pre_fix_replay.json": "A",
+    "reports/phase2_provider_canary/manual_review_checklist.md": "A",
+    "reports/phase2_provider_canary/observability_candidate.json": "A",
+    "reports/phase2_provider_canary/runtime_contract_build_evidence.json": "A",
+    "reports/phase2_provider_canary/runtime_contract_candidate.json": "A",
+    "reports/phase2_provider_canary/runtime_evidence.json": "A",
+    "reports/phase2_provider_canary/superseded/45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127.json": "A",
+    "reports/phase2_provider_canary/superseded/b30c156bee1f5f2a1c8d44004fcbd25934e56a1caf6739ab58ffe7ead0e881fb.json": "A",
+    "reports/phase2_provider_canary/superseded/e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b.json": "A",
+    "reports/tickflow_phase2b_canary_local_path_eval.md": "A",
+    "reports/tickflow_phase2b_canary_observability_eval.md": "A",
     "reports/tickflow_phase2b_canary_provider_preflight_eval.md": "M",
+    "reports/tickflow_phase2b_canary_runtime_contract_eval.md": "A",
+    "reports/tickflow_phase2b_consumed_unknown_diagnosis.md": "A",
     "reports/tickflow_phase2b_single_symbol_canary_eval.md": "A",
 }
+_RUNTIME_CANDIDATE_HASH_PATHS: tuple[tuple[Path, str], ...] = (
+    (Path("docker/phase2-openai-egress-proxy/proxy.py"), "proxy_source_sha256"),
+    (
+        Path("docker/phase2-openai-egress-proxy/Dockerfile"),
+        "proxy_dockerfile_sha256",
+    ),
+    (
+        Path("docker/phase2-openai-egress-proxy/responses-contract.json"),
+        "responses_contract_sha256",
+    ),
+    (
+        Path("docker/phase2-openai-egress-proxy/runtime-contract.json"),
+        "runtime_contract_sha256",
+    ),
+    (
+        Path("docker/phase2-openai-egress-proxy/readiness-contract.json"),
+        "readiness_contract_sha256",
+    ),
+    (Path("docker/phase2-canary-relay/relay.py"), "relay_source_sha256"),
+    (
+        Path("docker/phase2-canary-relay/Dockerfile"),
+        "relay_dockerfile_sha256",
+    ),
+    (
+        Path("docker/phase2-canary-relay/runtime-contract.json"),
+        "runtime_contract_sha256",
+    ),
+    (
+        Path("backend/app/services/phase2_canary_runtime_contract.json"),
+        "runtime_contract_sha256",
+    ),
+    (
+        Path("backend/app/services/phase2_canary_orchestrator.py"),
+        "orchestrator_source_sha256",
+    ),
+    (
+        Path("backend/app/services/phase2_canary_observability.py"),
+        "observability_source_sha256",
+    ),
+    (
+        Path("backend/scripts/run_phase2_single_symbol_canary.py"),
+        "launcher_source_sha256",
+    ),
+    (
+        Path("backend/app/services/phase2_canary_runtime_artifact.py"),
+        "artifact_verifier_source_sha256",
+    ),
+    (
+        Path("backend/scripts/build_phase2_canary_runtime_offline.py"),
+        "artifact_builder_source_sha256",
+    ),
+    (
+        Path("docs/phase2-single-call-orchestrator-runbook.md"),
+        "runbook_sha256",
+    ),
+)
 _PROXY_ARTIFACT_APPROVAL_REQUIRED = "PHASE2B_PROXY_ARTIFACT_APPROVAL_REQUIRED"
 _SYNTHETIC_PROXY_IMAGE_ID = "sha256:" + "0" * 64
 _PROXY_ARTIFACT_EVIDENCE_FIELDS = {
@@ -589,12 +705,61 @@ def _git_command(
     )
 
 
+def runtime_candidate_path_hash_allowlist(
+    hashes: RuntimeArtifactInputHashes,
+) -> dict[Path, str]:
+    """Return the only file-backed hash paths accepted by runtime preflight."""
+    values = hashes.model_dump(mode="json")
+    allowlist = {
+        relative: values[field]
+        for relative, field in _RUNTIME_CANDIDATE_HASH_PATHS
+    }
+    if len(allowlist) != len(_RUNTIME_CANDIDATE_HASH_PATHS):
+        raise CanaryPreflightError("runtime_preflight_hash_allowlist_invalid")
+    return allowlist
+
+
+def validate_runtime_candidate_hash_allowlist(
+    repo_root: Path,
+    candidate_path: Path,
+) -> dict[Path, str]:
+    """Bind a schema-v2 Candidate to current exact sources, including readiness."""
+    try:
+        raw, _value = _read_artifact_report(
+            candidate_path,
+            "runtime_preflight_hash_allowlist_invalid",
+        )
+        candidate = RuntimeArtifactCandidate.model_validate_json(raw)
+        if raw != canonical_json_bytes(candidate.model_dump(mode="json")):
+            raise CanaryPreflightError(
+                "runtime_preflight_hash_allowlist_invalid"
+            )
+        current = compute_runtime_artifact_input_hashes(repo_root)
+        if candidate.inputs != current:
+            raise CanaryPreflightError(
+                "runtime_preflight_hash_allowlist_invalid"
+            )
+        allowlist = runtime_candidate_path_hash_allowlist(candidate.inputs)
+        if Path(
+            "docker/phase2-openai-egress-proxy/readiness-contract.json"
+        ) not in allowlist:
+            raise CanaryPreflightError(
+                "runtime_preflight_hash_allowlist_invalid"
+            )
+        return allowlist
+    except (OSError, RuntimeArtifactError, ValidationError) as exc:
+        raise CanaryPreflightError(
+            "runtime_preflight_hash_allowlist_invalid"
+        ) from exc
+
+
 def read_git_gate(
     repo_root: Path,
     *,
     runner: Callable[..., subprocess.CompletedProcess[Any]] = subprocess.run,
+    hash_allowlist_validator: Callable[[Path, Path], dict[Path, str]] | None = None,
 ) -> GitGateEvidence:
-    """Bind preflight to the frozen base and an allowlisted clean delta."""
+    """Bind preflight to a clean branch and the Candidate's exact source hashes."""
     root = _absolute(repo_root)
     head_result = _git_command(root, ["rev-parse", "HEAD"], runner)
     branch_result = _git_command(root, ["branch", "--show-current"], runner)
@@ -624,14 +789,31 @@ def read_git_gate(
     branch = branch_result.stdout.strip()
     worktree_clean = status_result.stdout == ""
     observed_delta: dict[str, str] = {}
-    changed_paths_allowed = True
+    delta_contract_valid = True
     for raw_line in diff_result.stdout.splitlines():
         fields = raw_line.split("\t")
-        if len(fields) != 2 or fields[1] in observed_delta:
-            changed_paths_allowed = False
+        if (
+            len(fields) != 2
+            or fields[0] not in {"A", "M"}
+            or fields[1] in observed_delta
+        ):
+            delta_contract_valid = False
             continue
         observed_delta[fields[1]] = fields[0]
-    if observed_delta != _ALLOWED_PREFLIGHT_DELTA:
+    try:
+        validator = (
+            hash_allowlist_validator
+            or validate_runtime_candidate_hash_allowlist
+        )
+        validator(
+            root,
+            root / "reports/phase2_provider_canary/runtime_contract_candidate.json",
+        )
+        changed_paths_allowed = (
+            delta_contract_valid
+            and observed_delta == _ALLOWED_PREFLIGHT_DELTA
+        )
+    except (CanaryPreflightError, OSError, ValueError):
         changed_paths_allowed = False
     head_valid = re.fullmatch(r"[0-9a-f]{40}", current_head) is not None
     base_is_ancestor = ancestor_result.returncode == 0

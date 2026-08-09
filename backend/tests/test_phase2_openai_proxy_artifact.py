@@ -33,6 +33,7 @@ DOCKERFILE = CONTEXT / "Dockerfile"
 PROXY_SOURCE = CONTEXT / "proxy.py"
 CONTRACT = CONTEXT / "responses-contract.json"
 RUNTIME_CONTRACT = CONTEXT / "runtime-contract.json"
+READINESS_CONTRACT = CONTEXT / "readiness-contract.json"
 LAUNCHER = REPO_ROOT / "backend/app/services/phase2_openai_canary_runner.py"
 EXPECTED_ENVIRONMENT = [
     "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
@@ -44,7 +45,7 @@ EXPECTED_ENVIRONMENT = [
 BASE_ROOTFS_LAYERS = tuple("sha256:" + str(index % 10) * 64 for index in range(43))
 ADDED_ROOTFS_LAYERS = tuple(
     "sha256:" + character * 64
-    for character in ("a", "b", "c", "d", "e", "f")
+    for character in ("a", "b", "c", "d", "e", "f", "0")
 )
 
 
@@ -65,7 +66,7 @@ def test_dockerfile_is_digest_pinned_shellless_and_exact() -> None:
     assert "USER 65532:65532" in significant
     assert "WORKDIR /proxy" in significant
     assert 'ENTRYPOINT ["/usr/bin/python3", "/proxy/proxy.py"]' in significant
-    assert len([line for line in significant if line.startswith("COPY ")]) == 5
+    assert len([line for line in significant if line.startswith("COPY ")]) == 6
     assert all(
         line.startswith("COPY --chown=65532:65532 ")
         for line in significant
@@ -76,6 +77,7 @@ def test_dockerfile_is_digest_pinned_shellless_and_exact() -> None:
         "proxy.py",
         "responses-contract.json",
         "runtime-contract.json",
+        "readiness-contract.json",
         "secret.placeholder",
         "receipt.placeholder.json",
     ):
@@ -86,6 +88,7 @@ def test_dockerfile_is_digest_pinned_shellless_and_exact() -> None:
         "org.tickflow.phase2.responses-contract-sha256",
         "org.tickflow.phase2.proxy-policy-sha256",
         "org.tickflow.phase2.runtime-contract-sha256",
+        "org.tickflow.phase2.readiness-contract-sha256",
     ):
         assert label in source
     for environment in EXPECTED_ENVIRONMENT:
@@ -111,12 +114,13 @@ def test_dockerfile_is_digest_pinned_shellless_and_exact() -> None:
         assert forbidden not in source
 
 
-def test_dedicated_build_context_is_exactly_six_regular_files() -> None:
+def test_dedicated_build_context_is_exactly_seven_regular_files() -> None:
     assert {path.name for path in CONTEXT.iterdir() if path.is_file()} == {
         "Dockerfile",
         "proxy.py",
         "responses-contract.json",
         "runtime-contract.json",
+        "readiness-contract.json",
         "secret.placeholder",
         "receipt.placeholder.json",
     }
@@ -164,6 +168,7 @@ def test_build_command_is_offline_narrow_and_contains_only_nonsensitive_hashes(
         hashes.responses_contract_sha256,
         hashes.proxy_policy_sha256,
         hashes.runtime_contract_sha256,
+        hashes.readiness_contract_sha256,
     ):
         assert digest in joined
     for forbidden in (
@@ -258,6 +263,9 @@ def _image_inspect(hashes: ArtifactInputHashes) -> list[dict[str, Any]]:
                     "org.tickflow.phase2.runtime-contract-sha256": (
                         hashes.runtime_contract_sha256
                     ),
+                    "org.tickflow.phase2.readiness-contract-sha256": (
+                        hashes.readiness_contract_sha256
+                    ),
                 },
             },
         }
@@ -315,7 +323,7 @@ def test_image_inspection_requires_exact_identity_labels_and_clean_history(
     assert evidence.runtime_user == "65532:65532"
     assert evidence.entrypoint == ("/usr/bin/python3", "/proxy/proxy.py")
     assert evidence.base_rootfs_prefix_verified is True
-    assert evidence.rootfs_layer_count == 49
+    assert evidence.rootfs_layer_count == 50
 
 
 @pytest.mark.parametrize(
@@ -332,6 +340,7 @@ def test_image_inspection_requires_exact_identity_labels_and_clean_history(
         "contract_label",
         "policy_label",
         "runtime_contract_label",
+        "readiness_contract_label",
         "extra_label",
         "base_layer_prefix",
         "extra_layer_count",
@@ -369,6 +378,8 @@ def test_image_inspection_rejects_every_identity_or_layer_mutation(
         labels["org.tickflow.phase2.proxy-policy-sha256"] = "0" * 64
     elif case == "runtime_contract_label":
         labels["org.tickflow.phase2.runtime-contract-sha256"] = "0" * 64
+    elif case == "readiness_contract_label":
+        labels["org.tickflow.phase2.readiness-contract-sha256"] = "0" * 64
     elif case == "extra_label":
         labels["unapproved"] = "value"
     elif case == "base_layer_prefix":
@@ -446,12 +457,14 @@ class _ExecutorDouble:
         source_drift: bool = False,
         contract_drift: bool = False,
         runtime_contract_drift: bool = False,
+        readiness_contract_drift: bool = False,
         fail_cp: bool = False,
         fail_cleanup: bool = False,
     ) -> None:
         self.source_drift = source_drift
         self.contract_drift = contract_drift
         self.runtime_contract_drift = runtime_contract_drift
+        self.readiness_contract_drift = readiness_contract_drift
         self.fail_cp = fail_cp
         self.fail_cleanup = fail_cleanup
         self.calls: list[list[str]] = []
@@ -488,6 +501,10 @@ class _ExecutorDouble:
                 raw = CONTRACT.read_bytes()
                 if self.contract_drift:
                     raw += b"\n"
+            elif values[-2].endswith(":/proxy/readiness-contract.json"):
+                raw = READINESS_CONTRACT.read_bytes()
+                if self.readiness_contract_drift:
+                    raw += b"\n"
             else:
                 raw = RUNTIME_CONTRACT.read_bytes()
                 if self.runtime_contract_drift:
@@ -517,14 +534,21 @@ def test_image_contents_are_copied_from_never_started_container_and_cleaned(
     assert evidence.proxy_source_sha256 == hashes.proxy_source_sha256
     assert evidence.responses_contract_sha256 == hashes.responses_contract_sha256
     assert evidence.runtime_contract_sha256 == hashes.runtime_contract_sha256
-    assert len(executor.calls) == 5
+    assert evidence.readiness_contract_sha256 == hashes.readiness_contract_sha256
+    assert len(executor.calls) == 6
     assert all("start" not in command for command in executor.calls)
     assert executor.calls[-1][:3] == ["docker", "rm", "-f"]
 
 
 @pytest.mark.parametrize(
     "case",
-    ["source_drift", "contract_drift", "runtime_contract_drift", "cp_failure"],
+    [
+        "source_drift",
+        "contract_drift",
+        "runtime_contract_drift",
+        "readiness_contract_drift",
+        "cp_failure",
+    ],
 )
 def test_image_content_failure_always_removes_container(
     case: str,
@@ -533,6 +557,7 @@ def test_image_content_failure_always_removes_container(
         source_drift=case == "source_drift",
         contract_drift=case == "contract_drift",
         runtime_contract_drift=case == "runtime_contract_drift",
+        readiness_contract_drift=case == "readiness_contract_drift",
         fail_cp=case == "cp_failure",
     )
 
@@ -628,6 +653,7 @@ def test_artifact_candidate_rejects_current_source_or_content_drift(
         "proxy_source_sha256",
         "responses_contract_sha256",
         "runtime_contract_sha256",
+        "readiness_contract_sha256",
     ):
         drifted = contents.model_copy(
             update={field: "0" * 64},

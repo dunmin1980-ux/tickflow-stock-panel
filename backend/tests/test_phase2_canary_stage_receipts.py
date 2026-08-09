@@ -33,6 +33,11 @@ PROVIDER_EVENTS = (
     "response_headers_received",
     "response_body_completed",
 )
+PROXY_LOCAL_EVENTS = (
+    "process_started",
+    "proxy_ready",
+    "relay_request_received",
+)
 RELAY_EVENTS = (
     "relay_started",
     "proxy_connect_started",
@@ -253,7 +258,10 @@ def test_proxy_success_records_all_seven_provider_events(
     assert status == 200
     assert body == b'{"ok":true}'
     events = _events(recorder)
-    assert tuple(events) == ("process_started", *PROVIDER_EVENTS)
+    assert tuple(events) == (*PROXY_LOCAL_EVENTS, *PROVIDER_EVENTS)
+    assert events["process_started"]["occurred"] is True
+    assert events["proxy_ready"]["occurred"] is False
+    assert events["relay_request_received"]["occurred"] is False
     assert all(events[name]["occurred"] is True for name in PROVIDER_EVENTS)
     assert all(set(event) == EVENT_FIELDS for event in events.values())
     assert events["response_headers_received"]["http_status"] == 200
@@ -373,7 +381,7 @@ def test_proxy_receipt_is_atomic_strict_and_body_free(
     assert persisted["receipt_schema_version"] == 2
     assert persisted["request_id"] == REQUEST_ID
     assert persisted["component"] == "proxy"
-    assert all(name in persisted for name in ("process_started", *PROVIDER_EVENTS))
+    assert all(name in persisted for name in (*PROXY_LOCAL_EVENTS, *PROVIDER_EVENTS))
     assert not list(tmp_path.glob("*.tmp"))
     assert not list(tmp_path.glob("*.partial"))
     serialized = receipt_path.read_text(encoding="utf-8")
@@ -448,7 +456,8 @@ def test_relay_success_records_all_local_events(
     assert receipt["request_id"] == REQUEST_ID
     assert receipt["component"] == "relay"
     assert receipt["exit_code"] == 0
-    assert receipt["terminal_status"] == "SUCCEEDED"
+    assert receipt["terminal_status"] == "RELAY_COMPLETED"
+    assert receipt["terminal_reason_source"] == "relay_self"
     assert all(receipt[event]["occurred"] is True for event in RELAY_EVENTS)
     assert all(set(receipt[event]) == EVENT_FIELDS for event in RELAY_EVENTS)
     assert receipt == json.loads((output / "relay-receipt.json").read_bytes())
@@ -486,6 +495,7 @@ def test_relay_timeout_stops_at_last_proven_stage(
 
     assert receipt["exit_code"] == 2
     assert receipt["terminal_status"] == "RELAY_TIMEOUT"
+    assert receipt["terminal_reason_source"] == "relay_self"
     assert receipt["response_wait_started"]["occurred"] is True
     assert receipt["response_received"]["occurred"] is False
     assert receipt["candidate_write_started"]["occurred"] is False

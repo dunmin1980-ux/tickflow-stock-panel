@@ -95,6 +95,7 @@ _RECEIPT_FIELDS = {
     "status",
     "exit_code",
     "terminal_status",
+    "terminal_reason_source",
     "error_category",
     "proxy_http_status",
     "proxy_request_count",
@@ -104,6 +105,14 @@ _RECEIPT_FIELDS = {
     "started_at",
     "completed_at",
     *_RELAY_EVENTS,
+}
+_PROTOCOL_ERROR_CATEGORIES = {
+    "EMPTY_RESPONSE",
+    "HTTP_REJECTED",
+    "REDIRECT_REJECTED",
+    "RELAY_PROTOCOL_REJECTED",
+    "RESPONSE_TOO_LARGE",
+    "STRICT_JSON_REJECTED",
 }
 
 
@@ -539,7 +548,15 @@ def _default_requester(
     )
     try:
         stage_recorder.record("proxy_connect_started")
-        connection.connect()
+        try:
+            connection.connect()
+        except TimeoutError as exc:
+            raise RelayError("RELAY_TIMEOUT", proxy_request_count=1) from exc
+        except OSError as exc:
+            raise RelayError(
+                "RELAY_PROXY_CONNECT_FAILED",
+                proxy_request_count=1,
+            ) from exc
         stage_recorder.record("proxy_connect_completed")
         connection.request(
             "POST",
@@ -610,8 +627,10 @@ def _default_requester(
         return status, raw
     except RelayError:
         raise
-    except (TimeoutError, OSError, http.client.HTTPException) as exc:
+    except TimeoutError as exc:
         raise RelayError("RELAY_TIMEOUT", proxy_request_count=1) from exc
+    except (OSError, http.client.HTTPException) as exc:
+        raise RelayError("RELAY_PROTOCOL_REJECTED", proxy_request_count=1) from exc
     finally:
         connection.close()
 
@@ -626,7 +645,14 @@ def _receipt(
     response_size: int | None = None,
     response_sha256: str | None = None,
 ) -> dict[str, Any]:
-    terminal_status = error.category if error else "SUCCEEDED"
+    if error is None:
+        terminal_status = "RELAY_COMPLETED"
+    elif error.category in {"RELAY_TIMEOUT", "RELAY_PROXY_CONNECT_FAILED"}:
+        terminal_status = error.category
+    elif error.category in _PROTOCOL_ERROR_CATEGORIES:
+        terminal_status = "RELAY_PROTOCOL_REJECTED"
+    else:
+        terminal_status = "RELAY_PROCESS_ERROR"
     value = {
         "receipt_schema_version": 2,
         "request_id": request_id,
@@ -634,6 +660,7 @@ def _receipt(
         "status": status,
         "exit_code": 0 if error is None else 2,
         "terminal_status": terminal_status,
+        "terminal_reason_source": "relay_self",
         "error_category": error.category if error else None,
         "proxy_http_status": error.http_status if error else 200,
         "proxy_request_count": error.proxy_request_count if error else 1,

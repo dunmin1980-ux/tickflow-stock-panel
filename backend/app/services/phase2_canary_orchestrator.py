@@ -41,6 +41,7 @@ from app.services.phase2_canary_runtime_contract import (
     load_runtime_contract,
     runtime_contract_sha256,
 )
+from app.services.phase2_canary_runtime_artifact import RuntimeArtifactCandidate
 from app.services.phase2_claims_renderer import (
     render_claims_document,
     validate_rendered_document,
@@ -71,6 +72,8 @@ _EVENT_FIELDS = {
 }
 _PROXY_EVENTS = (
     "process_started",
+    "proxy_ready",
+    "relay_request_received",
     "provider_connect_started",
     "provider_connect_completed",
     "tls_completed",
@@ -85,6 +88,27 @@ _RELAY_EVENTS = (
     "proxy_connect_completed",
     "request_submitted",
     "response_wait_started",
+    "response_received",
+    "candidate_write_started",
+    "candidate_write_completed",
+    "candidate_ready_published",
+)
+_STAGE_TIE_ORDER = (
+    "process_started",
+    "proxy_ready",
+    "relay_started",
+    "proxy_connect_started",
+    "proxy_connect_completed",
+    "request_submitted",
+    "relay_request_received",
+    "provider_connect_started",
+    "provider_connect_completed",
+    "tls_completed",
+    "request_write_started",
+    "request_write_completed",
+    "response_wait_started",
+    "response_headers_received",
+    "response_body_completed",
     "response_received",
     "candidate_write_started",
     "candidate_write_completed",
@@ -115,6 +139,7 @@ _RELAY_RECEIPT_FIELDS = {
     "status",
     "exit_code",
     "terminal_status",
+    "terminal_reason_source",
     "error_category",
     "proxy_http_status",
     "proxy_request_count",
@@ -124,6 +149,28 @@ _RELAY_RECEIPT_FIELDS = {
     "started_at",
     "completed_at",
     *_RELAY_EVENTS,
+}
+_RELAY_TERMINAL_STATUSES = {
+    "RELAY_COMPLETED",
+    "RELAY_TIMEOUT",
+    "RELAY_NONZERO_EXIT",
+    "RELAY_PROCESS_ERROR",
+    "RELAY_SIGNALLED",
+    "RELAY_START_FAILED",
+    "RELAY_PROXY_CONNECT_FAILED",
+    "RELAY_PROTOCOL_REJECTED",
+}
+_TERMINAL_REASON_SOURCES = {
+    "relay_self",
+    "host_child_process",
+    "host_timeout",
+}
+_PROXY_READY_FIELDS = {
+    "request_id",
+    "proxy_ready",
+    "wall_time",
+    "monotonic_ns",
+    "listener_ready",
 }
 _SENSITIVE_EVIDENCE = re.compile(
     r"Authorization\s*:|Bearer\s+[^\s]+|"
@@ -626,6 +673,7 @@ class ApprovedCanaryArtifacts(_StrictFrozenModel):
     proxy_image_id: str
     relay_image_id: str
     timeout_contract_sha256: str
+    readiness_contract_sha256: str
     orchestrator_source_sha256: str
 
     @field_validator(
@@ -633,6 +681,7 @@ class ApprovedCanaryArtifacts(_StrictFrozenModel):
         "facts_sha256",
         "projection_sha256",
         "timeout_contract_sha256",
+        "readiness_contract_sha256",
         "orchestrator_source_sha256",
     )
     @classmethod
@@ -893,6 +942,39 @@ def _read_regular_unrestricted(path: Path, category: str) -> bytes:
     return raw
 
 
+def _read_trusted_runtime_approval(path: Path) -> bytes:
+    category = "runtime_approval_invalid"
+    try:
+        directory = os.lstat(path.parent)
+        before = os.lstat(path)
+    except OSError as exc:
+        raise OrchestratorError(category) from exc
+    current_uid = os.geteuid()
+    if (
+        stat.S_ISLNK(directory.st_mode)
+        or not stat.S_ISDIR(directory.st_mode)
+        or stat.S_IMODE(directory.st_mode) != 0o700
+        or directory.st_uid != current_uid
+        or stat.S_ISLNK(before.st_mode)
+        or not stat.S_ISREG(before.st_mode)
+        or stat.S_IMODE(before.st_mode) != 0o600
+        or before.st_uid != current_uid
+    ):
+        raise OrchestratorError(category)
+    raw = _read_regular_unrestricted(path, category)
+    try:
+        after = os.lstat(path)
+    except OSError as exc:
+        raise OrchestratorError(category) from exc
+    if (
+        (after.st_dev, after.st_ino) != (before.st_dev, before.st_ino)
+        or stat.S_IMODE(after.st_mode) != 0o600
+        or after.st_uid != current_uid
+    ):
+        raise OrchestratorError(category)
+    return raw
+
+
 def _valid_stage_event(value: object, expected_name: str) -> bool:
     if not isinstance(value, dict) or set(value) != _EVENT_FIELDS:
         return False
@@ -944,6 +1026,27 @@ def _validate_stage_receipt(
         if component == "relay"
         else _PROXY_RECEIPT_FIELDS
     )
+    relay_contract_invalid = component == "relay" and (
+        value.get("terminal_reason_source") not in _TERMINAL_REASON_SOURCES
+        or value.get("terminal_status") not in _RELAY_TERMINAL_STATUSES
+        or (
+            value.get("status") == "SUCCEEDED"
+            and (
+                value.get("exit_code") != 0
+                or value.get("terminal_status") != "RELAY_COMPLETED"
+                or value.get("error_category") is not None
+            )
+        )
+        or (
+            value.get("status") == "REJECTED"
+            and (
+                value.get("exit_code") != 2
+                or value.get("terminal_status") == "RELAY_COMPLETED"
+                or not isinstance(value.get("error_category"), str)
+            )
+        )
+        or value.get("status") not in {"SUCCEEDED", "REJECTED"}
+    )
     if (
         set(value) != fields
         or value.get("receipt_schema_version") != 2
@@ -953,6 +1056,7 @@ def _validate_stage_receipt(
         or any(
             not _valid_stage_event(value.get(name), name) for name in events
         )
+        or relay_contract_invalid
     ):
         raise OrchestratorError("RECEIPT_MALFORMED")
     serialized = canonical_json_bytes(value).decode("utf-8")
@@ -1016,6 +1120,27 @@ def _abnormal_child_reason(
     return None
 
 
+def _select_last_proven_stage(
+    receipt_values: Mapping[str, Mapping[str, Any]],
+) -> str | None:
+    rank = {name: index for index, name in enumerate(_STAGE_TIE_ORDER)}
+    candidates: list[tuple[int, str, int, str]] = []
+    for component, events in (("proxy", _PROXY_EVENTS), ("relay", _RELAY_EVENTS)):
+        receipt = receipt_values.get(component)
+        if receipt is None:
+            continue
+        for name in events:
+            event = receipt.get(name)
+            if not isinstance(event, Mapping) or event.get("occurred") is not True:
+                continue
+            monotonic_ns = event.get("monotonic_ns")
+            wall_time = event.get("wall_time")
+            if not isinstance(monotonic_ns, int) or not isinstance(wall_time, str):
+                continue
+            candidates.append((monotonic_ns, wall_time, rank[name], name))
+    return max(candidates)[-1] if candidates else None
+
+
 def _archive_stage_evidence(
     context: CanaryRuntimeContext,
     child_evidence: Mapping[str, ChildProcessEvidence],
@@ -1026,9 +1151,11 @@ def _archive_stage_evidence(
         "proxy": context.proxy_output_dir / "proxy-receipt.json",
     }
     loaded: dict[str, bytes] = {}
+    receipt_values: dict[str, dict[str, Any]] = {}
     statuses: dict[str, str] = {}
     proven_events: dict[str, tuple[str, ...]] = {}
     for component in ("relay", "proxy"):
+        _value: dict[str, Any] | None = None
         cached = (validated_receipts or {}).get(component)
         if cached is None:
             raw, _value, status, events = _load_stage_receipt(
@@ -1049,11 +1176,26 @@ def _archive_stage_evidence(
                 raw, status = cached, "VALID"
         statuses[component] = status
         proven_events[component] = events
+        if _value is not None:
+            receipt_values[component] = _value
         if raw is not None:
             loaded[component] = raw
 
+    proxy_receipt = receipt_values.get("proxy")
+    pre_dispatch_archive = (
+        statuses.get("proxy") == "VALID"
+        and statuses.get("relay") == "RECEIPT_MISSING"
+        and proxy_receipt is not None
+        and proxy_receipt.get("provider_attempt_count") == 0
+        and proxy_receipt.get("response_category") == "PROXY_READY"
+        and proxy_receipt.get("terminal_status") == "PROXY_READY"
+        and proven_events.get("proxy") == ("process_started", "proxy_ready")
+        and "relay" not in child_evidence
+    )
     if "RECEIPT_MALFORMED" in statuses.values():
         archive_status = "RECEIPT_MALFORMED"
+    elif pre_dispatch_archive:
+        archive_status = "PRE_DISPATCH_ARCHIVED"
     elif "RECEIPT_MISSING" in statuses.values():
         archive_status = "RECEIPT_MISSING"
     elif set(child_evidence) != {"relay", "proxy"}:
@@ -1061,12 +1203,26 @@ def _archive_stage_evidence(
     else:
         archive_status = "ARCHIVED"
 
-    last_proven_stage = None
-    for component in ("proxy", "relay"):
-        if proven_events[component]:
-            last_proven_stage = proven_events[component][-1]
-            break
-    child_terminal_reason = _abnormal_child_reason(child_evidence)
+    last_proven_stage = _select_last_proven_stage(receipt_values)
+    host_child_terminal_reason = _abnormal_child_reason(child_evidence)
+    child_terminal_reason = host_child_terminal_reason
+    terminal_reason_source = (
+        "host_timeout"
+        if host_child_terminal_reason == "ORCHESTRATOR_TIMEOUT"
+        else "host_child_process"
+        if host_child_terminal_reason is not None
+        else None
+    )
+    relay_receipt = receipt_values.get("relay")
+    if (
+        host_child_terminal_reason == "RELAY_NONZERO_EXIT"
+        and relay_receipt is not None
+        and relay_receipt.get("status") == "REJECTED"
+        and relay_receipt.get("terminal_reason_source") == "relay_self"
+        and relay_receipt.get("terminal_status") in _RELAY_TERMINAL_STATUSES
+    ):
+        child_terminal_reason = relay_receipt["terminal_status"]
+        terminal_reason_source = "relay_self"
     child_payload = {
         "child_metadata_schema_version": 1,
         "request_id": context.request_id,
@@ -1090,10 +1246,16 @@ def _archive_stage_evidence(
         "child_metadata_status": (
             "VALID"
             if set(child_evidence) == {"relay", "proxy"}
-            else "MISSING"
+            else (
+                "PARTIAL_PRE_DISPATCH"
+                if pre_dispatch_archive and set(child_evidence) == {"proxy"}
+                else "MISSING"
+            )
         ),
         "last_proven_stage": last_proven_stage,
         "child_terminal_reason": child_terminal_reason,
+        "host_child_terminal_reason": host_child_terminal_reason,
+        "terminal_reason_source": terminal_reason_source,
         "retry_count": 0,
     }
     for value in (child_payload, status_payload):
@@ -1469,7 +1631,6 @@ def run_single_symbol_canary(
         if (
             context is None
             or ledger is None
-            or ledger.provider_attempt_count == 0
         ):
             return archive
         try:
@@ -1573,7 +1734,10 @@ def run_single_symbol_canary(
             trade_date="2026-07-31",
             provider="openai",
             endpoint_alias="openai_responses_v1",
-            **artifacts.model_dump(mode="python"),
+            **artifacts.model_dump(
+                mode="python",
+                exclude={"readiness_contract_sha256"},
+            ),
         )
         ledger = store.prepare(identity, timestamp=wall_clock())
         workdir = Path(tempfile.mkdtemp(prefix="phase2-canary-", dir=config.work_root))
@@ -1714,7 +1878,16 @@ def run_single_symbol_canary(
         if archive.child_terminal_reason is not None:
             category = archive.child_terminal_reason
             unknown_dispatch_state = category.endswith("_EXIT_UNKNOWN")
-        if archive.status not in {"NOT_RUN", "ARCHIVED"}:
+        if (
+            ledger is not None
+            and ledger.provider_attempt_count > 0
+            and archive.status
+            not in {
+                "NOT_RUN",
+                "ARCHIVED",
+                "PRE_DISPATCH_ARCHIVED",
+            }
+        ):
             category = archive.status
             unknown_dispatch_state = False
         if store is not None and ledger is not None:
@@ -1765,7 +1938,16 @@ def run_single_symbol_canary(
         category = _terminal_category(exc)
         if archive.child_terminal_reason is not None:
             category = archive.child_terminal_reason
-        if archive.status not in {"NOT_RUN", "ARCHIVED"}:
+        if (
+            ledger is not None
+            and ledger.provider_attempt_count > 0
+            and archive.status
+            not in {
+                "NOT_RUN",
+                "ARCHIVED",
+                "PRE_DISPATCH_ARCHIVED",
+            }
+        ):
             category = archive.status
         if store is not None and ledger is not None and ledger.state not in _TERMINAL_STATES:
             target = (
@@ -1875,7 +2057,7 @@ class MockCanaryBackend:
 
     def prepare(
         self,
-        _context: CanaryRuntimeContext,
+        context: CanaryRuntimeContext,
         *,
         deadline: float,
     ) -> None:
@@ -1883,6 +2065,47 @@ class MockCanaryBackend:
         self.lifecycle.append("prepare")
         self.prepare_count += 1
         if self.scenario == "host_crash_before_dispatch":
+            proxy_events = {
+                name: _mock_stage_event(
+                    name,
+                    occurred=name in {"process_started", "proxy_ready"},
+                    index=index,
+                )
+                for index, name in enumerate(_PROXY_EVENTS, start=1)
+            }
+            _write_private_file(
+                context.proxy_output_dir / "proxy-receipt.json",
+                canonical_json_bytes(
+                    {
+                        "receipt_schema_version": 2,
+                        "request_id": context.request_id,
+                        "component": "proxy",
+                        "method_allowed": False,
+                        "path_allowed": False,
+                        "auth_present": False,
+                        "tls_verification": True,
+                        "redirect_followed": False,
+                        "provider_attempt_count": 0,
+                        "retry_count": 0,
+                        "provider_http_status": None,
+                        "response_category": "PROXY_READY",
+                        "response_size": None,
+                        "response_bytes": None,
+                        "terminal_status": "PROXY_READY",
+                        **proxy_events,
+                    }
+                ),
+            )
+            timing = ChildExecutionTiming(
+                started_at="2026-08-08T08:23:20.000000Z",
+                exited_at="2026-08-08T08:23:20.000000Z",
+                started_monotonic_ns=20_000_000_000,
+                exited_monotonic_ns=20_000_000_000,
+            )
+            self._child_evidence["proxy"] = classify_running_child(
+                "proxy",
+                timing,
+            )
             raise BackendError("HOST_CRASH_BEFORE_DISPATCH")
 
     def _publish(self, context: CanaryRuntimeContext, value: Mapping[str, Any]) -> None:
@@ -1998,9 +2221,14 @@ class MockCanaryBackend:
             if self.scenario in {"relay_exit_before_candidate", "nonzero_container_exit"}
             else "RELAY_TIMEOUT"
             if self.scenario == "provider_over_60s"
-            else "REJECTED"
+            else "RELAY_PROCESS_ERROR"
             if relay_failed
-            else "SUCCEEDED"
+            else "RELAY_COMPLETED"
+        )
+        relay_terminal_source = (
+            "relay_self"
+            if self.scenario in {"provider_over_60s"} or not relay_failed
+            else "host_child_process"
         )
         relay_receipt = {
             "receipt_schema_version": 2,
@@ -2009,6 +2237,7 @@ class MockCanaryBackend:
             "status": "REJECTED" if relay_failed else "SUCCEEDED",
             "exit_code": 2 if relay_failed else 0,
             "terminal_status": relay_terminal,
+            "terminal_reason_source": relay_terminal_source,
             "error_category": relay_terminal if relay_failed else None,
             "proxy_http_status": 200,
             "proxy_request_count": 1,
@@ -2216,11 +2445,13 @@ class DockerCanaryBackend:
         monotonic: Callable[[], float] = time.monotonic,
         monotonic_ns: Callable[[], int] = time.monotonic_ns,
         wall_clock: Callable[[], str] = _wall_timestamp,
+        waiter: Callable[[float], None] = time.sleep,
     ) -> None:
         self.executor = executor
         self.monotonic = monotonic
         self.monotonic_ns = monotonic_ns
         self.wall_clock = wall_clock
+        self.waiter = waiter
         self._names: dict[str, str] = {}
         self._child_evidence: dict[str, ChildProcessEvidence] = {}
         self._validated_receipts: dict[str, bytes] = {}
@@ -2264,6 +2495,9 @@ class DockerCanaryBackend:
         started_monotonic_ns = self.monotonic_ns()
         remaining = self._remaining(deadline, f"{component.upper()}_TIMEOUT")
         timeout = min(remaining, maximum_timeout or remaining)
+        host_timeout_is_binding = (
+            maximum_timeout is not None and remaining < maximum_timeout
+        )
         try:
             result = self.executor(command, timeout)
         except Exception as exc:
@@ -2277,6 +2511,11 @@ class DockerCanaryBackend:
                 ),
             )
             evidence = classify_child_exception(component, exc, timing)
+            if isinstance(exc, subprocess.TimeoutExpired) and host_timeout_is_binding:
+                evidence = replace(
+                    evidence,
+                    terminal_reason="ORCHESTRATOR_TIMEOUT",
+                )
             self._child_evidence[component] = evidence
             raise BackendError(
                 evidence.terminal_reason,
@@ -2382,6 +2621,49 @@ class DockerCanaryBackend:
             "relay": f"phase2-canary-relay-worker-{suffix}",
         }
 
+    def _wait_for_proxy_ready(
+        self,
+        context: CanaryRuntimeContext,
+        *,
+        deadline: float,
+    ) -> None:
+        ready_path = context.proxy_output_dir / "proxy-ready.json"
+        readiness_deadline = min(
+            deadline,
+            self.monotonic()
+            + float(context.runtime_contract["provider_connect_timeout_seconds"]),
+        )
+        while self.monotonic() <= readiness_deadline:
+            if ready_path.exists() or ready_path.is_symlink():
+                try:
+                    raw = _read_regular_unrestricted(
+                        ready_path,
+                        "PROXY_READINESS_INVALID",
+                    )
+                    value = _strict_json_bytes(raw, "PROXY_READINESS_INVALID")
+                except OrchestratorError as exc:
+                    raise BackendError("PROXY_READINESS_INVALID") from exc
+                if (
+                    set(value) != _PROXY_READY_FIELDS
+                    or value.get("request_id") != context.request_id
+                    or value.get("proxy_ready") is not True
+                    or value.get("listener_ready") is not True
+                    or not isinstance(value.get("wall_time"), str)
+                    or not value["wall_time"]
+                    or isinstance(value.get("monotonic_ns"), bool)
+                    or not isinstance(value.get("monotonic_ns"), int)
+                    or value["monotonic_ns"] < 0
+                    or raw != canonical_json_bytes(value)
+                    or _SENSITIVE_EVIDENCE.search(raw.decode("utf-8"))
+                ):
+                    raise BackendError("PROXY_READINESS_INVALID")
+                return
+            remaining = readiness_deadline - self.monotonic()
+            if remaining <= 0:
+                break
+            self.waiter(min(0.05, remaining))
+        raise BackendError("PROXY_READINESS_TIMEOUT")
+
     def prepare(
         self,
         context: CanaryRuntimeContext,
@@ -2430,6 +2712,12 @@ class DockerCanaryBackend:
                     "/output",
                     readonly=False,
                 ),
+                "--mount",
+                _mount(
+                    context.request_path,
+                    "/input/request.json",
+                    readonly=True,
+                ),
                 context.proxy_image_id,
             ],
             [
@@ -2473,6 +2761,7 @@ class DockerCanaryBackend:
                 deadline=deadline,
                 category="RUNTIME_PREPARE_FAILED",
             )
+        self._wait_for_proxy_ready(context, deadline=deadline)
 
     def dispatch(
         self,
@@ -2711,19 +3000,13 @@ def load_installed_runtime_approval(
             candidate_path,
             "runtime_candidate_invalid",
         )
-        approval_raw = _read_regular_unrestricted(
-            approval_path,
-            "runtime_approval_invalid",
-        )
-        approval_metadata = os.lstat(approval_path)
-        if stat.S_IMODE(approval_metadata.st_mode) != 0o600:
-            raise OrchestratorError("runtime_approval_invalid")
-        candidate = _strict_json_object(
-            candidate_path,
+        approval_raw = _read_trusted_runtime_approval(approval_path)
+        candidate = _strict_json_bytes(
+            candidate_raw,
             "runtime_candidate_invalid",
         )
-        approval = _strict_json_object(
-            approval_path,
+        approval = _strict_json_bytes(
+            approval_raw,
             "runtime_approval_invalid",
         )
     except OrchestratorError as exc:
@@ -2732,6 +3015,16 @@ def load_installed_runtime_approval(
         raise OrchestratorError("runtime_approval_invalid") from exc
     if approval_raw != canonical_json_bytes(approval):
         raise OrchestratorError("runtime_approval_invalid")
+    try:
+        candidate_model = RuntimeArtifactCandidate.model_validate_json(
+            candidate_raw
+        )
+    except ValidationError as exc:
+        raise OrchestratorError("runtime_candidate_invalid") from exc
+    if candidate_raw != canonical_json_bytes(
+        candidate_model.model_dump(mode="json")
+    ):
+        raise OrchestratorError("runtime_candidate_invalid")
     expected_approval_fields = {
         "runtime_approval_schema_version",
         "approved_candidate_sha256",
@@ -2744,9 +3037,9 @@ def load_installed_runtime_approval(
     candidate_sha256 = hashlib.sha256(candidate_raw).hexdigest()
     if (
         set(approval) != expected_approval_fields
-        or approval.get("runtime_approval_schema_version") != 1
+        or approval.get("runtime_approval_schema_version") != 2
         or approval.get("approval_scope")
-        != "single_symbol_openai_canary_runtime_v1"
+        != "single_symbol_openai_canary_runtime_v2"
         or approval.get("symbol") != "000403.SZ"
         or approval.get("provider") != "openai"
         or approval.get("maximum_provider_attempts") != 1
@@ -2758,23 +3051,7 @@ def load_installed_runtime_approval(
         )
     ):
         raise OrchestratorError("runtime_approval_invalid")
-    identity = candidate.get("artifact_identity")
-    expected_identity_fields = {
-        "facts_sha256",
-        "projection_sha256",
-        "proxy_image_id",
-        "relay_image_id",
-        "timeout_contract_sha256",
-        "orchestrator_source_sha256",
-    }
-    if (
-        candidate.get("runtime_candidate_schema_version") != 1
-        or candidate.get("status")
-        != "PHASE2B_CANARY_RUNTIME_CONTRACT_READY_FOR_REAPPROVAL"
-        or not isinstance(identity, dict)
-        or set(identity) != expected_identity_fields
-    ):
-        raise OrchestratorError("runtime_candidate_invalid")
+    identity = candidate_model.artifact_identity.model_dump(mode="json")
     try:
         return ApprovedCanaryArtifacts.model_validate(
             {

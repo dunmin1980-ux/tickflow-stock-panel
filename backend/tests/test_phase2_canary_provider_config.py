@@ -34,34 +34,22 @@ from scripts.validate_phase2_canary_provider_config import (
     read_proxy_artifact_approval,
     read_runtime_residue,
     run_canary_preflight,
+    runtime_candidate_path_hash_allowlist,
     validate_offline_canary_inputs,
     validate_proxy_artifact_approval,
+    validate_runtime_candidate_hash_allowlist,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-_EXPECTED_PREFLIGHT_DELTA = {
-    "backend/app/schemas/phase2_canary_provider_config.py": "M",
-    "backend/app/services/phase2_openai_proxy_contract.py": "A",
-    "backend/app/services/phase2_openai_proxy_artifact.py": "A",
-    "backend/app/services/phase2_openai_canary_runner.py": "A",
-    "backend/scripts/build_phase2_openai_proxy_offline.py": "A",
-    "backend/scripts/validate_phase2_canary_provider_config.py": "M",
-    "backend/tests/test_phase2_openai_proxy_contract.py": "A",
-    "backend/tests/test_phase2_openai_proxy_artifact.py": "A",
-    "backend/tests/test_phase2_openai_canary_runner.py": "A",
-    "backend/tests/test_phase2_canary_provider_config.py": "M",
-    "docker/phase2-openai-egress-proxy/Dockerfile": "A",
-    "docker/phase2-openai-egress-proxy/proxy.py": "A",
-    "docker/phase2-openai-egress-proxy/responses-contract.json": "A",
-    "docker/phase2-openai-egress-proxy/secret.placeholder": "A",
-    "docker/phase2-openai-egress-proxy/receipt.placeholder.json": "A",
-    "docs/superpowers/plans/2026-08-02-tickflow-phase2b3b-openai-proxy.md": "A",
-    "reports/phase2_openai_proxy_artifact/approval_candidate.json": "A",
-    "reports/phase2_openai_proxy_artifact/build_evidence.json": "A",
-    "reports/tickflow_phase2b_canary_provider_preflight_eval.md": "M",
-    "reports/tickflow_phase2b_single_symbol_canary_eval.md": "A",
-}
+
+@pytest.fixture(autouse=True)
+def _stub_runtime_candidate_hash_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        canary_preflight,
+        "validate_runtime_candidate_hash_allowlist",
+        lambda _root, _candidate: {},
+    )
 
 
 def _approved_config() -> dict[str, Any]:
@@ -147,7 +135,7 @@ def _write_artifact_approval(
 def _expected_git_diff() -> str:
     return "".join(
         f"{status}\t{path}\n"
-        for path, status in _EXPECTED_PREFLIGHT_DELTA.items()
+        for path, status in canary_preflight._ALLOWED_PREFLIGHT_DELTA.items()
     )
 
 
@@ -902,7 +890,11 @@ def test_git_gate_binds_preflight_to_clean_allowed_branch_delta() -> None:
         result.args = command
         return result
 
-    evidence = read_git_gate(REPO_ROOT, runner=runner)
+    evidence = read_git_gate(
+        REPO_ROOT,
+        runner=runner,
+        hash_allowlist_validator=lambda _root, _candidate: {},
+    )
 
     assert evidence.ready is True
     assert evidence.base_head == (
@@ -939,7 +931,7 @@ def test_git_gate_rejects_dirty_or_unapproved_drift() -> None:
             subprocess.CompletedProcess(
                 [],
                 0,
-                stdout="M\tbackend/app/main.py\n",
+                stdout=_expected_git_diff(),
                 stderr="",
             ),
         ]
@@ -948,38 +940,71 @@ def test_git_gate_rejects_dirty_or_unapproved_drift() -> None:
     evidence = read_git_gate(
         REPO_ROOT,
         runner=lambda command, **_kwargs: next(outputs),
+        hash_allowlist_validator=lambda _root, _candidate: {},
     )
 
     assert evidence.ready is False
     assert evidence.worktree_clean is False
+    assert evidence.changed_paths_allowed is True
+
+
+def test_git_gate_rejects_runtime_hash_allowlist_failure() -> None:
+    outputs = iter(
+        [
+            subprocess.CompletedProcess([], 0, stdout="c" * 40 + "\n", stderr=""),
+            subprocess.CompletedProcess(
+                [],
+                0,
+                stdout="codex/tickflow-phase2-ai-review\n",
+                stderr="",
+            ),
+            subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+            subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+            subprocess.CompletedProcess(
+                [],
+                0,
+                stdout=_expected_git_diff(),
+                stderr="",
+            ),
+        ]
+    )
+
+    def reject_hashes(_root: Path, _candidate: Path) -> dict[Path, str]:
+        raise CanaryPreflightError("runtime_preflight_hash_allowlist_invalid")
+
+    evidence = read_git_gate(
+        REPO_ROOT,
+        runner=lambda command, **_kwargs: next(outputs),
+        hash_allowlist_validator=reject_hashes,
+    )
+
+    assert evidence.ready is False
     assert evidence.changed_paths_allowed is False
 
 
 @pytest.mark.parametrize(
     "changed_diff",
     [
+        _expected_git_diff()
+        + "A\tbackend/app/services/undeclared_runtime.py\n",
         _expected_git_diff().replace(
-            "A\tbackend/app/services/phase2_openai_proxy_contract.py\n",
+            "A\tdocker/phase2-openai-egress-proxy/readiness-contract.json\n",
             "",
         ),
-        _expected_git_diff()
-        + "A\tbackend/app/services/unapproved_runtime.py\n",
         _expected_git_diff().replace(
-            "M\tbackend/scripts/validate_phase2_canary_provider_config.py\n",
-            "A\tbackend/scripts/validate_phase2_canary_provider_config.py\n",
+            "A\tdocker/phase2-openai-egress-proxy/readiness-contract.json\n",
+            "D\tdocker/phase2-openai-egress-proxy/readiness-contract.json\n",
         ),
         _expected_git_diff().replace(
-            "A\tdocker/phase2-openai-egress-proxy/proxy.py\n",
-            "D\tdocker/phase2-openai-egress-proxy/proxy.py\n",
-        ),
-        _expected_git_diff().replace(
-            "A\tdocker/phase2-openai-egress-proxy/proxy.py\n",
-            "R100\tdocker/phase2-openai-egress-proxy/proxy.py\t"
-            "docker/phase2-openai-egress-proxy/proxy-renamed.py\n",
+            "A\tdocker/phase2-openai-egress-proxy/readiness-contract.json\n",
+            "R100\tdocker/phase2-openai-egress-proxy/readiness-contract.json\t"
+            "docker/phase2-openai-egress-proxy/renamed-readiness.json\n",
         ),
     ],
 )
-def test_git_gate_requires_the_exact_status_path_delta(changed_diff: str) -> None:
+def test_git_gate_rejects_unknown_missing_deleted_or_renamed_paths(
+    changed_diff: str,
+) -> None:
     outputs = iter(
         [
             subprocess.CompletedProcess([], 0, stdout="c" * 40 + "\n", stderr=""),
@@ -998,17 +1023,74 @@ def test_git_gate_requires_the_exact_status_path_delta(changed_diff: str) -> Non
     evidence = read_git_gate(
         REPO_ROOT,
         runner=lambda command, **_kwargs: next(outputs),
+        hash_allowlist_validator=lambda _root, _candidate: {},
     )
 
     assert evidence.ready is False
     assert evidence.changed_paths_allowed is False
 
 
-def test_offline_canary_inputs_rebuild_projection_and_preserve_all_evidence() -> None:
+def test_runtime_candidate_path_hash_allowlist_is_exact_and_includes_readiness() -> None:
+    hashes = canary_preflight.compute_runtime_artifact_input_hashes(REPO_ROOT)
+
+    allowlist = runtime_candidate_path_hash_allowlist(hashes)
+
+    assert allowlist[Path("docker/phase2-openai-egress-proxy/readiness-contract.json")] == (
+        hashes.readiness_contract_sha256
+    )
+    assert set(allowlist) == {
+        Path("docker/phase2-openai-egress-proxy/proxy.py"),
+        Path("docker/phase2-openai-egress-proxy/Dockerfile"),
+        Path("docker/phase2-openai-egress-proxy/responses-contract.json"),
+        Path("docker/phase2-openai-egress-proxy/runtime-contract.json"),
+        Path("docker/phase2-openai-egress-proxy/readiness-contract.json"),
+        Path("docker/phase2-canary-relay/relay.py"),
+        Path("docker/phase2-canary-relay/Dockerfile"),
+        Path("docker/phase2-canary-relay/runtime-contract.json"),
+        Path("backend/app/services/phase2_canary_runtime_contract.json"),
+        Path("backend/app/services/phase2_canary_orchestrator.py"),
+        Path("backend/app/services/phase2_canary_observability.py"),
+        Path("backend/scripts/run_phase2_single_symbol_canary.py"),
+        Path("backend/app/services/phase2_canary_runtime_artifact.py"),
+        Path("backend/scripts/build_phase2_canary_runtime_offline.py"),
+        Path("docs/phase2-single-call-orchestrator-runbook.md"),
+    }
+
+
+def test_runtime_candidate_hash_allowlist_rejects_unknown_readiness_hash(
+    tmp_path: Path,
+) -> None:
+    candidate = json.loads(
+        (
+            REPO_ROOT
+            / "reports/phase2_provider_canary/runtime_contract_candidate.json"
+        ).read_bytes()
+    )
+    candidate["artifact_identity"]["readiness_contract_sha256"] = "f" * 64
+    candidate["inputs"]["readiness_contract_sha256"] = "f" * 64
+    candidate["proxy_image"]["readiness_contract_sha256"] = "f" * 64
+    candidate["proxy_contents"]["readiness_contract_sha256"] = "f" * 64
+    candidate_path = tmp_path / "candidate.json"
+    candidate_path.write_text(
+        json.dumps(candidate, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        CanaryPreflightError,
+        match="runtime_preflight_hash_allowlist_invalid",
+    ):
+        validate_runtime_candidate_hash_allowlist(REPO_ROOT, candidate_path)
+
+
+def test_offline_canary_inputs_preserve_facts_but_cannot_reopen_consumed_preflight() -> None:
     evidence = validate_offline_canary_inputs(REPO_ROOT)
 
-    assert evidence.status == "READY"
-    assert evidence.errors == []
+    assert evidence.status == "BLOCKED"
+    assert evidence.errors == [
+        "canary_output_not_empty",
+        "external_action_evidence_invalid",
+    ]
     assert evidence.facts_status == "VALID"
     assert evidence.trade_date == "2026-07-31"
     assert evidence.facts_sha256 == (
@@ -1029,7 +1111,7 @@ def test_offline_canary_inputs_rebuild_projection_and_preserve_all_evidence() ->
         "53d94e60fce7914582c85beea977ca65f7a6713c7066ee65df2c84a8ec6c361e"
     )
     assert evidence.provider_relay_status == "PHASE2B_PROVIDER_RELAY_READY"
-    assert evidence.canary_output_empty is True
+    assert evidence.canary_output_empty is False
     assert evidence.provider_attempt_count == 0
     assert evidence.ai_call_count == 0
     assert evidence.tickflow_api_request_count == 0
@@ -1116,8 +1198,11 @@ def test_combined_preflight_rejects_superseded_candidate_before_runtime_create(
         git_runner=lambda command, **_kwargs: _clean_git_result(command),
     )
 
-    assert result.status == "PHASE2B_CANARY_EGRESS_BLOCKED"
-    assert result.errors == ["artifact_source_binding_invalid"]
+    assert result.status == "PHASE2B_CANARY_CONFIG_BLOCKED"
+    assert result.errors == [
+        "canary_output_not_empty",
+        "external_action_evidence_invalid",
+    ]
     assert result.provider == "openai"
     assert result.exact_model == "gpt-5.6-terra"
     assert result.endpoint_alias == "openai_responses_v1"
@@ -1129,23 +1214,21 @@ def test_combined_preflight_rejects_superseded_candidate_before_runtime_create(
     assert result.secret_content_read is False
     assert result.secret_hash_recorded is False
     assert result.strict_json_schema == "READY"
-    assert result.proxy_artifact_candidate == "INVALID"
-    assert result.proxy_artifact_review == "FAILED"
+    assert result.proxy_artifact_candidate == "NOT_RUN"
+    assert result.proxy_artifact_review == "NOT_RUN"
     assert result.proxy_artifact_approval == "NOT_RUN"
     assert result.proxy_image == "NOT_RUN"
     assert result.proxy_launcher == "NOT_RUN"
-    assert result.tls == "BLOCKED"
-    assert result.redirect == "DISABLED"
-    assert result.egress_allowlist == "FAILED"
+    assert result.tls == "NOT_RUN"
+    assert result.redirect == "NOT_RUN"
+    assert result.egress_allowlist == "NOT_RUN"
     assert result.provider_attempt_count == 0
     assert result.ai_call_count == 0
     assert result.retry_count == 0
     assert result.provider_http == "NOT_RUN"
     assert result.tickflow_api_request_count == 0
     assert result.real_public_network_success_count == 0
-    assert result.external_action_evidence == (
-        "DERIVED_FROM_UNCHANGED_AUDITS_AND_ABSENT_CANARY_RUNTIME"
-    )
+    assert result.external_action_evidence == "NOT_PROVEN"
     assert not any(command[:2] == ["docker", "create"] for command in runtime_calls)
 
 
@@ -1180,8 +1263,11 @@ def test_combined_preflight_does_not_reopen_superseded_approval(
         git_runner=lambda command, **_kwargs: _clean_git_result(command),
     )
 
-    assert result.status == "PHASE2B_CANARY_EGRESS_BLOCKED"
-    assert result.errors == ["artifact_source_binding_invalid"]
+    assert result.status == "PHASE2B_CANARY_CONFIG_BLOCKED"
+    assert result.errors == [
+        "canary_output_not_empty",
+        "external_action_evidence_invalid",
+    ]
     assert result.provider == "openai"
     assert result.exact_model == "gpt-5.6-terra"
     assert result.keychain_secret == "PRESENT"
@@ -1192,10 +1278,10 @@ def test_combined_preflight_does_not_reopen_superseded_approval(
     assert result.proxy_artifact_approval == "NOT_RUN"
     assert result.proxy_image == "NOT_RUN"
     assert result.proxy_launcher == "NOT_RUN"
-    assert result.tls == "BLOCKED"
+    assert result.tls == "NOT_RUN"
     assert result.tls_evidence == "NOT_RUN"
-    assert result.redirect == "DISABLED"
-    assert result.egress_allowlist == "FAILED"
+    assert result.redirect == "NOT_RUN"
+    assert result.egress_allowlist == "NOT_RUN"
     assert result.egress_evidence == "NOT_RUN"
     assert result.provider_attempt_count == 0
     assert result.ai_call_count == 0
@@ -1312,7 +1398,10 @@ def test_combined_preflight_sanitizes_runtime_probe_failure(
     serialized = json.dumps(result.to_dict(), sort_keys=True)
 
     assert result.status == "PHASE2B_CANARY_CONFIG_BLOCKED"
-    assert result.errors == ["runtime_residue_probe_failed"]
+    assert result.errors == [
+        "canary_output_not_empty",
+        "external_action_evidence_invalid",
+    ]
     assert str(tmp_path) not in serialized
     assert result.tls == "NOT_RUN"
     assert result.egress_allowlist == "NOT_RUN"

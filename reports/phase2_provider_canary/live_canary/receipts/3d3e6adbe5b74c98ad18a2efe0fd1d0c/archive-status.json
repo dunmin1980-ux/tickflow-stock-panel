@@ -1,0 +1,11 @@
+{
+  "archive_status": "RECEIPT_MISSING",
+  "archive_status_schema_version": 1,
+  "child_metadata_status": "VALID",
+  "child_terminal_reason": "RELAY_NONZERO_EXIT",
+  "last_proven_stage": "proxy_connect_started",
+  "proxy_receipt_status": "RECEIPT_MISSING",
+  "relay_receipt_status": "VALID",
+  "request_id": "3d3e6adbe5b74c98ad18a2efe0fd1d0c",
+  "retry_count": 0
+}

@@ -105,6 +105,7 @@ def test_attempt_ledger_is_mode_0600_canonical_and_identity_bound(
     assert json.loads(path.read_bytes()) == ledger.model_dump(mode="json")
     assert path.read_bytes().endswith(b"\n")
     serialized = path.read_text(encoding="utf-8")
+    assert "readiness_contract_sha256" not in serialized
     for forbidden in ("Authorization", "Bearer ", "api_key", "secret"):
         assert forbidden not in serialized.lower()
 
@@ -249,6 +250,8 @@ def test_consumed_historical_attempt_remains_dispatch_ledger_only() -> None:
     ledger_path = (
         Path.home()
         / "Library/Application Support/TickFlowPhase2Canary/runtime-v1"
+        / "history"
+        / HISTORICAL_REQUEST_ID
         / "attempt-ledger.json"
     )
 
@@ -406,6 +409,7 @@ def artifacts(projection: dict[str, Any]) -> ApprovedCanaryArtifacts:
         proxy_image_id="sha256:" + "4" * 64,
         relay_image_id="sha256:" + "5" * 64,
         timeout_contract_sha256=runtime_contract_sha256(),
+        readiness_contract_sha256="6" * 64,
         orchestrator_source_sha256="7" * 64,
     )
 
@@ -527,6 +531,17 @@ class _SensitiveStderrBackend(MockCanaryBackend):
             "proxy",
             timing,
         )
+
+
+class _ProxyReadinessFailureBackend(MockCanaryBackend):
+    def prepare(
+        self,
+        context: CanaryRuntimeContext,
+        *,
+        deadline: float,
+    ) -> None:
+        super().prepare(context, deadline=deadline)
+        raise BackendError("PROXY_READINESS_TIMEOUT")
 
 
 def test_successful_one_shot_lifecycle_validates_renders_and_cleans(
@@ -757,7 +772,7 @@ def test_archive_precedes_terminal_ledger_transition(
     assert result.attempt_ledger_state is LedgerState.CLEANUP_COMPLETED
 
 
-def test_pre_dispatch_failure_does_not_publish_false_archive(
+def test_pre_dispatch_failure_archives_proxy_ready_receipt_without_consuming_attempt(
     orchestrator_config: CanaryOrchestratorConfig,
     artifacts: ApprovedCanaryArtifacts,
     projection: dict[str, Any],
@@ -773,8 +788,48 @@ def test_pre_dispatch_failure_does_not_publish_false_archive(
 
     target = orchestrator_config.canary_output_root / "receipts" / ("a" * 32)
     assert result.terminal_state == "HOST_CRASH_BEFORE_DISPATCH"
-    assert backend.archive_count == 0
-    assert not target.exists()
+    assert result.attempt_ledger_state is LedgerState.FAILED_BEFORE_DISPATCH
+    assert result.provider_attempt_count == 0
+    assert result.receipt_archive_status == "PRE_DISPATCH_ARCHIVED"
+    assert backend.archive_count == 1
+    assert backend.lifecycle == ["prepare", "archive", "cleanup"]
+    assert (target / "proxy-receipt.json").is_file()
+    assert not (target / "relay-receipt.json").exists()
+    status = json.loads((target / "archive-status.json").read_bytes())
+    assert status["archive_status"] == "PRE_DISPATCH_ARCHIVED"
+    assert status["proxy_receipt_status"] == "VALID"
+    assert status["relay_receipt_status"] == "RECEIPT_MISSING"
+    assert status["last_proven_stage"] == "proxy_ready"
+
+
+def test_proxy_readiness_timeout_is_failed_before_dispatch_without_attempt(
+    orchestrator_config: CanaryOrchestratorConfig,
+    artifacts: ApprovedCanaryArtifacts,
+    projection: dict[str, Any],
+    relay_response: dict[str, Any],
+) -> None:
+    backend = _ProxyReadinessFailureBackend(
+        scenario="provider_1s",
+        relay_response=relay_response,
+    )
+
+    result = run_single_symbol_canary(
+        config=orchestrator_config,
+        artifacts=artifacts,
+        projection=projection,
+        backend=backend,
+        artifact_verifier=lambda _artifacts: None,
+        secret_reader=lambda: "placeholder-canary-secret",
+        request_id_factory=lambda: "a" * 32,
+        wall_clock=lambda: FIXED_TIME,
+        monotonic=backend.monotonic,
+    )
+
+    assert result.terminal_state == "PROXY_READINESS_TIMEOUT"
+    assert result.attempt_ledger_state is LedgerState.FAILED_BEFORE_DISPATCH
+    assert result.provider_attempt_count == 0
+    assert backend.dispatch_count == 0
+    assert backend.cleanup_count == 1
 
 
 def test_sensitive_child_stderr_is_redacted_before_archive(
@@ -1076,7 +1131,10 @@ def test_interrupted_ledger_blocks_new_attempt_without_secret_read(
         trade_date="2026-07-31",
         provider="openai",
         endpoint_alias="openai_responses_v1",
-        **artifacts.model_dump(mode="python"),
+        **artifacts.model_dump(
+            mode="python",
+            exclude={"readiness_contract_sha256"},
+        ),
     )
     store.prepare(interrupted, timestamp=FIXED_TIME)
     store.transition(
@@ -1221,8 +1279,9 @@ def test_mock_fault_catalog_is_exactly_the_twenty_required_cases() -> None:
 
 
 class _RecordingExecutor:
-    def __init__(self) -> None:
+    def __init__(self, ready_path: Path | None = None) -> None:
         self.calls: list[tuple[list[str], float]] = []
+        self.ready_path = ready_path
 
     def __call__(
         self,
@@ -1230,6 +1289,22 @@ class _RecordingExecutor:
         timeout: float,
     ) -> subprocess.CompletedProcess[str]:
         self.calls.append((command, timeout))
+        if (
+            self.ready_path is not None
+            and command[:2] == ["docker", "start"]
+            and "proxy" in command[-1]
+        ):
+            self.ready_path.write_bytes(
+                canonical_json_bytes(
+                    {
+                        "listener_ready": True,
+                        "monotonic_ns": 1,
+                        "proxy_ready": True,
+                        "request_id": "a" * 32,
+                        "wall_time": FIXED_TIME,
+                    }
+                )
+            )
         if command[:2] == ["docker", "inspect"] and "--format" in command:
             return subprocess.CompletedProcess(
                 command,
@@ -1255,8 +1330,8 @@ class _RecordingExecutor:
 
 
 class _ChildOutcomeExecutor(_RecordingExecutor):
-    def __init__(self, outcome: str) -> None:
-        super().__init__()
+    def __init__(self, outcome: str, ready_path: Path | None = None) -> None:
+        super().__init__(ready_path)
         self.outcome = outcome
 
     def __call__(
@@ -1265,9 +1340,27 @@ class _ChildOutcomeExecutor(_RecordingExecutor):
         timeout: float,
     ) -> subprocess.CompletedProcess[str]:
         self.calls.append((command, timeout))
+        if (
+            self.ready_path is not None
+            and command[:2] == ["docker", "start"]
+            and "proxy" in command[-1]
+        ):
+            self.ready_path.write_bytes(
+                canonical_json_bytes(
+                    {
+                        "listener_ready": True,
+                        "monotonic_ns": 1,
+                        "proxy_ready": True,
+                        "request_id": "a" * 32,
+                        "wall_time": FIXED_TIME,
+                    }
+                )
+            )
         if command[:3] == ["docker", "start", "--attach"]:
             if self.outcome == "relay_timeout":
                 raise subprocess.TimeoutExpired(command, timeout, stderr="deadline")
+            if self.outcome == "relay_process_error":
+                raise subprocess.SubprocessError("relay process failed")
             if self.outcome == "relay_nonzero":
                 return subprocess.CompletedProcess(command, 1, "", "relay failed")
             if self.outcome == "relay_signal":
@@ -1338,7 +1431,9 @@ def runtime_context(
 def test_docker_backend_commands_have_exact_isolation_and_no_secret_surface(
     runtime_context: CanaryRuntimeContext,
 ) -> None:
-    executor = _RecordingExecutor()
+    executor = _RecordingExecutor(
+        runtime_context.proxy_output_dir / "proxy-ready.json"
+    )
     backend = DockerCanaryBackend(executor=executor, monotonic=lambda: 0.0)
 
     backend.prepare(runtime_context, deadline=90.0)
@@ -1349,7 +1444,7 @@ def test_docker_backend_commands_have_exact_isolation_and_no_secret_surface(
     assert joined.count("docker network create") == 2
     assert "--network-alias phase2-egress-proxy" in joined
     assert "dst=/run/phase2/provider-auth,readonly" in joined
-    assert "dst=/input/request.json,readonly" in joined
+    assert joined.count("dst=/input/request.json,readonly") == 2
     assert "dst=/input/projection.json,readonly" in joined
     assert "dst=/output" in joined
     assert joined.count("dst=/run/phase2/provider-auth,readonly") == 1
@@ -1367,10 +1462,38 @@ def test_docker_backend_commands_have_exact_isolation_and_no_secret_surface(
     assert all(timeout <= 90 for _command, timeout in executor.calls)
 
 
-def test_docker_backend_dispatches_relay_once_and_cleanup_is_bounded(
+def test_docker_backend_refuses_dispatch_until_proxy_application_is_ready(
     runtime_context: CanaryRuntimeContext,
 ) -> None:
     executor = _RecordingExecutor()
+    now = [0.0]
+
+    def wait(seconds: float) -> None:
+        now[0] += seconds
+
+    backend = DockerCanaryBackend(
+        executor=executor,
+        monotonic=lambda: now[0],
+        waiter=wait,
+    )
+
+    with pytest.raises(BackendError, match="PROXY_READINESS_TIMEOUT"):
+        backend.prepare(runtime_context, deadline=90.0)
+
+    commands = [command for command, _timeout in executor.calls]
+    assert any(command[:2] == ["docker", "start"] for command in commands)
+    assert not any(
+        command[:3] == ["docker", "start", "--attach"]
+        for command in commands
+    )
+
+
+def test_docker_backend_dispatches_relay_once_and_cleanup_is_bounded(
+    runtime_context: CanaryRuntimeContext,
+) -> None:
+    executor = _RecordingExecutor(
+        runtime_context.proxy_output_dir / "proxy-ready.json"
+    )
     now = [0.0]
     backend = DockerCanaryBackend(executor=executor, monotonic=lambda: now[0])
     backend.prepare(runtime_context, deadline=90.0)
@@ -1435,6 +1558,7 @@ def test_docker_backend_dispatches_relay_once_and_cleanup_is_bounded(
     [
         ("relay_nonzero", "RELAY_NONZERO_EXIT"),
         ("relay_timeout", "RELAY_TIMEOUT"),
+        ("relay_process_error", "RELAY_PROCESS_ERROR"),
         ("relay_signal", "RELAY_SIGNALLED"),
         ("proxy_nonzero", "PROXY_NONZERO_EXIT"),
         ("proxy_signal", "PROXY_SIGNALLED"),
@@ -1445,7 +1569,10 @@ def test_docker_child_outcomes_are_not_collapsed_to_timeout(
     category: str,
     runtime_context: CanaryRuntimeContext,
 ) -> None:
-    executor = _ChildOutcomeExecutor(outcome)
+    executor = _ChildOutcomeExecutor(
+        outcome,
+        runtime_context.proxy_output_dir / "proxy-ready.json",
+    )
     backend = DockerCanaryBackend(executor=executor, monotonic=lambda: 0.0)
     backend.prepare(runtime_context, deadline=90.0)
 
@@ -1454,6 +1581,154 @@ def test_docker_child_outcomes_are_not_collapsed_to_timeout(
 
     assert raised.value.category == category
     assert raised.value.unknown_dispatch_state is False
+
+
+def test_host_deadline_expiry_is_not_reported_as_relay_timeout(
+    runtime_context: CanaryRuntimeContext,
+) -> None:
+    executor = _ChildOutcomeExecutor(
+        "relay_timeout",
+        runtime_context.proxy_output_dir / "proxy-ready.json",
+    )
+    now = [0.0]
+    backend = DockerCanaryBackend(executor=executor, monotonic=lambda: now[0])
+    backend.prepare(runtime_context, deadline=90.0)
+    now[0] = 20.0
+
+    with pytest.raises(BackendError, match="ORCHESTRATOR_TIMEOUT") as raised:
+        backend.dispatch(runtime_context, deadline=90.0)
+
+    evidence = backend._child_evidence["relay"]
+    assert raised.value.category == "ORCHESTRATOR_TIMEOUT"
+    assert evidence.child_state is orchestrator_module.ChildState.TIMEOUT
+    assert evidence.terminal_reason == "ORCHESTRATOR_TIMEOUT"
+    relay_timeout = next(
+        timeout
+        for command, timeout in executor.calls
+        if command[:3] == ["docker", "start", "--attach"]
+    )
+    assert relay_timeout == 70.0
+
+    archive = backend.archive_evidence(runtime_context, deadline=90.0)
+    status = json.loads(
+        (runtime_context.receipt_archive_dir / "archive-status.json").read_bytes()
+    )
+    assert archive.child_terminal_reason == "ORCHESTRATOR_TIMEOUT"
+    assert status["terminal_reason_source"] == "host_timeout"
+
+
+def test_last_proven_stage_uses_persisted_monotonic_time_across_components(
+    runtime_context: CanaryRuntimeContext,
+) -> None:
+    backend = MockCanaryBackend(scenario="provider_1s", relay_response={})
+    backend._write_receipts(runtime_context)
+    backend._record_child_evidence()
+    for component, path, base, wall_time in (
+        (
+            "proxy",
+            runtime_context.proxy_output_dir / "proxy-receipt.json",
+            1,
+            "2030-01-01T00:00:00Z",
+        ),
+        (
+            "relay",
+            runtime_context.output_dir / "relay-receipt.json",
+            100,
+            "2020-01-01T00:00:00Z",
+        ),
+    ):
+        receipt = json.loads(path.read_bytes())
+        events = (
+            orchestrator_module._PROXY_EVENTS
+            if component == "proxy"
+            else orchestrator_module._RELAY_EVENTS
+        )
+        for index, name in enumerate(events, start=base):
+            receipt[name]["wall_time"] = wall_time
+            receipt[name]["monotonic_ns"] = index
+        path.write_bytes(canonical_json_bytes(receipt))
+
+    archive = orchestrator_module._archive_stage_evidence(
+        runtime_context,
+        backend._child_evidence,
+    )
+
+    status = json.loads(
+        (runtime_context.receipt_archive_dir / "archive-status.json").read_bytes()
+    )
+    assert archive.last_proven_stage == "candidate_ready_published"
+    assert status["last_proven_stage"] == "candidate_ready_published"
+
+
+def test_relay_self_reason_refines_host_nonzero_exit_without_losing_child_evidence(
+    runtime_context: CanaryRuntimeContext,
+) -> None:
+    fixture_backend = MockCanaryBackend(
+        scenario="provider_1s",
+        relay_response={},
+    )
+    fixture_backend._write_receipts(runtime_context)
+    relay_path = runtime_context.output_dir / "relay-receipt.json"
+    relay_receipt = json.loads(relay_path.read_bytes())
+    relay_receipt.update(
+        {
+            "status": "REJECTED",
+            "exit_code": 2,
+            "terminal_status": "RELAY_PROXY_CONNECT_FAILED",
+            "terminal_reason_source": "relay_self",
+            "error_category": "RELAY_PROXY_CONNECT_FAILED",
+            "proxy_http_status": None,
+            "response_size": None,
+            "response_sha256": None,
+        }
+    )
+    for name in (
+        "proxy_connect_completed",
+        "request_submitted",
+        "response_wait_started",
+        "response_received",
+        "candidate_write_started",
+        "candidate_write_completed",
+        "candidate_ready_published",
+    ):
+        relay_receipt[name] = orchestrator_module._mock_stage_event(
+            name,
+            occurred=False,
+            index=0,
+        )
+    relay_path.write_bytes(canonical_json_bytes(relay_receipt))
+    timing = orchestrator_module.ChildExecutionTiming(
+        started_at=FIXED_TIME,
+        exited_at=FIXED_TIME,
+        started_monotonic_ns=1,
+        exited_monotonic_ns=2,
+    )
+    child_evidence = {
+        "relay": orchestrator_module.classify_completed_child(
+            "relay",
+            subprocess.CompletedProcess(["mock-relay"], 2, "", ""),
+            timing,
+            interpret_positive_signal=True,
+        ),
+        "proxy": orchestrator_module.classify_running_child("proxy", timing),
+    }
+
+    archive = orchestrator_module._archive_stage_evidence(
+        runtime_context,
+        child_evidence,
+    )
+
+    status = json.loads(
+        (runtime_context.receipt_archive_dir / "archive-status.json").read_bytes()
+    )
+    child = json.loads(
+        (runtime_context.receipt_archive_dir / "child-metadata.json").read_bytes()
+    )
+    assert archive.child_terminal_reason == "RELAY_PROXY_CONNECT_FAILED"
+    assert status["child_terminal_reason"] == "RELAY_PROXY_CONNECT_FAILED"
+    assert status["host_child_terminal_reason"] == "RELAY_NONZERO_EXIT"
+    assert status["terminal_reason_source"] == "relay_self"
+    assert child["relay"]["terminal_reason"] == "RELAY_NONZERO_EXIT"
 
 
 class _CleanupInspectionErrorExecutor(_RecordingExecutor):
@@ -1554,7 +1829,9 @@ def test_archives_exact_proxy_receipt_validated_during_dispatch(
     fixture_backend._write_receipts(runtime_context)
     proxy_receipt_path = runtime_context.proxy_output_dir / "proxy-receipt.json"
     validated_bytes = proxy_receipt_path.read_bytes()
-    executor = _RecordingExecutor()
+    executor = _RecordingExecutor(
+        runtime_context.proxy_output_dir / "proxy-ready.json"
+    )
     backend = DockerCanaryBackend(executor=executor, monotonic=lambda: 0.0)
     backend.prepare(runtime_context, deadline=90.0)
 
@@ -1601,22 +1878,18 @@ def test_keychain_reader_uses_fixed_service_once_without_shell_or_output_logging
 
 def test_runtime_candidate_requires_separate_mode_0600_local_approval(
     tmp_path: Path,
-    artifacts: ApprovedCanaryArtifacts,
 ) -> None:
     candidate_path = tmp_path / "runtime_contract_candidate.json"
     approval_path = tmp_path / "runtime-contract-approval.json"
-    artifact_identity = artifacts.model_dump(mode="json")
-    artifact_identity.pop("approval_candidate_sha256")
-    candidate_bytes = canonical_json_bytes(
-        {
-            "runtime_candidate_schema_version": 1,
-            "status": "PHASE2B_CANARY_RUNTIME_CONTRACT_READY_FOR_REAPPROVAL",
-            "artifact_identity": artifact_identity,
-        }
-    )
+    candidate_bytes = (
+        REPO_ROOT
+        / "reports/phase2_provider_canary/runtime_contract_candidate.json"
+    ).read_bytes()
+    candidate = json.loads(candidate_bytes)
+    artifact_identity = candidate["artifact_identity"]
     candidate_path.write_bytes(candidate_bytes)
     candidate_path.chmod(0o644)
-    candidate_sha = __import__("hashlib").sha256(candidate_bytes).hexdigest()
+    candidate_sha = hashlib.sha256(candidate_bytes).hexdigest()
 
     with pytest.raises(OrchestratorError, match="runtime_approval_invalid"):
         load_installed_runtime_approval(
@@ -1627,9 +1900,9 @@ def test_runtime_candidate_requires_separate_mode_0600_local_approval(
     approval_path.write_bytes(
         canonical_json_bytes(
             {
-                "runtime_approval_schema_version": 1,
+                "runtime_approval_schema_version": 2,
                 "approved_candidate_sha256": candidate_sha,
-                "approval_scope": "single_symbol_openai_canary_runtime_v1",
+                "approval_scope": "single_symbol_openai_canary_runtime_v2",
                 "symbol": "000403.SZ",
                 "provider": "openai",
                 "maximum_provider_attempts": 1,
@@ -1651,30 +1924,265 @@ def test_runtime_candidate_requires_separate_mode_0600_local_approval(
     }
 
 
-def test_runtime_approval_hash_or_file_shape_mismatch_fails_closed(
+def test_runtime_approval_loader_rejects_incomplete_schema_v2_candidate(
     tmp_path: Path,
     artifacts: ApprovedCanaryArtifacts,
 ) -> None:
-    candidate = tmp_path / "candidate.json"
-    approval = tmp_path / "approval.json"
+    candidate_path = tmp_path / "runtime_contract_candidate.json"
+    approval_path = tmp_path / "runtime-contract-approval.json"
     artifact_identity = artifacts.model_dump(mode="json")
     artifact_identity.pop("approval_candidate_sha256")
-    candidate.write_bytes(
+    candidate_bytes = canonical_json_bytes(
+        {
+            "runtime_candidate_schema_version": 2,
+            "status": "PHASE2B_CANARY_RUNTIME_CONTRACT_READY_FOR_REAPPROVAL",
+            "artifact_identity": artifact_identity,
+        }
+    )
+    candidate_path.write_bytes(candidate_bytes)
+    candidate_sha = hashlib.sha256(candidate_bytes).hexdigest()
+    approval_path.write_bytes(
         canonical_json_bytes(
             {
-                "runtime_candidate_schema_version": 1,
-                "status": "PHASE2B_CANARY_RUNTIME_CONTRACT_READY_FOR_REAPPROVAL",
-                "artifact_identity": artifact_identity,
+                "runtime_approval_schema_version": 2,
+                "approved_candidate_sha256": candidate_sha,
+                "approval_scope": "single_symbol_openai_canary_runtime_v2",
+                "symbol": "000403.SZ",
+                "provider": "openai",
+                "maximum_provider_attempts": 1,
+                "retry_count": 0,
             }
         )
+    )
+    approval_path.chmod(0o600)
+
+    with pytest.raises(OrchestratorError, match="runtime_candidate_invalid"):
+        load_installed_runtime_approval(
+            candidate_path=candidate_path,
+            approval_path=approval_path,
+        )
+
+
+def test_runtime_schema_v2_loads_exact_readiness_identity_and_rejects_v1(
+    tmp_path: Path,
+) -> None:
+    candidate_path = tmp_path / "runtime_contract_candidate.json"
+    approval_directory = tmp_path / "approval"
+    approval_directory.mkdir(mode=0o700)
+    approval_path = approval_directory / "runtime-contract-approval.json"
+    candidate_value = json.loads(
+        (
+            REPO_ROOT
+            / "reports/phase2_provider_canary/runtime_contract_candidate.json"
+        ).read_bytes()
+    )
+    readiness_sha256 = candidate_value["artifact_identity"][
+        "readiness_contract_sha256"
+    ]
+
+    def write_candidate(schema_version: int) -> str:
+        value = dict(candidate_value)
+        value["runtime_candidate_schema_version"] = schema_version
+        raw = canonical_json_bytes(value)
+        candidate_path.write_bytes(raw)
+        candidate_path.chmod(0o644)
+        return hashlib.sha256(raw).hexdigest()
+
+    def write_approval(schema_version: int, candidate_sha256: str) -> None:
+        approval_path.write_bytes(
+            canonical_json_bytes(
+                {
+                    "runtime_approval_schema_version": schema_version,
+                    "approved_candidate_sha256": candidate_sha256,
+                    "approval_scope": "single_symbol_openai_canary_runtime_v2",
+                    "symbol": "000403.SZ",
+                    "provider": "openai",
+                    "maximum_provider_attempts": 1,
+                    "retry_count": 0,
+                }
+            )
+        )
+        approval_path.chmod(0o600)
+
+    candidate_sha256 = write_candidate(2)
+    write_approval(2, candidate_sha256)
+
+    approved = load_installed_runtime_approval(
+        candidate_path=candidate_path,
+        approval_path=approval_path,
+    )
+
+    assert approved.readiness_contract_sha256 == readiness_sha256
+    assert approved.approval_candidate_sha256 == candidate_sha256
+
+    legacy_candidate_sha256 = write_candidate(1)
+    write_approval(2, legacy_candidate_sha256)
+    with pytest.raises(OrchestratorError, match="runtime_candidate_invalid"):
+        load_installed_runtime_approval(
+            candidate_path=candidate_path,
+            approval_path=approval_path,
+        )
+
+
+def test_preserved_45c5_candidate_is_rejected_by_runtime_loader(
+    tmp_path: Path,
+) -> None:
+    candidate_path = (
+        REPO_ROOT
+        / "reports/phase2_provider_canary/superseded"
+        / "45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127.json"
+    )
+    candidate_sha256 = hashlib.sha256(candidate_path.read_bytes()).hexdigest()
+    assert candidate_sha256 == candidate_path.stem
+    approval_directory = tmp_path / "approval"
+    approval_directory.mkdir(mode=0o700)
+    approval_path = approval_directory / "runtime-contract-approval.json"
+    approval_path.write_bytes(
+        canonical_json_bytes(
+            {
+                "runtime_approval_schema_version": 2,
+                "approved_candidate_sha256": candidate_sha256,
+                "approval_scope": "single_symbol_openai_canary_runtime_v2",
+                "symbol": "000403.SZ",
+                "provider": "openai",
+                "maximum_provider_attempts": 1,
+                "retry_count": 0,
+            }
+        )
+    )
+    approval_path.chmod(0o600)
+
+    with pytest.raises(OrchestratorError, match="runtime_candidate_invalid"):
+        load_installed_runtime_approval(
+            candidate_path=candidate_path,
+            approval_path=approval_path,
+        )
+
+
+def test_runtime_approval_rejects_untrusted_directory_and_owner(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate_path = tmp_path / "runtime_contract_candidate.json"
+    candidate_raw = canonical_json_bytes(
+        {
+            "runtime_candidate_schema_version": 2,
+            "status": "PHASE2B_CANARY_RUNTIME_CONTRACT_READY_FOR_REAPPROVAL",
+            "artifact_identity": {
+                "facts_sha256": "1" * 64,
+                "projection_sha256": "2" * 64,
+                "proxy_image_id": "sha256:" + "3" * 64,
+                "relay_image_id": "sha256:" + "4" * 64,
+                "timeout_contract_sha256": "5" * 64,
+                "readiness_contract_sha256": "6" * 64,
+                "orchestrator_source_sha256": "7" * 64,
+            },
+        }
+    )
+    candidate_path.write_bytes(candidate_raw)
+    candidate_path.chmod(0o644)
+    candidate_sha256 = hashlib.sha256(candidate_raw).hexdigest()
+
+    approval_directory = tmp_path / "approval"
+    approval_directory.mkdir(mode=0o700)
+    approval_path = approval_directory / "runtime-contract-approval.json"
+    approval_path.write_bytes(
+        canonical_json_bytes(
+            {
+                "runtime_approval_schema_version": 2,
+                "approved_candidate_sha256": candidate_sha256,
+                "approval_scope": "single_symbol_openai_canary_runtime_v2",
+                "symbol": "000403.SZ",
+                "provider": "openai",
+                "maximum_provider_attempts": 1,
+                "retry_count": 0,
+            }
+        )
+    )
+    approval_path.chmod(0o600)
+
+    approval_directory.chmod(0o755)
+    with pytest.raises(OrchestratorError, match="runtime_approval_invalid"):
+        load_installed_runtime_approval(
+            candidate_path=candidate_path,
+            approval_path=approval_path,
+        )
+
+    approval_directory.chmod(0o700)
+    current_uid = os.geteuid()
+    monkeypatch.setattr(orchestrator_module.os, "geteuid", lambda: current_uid + 1)
+    with pytest.raises(OrchestratorError, match="runtime_approval_invalid"):
+        load_installed_runtime_approval(
+            candidate_path=candidate_path,
+            approval_path=approval_path,
+        )
+
+
+def test_runtime_approval_rejects_symlinked_parent(tmp_path: Path) -> None:
+    candidate_path = tmp_path / "runtime_contract_candidate.json"
+    candidate_raw = canonical_json_bytes(
+        {
+            "runtime_candidate_schema_version": 2,
+            "status": "PHASE2B_CANARY_RUNTIME_CONTRACT_READY_FOR_REAPPROVAL",
+            "artifact_identity": {
+                "facts_sha256": "1" * 64,
+                "projection_sha256": "2" * 64,
+                "proxy_image_id": "sha256:" + "3" * 64,
+                "relay_image_id": "sha256:" + "4" * 64,
+                "timeout_contract_sha256": "5" * 64,
+                "readiness_contract_sha256": "6" * 64,
+                "orchestrator_source_sha256": "7" * 64,
+            },
+        }
+    )
+    candidate_path.write_bytes(candidate_raw)
+    candidate_path.chmod(0o644)
+    candidate_sha256 = hashlib.sha256(candidate_raw).hexdigest()
+    real_directory = tmp_path / "real-approval"
+    real_directory.mkdir(mode=0o700)
+    approval_path = real_directory / "runtime-contract-approval.json"
+    approval_path.write_bytes(
+        canonical_json_bytes(
+            {
+                "runtime_approval_schema_version": 2,
+                "approved_candidate_sha256": candidate_sha256,
+                "approval_scope": "single_symbol_openai_canary_runtime_v2",
+                "symbol": "000403.SZ",
+                "provider": "openai",
+                "maximum_provider_attempts": 1,
+                "retry_count": 0,
+            }
+        )
+    )
+    approval_path.chmod(0o600)
+    linked_directory = tmp_path / "linked-approval"
+    linked_directory.symlink_to(real_directory, target_is_directory=True)
+
+    with pytest.raises(OrchestratorError, match="runtime_approval_invalid"):
+        load_installed_runtime_approval(
+            candidate_path=candidate_path,
+            approval_path=linked_directory / approval_path.name,
+        )
+
+
+def test_runtime_approval_hash_or_file_shape_mismatch_fails_closed(
+    tmp_path: Path,
+) -> None:
+    candidate = tmp_path / "candidate.json"
+    approval = tmp_path / "approval.json"
+    candidate.write_bytes(
+        (
+            REPO_ROOT
+            / "reports/phase2_provider_canary/runtime_contract_candidate.json"
+        ).read_bytes()
     )
     candidate.chmod(0o644)
     approval.write_bytes(
         canonical_json_bytes(
             {
-                "runtime_approval_schema_version": 1,
+                "runtime_approval_schema_version": 2,
                 "approved_candidate_sha256": "0" * 64,
-                "approval_scope": "single_symbol_openai_canary_runtime_v1",
+                "approval_scope": "single_symbol_openai_canary_runtime_v2",
                 "symbol": "000403.SZ",
                 "provider": "openai",
                 "maximum_provider_attempts": 1,

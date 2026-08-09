@@ -1,6 +1,6 @@
 {
   "ai_call_count": 0,
-  "approval_candidate_sha256": "b30c156bee1f5f2a1c8d44004fcbd25934e56a1caf6739ab58ffe7ead0e881fb",
+  "approval_candidate_sha256": "769f4d762594ac496bbaf14b90b8dd3cb7eae572ac9bf05f0484abfe3b86ffaf",
   "base_digest_pinned": true,
   "base_image": {
     "base_available": true,
@@ -59,30 +59,32 @@
   "input_hashes_stable": true,
   "inputs_after": {
     "artifact_builder_source_sha256": "50ef15ca64304530c74251de04628105dc821f12f207090d60b035a33cba1f52",
-    "artifact_verifier_source_sha256": "82ea6304de37c0569abbdbe3d82301cdfd7d534c8bdfe4bc61b5704a48af8c39",
+    "artifact_verifier_source_sha256": "823fcedf03d0931cb94bd4bed3a9c1d0c903b72fae3f319258aae54553c15536",
     "launcher_source_sha256": "7a6dfb2ca4dda9a282e4099433483639dd082afd6ae4cdd5398b4b202cf32259",
     "observability_source_sha256": "ea80b0e4e5d5e1fcf5f2a7901da92fe7bdb3decbda8cd0b54337ead10e960f43",
-    "orchestrator_source_sha256": "c5481434f77e115e2abb82c5e2de59c850d250a450236be3c8261f1966b49f24",
-    "proxy_dockerfile_sha256": "48a633b025bebc739ec96e48484fb841948261893b645d58fcbc5335c85d6f9e",
+    "orchestrator_source_sha256": "dc2d9562c8c5d92612308b07d07d40293478783a0c1dee3270a25f7163724810",
+    "proxy_dockerfile_sha256": "4451af54a04671b79a1f800c596308ac5abcddf160fac81ddc2368ad0ecbd99d",
     "proxy_policy_sha256": "f9819264a0d815644ef8a95d95ff60ac2b930ce40646899cdc565b8bf95b2274",
-    "proxy_source_sha256": "c5d5e5fd9066cb567e0aa358f93a9b5005569d7c47f759512d2936d5ad9d85b1",
+    "proxy_source_sha256": "c965e699201cfe0d9dc5a737823857bd5aa3ef5aff3f5d9a0c11a2e90f00a66e",
+    "readiness_contract_sha256": "092f45689e2bea4bd3e45dc3e8f473fe180cd67832ec8300ba66dfecfa71d59e",
     "relay_dockerfile_sha256": "039acb0f4b8c742e45f16fa621f2500c63e4ace5070ef1d55271b32c02629e58",
-    "relay_source_sha256": "7165181e2a1179d5ca2dfecb65e0080ab887e7f62eb0f9c02e1c052502a6a6cb",
+    "relay_source_sha256": "db5a9d3207797f03f32fdde330cb77451838d8cd9c24f4ffd4c4df343cfbe435",
     "responses_contract_sha256": "29cbd048ee6b34e3495fc1a5f8d1bff0a1f7e0c466006c2f40082e1f00481526",
     "runbook_sha256": "cb65e5ba3ce242003c5198822ee0a6b2302d86ef889f2b885758c952e85f07fe",
     "runtime_contract_sha256": "34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68"
   },
   "inputs_before": {
     "artifact_builder_source_sha256": "50ef15ca64304530c74251de04628105dc821f12f207090d60b035a33cba1f52",
-    "artifact_verifier_source_sha256": "82ea6304de37c0569abbdbe3d82301cdfd7d534c8bdfe4bc61b5704a48af8c39",
+    "artifact_verifier_source_sha256": "823fcedf03d0931cb94bd4bed3a9c1d0c903b72fae3f319258aae54553c15536",
     "launcher_source_sha256": "7a6dfb2ca4dda9a282e4099433483639dd082afd6ae4cdd5398b4b202cf32259",
     "observability_source_sha256": "ea80b0e4e5d5e1fcf5f2a7901da92fe7bdb3decbda8cd0b54337ead10e960f43",
-    "orchestrator_source_sha256": "c5481434f77e115e2abb82c5e2de59c850d250a450236be3c8261f1966b49f24",
-    "proxy_dockerfile_sha256": "48a633b025bebc739ec96e48484fb841948261893b645d58fcbc5335c85d6f9e",
+    "orchestrator_source_sha256": "dc2d9562c8c5d92612308b07d07d40293478783a0c1dee3270a25f7163724810",
+    "proxy_dockerfile_sha256": "4451af54a04671b79a1f800c596308ac5abcddf160fac81ddc2368ad0ecbd99d",
     "proxy_policy_sha256": "f9819264a0d815644ef8a95d95ff60ac2b930ce40646899cdc565b8bf95b2274",
-    "proxy_source_sha256": "c5d5e5fd9066cb567e0aa358f93a9b5005569d7c47f759512d2936d5ad9d85b1",
+    "proxy_source_sha256": "c965e699201cfe0d9dc5a737823857bd5aa3ef5aff3f5d9a0c11a2e90f00a66e",
+    "readiness_contract_sha256": "092f45689e2bea4bd3e45dc3e8f473fe180cd67832ec8300ba66dfecfa71d59e",
     "relay_dockerfile_sha256": "039acb0f4b8c742e45f16fa621f2500c63e4ace5070ef1d55271b32c02629e58",
-    "relay_source_sha256": "7165181e2a1179d5ca2dfecb65e0080ab887e7f62eb0f9c02e1c052502a6a6cb",
+    "relay_source_sha256": "db5a9d3207797f03f32fdde330cb77451838d8cd9c24f4ffd4c4df343cfbe435",
     "responses_contract_sha256": "29cbd048ee6b34e3495fc1a5f8d1bff0a1f7e0c466006c2f40082e1f00481526",
     "runbook_sha256": "cb65e5ba3ce242003c5198822ee0a6b2302d86ef889f2b885758c952e85f07fe",
     "runtime_contract_sha256": "34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68"
@@ -90,46 +92,49 @@
   "network_residue_count": 0,
   "new_approval_installed": false,
   "no_cache": true,
-  "old_approval_candidate_sha256": "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b",
+  "old_approval_candidate_sha256": "45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127",
   "provider_attempt_count": 0,
   "provider_http": "NOT_RUN",
   "proxy_contents": {
     "cleanup_complete": true,
     "content_valid": true,
+    "readiness_contract_sha256": "092f45689e2bea4bd3e45dc3e8f473fe180cd67832ec8300ba66dfecfa71d59e",
     "responses_contract_sha256": "29cbd048ee6b34e3495fc1a5f8d1bff0a1f7e0c466006c2f40082e1f00481526",
     "role": "proxy",
     "runtime_contract_sha256": "34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68",
-    "source_sha256": "c5d5e5fd9066cb567e0aa358f93a9b5005569d7c47f759512d2936d5ad9d85b1"
+    "source_sha256": "c965e699201cfe0d9dc5a737823857bd5aa3ef5aff3f5d9a0c11a2e90f00a66e"
   },
   "proxy_image": {
     "base_image_digest": "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5",
     "base_rootfs_prefix_verified": true,
-    "dockerfile_sha256": "48a633b025bebc739ec96e48484fb841948261893b645d58fcbc5335c85d6f9e",
+    "dockerfile_sha256": "4451af54a04671b79a1f800c596308ac5abcddf160fac81ddc2368ad0ecbd99d",
     "entrypoint": [
       "/usr/bin/python3",
       "/proxy/proxy.py"
     ],
     "history_clean": true,
-    "image_id": "sha256:421551285b5805abb6e01bcd54f6d7ff2bb0a131ca4a7b0e5e693086174df5a3",
+    "image_id": "sha256:97f410e482119c2aa6d4c9cabf58c5510c7dd9c92189ae6d3306777315db3dc8",
     "image_name": "tickflow-phase2-openai-egress-proxy:runtime-v1",
     "image_valid": true,
     "proxy_policy_sha256": "f9819264a0d815644ef8a95d95ff60ac2b930ce40646899cdc565b8bf95b2274",
+    "readiness_contract_sha256": "092f45689e2bea4bd3e45dc3e8f473fe180cd67832ec8300ba66dfecfa71d59e",
     "responses_contract_sha256": "29cbd048ee6b34e3495fc1a5f8d1bff0a1f7e0c466006c2f40082e1f00481526",
     "role": "proxy",
-    "rootfs_layer_count": 49,
+    "rootfs_layer_count": 50,
     "runtime_contract_sha256": "34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68",
     "runtime_user": "65532:65532",
-    "source_sha256": "c5d5e5fd9066cb567e0aa358f93a9b5005569d7c47f759512d2936d5ad9d85b1"
+    "source_sha256": "c965e699201cfe0d9dc5a737823857bd5aa3ef5aff3f5d9a0c11a2e90f00a66e"
   },
   "pull_allowed": false,
   "real_public_network_success_count": 0,
   "relay_contents": {
     "cleanup_complete": true,
     "content_valid": true,
+    "readiness_contract_sha256": null,
     "responses_contract_sha256": null,
     "role": "relay",
     "runtime_contract_sha256": "34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68",
-    "source_sha256": "7165181e2a1179d5ca2dfecb65e0080ab887e7f62eb0f9c02e1c052502a6a6cb"
+    "source_sha256": "db5a9d3207797f03f32fdde330cb77451838d8cd9c24f4ffd4c4df343cfbe435"
   },
   "relay_image": {
     "base_image_digest": "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5",
@@ -140,16 +145,17 @@
       "/relay/relay.py"
     ],
     "history_clean": true,
-    "image_id": "sha256:e0fd61824433164ef6b2c77a012365a273e71ce26e56283dd36a3ca0396de7b3",
+    "image_id": "sha256:92a18952b6a6ab140879194cfa18d3e81080bab2f2f214630ae42758213c3c0f",
     "image_name": "tickflow-phase2-canary-relay:runtime-v1",
     "image_valid": true,
     "proxy_policy_sha256": null,
+    "readiness_contract_sha256": null,
     "responses_contract_sha256": null,
     "role": "relay",
     "rootfs_layer_count": 49,
     "runtime_contract_sha256": "34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68",
     "runtime_user": "65532:65532",
-    "source_sha256": "7165181e2a1179d5ca2dfecb65e0080ab887e7f62eb0f9c02e1c052502a6a6cb"
+    "source_sha256": "db5a9d3207797f03f32fdde330cb77451838d8cd9c24f4ffd4c4df343cfbe435"
   },
   "runtime_build_evidence_schema_version": 1,
   "status": "PHASE2B_CANARY_RUNTIME_CONTRACT_READY_FOR_REAPPROVAL",

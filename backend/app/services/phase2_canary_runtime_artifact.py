@@ -36,7 +36,7 @@ RELAY_IMAGE_NAME = "tickflow-phase2-canary-relay:runtime-v1"
 RUNTIME_USER = "65532:65532"
 READY_STATUS = "PHASE2B_CANARY_RUNTIME_CONTRACT_READY_FOR_REAPPROVAL"
 OLD_CANDIDATE_SHA256 = (
-    "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b"
+    "45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127"
 )
 
 _PROXY_CONTEXT = Path("docker/phase2-openai-egress-proxy")
@@ -52,13 +52,14 @@ _RUNBOOK = Path("docs/phase2-single-call-orchestrator-runbook.md")
 _FACTS = Path("reports/phase2_facts/000403SZ_facts.json")
 _OLD_CANDIDATE = Path(
     "reports/phase2_provider_canary/superseded/"
-    "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b.json"
+    "45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127.json"
 )
 _PROXY_FILES = {
     "Dockerfile",
     "proxy.py",
     "responses-contract.json",
     "runtime-contract.json",
+    "readiness-contract.json",
     "secret.placeholder",
     "receipt.placeholder.json",
 }
@@ -111,6 +112,7 @@ class RuntimeArtifactInputHashes(_StrictFrozenModel):
     relay_source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     relay_dockerfile_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     runtime_contract_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    readiness_contract_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     orchestrator_source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     observability_source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     launcher_source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -142,6 +144,7 @@ class RuntimeImageEvidence(_StrictFrozenModel):
     source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     dockerfile_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     runtime_contract_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    readiness_contract_sha256: str | None = None
     responses_contract_sha256: str | None = None
     proxy_policy_sha256: str | None = None
     runtime_user: Literal["65532:65532"]
@@ -160,11 +163,13 @@ class RuntimeImageEvidence(_StrictFrozenModel):
         if self.role == "proxy" and (
             self.responses_contract_sha256 is None
             or self.proxy_policy_sha256 is None
+            or self.readiness_contract_sha256 is None
         ):
             raise ValueError("artifact_proxy_identity_incomplete")
         if self.role == "relay" and (
             self.responses_contract_sha256 is not None
             or self.proxy_policy_sha256 is not None
+            or self.readiness_contract_sha256 is not None
         ):
             raise ValueError("artifact_relay_identity_invalid")
         return self
@@ -176,11 +181,17 @@ class RuntimeImageContentEvidence(_StrictFrozenModel):
     cleanup_complete: Literal[True]
     source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     runtime_contract_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    readiness_contract_sha256: str | None = None
     responses_contract_sha256: str | None = None
 
     @model_validator(mode="after")
     def require_role_content(self) -> RuntimeImageContentEvidence:
-        if (self.role == "proxy") != (self.responses_contract_sha256 is not None):
+        if (
+            (self.role == "proxy")
+            != (self.responses_contract_sha256 is not None)
+            or (self.role == "proxy")
+            != (self.readiness_contract_sha256 is not None)
+        ):
             raise ValueError("artifact_image_content_role_invalid")
         return self
 
@@ -191,11 +202,12 @@ class RuntimeArtifactIdentity(_StrictFrozenModel):
     proxy_image_id: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     relay_image_id: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     timeout_contract_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    readiness_contract_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     orchestrator_source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class RuntimeArtifactCandidate(_StrictFrozenModel):
-    runtime_candidate_schema_version: Literal[1]
+    runtime_candidate_schema_version: Literal[2]
     status: Literal["PHASE2B_CANARY_RUNTIME_CONTRACT_READY_FOR_REAPPROVAL"]
     symbol: Literal["000403.SZ"]
     trade_date: Literal["2026-07-31"]
@@ -217,7 +229,7 @@ class RuntimeArtifactCandidate(_StrictFrozenModel):
     no_cache: Literal[True]
     base_digest_pinned: Literal[True]
     old_approval_candidate_sha256: Literal[
-        "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b"
+        "45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127"
     ]
     new_approval_installed: Literal[False]
     provider_attempt_count: Literal[0]
@@ -239,10 +251,14 @@ class RuntimeArtifactCandidate(_StrictFrozenModel):
             or self.artifact_identity.relay_image_id != self.relay_image.image_id
             or self.artifact_identity.timeout_contract_sha256
             != self.inputs.runtime_contract_sha256
+            or self.artifact_identity.readiness_contract_sha256
+            != self.inputs.readiness_contract_sha256
             or self.artifact_identity.orchestrator_source_sha256
             != self.inputs.orchestrator_source_sha256
             or self.proxy_image.runtime_contract_sha256
             != self.inputs.runtime_contract_sha256
+            or self.proxy_image.readiness_contract_sha256
+            != self.inputs.readiness_contract_sha256
             or self.relay_image.runtime_contract_sha256
             != self.inputs.runtime_contract_sha256
             or self.proxy_contents.source_sha256
@@ -251,6 +267,8 @@ class RuntimeArtifactCandidate(_StrictFrozenModel):
             != self.inputs.relay_source_sha256
             or self.proxy_contents.runtime_contract_sha256
             != self.inputs.runtime_contract_sha256
+            or self.proxy_contents.readiness_contract_sha256
+            != self.inputs.readiness_contract_sha256
             or self.relay_contents.runtime_contract_sha256
             != self.inputs.runtime_contract_sha256
             or self.proxy_contents.responses_contract_sha256
@@ -360,6 +378,22 @@ def compute_runtime_artifact_input_hashes(
     )
     if responses_raw != canonical_proxy_contract_bytes():
         raise RuntimeArtifactError("artifact_responses_contract_invalid")
+    readiness_raw = _read_regular(
+        root / _PROXY_CONTEXT / "readiness-contract.json",
+        "artifact_readiness_contract_invalid",
+    )
+    readiness_value = _strict_json(readiness_raw, "artifact_readiness_contract_invalid")
+    if (
+        not isinstance(readiness_value, dict)
+        or readiness_raw != canonical_json_bytes(readiness_value)
+        or readiness_value.get("proxy_readiness_contract_version") != 1
+        or readiness_value.get("marker_path") != "/output/proxy-ready.json"
+        or readiness_value.get("request_path") != "/input/request.json"
+        or readiness_value.get("provider_attempt_count_before_ready") != 0
+        or readiness_value.get("readiness_timeout_source")
+        != "provider_connect_timeout_seconds"
+    ):
+        raise RuntimeArtifactError("artifact_readiness_contract_invalid")
     old_candidate = _read_regular(
         root / _OLD_CANDIDATE,
         "artifact_old_candidate_invalid",
@@ -388,6 +422,7 @@ def compute_runtime_artifact_input_hashes(
             )
         ),
         runtime_contract_sha256=runtime_hash,
+        readiness_contract_sha256=_sha256(readiness_raw),
         orchestrator_source_sha256=_sha256(
             _read_regular(root / _ORCHESTRATOR, "artifact_orchestrator_invalid")
         ),
@@ -459,6 +494,8 @@ def build_runtime_image_commands(
         f"PROXY_POLICY_SHA256={hashes.proxy_policy_sha256}",
         "--build-arg",
         f"RUNTIME_CONTRACT_SHA256={hashes.runtime_contract_sha256}",
+        "--build-arg",
+        f"READINESS_CONTRACT_SHA256={hashes.readiness_contract_sha256}",
         str(root / _PROXY_CONTEXT),
     ]
     relay = [
@@ -542,9 +579,13 @@ def inspect_runtime_image(
             "org.tickflow.phase2.runtime-contract-sha256": (
                 hashes.runtime_contract_sha256
             ),
+            "org.tickflow.phase2.readiness-contract-sha256": (
+                hashes.readiness_contract_sha256
+            ),
         }
         responses_hash: str | None = hashes.responses_contract_sha256
         policy_hash: str | None = hashes.proxy_policy_sha256
+        readiness_hash: str | None = hashes.readiness_contract_sha256
     else:
         image_name = RELAY_IMAGE_NAME
         entrypoint = _RELAY_ENTRYPOINT
@@ -560,6 +601,7 @@ def inspect_runtime_image(
         }
         responses_hash = None
         policy_hash = None
+        readiness_hash = None
     if (
         item.get("Id") != expected_image_id
         or item.get("RepoTags") != [image_name]
@@ -569,7 +611,8 @@ def inspect_runtime_image(
         or set(config.get("Env") or []) != environment
         or len(config.get("Env") or []) != len(environment)
         or config.get("Labels") != labels
-        or len(layers) != len(base.rootfs_layers) + 6
+        or len(layers)
+        != len(base.rootfs_layers) + (7 if role == "proxy" else 6)
         or tuple(layers[: len(base.rootfs_layers)]) != base.rootfs_layers
         or any(not isinstance(layer, str) or not _IMAGE_ID.fullmatch(layer) for layer in layers)
     ):
@@ -592,6 +635,7 @@ def inspect_runtime_image(
         source_sha256=source_hash,
         dockerfile_sha256=dockerfile_hash,
         runtime_contract_sha256=hashes.runtime_contract_sha256,
+        readiness_contract_sha256=readiness_hash,
         responses_contract_sha256=responses_hash,
         proxy_policy_sha256=policy_hash,
         runtime_user=RUNTIME_USER,
@@ -645,6 +689,7 @@ def build_runtime_artifact_candidate(
         or relay.source_sha256 != hashes.relay_source_sha256
         or relay.dockerfile_sha256 != hashes.relay_dockerfile_sha256
         or proxy.runtime_contract_sha256 != hashes.runtime_contract_sha256
+        or proxy.readiness_contract_sha256 != hashes.readiness_contract_sha256
         or relay.runtime_contract_sha256 != hashes.runtime_contract_sha256
         or proxy_contents.role != "proxy"
         or relay_contents.role != "relay"
@@ -652,6 +697,8 @@ def build_runtime_artifact_candidate(
         or relay_contents.source_sha256 != hashes.relay_source_sha256
         or proxy_contents.runtime_contract_sha256
         != hashes.runtime_contract_sha256
+        or proxy_contents.readiness_contract_sha256
+        != hashes.readiness_contract_sha256
         or relay_contents.runtime_contract_sha256
         != hashes.runtime_contract_sha256
         or proxy_contents.responses_contract_sha256
@@ -660,7 +707,7 @@ def build_runtime_artifact_candidate(
         raise RuntimeArtifactError("artifact_image_input_mismatch")
     runtime = load_runtime_contract().model_dump(mode="json")
     return RuntimeArtifactCandidate(
-        runtime_candidate_schema_version=1,
+        runtime_candidate_schema_version=2,
         status=READY_STATUS,
         symbol="000403.SZ",
         trade_date="2026-07-31",
@@ -673,6 +720,7 @@ def build_runtime_artifact_candidate(
             proxy_image_id=proxy.image_id,
             relay_image_id=relay.image_id,
             timeout_contract_sha256=hashes.runtime_contract_sha256,
+            readiness_contract_sha256=hashes.readiness_contract_sha256,
             orchestrator_source_sha256=hashes.orchestrator_source_sha256,
         ),
         inputs=hashes,
@@ -730,6 +778,9 @@ def verify_runtime_image_contents(
             ),
             "/proxy/runtime-contract.json": (
                 root / _PROXY_CONTEXT / "runtime-contract.json"
+            ),
+            "/proxy/readiness-contract.json": (
+                root / _PROXY_CONTEXT / "readiness-contract.json"
             ),
         },
         "relay": {
@@ -803,6 +854,9 @@ def verify_runtime_image_contents(
             else hashes.relay_source_sha256
         ),
         runtime_contract_sha256=hashes.runtime_contract_sha256,
+        readiness_contract_sha256=(
+            hashes.readiness_contract_sha256 if role == "proxy" else None
+        ),
         responses_contract_sha256=(
             hashes.responses_contract_sha256 if role == "proxy" else None
         ),

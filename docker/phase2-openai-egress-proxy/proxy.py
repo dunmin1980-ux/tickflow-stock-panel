@@ -34,6 +34,8 @@ CONTRACT_PATH = Path("/proxy/responses-contract.json")
 RUNTIME_CONTRACT_PATH = Path("/proxy/runtime-contract.json")
 AUTH_PATH = Path("/run/phase2/provider-auth")
 RECEIPT_PATH = Path("/output/proxy-receipt.json")
+REQUEST_PATH = Path("/input/request.json")
+READY_PATH = Path("/output/proxy-ready.json")
 AUTH_MAXIMUM_BYTES = 16_384
 
 _EXPECTED_CONTRACT_SHA256 = (
@@ -228,6 +230,8 @@ _RECEIPT_FIELDS = {
     "response_bytes",
     "terminal_status",
     "process_started",
+    "proxy_ready",
+    "relay_request_received",
     "provider_connect_started",
     "provider_connect_completed",
     "tls_completed",
@@ -312,7 +316,12 @@ class ProviderStageRecorder:
         self._monotonic_ns = monotonic_ns
         self._events = {
             name: self._empty_event(name)
-            for name in ("process_started", *_PROVIDER_STAGE_EVENTS)
+            for name in (
+                "process_started",
+                "proxy_ready",
+                "relay_request_received",
+                *_PROVIDER_STAGE_EVENTS,
+            )
         }
         self.record("process_started")
 
@@ -1271,9 +1280,12 @@ def perform_provider_request(
                     provider_http_status=status_code,
                     provider_attempt_count=1,
                 )
-        connection.sock.settimeout(
-            remaining(runtime["provider_read_timeout_seconds"])
-        )
+        # http.client may detach the connection socket for Connection: close;
+        # the response stream still owns that socket and keeps its prior timeout.
+        if connection.sock is not None:
+            connection.sock.settimeout(
+                remaining(runtime["provider_read_timeout_seconds"])
+            )
         try:
             raw = response.read(MAXIMUM_BYTES + 1)
         except (TimeoutError, OSError, http.client.HTTPException) as exc:
@@ -1365,21 +1377,22 @@ def build_receipt(
             not isinstance(value.get(name), Mapping)
             or set(value[name]) != _STAGE_EVENT_FIELDS
             or value[name].get("event") != name
-            for name in ("process_started", *_PROVIDER_STAGE_EVENTS)
+            for name in (
+                "process_started",
+                "proxy_ready",
+                "relay_request_received",
+                *_PROVIDER_STAGE_EVENTS,
+            )
         )
     ):
         raise ProxyError("UPSTREAM_REJECTED")
     return value
 
 
-def write_receipt(
-    value: Mapping[str, Any],
-    path: str = "/output/proxy-receipt.json",
-) -> None:
-    """Publish one sanitized receipt using fsync and same-directory rename."""
-    if not isinstance(value, Mapping) or set(value) != _RECEIPT_FIELDS:
+def _write_atomic_json(value: Mapping[str, Any], target: Path) -> None:
+    """Publish one bounded JSON object with fsync and same-directory rename."""
+    if not isinstance(value, Mapping):
         raise ProxyError("UPSTREAM_REJECTED")
-    target = Path(path)
     try:
         parent = os.lstat(target.parent)
         existing = os.lstat(target) if os.path.lexists(target) else None
@@ -1439,6 +1452,52 @@ def write_receipt(
                 temporary.unlink(missing_ok=True)
 
 
+def write_receipt(
+    value: Mapping[str, Any],
+    path: str = "/output/proxy-receipt.json",
+) -> None:
+    """Publish one sanitized receipt using fsync and same-directory rename."""
+    if not isinstance(value, Mapping) or set(value) != _RECEIPT_FIELDS:
+        raise ProxyError("UPSTREAM_REJECTED")
+    _write_atomic_json(value, Path(path))
+
+
+def publish_proxy_readiness(
+    *,
+    request_path: str = "/input/request.json",
+    ready_path: str = "/output/proxy-ready.json",
+    receipt_path: str = "/output/proxy-receipt.json",
+    stage_recorder: ProviderStageRecorder,
+) -> dict[str, Any]:
+    """Bind readiness evidence to the one approved request before dispatch."""
+    request = strict_object(
+        _read_regular(Path(request_path), MAXIMUM_BYTES, "UPSTREAM_REJECTED"),
+        "UPSTREAM_REJECTED",
+    )
+    request_id = request.get("request_id")
+    if not isinstance(request_id, str) or _HEX_32.fullmatch(request_id) is None:
+        raise ProxyError("UPSTREAM_REJECTED")
+    stage_recorder.record("proxy_ready")
+    ready_event = stage_recorder.events()["proxy_ready"]
+    receipt = build_receipt(
+        request_id=request_id,
+        response_category="PROXY_READY",
+        terminal_status="PROXY_READY",
+        provider_attempt_count=0,
+        stage_recorder=stage_recorder,
+    )
+    write_receipt(receipt, receipt_path)
+    marker = {
+        "request_id": request_id,
+        "proxy_ready": True,
+        "wall_time": ready_event["wall_time"],
+        "monotonic_ns": ready_event["monotonic_ns"],
+        "listener_ready": True,
+    }
+    _write_atomic_json(marker, Path(ready_path))
+    return marker
+
+
 def _error_body(category: str) -> bytes:
     return json.dumps(
         {"error": category},
@@ -1463,6 +1522,8 @@ def process_local_request(
     auth_path: str = "/run/phase2/provider-auth",
     receipt_path: str = "/output/proxy-receipt.json",
     provider_requester: ProviderRequester = perform_provider_request,
+    stage_recorder: ProviderStageRecorder | None = None,
+    expected_request_id: str | None = None,
 ) -> tuple[int, bytes, dict[str, Any]]:
     """Apply every local gate and produce one sanitized receipt."""
     method_allowed = method == ALLOWED_METHOD
@@ -1471,9 +1532,10 @@ def process_local_request(
     provider_attempted = False
     provider_status: int | None = None
     response_size: int | None = None
-    request_id: str | None = None
-    stage_recorder = ProviderStageRecorder()
+    request_id = expected_request_id
+    recorder = stage_recorder or ProviderStageRecorder()
     try:
+        recorder.record("relay_request_received")
         if not method_allowed:
             raise ProxyError("METHOD_BLOCKED")
         if not path_allowed:
@@ -1491,7 +1553,10 @@ def process_local_request(
             raise ProxyError("REQUEST_SIZE_BLOCKED")
         envelope = strict_object(body, "REQUEST_SCHEMA_BLOCKED")
         provider_payload = build_provider_request(envelope, contract)
-        request_id = envelope["request"]["request_id"]
+        envelope_request_id = envelope["request"]["request_id"]
+        if expected_request_id is not None and envelope_request_id != expected_request_id:
+            raise ProxyError("REQUEST_SCHEMA_BLOCKED")
+        request_id = envelope_request_id
         provider_body = _canonical_bytes(provider_payload)
         if len(provider_body) > MAXIMUM_BYTES:
             raise ProxyError("REQUEST_SIZE_BLOCKED")
@@ -1501,7 +1566,7 @@ def process_local_request(
         provider_status, raw_response = provider_requester(
             provider_body,
             auth_value,
-            stage_recorder,
+            recorder,
         )
         if (
             isinstance(provider_status, bool)
@@ -1554,7 +1619,7 @@ def process_local_request(
         receipt = build_receipt(
             request_id=request_id,
             terminal_status="FORWARDED",
-            stage_recorder=stage_recorder,
+            stage_recorder=recorder,
             method_allowed=True,
             path_allowed=True,
             auth_present=True,
@@ -1573,7 +1638,7 @@ def process_local_request(
         receipt = build_receipt(
             request_id=request_id,
             terminal_status=exc.category,
-            stage_recorder=stage_recorder,
+            stage_recorder=recorder,
             method_allowed=method_allowed,
             path_allowed=path_allowed,
             auth_present=auth_present,
@@ -1592,10 +1657,29 @@ def process_local_request(
         )
         write_receipt(receipt, receipt_path)
         return _local_status(exc.category), _error_body(exc.category), receipt
+    except Exception:
+        category = "UPSTREAM_REJECTED"
+        receipt = build_receipt(
+            request_id=request_id,
+            terminal_status=category,
+            stage_recorder=recorder,
+            method_allowed=method_allowed,
+            path_allowed=path_allowed,
+            auth_present=auth_present,
+            provider_attempt_count=int(provider_attempted),
+            provider_http_status=provider_status,
+            response_category=category,
+            response_size=response_size,
+        )
+        write_receipt(receipt, receipt_path)
+        return _local_status(category), _error_body(category), receipt
 
 
 class ProxyHTTPServer(HTTPServer):
     proxy_contract: dict[str, Any]
+    proxy_request_id: str
+    proxy_stage_recorder: ProviderStageRecorder
+    proxy_receipt_path: str
 
 
 class ProxyHandler(BaseHTTPRequestHandler):
@@ -1632,6 +1716,9 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 content_length=content_length,
                 body=body,
                 contract=self.server.proxy_contract,
+                stage_recorder=self.server.proxy_stage_recorder,
+                expected_request_id=self.server.proxy_request_id,
+                receipt_path=self.server.proxy_receipt_path,
             )
         except ProxyError:
             status_code = 502
@@ -1656,23 +1743,133 @@ def create_server(
     address: tuple[str, int] = ("0.0.0.0", 8080),
     *,
     contract: dict[str, Any] | None = None,
+    request_id: str = "0" * 32,
+    stage_recorder: ProviderStageRecorder | None = None,
+    receipt_path: str = "/output/proxy-receipt.json",
 ) -> ProxyHTTPServer:
     server = ProxyHTTPServer(address, ProxyHandler)
     server.proxy_contract = contract if contract is not None else load_contract()
+    server.proxy_request_id = request_id
+    server.proxy_stage_recorder = stage_recorder or ProviderStageRecorder()
+    server.proxy_receipt_path = receipt_path
     return server
 
 
-def main() -> int:
+def _publish_lifecycle_terminal_receipt(
+    *,
+    request_id: str | None,
+    stage_recorder: ProviderStageRecorder,
+    receipt_path: str,
+    category: str = "PROXY_PROCESS_ERROR",
+) -> None:
+    events = stage_recorder.events()
+    provider_attempt_count = int(
+        any(events[name]["occurred"] is True for name in _PROVIDER_STAGE_EVENTS)
+    )
+    receipt = build_receipt(
+        request_id=request_id,
+        response_category=category,
+        terminal_status=category,
+        provider_attempt_count=provider_attempt_count,
+        stage_recorder=stage_recorder,
+    )
     try:
-        contract = load_contract()
-        server = create_server(contract=contract)
+        write_receipt(receipt, receipt_path)
     except ProxyError:
+        with suppress(OSError):
+            Path(receipt_path).unlink(missing_ok=True)
+        raise
+
+
+def run_proxy_lifecycle(
+    *,
+    contract_loader: Callable[[], dict[str, Any]] = load_contract,
+    request_path: str = str(REQUEST_PATH),
+    ready_path: str = str(READY_PATH),
+    receipt_path: str = str(RECEIPT_PATH),
+    server_factory: Callable[..., ProxyHTTPServer] = create_server,
+    readiness_publisher: Callable[..., dict[str, Any]] = publish_proxy_readiness,
+) -> int:
+    """Run the listener and replace READY with a durable process terminal receipt."""
+    server: ProxyHTTPServer | None = None
+    recorder = ProviderStageRecorder()
+    request_id: str | None = None
+    try:
+        contract = contract_loader()
+        request = strict_object(
+            _read_regular(Path(request_path), MAXIMUM_BYTES, "UPSTREAM_REJECTED"),
+            "UPSTREAM_REJECTED",
+        )
+        request_id = request.get("request_id")
+        if not isinstance(request_id, str) or _HEX_32.fullmatch(request_id) is None:
+            raise ProxyError("UPSTREAM_REJECTED")
+        server = server_factory(
+            contract=contract,
+            request_id=request_id,
+            stage_recorder=recorder,
+            receipt_path=receipt_path,
+        )
+        readiness_publisher(
+            request_path=request_path,
+            ready_path=ready_path,
+            receipt_path=receipt_path,
+            stage_recorder=recorder,
+        )
+    except ProxyError:
+        if server is not None:
+            with suppress(ProxyError):
+                _publish_lifecycle_terminal_receipt(
+                    request_id=request_id,
+                    stage_recorder=recorder,
+                    receipt_path=receipt_path,
+                    category="PROXY_READINESS_FAILED",
+                )
+        if server is not None:
+            with suppress(Exception):
+                server.server_close()
+        return 2
+    except Exception:
+        with suppress(ProxyError):
+            _publish_lifecycle_terminal_receipt(
+                request_id=request_id,
+                stage_recorder=recorder,
+                receipt_path=receipt_path,
+            )
+        if server is not None:
+            with suppress(Exception):
+                server.server_close()
         return 2
     try:
         server.serve_forever()
-    finally:
+    except Exception:
+        with suppress(ProxyError):
+            _publish_lifecycle_terminal_receipt(
+                request_id=request_id,
+                stage_recorder=recorder,
+                receipt_path=receipt_path,
+            )
+        with suppress(Exception):
+            server.server_close()
+        return 2
+    except BaseException:
+        with suppress(Exception):
+            server.server_close()
+        raise
+    try:
         server.server_close()
+    except Exception:
+        with suppress(ProxyError):
+            _publish_lifecycle_terminal_receipt(
+                request_id=request_id,
+                stage_recorder=recorder,
+                receipt_path=receipt_path,
+            )
+        return 2
     return 0
+
+
+def main() -> int:
+    return run_proxy_lifecycle()
 
 
 if __name__ == "__main__":

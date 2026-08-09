@@ -697,9 +697,11 @@ class _FakeHTTPSConnection:
         response: _FakeHTTPSResponse,
         *,
         request_error: BaseException | None = None,
+        drop_socket_on_response: bool = False,
     ) -> None:
         self.response = response
         self.request_error = request_error
+        self.drop_socket_on_response = drop_socket_on_response
         self.requests: list[tuple[str, str, bytes, dict[str, str]]] = []
         self.getresponse_count = 0
         self.close_count = 0
@@ -722,6 +724,8 @@ class _FakeHTTPSConnection:
 
     def getresponse(self) -> _FakeHTTPSResponse:
         self.getresponse_count += 1
+        if self.drop_socket_on_response:
+            self.sock = None
         return self.response
 
     def close(self) -> None:
@@ -815,6 +819,34 @@ def test_transport_uses_one_verified_https_request(
     assert response.read_limits == [proxy_module.MAXIMUM_BYTES + 1]
     assert connection.sock.timeouts
     assert all(0 < value <= 60 for value in connection.sock.timeouts)
+
+
+def test_transport_reads_connection_close_response_after_socket_detaches(
+    proxy_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response_body = b'{"status":"synthetic"}'
+    response = _FakeHTTPSResponse(response_body)
+    connection = _FakeHTTPSConnection(
+        response,
+        drop_socket_on_response=True,
+    )
+    monkeypatch.setattr(
+        proxy_module,
+        "create_tls_context",
+        lambda: ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT),
+    )
+
+    status, raw = proxy_module.perform_provider_request(
+        b'{"model":"gpt-5.6-terra"}',
+        "synthetic-value",
+        connection_factory=_FakeConnectionFactory(connection),
+    )
+
+    assert status == 200
+    assert raw == response_body
+    assert response.read_limits == [proxy_module.MAXIMUM_BYTES + 1]
+    assert connection.close_count == 1
 
 
 @pytest.mark.parametrize(
@@ -1127,6 +1159,8 @@ def test_process_local_request_success_returns_relay_response_and_sanitized_rece
         "response_bytes",
         "terminal_status",
         "process_started",
+        "proxy_ready",
+        "relay_request_received",
         "provider_connect_started",
         "provider_connect_completed",
         "tls_completed",
@@ -1298,6 +1332,105 @@ def test_process_local_request_maps_transport_failures_without_retry(
     assert receipt["provider_attempt_count"] == 1
     assert receipt["retry_count"] == 0
     assert auth_value not in json.dumps(receipt, sort_keys=True)
+
+
+@pytest.mark.parametrize(
+    "reached_stages",
+    [
+        (),
+        (
+            "provider_connect_started",
+            "provider_connect_completed",
+            "tls_completed",
+        ),
+        (
+            "provider_connect_started",
+            "provider_connect_completed",
+            "tls_completed",
+            "request_write_started",
+        ),
+    ],
+)
+def test_unexpected_provider_exception_publishes_sanitized_terminal_receipt(
+    reached_stages: tuple[str, ...],
+    proxy_module: ModuleType,
+    relay_envelope: dict[str, Any],
+    contract: dict[str, Any],
+    tmp_path: Path,
+) -> None:
+    body = _relay_body(relay_envelope)
+    auth_path = tmp_path / "provider-auth"
+    auth_path.write_text("synthetic-value", encoding="utf-8")
+    auth_path.chmod(0o600)
+    receipt_path = tmp_path / "receipt.json"
+    sensitive_exception = "Authorization: Bearer must-not-be-persisted"
+
+    def unexpected_requester(
+        _body: bytes,
+        _auth: str,
+        stage_recorder: Any,
+    ) -> tuple[int, bytes]:
+        for stage in reached_stages:
+            stage_recorder.record(stage)
+        raise RuntimeError(sensitive_exception)
+
+    status, response_body, receipt = proxy_module.process_local_request(
+        method="POST",
+        path="/v1/typed-claims",
+        content_length=str(len(body)),
+        body=body,
+        contract=contract,
+        auth_path=str(auth_path),
+        receipt_path=str(receipt_path),
+        provider_requester=unexpected_requester,
+    )
+
+    persisted = receipt_path.read_text(encoding="utf-8")
+    assert status == 502
+    assert json.loads(response_body) == {"error": "UPSTREAM_REJECTED"}
+    assert receipt["terminal_status"] == "UPSTREAM_REJECTED"
+    assert receipt["response_category"] == "UPSTREAM_REJECTED"
+    assert receipt["provider_attempt_count"] == 1
+    assert receipt["retry_count"] == 0
+    assert all(receipt[name]["occurred"] is True for name in reached_stages)
+    assert sensitive_exception not in persisted
+    assert "Authorization" not in persisted
+    assert "Bearer " not in persisted
+    assert json.loads(persisted) == receipt
+
+
+def test_unexpected_base_exception_is_not_swallowed(
+    proxy_module: ModuleType,
+    relay_envelope: dict[str, Any],
+    contract: dict[str, Any],
+    tmp_path: Path,
+) -> None:
+    body = _relay_body(relay_envelope)
+    auth_path = tmp_path / "provider-auth"
+    auth_path.write_text("synthetic-value", encoding="utf-8")
+    auth_path.chmod(0o600)
+    receipt_path = tmp_path / "receipt.json"
+
+    def interrupted_requester(
+        _body: bytes,
+        _auth: str,
+        _stage_recorder: Any,
+    ) -> tuple[int, bytes]:
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        proxy_module.process_local_request(
+            method="POST",
+            path="/v1/typed-claims",
+            content_length=str(len(body)),
+            body=body,
+            contract=contract,
+            auth_path=str(auth_path),
+            receipt_path=str(receipt_path),
+            provider_requester=interrupted_requester,
+        )
+
+    assert not receipt_path.exists()
 
 
 @pytest.mark.parametrize(

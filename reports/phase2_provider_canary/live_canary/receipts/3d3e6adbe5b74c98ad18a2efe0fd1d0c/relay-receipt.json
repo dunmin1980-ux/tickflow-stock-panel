@@ -1,0 +1,88 @@
+{
+  "candidate_ready_published": {
+    "byte_count": null,
+    "event": "candidate_ready_published",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "candidate_write_completed": {
+    "byte_count": null,
+    "event": "candidate_write_completed",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "candidate_write_started": {
+    "byte_count": null,
+    "event": "candidate_write_started",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "completed_at": "2026-08-09T06:59:04.027579Z",
+  "component": "relay",
+  "error_category": "RELAY_TIMEOUT",
+  "exit_code": 2,
+  "proxy_connect_completed": {
+    "byte_count": null,
+    "event": "proxy_connect_completed",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "proxy_connect_started": {
+    "byte_count": null,
+    "event": "proxy_connect_started",
+    "http_status": null,
+    "monotonic_ns": 1789034737441,
+    "occurred": true,
+    "wall_time": "2026-08-09T06:59:03.981981Z"
+  },
+  "proxy_http_status": null,
+  "proxy_request_count": 1,
+  "receipt_schema_version": 2,
+  "relay_started": {
+    "byte_count": null,
+    "event": "relay_started",
+    "http_status": null,
+    "monotonic_ns": 1789026649388,
+    "occurred": true,
+    "wall_time": "2026-08-09T06:59:03.973292Z"
+  },
+  "request_id": "3d3e6adbe5b74c98ad18a2efe0fd1d0c",
+  "request_submitted": {
+    "byte_count": null,
+    "event": "request_submitted",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "response_received": {
+    "byte_count": null,
+    "event": "response_received",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "response_sha256": null,
+  "response_size": null,
+  "response_wait_started": {
+    "byte_count": null,
+    "event": "response_wait_started",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "retry_count": 0,
+  "started_at": "2026-08-09T06:59:03.973142Z",
+  "status": "REJECTED",
+  "terminal_status": "RELAY_TIMEOUT"
+}

@@ -1,0 +1,26 @@
+{
+  "atomic_publication": [
+    "write",
+    "fsync",
+    "atomic_rename",
+    "directory_fsync"
+  ],
+  "dispatch_order": [
+    "START_PROXY",
+    "WAIT_PROXY_READY",
+    "NETWORK_DISPATCH_STARTED",
+    "START_RELAY"
+  ],
+  "marker_path": "/output/proxy-ready.json",
+  "provider_attempt_count_before_ready": 0,
+  "proxy_readiness_contract_version": 1,
+  "readiness_timeout_source": "provider_connect_timeout_seconds",
+  "request_path": "/input/request.json",
+  "required_marker_fields": [
+    "request_id",
+    "proxy_ready",
+    "wall_time",
+    "monotonic_ns",
+    "listener_ready"
+  ]
+}
