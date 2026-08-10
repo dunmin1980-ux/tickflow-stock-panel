@@ -65,10 +65,25 @@ evidence publication, and cleanup.
 
 ## State Interpretation
 
-The durable attempt ledger is written before any possible external dispatch.
-Once `NETWORK_DISPATCH_STARTED` is durable, the attempt is consumed. A crash,
-timeout, unknown response, or Host restart after that point never permits an
-automatic retry.
+The durable attempt budget is scoped by the approved Candidate SHA-256, symbol,
+provider, exact model, endpoint alias, and ledger namespace version. New
+attempts are stored under:
+
+```text
+reports/phase2_provider_canary/attempts/
+  <approval_scope_id>/<request_id>/ledger.json
+```
+
+Legacy ledgers remain byte-for-byte read-only in Application Support. A
+consumed terminal ledger from a different, immutable approval scope is
+preserved and audited but does not consume the current scope. An unresolved,
+nonterminal, contradictory, or residue-bearing historical ledger blocks every
+scope.
+
+The current scoped ledger is written before any possible external dispatch.
+Once `NETWORK_DISPATCH_STARTED` is durable, that approval scope is consumed. A
+crash, timeout, unknown response, or Host restart after that point never permits
+an automatic retry or a second request ID in the same scope.
 
 Terminal recovery rules:
 
@@ -79,8 +94,13 @@ Terminal recovery rules:
 - `CLEANUP_COMPLETED`: machine validation and cleanup completed; manual review
   remains pending and `can_publish` remains false.
 
-An existing or unknown ledger or stale lock is a stop condition. Do not delete
-state files to force another call.
+The exclusive lock remains global at `runtime-v1/.runtime.lock`; different
+approval scopes cannot run concurrently. Request IDs remain globally unique
+across legacy ledgers, scoped ledgers, evidence, rejections, and receipts. A
+stale lock is recoverable only when the same scope has a provable terminal
+`FAILED_BEFORE_DISPATCH` ledger and no dispatch evidence. Any other existing or
+unknown lock is a stop condition. Do not delete state files to force another
+call.
 
 ## Evidence and Routing
 

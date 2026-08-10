@@ -23,7 +23,13 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from app.schemas.phase2_claims import ClaimsDocument, WorkerClaimsCandidate
 from app.services.phase2_ai_worker_protocol import (
@@ -37,11 +43,18 @@ from app.services.phase2_canary_observability import (
     classify_completed_child,
     classify_running_child,
 )
+from app.services.phase2_canary_runtime_artifact import (
+    BASE_IMAGE_DIGEST,
+    BASE_IMAGE_REFERENCE,
+    PROXY_IMAGE_NAME,
+    RELAY_IMAGE_NAME,
+    RUNTIME_USER,
+    RuntimeArtifactCandidate,
+)
 from app.services.phase2_canary_runtime_contract import (
     load_runtime_contract,
     runtime_contract_sha256,
 )
-from app.services.phase2_canary_runtime_artifact import RuntimeArtifactCandidate
 from app.services.phase2_claims_renderer import (
     render_claims_document,
     validate_rendered_document,
@@ -61,7 +74,11 @@ _NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 _DIRECTORY = getattr(os, "O_DIRECTORY", 0)
 _MAXIMUM_LEDGER_BYTES = 65_536
 _LEDGER_NAME = "attempt-ledger.json"
+_SCOPED_LEDGER_NAME = "ledger.json"
 _LOCK_NAME = ".runtime.lock"
+_LEDGER_NAMESPACE_VERSION = 1
+_LEDGER_NAMESPACE_PREFIX = "tickflow-canary-ledger-v1"
+_EXACT_MODEL_ID = "gpt-5.6-terra"
 _EVENT_FIELDS = {
     "event",
     "occurred",
@@ -178,6 +195,271 @@ _SENSITIVE_EVIDENCE = re.compile(
     r"\s*[:=]\s*[^\s]+|\bsk-(?:proj-)?[A-Za-z0-9_-]{12,}",
     re.IGNORECASE,
 )
+_RUNTIME_EVIDENCE_BASE_FIELDS = frozenset(
+    {
+        "approval_candidate_sha256",
+        "attempt_ledger_state",
+        "can_publish",
+        "candidate_ready_at",
+        "cleanup_completed_at",
+        "container_residue_count",
+        "dispatch_started_at",
+        "host_validation_completed_at",
+        "manual_review",
+        "network_residue_count",
+        "orchestrator_source_sha256",
+        "provider_attempt_count",
+        "provider_http_status",
+        "proxy_image_id",
+        "relay_image_id",
+        "request_id",
+        "response_received_at",
+        "retry_count",
+        "route",
+        "runtime_contract_version",
+        "runtime_evidence_schema_version",
+        "secret_file_residue_count",
+        "symbol",
+        "temporary_file_residue_count",
+        "terminal_state",
+        "timeout_contract_sha256",
+    }
+)
+_RUNTIME_EVIDENCE_SCOPE_FIELDS = frozenset(
+    {"approval_scope_id", "ledger_namespace_version"}
+)
+_RUNTIME_EVIDENCE_OBSERVABILITY_FIELDS = frozenset(
+    {"receipt_archive_status", "last_proven_stage", "child_terminal_reason"}
+)
+_HISTORICAL_RECEIPT_FILES = frozenset(
+    {
+        "archive-status.json",
+        "child-metadata.json",
+        "proxy-receipt.json",
+        "relay-receipt.json",
+    }
+)
+_REJECTION_FIELDS = frozenset(
+    {"can_publish", "error_category", "request_id", "retry_count", "route"}
+)
+# This pre-observability bundle is accepted only byte-for-byte. The adapter
+# supplies fields added later without rewriting the preserved audit evidence.
+_PINNED_LEGACY_RECEIPT_BUNDLES = {
+    "3d3e6adbe5b74c98ad18a2efe0fd1d0c": {
+        "archive-status.json": (
+            "f62dfc0ab09307cb0cd21aa9fa43a746bc8e32dd9a263ab31eb7586414739b8d"
+        ),
+        "child-metadata.json": (
+            "c13fd267d78f57550d229fd76ce84d9b3b0d45494e40226cc159ffd0973fdad7"
+        ),
+        "relay-receipt.json": (
+            "25acd73fed9bc65053421b57eff7e59acf00db1d0cf37c3e245c3eb49a1a3c17"
+        ),
+    }
+}
+_ARCHIVE_STATUS_FIELDS = frozenset(
+    {
+        "archive_status",
+        "archive_status_schema_version",
+        "child_metadata_status",
+        "child_terminal_reason",
+        "host_child_terminal_reason",
+        "last_proven_stage",
+        "proxy_receipt_status",
+        "relay_receipt_status",
+        "request_id",
+        "retry_count",
+        "terminal_reason_source",
+    }
+)
+_CHILD_METADATA_FIELDS = frozenset(
+    {"child_metadata_schema_version", "proxy", "relay", "request_id"}
+)
+_CHILD_PROCESS_FIELDS = frozenset(
+    {
+        "child_state",
+        "component",
+        "elapsed_ms",
+        "exit_code",
+        "exited_at",
+        "exited_monotonic_ns",
+        "signal",
+        "started_at",
+        "started_monotonic_ns",
+        "stderr",
+        "terminal_reason",
+    }
+)
+_CHILD_STDERR_FIELDS = frozenset(
+    {
+        "sensitive_hit_count",
+        "stderr_byte_count",
+        "stderr_excerpt",
+        "stderr_redacted",
+        "stderr_sha256",
+        "stderr_truncated",
+    }
+)
+_HISTORICAL_CANDIDATE_FIELDS = frozenset(
+    {
+        "ai_call_count",
+        "artifact_identity",
+        "base_digest_pinned",
+        "base_image_reference",
+        "build_network",
+        "can_publish",
+        "endpoint_alias",
+        "exact_model",
+        "inputs",
+        "manual_review",
+        "maximum_provider_attempts",
+        "new_approval_installed",
+        "no_cache",
+        "old_approval_candidate_sha256",
+        "provider",
+        "provider_attempt_count",
+        "provider_http",
+        "proxy_contents",
+        "proxy_image",
+        "pull_allowed",
+        "relay_contents",
+        "relay_image",
+        "retry_count",
+        "runtime_candidate_schema_version",
+        "runtime_contract",
+        "status",
+        "symbol",
+        "trade_date",
+    }
+)
+_HISTORICAL_ARTIFACT_IDENTITY_FIELDS = {
+    1: frozenset(
+        {
+            "facts_sha256",
+            "orchestrator_source_sha256",
+            "projection_sha256",
+            "proxy_image_id",
+            "relay_image_id",
+            "timeout_contract_sha256",
+        }
+    ),
+    2: frozenset(
+        {
+            "facts_sha256",
+            "orchestrator_source_sha256",
+            "projection_sha256",
+            "proxy_image_id",
+            "readiness_contract_sha256",
+            "relay_image_id",
+            "timeout_contract_sha256",
+        }
+    ),
+}
+_HISTORICAL_INPUT_FIELDS = {
+    1: frozenset(
+        {
+            "artifact_builder_source_sha256",
+            "artifact_verifier_source_sha256",
+            "launcher_source_sha256",
+            "orchestrator_source_sha256",
+            "proxy_dockerfile_sha256",
+            "proxy_policy_sha256",
+            "proxy_source_sha256",
+            "relay_dockerfile_sha256",
+            "relay_source_sha256",
+            "responses_contract_sha256",
+            "runbook_sha256",
+            "runtime_contract_sha256",
+        }
+    ),
+    2: frozenset(
+        {
+            "artifact_builder_source_sha256",
+            "artifact_verifier_source_sha256",
+            "launcher_source_sha256",
+            "observability_source_sha256",
+            "orchestrator_source_sha256",
+            "proxy_dockerfile_sha256",
+            "proxy_policy_sha256",
+            "proxy_source_sha256",
+            "readiness_contract_sha256",
+            "relay_dockerfile_sha256",
+            "relay_source_sha256",
+            "responses_contract_sha256",
+            "runbook_sha256",
+            "runtime_contract_sha256",
+        }
+    ),
+}
+_PINNED_OBSERVABILITY_V1_CANDIDATES = frozenset(
+    {
+        "b30c156bee1f5f2a1c8d44004fcbd25934e56a1caf6739ab58ffe7ead0e881fb"
+    }
+)
+_HISTORICAL_IMAGE_FIELDS = {
+    1: frozenset(
+        {
+            "base_image_digest",
+            "base_rootfs_prefix_verified",
+            "dockerfile_sha256",
+            "entrypoint",
+            "history_clean",
+            "image_id",
+            "image_name",
+            "image_valid",
+            "proxy_policy_sha256",
+            "responses_contract_sha256",
+            "role",
+            "rootfs_layer_count",
+            "runtime_contract_sha256",
+            "runtime_user",
+            "source_sha256",
+        }
+    ),
+    2: frozenset(
+        {
+            "base_image_digest",
+            "base_rootfs_prefix_verified",
+            "dockerfile_sha256",
+            "entrypoint",
+            "history_clean",
+            "image_id",
+            "image_name",
+            "image_valid",
+            "proxy_policy_sha256",
+            "readiness_contract_sha256",
+            "responses_contract_sha256",
+            "role",
+            "rootfs_layer_count",
+            "runtime_contract_sha256",
+            "runtime_user",
+            "source_sha256",
+        }
+    ),
+}
+_HISTORICAL_CONTENT_FIELDS = {
+    1: frozenset(
+        {
+            "cleanup_complete",
+            "content_valid",
+            "responses_contract_sha256",
+            "role",
+            "runtime_contract_sha256",
+            "source_sha256",
+        }
+    ),
+    2: frozenset(
+        {
+            "cleanup_complete",
+            "content_valid",
+            "readiness_contract_sha256",
+            "responses_contract_sha256",
+            "role",
+            "runtime_contract_sha256",
+            "source_sha256",
+        }
+    ),
+}
 
 
 def _wall_timestamp() -> str:
@@ -186,6 +468,146 @@ def _wall_timestamp() -> str:
 
 class OrchestratorError(RuntimeError):
     """Stable fail-closed error category for Host orchestration."""
+
+
+def _is_sha256(value: object) -> bool:
+    return isinstance(value, str) and _HEX_64.fullmatch(value) is not None
+
+
+def _is_image_id(value: object) -> bool:
+    return isinstance(value, str) and _IMAGE_ID.fullmatch(value) is not None
+
+
+def _historical_candidate_nested_valid(
+    value: Mapping[str, Any],
+    version: int,
+    candidate_sha256: str,
+) -> bool:
+    inputs = value.get("inputs")
+    identity = value.get("artifact_identity")
+    runtime_contract = value.get("runtime_contract")
+    expected_input_fields = _HISTORICAL_INPUT_FIELDS[version]
+    if (
+        version == 1
+        and candidate_sha256 in _PINNED_OBSERVABILITY_V1_CANDIDATES
+    ):
+        expected_input_fields = expected_input_fields | {
+            "observability_source_sha256"
+        }
+    if (
+        not isinstance(inputs, dict)
+        or frozenset(inputs) != expected_input_fields
+        or any(not _is_sha256(item) for item in inputs.values())
+        or not isinstance(identity, dict)
+        or frozenset(identity)
+        != _HISTORICAL_ARTIFACT_IDENTITY_FIELDS[version]
+        or any(
+            not _is_sha256(identity.get(field))
+            for field in identity
+            if field not in {"proxy_image_id", "relay_image_id"}
+        )
+        or not _is_image_id(identity.get("proxy_image_id"))
+        or not _is_image_id(identity.get("relay_image_id"))
+        or value.get("base_image_reference") != BASE_IMAGE_REFERENCE
+    ):
+        return False
+    try:
+        expected_contract = load_runtime_contract().model_dump(mode="json")
+    except (OSError, ValueError):
+        return False
+    if runtime_contract != expected_contract:
+        return False
+
+    images: dict[str, Mapping[str, Any]] = {}
+    contents: dict[str, Mapping[str, Any]] = {}
+    for role in ("proxy", "relay"):
+        image = value.get(f"{role}_image")
+        content = value.get(f"{role}_contents")
+        expected_name = PROXY_IMAGE_NAME if role == "proxy" else RELAY_IMAGE_NAME
+        expected_entrypoint = (
+            ["/usr/bin/python3", "/proxy/proxy.py"]
+            if role == "proxy"
+            else ["/usr/bin/python3", "/relay/relay.py"]
+        )
+        if (
+            not isinstance(image, dict)
+            or frozenset(image) != _HISTORICAL_IMAGE_FIELDS[version]
+            or image.get("role") != role
+            or image.get("image_valid") is not True
+            or image.get("history_clean") is not True
+            or image.get("base_rootfs_prefix_verified") is not True
+            or image.get("image_name") != expected_name
+            or not _is_image_id(image.get("image_id"))
+            or image.get("base_image_digest") != BASE_IMAGE_DIGEST
+            or not _is_sha256(image.get("source_sha256"))
+            or not _is_sha256(image.get("dockerfile_sha256"))
+            or not _is_sha256(image.get("runtime_contract_sha256"))
+            or image.get("runtime_user") != RUNTIME_USER
+            or image.get("entrypoint") != expected_entrypoint
+            or type(image.get("rootfs_layer_count")) is not int
+            or image.get("rootfs_layer_count") < 1
+            or not isinstance(content, dict)
+            or frozenset(content) != _HISTORICAL_CONTENT_FIELDS[version]
+            or content.get("role") != role
+            or content.get("content_valid") is not True
+            or content.get("cleanup_complete") is not True
+            or not _is_sha256(content.get("source_sha256"))
+            or not _is_sha256(content.get("runtime_contract_sha256"))
+        ):
+            return False
+        images[role] = image
+        contents[role] = content
+
+    readiness_hash = inputs.get("readiness_contract_sha256")
+    return not (
+        identity.get("proxy_image_id") != images["proxy"].get("image_id")
+        or identity.get("relay_image_id") != images["relay"].get("image_id")
+        or identity.get("timeout_contract_sha256")
+        != inputs.get("runtime_contract_sha256")
+        or identity.get("orchestrator_source_sha256")
+        != inputs.get("orchestrator_source_sha256")
+        or images["proxy"].get("source_sha256")
+        != inputs.get("proxy_source_sha256")
+        or images["relay"].get("source_sha256")
+        != inputs.get("relay_source_sha256")
+        or images["proxy"].get("dockerfile_sha256")
+        != inputs.get("proxy_dockerfile_sha256")
+        or images["relay"].get("dockerfile_sha256")
+        != inputs.get("relay_dockerfile_sha256")
+        or images["proxy"].get("runtime_contract_sha256")
+        != inputs.get("runtime_contract_sha256")
+        or images["relay"].get("runtime_contract_sha256")
+        != inputs.get("runtime_contract_sha256")
+        or images["proxy"].get("responses_contract_sha256")
+        != inputs.get("responses_contract_sha256")
+        or images["relay"].get("responses_contract_sha256") is not None
+        or images["proxy"].get("proxy_policy_sha256")
+        != inputs.get("proxy_policy_sha256")
+        or images["relay"].get("proxy_policy_sha256") is not None
+        or contents["proxy"].get("source_sha256")
+        != inputs.get("proxy_source_sha256")
+        or contents["relay"].get("source_sha256")
+        != inputs.get("relay_source_sha256")
+        or contents["proxy"].get("runtime_contract_sha256")
+        != inputs.get("runtime_contract_sha256")
+        or contents["relay"].get("runtime_contract_sha256")
+        != inputs.get("runtime_contract_sha256")
+        or contents["proxy"].get("responses_contract_sha256")
+        != inputs.get("responses_contract_sha256")
+        or contents["relay"].get("responses_contract_sha256") is not None
+        or (
+            version == 2
+            and (
+                identity.get("readiness_contract_sha256") != readiness_hash
+                or images["proxy"].get("readiness_contract_sha256")
+                != readiness_hash
+                or images["relay"].get("readiness_contract_sha256") is not None
+                or contents["proxy"].get("readiness_contract_sha256")
+                != readiness_hash
+                or contents["relay"].get("readiness_contract_sha256") is not None
+            )
+        )
+    )
 
 
 class LedgerState(StrEnum):
@@ -302,6 +724,212 @@ class AttemptLedger(_StrictFrozenModel):
     host_validation_completed_at: str | None = None
     cleanup_completed_at: str | None = None
     failed_at: str | None = None
+
+    @field_validator(
+        "ledger_schema_version",
+        "provider_attempt_count",
+        "retry_count",
+        mode="before",
+    )
+    @classmethod
+    def require_exact_integer_contract_fields(cls, value: object) -> object:
+        if type(value) is not int:
+            raise ValueError("ledger_integer_field_invalid")
+        return value
+
+    @model_validator(mode="after")
+    def require_consistent_timeline(self) -> AttemptLedger:
+        timestamps = {
+            "prepared_at": self.prepared_at,
+            "dispatch_started_at": self.dispatch_started_at,
+            "response_received_at": self.response_received_at,
+            "candidate_ready_at": self.candidate_ready_at,
+            "host_validation_completed_at": self.host_validation_completed_at,
+            "cleanup_completed_at": self.cleanup_completed_at,
+            "failed_at": self.failed_at,
+        }
+        if any(
+            value is not None and (not value or value != value.strip())
+            for value in timestamps.values()
+        ):
+            raise ValueError("ledger_timestamp_invalid")
+        expected_attempts = 1 if self.state in _POST_DISPATCH_STATES else 0
+        if self.provider_attempt_count != expected_attempts:
+            raise ValueError("ledger_attempt_count_invalid")
+        required: dict[LedgerState, tuple[str, ...]] = {
+            LedgerState.PREPARED: ("prepared_at",),
+            LedgerState.NETWORK_DISPATCH_STARTED: (
+                "prepared_at",
+                "dispatch_started_at",
+            ),
+            LedgerState.PROVIDER_RESPONSE_RECEIVED: (
+                "prepared_at",
+                "dispatch_started_at",
+                "response_received_at",
+            ),
+            LedgerState.CANDIDATE_COLLECTED: (
+                "prepared_at",
+                "dispatch_started_at",
+                "response_received_at",
+                "candidate_ready_at",
+            ),
+            LedgerState.HOST_VALIDATION_COMPLETED: (
+                "prepared_at",
+                "dispatch_started_at",
+                "response_received_at",
+                "candidate_ready_at",
+                "host_validation_completed_at",
+            ),
+            LedgerState.CLEANUP_COMPLETED: tuple(timestamps)[:-1],
+            LedgerState.FAILED_BEFORE_DISPATCH: ("prepared_at", "failed_at"),
+            LedgerState.FAILED_AFTER_DISPATCH: (
+                "prepared_at",
+                "dispatch_started_at",
+                "failed_at",
+            ),
+            LedgerState.ATTEMPT_CONSUMED_UNKNOWN: (
+                "prepared_at",
+                "dispatch_started_at",
+                "failed_at",
+            ),
+        }[self.state]
+        required_set = set(required)
+        if any(timestamps[field] is None for field in required_set):
+            raise ValueError("ledger_timeline_incomplete")
+        if self.state in {
+            LedgerState.PREPARED,
+            LedgerState.NETWORK_DISPATCH_STARTED,
+            LedgerState.PROVIDER_RESPONSE_RECEIVED,
+            LedgerState.CANDIDATE_COLLECTED,
+            LedgerState.HOST_VALIDATION_COMPLETED,
+            LedgerState.CLEANUP_COMPLETED,
+            LedgerState.FAILED_BEFORE_DISPATCH,
+        } and any(
+            value is not None
+            for field, value in timestamps.items()
+            if field not in required_set
+        ):
+            raise ValueError("ledger_timeline_contradictory")
+        if (
+            self.candidate_ready_at is not None
+            and self.response_received_at is None
+        ) or (
+            self.host_validation_completed_at is not None
+            and self.candidate_ready_at is None
+        ) or (
+            self.cleanup_completed_at is not None
+            and self.host_validation_completed_at is None
+        ):
+            raise ValueError("ledger_timeline_contradictory")
+        return self
+
+
+class ApprovalScopeIdentity(_StrictFrozenModel):
+    ledger_namespace_version: Literal[1] = 1
+    approval_candidate_sha256: str
+    symbol: Literal["000403.SZ"]
+    provider_id: Literal["openai"]
+    exact_model_id: Literal["gpt-5.6-terra"]
+    endpoint_alias: Literal["openai_responses_v1"]
+
+    @field_validator("ledger_namespace_version", mode="before")
+    @classmethod
+    def require_exact_namespace_version(cls, value: object) -> object:
+        if type(value) is not int:
+            raise ValueError("ledger_namespace_version_invalid")
+        return value
+
+    @field_validator("approval_candidate_sha256")
+    @classmethod
+    def validate_candidate_sha256(cls, value: str) -> str:
+        if _HEX_64.fullmatch(value) is None:
+            raise ValueError("approval_candidate_sha256_invalid")
+        return value
+
+
+def approval_scope_material(scope: ApprovalScopeIdentity) -> bytes:
+    if not isinstance(scope, ApprovalScopeIdentity):
+        raise OrchestratorError("approval_scope_identity_invalid")
+    values = (
+        _LEDGER_NAMESPACE_PREFIX,
+        scope.approval_candidate_sha256,
+        scope.symbol,
+        scope.provider_id,
+        scope.exact_model_id,
+        scope.endpoint_alias,
+    )
+    return "\n|\n".join(values).encode("utf-8")
+
+
+def compute_approval_scope_id(scope: ApprovalScopeIdentity) -> str:
+    return hashlib.sha256(approval_scope_material(scope)).hexdigest()
+
+
+class ApprovalScopedAttemptLedger(_StrictFrozenModel):
+    ledger_namespace_version: Literal[1] = 1
+    approval_scope_id: str
+    exact_model_id: Literal["gpt-5.6-terra"]
+    attempt: AttemptLedger
+
+    @field_validator("ledger_namespace_version", mode="before")
+    @classmethod
+    def require_exact_namespace_version(cls, value: object) -> object:
+        if type(value) is not int:
+            raise ValueError("ledger_namespace_version_invalid")
+        return value
+
+    @field_validator("approval_scope_id")
+    @classmethod
+    def validate_scope_id(cls, value: str) -> str:
+        if _HEX_64.fullmatch(value) is None:
+            raise ValueError("approval_scope_id_invalid")
+        return value
+
+    @model_validator(mode="after")
+    def require_scope_binding(self) -> ApprovalScopedAttemptLedger:
+        identity = self.attempt.identity
+        scope = ApprovalScopeIdentity(
+            approval_candidate_sha256=identity.approval_candidate_sha256,
+            symbol=identity.symbol,
+            provider_id=identity.provider,
+            exact_model_id=self.exact_model_id,
+            endpoint_alias=identity.endpoint_alias,
+        )
+        if self.approval_scope_id != compute_approval_scope_id(scope):
+            raise ValueError("approval_scope_binding_invalid")
+        return self
+
+    @property
+    def identity(self) -> CanaryRunIdentity:
+        return self.attempt.identity
+
+    @property
+    def state(self) -> LedgerState:
+        return self.attempt.state
+
+    @property
+    def provider_attempt_count(self) -> int:
+        return self.attempt.provider_attempt_count
+
+    @property
+    def dispatch_started_at(self) -> str | None:
+        return self.attempt.dispatch_started_at
+
+    @property
+    def response_received_at(self) -> str | None:
+        return self.attempt.response_received_at
+
+    @property
+    def candidate_ready_at(self) -> str | None:
+        return self.attempt.candidate_ready_at
+
+    @property
+    def host_validation_completed_at(self) -> str | None:
+        return self.attempt.host_validation_completed_at
+
+    @property
+    def cleanup_completed_at(self) -> str | None:
+        return self.attempt.cleanup_completed_at
 
 
 def _canonical_bytes(value: object) -> bytes:
@@ -443,14 +1071,38 @@ def _atomic_write(path: Path, raw: bytes) -> None:
             temporary.unlink(missing_ok=True)
 
 
-class AttemptLedgerStore:
-    """Persistent fsync-backed ledger outside the ephemeral run directory."""
+def _frozen_legacy_state_roots() -> tuple[Path, ...]:
+    return (
+        Path.home()
+        / "Library/Application Support/TickFlowPhase2Canary/runtime-v1",
+    )
 
-    def __init__(self, state_root: Path) -> None:
+
+class AttemptLedgerStore:
+    """Read legacy ledgers; writes are restricted to isolated test fixtures."""
+
+    def __init__(
+        self,
+        state_root: Path,
+        *,
+        fixture_writes_enabled: bool = False,
+    ) -> None:
         self.root = _validate_state_root(state_root)
         self.path = self.root / _LEDGER_NAME
+        if not isinstance(fixture_writes_enabled, bool):
+            raise OrchestratorError("fixture_write_setting_invalid")
+        self.fixture_writes_enabled = fixture_writes_enabled
+
+    def _assert_fixture_write_allowed(self) -> None:
+        if not self.fixture_writes_enabled:
+            raise OrchestratorError("legacy_ledger_read_only")
+        for frozen in _frozen_legacy_state_roots():
+            frozen_root = Path(os.path.abspath(os.fspath(frozen)))
+            if self.root == frozen_root or frozen_root in self.root.parents:
+                raise OrchestratorError("historical_ledger_immutable")
 
     def prepare(self, identity: CanaryRunIdentity, *, timestamp: str) -> AttemptLedger:
+        self._assert_fixture_write_allowed()
         if not isinstance(identity, CanaryRunIdentity):
             raise OrchestratorError("identity_invalid")
         try:
@@ -479,6 +1131,7 @@ class AttemptLedgerStore:
         *,
         timestamp: str,
     ) -> AttemptLedger:
+        self._assert_fixture_write_allowed()
         current = self.load()
         if state not in _TRANSITIONS.get(current.state, set()):
             raise OrchestratorError("ledger_transition_invalid")
@@ -525,6 +1178,1503 @@ def recover_attempt_state(
     )
 
 
+def _validate_report_directory(path: Path, category: str) -> Path:
+    target = Path(os.path.abspath(os.fspath(path)))
+    try:
+        _assert_no_symlink_components(target)
+        metadata = os.lstat(target)
+    except (OSError, OrchestratorError) as exc:
+        raise OrchestratorError(category) from exc
+    if (
+        stat.S_ISLNK(metadata.st_mode)
+        or not stat.S_ISDIR(metadata.st_mode)
+        or stat.S_IMODE(metadata.st_mode) & 0o022
+    ):
+        raise OrchestratorError(category)
+    return target
+
+
+def _read_report_regular(
+    path: Path,
+    category: str,
+    *,
+    maximum_bytes: int = 262_144,
+) -> bytes:
+    try:
+        before = os.lstat(path)
+    except OSError as exc:
+        raise OrchestratorError(category) from exc
+    if (
+        stat.S_ISLNK(before.st_mode)
+        or not stat.S_ISREG(before.st_mode)
+        or before.st_size <= 0
+        or before.st_size > maximum_bytes
+    ):
+        raise OrchestratorError(category)
+    try:
+        descriptor = os.open(path, os.O_RDONLY | _NOFOLLOW)
+    except OSError as exc:
+        raise OrchestratorError(category) from exc
+    try:
+        opened = os.fstat(descriptor)
+        raw = os.read(descriptor, maximum_bytes + 1)
+        after = os.lstat(path)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or len(raw) != opened.st_size
+            or len(raw) > maximum_bytes
+            or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)
+            or (after.st_dev, after.st_ino) != (opened.st_dev, opened.st_ino)
+        ):
+            raise OrchestratorError(category)
+        return raw
+    except OSError as exc:
+        raise OrchestratorError(category) from exc
+    finally:
+        os.close(descriptor)
+
+
+def _open_private_directory(
+    path: Path,
+    category: str,
+    *,
+    allow_read_only_public: bool = False,
+) -> int:
+    target = Path(os.path.abspath(os.fspath(path)))
+    try:
+        _assert_no_symlink_components(target)
+        before = os.lstat(target)
+        descriptor = os.open(
+            target,
+            os.O_RDONLY | _DIRECTORY | _NOFOLLOW,
+        )
+        opened = os.fstat(descriptor)
+    except (OSError, OrchestratorError) as exc:
+        if "descriptor" in locals():
+            os.close(descriptor)
+        raise OrchestratorError(category) from exc
+    mode = stat.S_IMODE(before.st_mode)
+    if (
+        stat.S_ISLNK(before.st_mode)
+        or not stat.S_ISDIR(before.st_mode)
+        or (
+            mode != 0o700
+            and not (allow_read_only_public and mode & 0o022 == 0)
+        )
+        or not stat.S_ISDIR(opened.st_mode)
+        or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)
+    ):
+        os.close(descriptor)
+        raise OrchestratorError(category)
+    return descriptor
+
+
+def _write_descriptor(descriptor: int, raw: bytes, category: str) -> None:
+    offset = 0
+    while offset < len(raw):
+        try:
+            written = os.write(descriptor, raw[offset:])
+        except OSError as exc:
+            raise OrchestratorError(category) from exc
+        if written <= 0:
+            raise OrchestratorError(category)
+        offset += written
+    os.fsync(descriptor)
+
+
+def _atomic_create_no_clobber(path: Path, raw: bytes) -> None:
+    parent_descriptor = _open_private_directory(
+        path.parent,
+        "ledger_namespace_invalid",
+    )
+    temporary_name = f".{path.name}.{uuid.uuid4().hex}.partial"
+    temporary_descriptor = -1
+    linked = False
+    try:
+        temporary_descriptor = os.open(
+            temporary_name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NOFOLLOW,
+            0o600,
+            dir_fd=parent_descriptor,
+        )
+        _write_descriptor(
+            temporary_descriptor,
+            raw,
+            "scoped_ledger_write_failed",
+        )
+        os.close(temporary_descriptor)
+        temporary_descriptor = -1
+        try:
+            os.link(
+                temporary_name,
+                path.name,
+                src_dir_fd=parent_descriptor,
+                dst_dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+        except FileExistsError as exc:
+            raise OrchestratorError("scoped_ledger_already_exists") from exc
+        linked = True
+        os.unlink(temporary_name, dir_fd=parent_descriptor)
+        os.fsync(parent_descriptor)
+    except OrchestratorError:
+        raise
+    except OSError as exc:
+        raise OrchestratorError("scoped_ledger_write_failed") from exc
+    finally:
+        if temporary_descriptor >= 0:
+            os.close(temporary_descriptor)
+        if not linked:
+            with contextlib.suppress(OSError):
+                os.unlink(temporary_name, dir_fd=parent_descriptor)
+        os.close(parent_descriptor)
+
+
+def _atomic_replace_expected(
+    path: Path,
+    raw: bytes,
+    *,
+    expected_raw: bytes,
+) -> None:
+    parent_descriptor = _open_private_directory(
+        path.parent,
+        "ledger_namespace_invalid",
+    )
+    target_descriptor = -1
+    temporary_descriptor = -1
+    temporary_name = f".{path.name}.{uuid.uuid4().hex}.partial"
+    backup_name = f".{path.name}.{uuid.uuid4().hex}.previous"
+    backup_present = False
+
+    def restore_backup() -> bool:
+        nonlocal backup_present
+        try:
+            os.link(
+                backup_name,
+                path.name,
+                src_dir_fd=parent_descriptor,
+                dst_dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+        except FileExistsError:
+            return False
+        os.unlink(backup_name, dir_fd=parent_descriptor)
+        backup_present = False
+        os.fsync(parent_descriptor)
+        return True
+
+    try:
+        target_descriptor = os.open(
+            path.name,
+            os.O_RDONLY | _NOFOLLOW,
+            dir_fd=parent_descriptor,
+        )
+        target_metadata = os.fstat(target_descriptor)
+        observed = os.read(target_descriptor, _MAXIMUM_LEDGER_BYTES + 1)
+        if (
+            not stat.S_ISREG(target_metadata.st_mode)
+            or stat.S_IMODE(target_metadata.st_mode) != 0o600
+            or len(observed) != target_metadata.st_size
+            or observed != expected_raw
+        ):
+            raise OrchestratorError("scoped_ledger_changed")
+        temporary_descriptor = os.open(
+            temporary_name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NOFOLLOW,
+            0o600,
+            dir_fd=parent_descriptor,
+        )
+        _write_descriptor(
+            temporary_descriptor,
+            raw,
+            "scoped_ledger_write_failed",
+        )
+        os.close(temporary_descriptor)
+        temporary_descriptor = -1
+        os.rename(
+            path.name,
+            backup_name,
+            src_dir_fd=parent_descriptor,
+            dst_dir_fd=parent_descriptor,
+        )
+        backup_present = True
+        moved = os.stat(
+            backup_name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        os.lseek(target_descriptor, 0, os.SEEK_SET)
+        moved_raw = os.read(target_descriptor, _MAXIMUM_LEDGER_BYTES + 1)
+        if (
+            (moved.st_dev, moved.st_ino)
+            != (target_metadata.st_dev, target_metadata.st_ino)
+            or moved_raw != expected_raw
+            or len(moved_raw) != moved.st_size
+        ):
+            restore_backup()
+            raise OrchestratorError("scoped_ledger_changed")
+        try:
+            os.link(
+                temporary_name,
+                path.name,
+                src_dir_fd=parent_descriptor,
+                dst_dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+        except FileExistsError as exc:
+            restore_backup()
+            raise OrchestratorError("scoped_ledger_changed") from exc
+        os.unlink(temporary_name, dir_fd=parent_descriptor)
+        os.unlink(backup_name, dir_fd=parent_descriptor)
+        backup_present = False
+        os.fsync(parent_descriptor)
+    except OrchestratorError:
+        raise
+    except OSError as exc:
+        raise OrchestratorError("scoped_ledger_write_failed") from exc
+    finally:
+        if target_descriptor >= 0:
+            os.close(target_descriptor)
+        if temporary_descriptor >= 0:
+            os.close(temporary_descriptor)
+        with contextlib.suppress(OSError):
+            os.unlink(temporary_name, dir_fd=parent_descriptor)
+        if backup_present:
+            with contextlib.suppress(OSError):
+                os.fsync(parent_descriptor)
+        os.close(parent_descriptor)
+
+
+def _private_namespace_child(parent: Path, name: str) -> Path:
+    child = parent / name
+    parent_descriptor = _open_private_directory(
+        parent,
+        "ledger_namespace_invalid",
+    )
+    try:
+        metadata = os.stat(
+            name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+    except FileNotFoundError:
+        try:
+            os.mkdir(name, mode=0o700, dir_fd=parent_descriptor)
+            os.fsync(parent_descriptor)
+        except FileExistsError:
+            pass
+        except OSError as exc:
+            os.close(parent_descriptor)
+            raise OrchestratorError("ledger_namespace_create_failed") from exc
+        try:
+            metadata = os.stat(
+                name,
+                dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+        except OSError as exc:
+            os.close(parent_descriptor)
+            raise OrchestratorError("ledger_namespace_create_failed") from exc
+    except OSError as exc:
+        os.close(parent_descriptor)
+        raise OrchestratorError("ledger_namespace_invalid") from exc
+    try:
+        if stat.S_ISLNK(metadata.st_mode):
+            raise OrchestratorError("ledger_namespace_symlink_forbidden")
+        if (
+            not stat.S_ISDIR(metadata.st_mode)
+            or stat.S_IMODE(metadata.st_mode) != 0o700
+        ):
+            raise OrchestratorError("ledger_namespace_mode_invalid")
+        child_descriptor = os.open(
+            name,
+            os.O_RDONLY | _DIRECTORY | _NOFOLLOW,
+            dir_fd=parent_descriptor,
+        )
+        try:
+            opened = os.fstat(child_descriptor)
+            if (opened.st_dev, opened.st_ino) != (
+                metadata.st_dev,
+                metadata.st_ino,
+            ):
+                raise OrchestratorError("ledger_namespace_changed")
+        finally:
+            os.close(child_descriptor)
+        return child
+    finally:
+        os.close(parent_descriptor)
+
+
+def _decode_scoped_ledger(raw: bytes) -> ApprovalScopedAttemptLedger:
+    try:
+        ledger = ApprovalScopedAttemptLedger.model_validate_json(raw)
+    except ValueError as exc:
+        raise OrchestratorError("scoped_ledger_invalid") from exc
+    if raw != _canonical_bytes(ledger.model_dump(mode="json")):
+        raise OrchestratorError("scoped_ledger_not_canonical")
+    expected_attempts = 1 if ledger.state in _POST_DISPATCH_STATES else 0
+    if ledger.provider_attempt_count != expected_attempts:
+        raise OrchestratorError("scoped_ledger_attempt_count_invalid")
+    return ledger
+
+
+class ApprovalScopedAttemptLedgerStore:
+    """Fsync-backed ledger for one request inside one approval scope."""
+
+    def __init__(
+        self,
+        attempts_root: Path,
+        *,
+        scope: ApprovalScopeIdentity,
+        request_id: str,
+    ) -> None:
+        self.attempts_root = _validate_state_root(attempts_root)
+        if not isinstance(scope, ApprovalScopeIdentity):
+            raise OrchestratorError("approval_scope_identity_invalid")
+        if _HEX_32.fullmatch(request_id) is None:
+            raise OrchestratorError("request_id_invalid")
+        self.scope = scope
+        self.scope_id = compute_approval_scope_id(scope)
+        self.request_id = request_id
+        self.scope_root = self.attempts_root / self.scope_id
+        self.root = self.scope_root / request_id
+        self.path = self.root / _SCOPED_LEDGER_NAME
+
+    def _ensure_root(self) -> None:
+        scope_root = _private_namespace_child(self.attempts_root, self.scope_id)
+        request_root = _private_namespace_child(scope_root, self.request_id)
+        if request_root != self.root:
+            raise OrchestratorError("ledger_namespace_path_invalid")
+
+    def _validate_existing_root(self) -> None:
+        for path in (self.scope_root, self.root):
+            try:
+                metadata = os.lstat(path)
+            except OSError as exc:
+                raise OrchestratorError("scoped_ledger_missing") from exc
+            if stat.S_ISLNK(metadata.st_mode):
+                raise OrchestratorError("ledger_namespace_symlink_forbidden")
+            if (
+                not stat.S_ISDIR(metadata.st_mode)
+                or stat.S_IMODE(metadata.st_mode) != 0o700
+            ):
+                raise OrchestratorError("ledger_namespace_mode_invalid")
+
+    def prepare(
+        self,
+        identity: CanaryRunIdentity,
+        *,
+        timestamp: str,
+    ) -> ApprovalScopedAttemptLedger:
+        if (
+            not isinstance(identity, CanaryRunIdentity)
+            or identity.request_id != self.request_id
+            or identity.approval_candidate_sha256
+            != self.scope.approval_candidate_sha256
+            or identity.symbol != self.scope.symbol
+            or identity.provider != self.scope.provider_id
+            or identity.endpoint_alias != self.scope.endpoint_alias
+        ):
+            raise OrchestratorError("scoped_ledger_identity_invalid")
+        self._ensure_root()
+        attempt = AttemptLedger(
+            identity=identity,
+            state=LedgerState.PREPARED,
+            provider_attempt_count=0,
+            prepared_at=timestamp,
+        )
+        ledger = ApprovalScopedAttemptLedger(
+            approval_scope_id=self.scope_id,
+            exact_model_id=self.scope.exact_model_id,
+            attempt=attempt,
+        )
+        _atomic_create_no_clobber(
+            self.path,
+            _canonical_bytes(ledger.model_dump(mode="json")),
+        )
+        return ledger
+
+    def load(self) -> ApprovalScopedAttemptLedger:
+        self._validate_existing_root()
+        ledger = _decode_scoped_ledger(
+            _read_regular(self.path, "scoped_ledger_target_invalid")
+        )
+        if (
+            ledger.approval_scope_id != self.scope_id
+            or ledger.identity.request_id != self.request_id
+            or ledger.exact_model_id != self.scope.exact_model_id
+        ):
+            raise OrchestratorError("scoped_ledger_identity_invalid")
+        return ledger
+
+    def transition(
+        self,
+        state: LedgerState,
+        *,
+        timestamp: str,
+    ) -> ApprovalScopedAttemptLedger:
+        current = self.load()
+        if state not in _TRANSITIONS.get(current.state, set()):
+            raise OrchestratorError("ledger_transition_invalid")
+        updates: dict[str, Any] = {
+            "state": state,
+            "provider_attempt_count": 1 if state in _POST_DISPATCH_STATES else 0,
+        }
+        timestamp_field = {
+            LedgerState.NETWORK_DISPATCH_STARTED: "dispatch_started_at",
+            LedgerState.PROVIDER_RESPONSE_RECEIVED: "response_received_at",
+            LedgerState.CANDIDATE_COLLECTED: "candidate_ready_at",
+            LedgerState.HOST_VALIDATION_COMPLETED: "host_validation_completed_at",
+            LedgerState.CLEANUP_COMPLETED: "cleanup_completed_at",
+            LedgerState.FAILED_BEFORE_DISPATCH: "failed_at",
+            LedgerState.FAILED_AFTER_DISPATCH: "failed_at",
+            LedgerState.ATTEMPT_CONSUMED_UNKNOWN: "failed_at",
+        }[state]
+        updates[timestamp_field] = timestamp
+        attempt = current.attempt.model_copy(update=updates)
+        ledger = ApprovalScopedAttemptLedger(
+            approval_scope_id=current.approval_scope_id,
+            exact_model_id=current.exact_model_id,
+            attempt=attempt,
+        )
+        _atomic_replace_expected(
+            self.path,
+            _canonical_bytes(ledger.model_dump(mode="json")),
+            expected_raw=_canonical_bytes(current.model_dump(mode="json")),
+        )
+        return ledger
+
+
+@dataclass(frozen=True)
+class LedgerNamespacePreflight:
+    status: str
+    current_scope_id: str
+    current_scope_provider_attempts: int
+    current_scope_attempt_availability: Literal["AVAILABLE", "BLOCKED"]
+    historical_requests: tuple[str, ...]
+    global_request_ids: tuple[str, ...]
+    errors: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class _DiscoveredLedger:
+    ledger: AttemptLedger | ApprovalScopedAttemptLedger
+    path: Path
+    scoped: bool
+
+
+class ApprovalScopedLedgerNamespace:
+    """Read-only preflight across legacy and approval-scoped attempts."""
+
+    def __init__(
+        self,
+        *,
+        repo_root: Path,
+        attempts_root: Path,
+        legacy_state_root: Path,
+        historical_evidence_root: Path,
+        candidate_roots: tuple[Path, ...],
+    ) -> None:
+        self.repo_root = _validate_report_directory(
+            repo_root,
+            "repo_root_invalid",
+        )
+        self.attempts_root = _validate_state_root(attempts_root)
+        self.legacy_state_root = _validate_state_root(legacy_state_root)
+        self.historical_evidence_root = _validate_report_directory(
+            historical_evidence_root,
+            "historical_evidence_root_invalid",
+        )
+        if not candidate_roots:
+            raise OrchestratorError("candidate_roots_missing")
+        self.candidate_roots = tuple(
+            _validate_report_directory(path, "candidate_root_invalid")
+            for path in candidate_roots
+        )
+
+    def _legacy_ledgers(self) -> list[_DiscoveredLedger]:
+        allowed_entries = {_LEDGER_NAME, "history", ".runtime.lock"}
+        if any(
+            entry.name not in allowed_entries
+            for entry in self.legacy_state_root.iterdir()
+        ):
+            raise OrchestratorError("historical_state_entries_invalid")
+        paths: list[Path] = []
+        current = self.legacy_state_root / _LEDGER_NAME
+        if current.exists() or current.is_symlink():
+            paths.append(current)
+        history = self.legacy_state_root / "history"
+        if history.exists() or history.is_symlink():
+            history = _validate_state_root(history)
+            for request_root in sorted(history.iterdir(), key=lambda item: item.name):
+                if _HEX_32.fullmatch(request_root.name) is None:
+                    raise OrchestratorError("historical_request_path_invalid")
+                request_root = _validate_state_root(request_root)
+                if {item.name for item in request_root.iterdir()} != {
+                    _LEDGER_NAME
+                }:
+                    raise OrchestratorError(
+                        "historical_request_entries_invalid"
+                    )
+                ledger_path = request_root / _LEDGER_NAME
+                if not ledger_path.exists() and not ledger_path.is_symlink():
+                    raise OrchestratorError("historical_ledger_missing")
+                paths.append(ledger_path)
+        discovered: list[_DiscoveredLedger] = []
+        for path in paths:
+            ledger = _decode_ledger(_read_regular(path, "ledger_target_invalid"))
+            if (
+                path.parent.name != "history"
+                and path.parent != self.legacy_state_root
+                and path.parent.name != ledger.identity.request_id
+            ):
+                raise OrchestratorError("historical_request_path_invalid")
+            discovered.append(_DiscoveredLedger(ledger=ledger, path=path, scoped=False))
+        return discovered
+
+    def _scoped_ledgers(self) -> list[_DiscoveredLedger]:
+        discovered: list[_DiscoveredLedger] = []
+        for scope_root in sorted(self.attempts_root.iterdir(), key=lambda item: item.name):
+            if _HEX_64.fullmatch(scope_root.name) is None:
+                raise OrchestratorError("scoped_scope_path_invalid")
+            scope_root = _validate_state_root(scope_root)
+            for request_root in sorted(scope_root.iterdir(), key=lambda item: item.name):
+                if _HEX_32.fullmatch(request_root.name) is None:
+                    raise OrchestratorError("scoped_request_path_invalid")
+                request_root = _validate_state_root(request_root)
+                if {item.name for item in request_root.iterdir()} != {
+                    _SCOPED_LEDGER_NAME
+                }:
+                    raise OrchestratorError("scoped_request_entries_invalid")
+                ledger_path = request_root / _SCOPED_LEDGER_NAME
+                if not ledger_path.exists() and not ledger_path.is_symlink():
+                    raise OrchestratorError("scoped_ledger_missing")
+                ledger = _decode_scoped_ledger(
+                    _read_regular(ledger_path, "scoped_ledger_target_invalid")
+                )
+                if (
+                    ledger.approval_scope_id != scope_root.name
+                    or ledger.identity.request_id != request_root.name
+                ):
+                    raise OrchestratorError("scoped_ledger_path_binding_invalid")
+                discovered.append(
+                    _DiscoveredLedger(ledger=ledger, path=ledger_path, scoped=True)
+                )
+        return discovered
+
+    def _candidate_identity(self, candidate_sha256: str) -> ApprovalScopeIdentity:
+        for root in self.candidate_roots:
+            path = root / f"{candidate_sha256}.json"
+            if not path.exists() and not path.is_symlink():
+                continue
+            raw = _read_report_regular(path, "historical_candidate_invalid")
+            if hashlib.sha256(raw).hexdigest() != candidate_sha256:
+                raise OrchestratorError("historical_candidate_hash_mismatch")
+            try:
+                value = _strict_json_bytes(raw, "historical_candidate_invalid")
+            except OrchestratorError as exc:
+                raise OrchestratorError("historical_candidate_invalid") from exc
+            version = value.get("runtime_candidate_schema_version")
+            artifact_identity = value.get("artifact_identity")
+            nested_objects = (
+                "inputs",
+                "proxy_contents",
+                "proxy_image",
+                "relay_contents",
+                "relay_image",
+                "runtime_contract",
+            )
+            if (
+                raw != canonical_json_bytes(value)
+                or not isinstance(value, dict)
+                or frozenset(value) != _HISTORICAL_CANDIDATE_FIELDS
+                or type(version) is not int
+                or version not in _HISTORICAL_ARTIFACT_IDENTITY_FIELDS
+                or not isinstance(artifact_identity, dict)
+                or frozenset(artifact_identity)
+                != _HISTORICAL_ARTIFACT_IDENTITY_FIELDS[version]
+                or any(not isinstance(value.get(field), dict) for field in nested_objects)
+                or not _historical_candidate_nested_valid(
+                    value,
+                    version,
+                    candidate_sha256,
+                )
+                or value.get("status")
+                != "PHASE2B_CANARY_RUNTIME_CONTRACT_READY_FOR_REAPPROVAL"
+                or value.get("symbol") != "000403.SZ"
+                or value.get("trade_date") != "2026-07-31"
+                or value.get("provider") != "openai"
+                or value.get("exact_model") != _EXACT_MODEL_ID
+                or value.get("endpoint_alias") != "openai_responses_v1"
+                or not isinstance(
+                    value.get("old_approval_candidate_sha256"), str
+                )
+                or _HEX_64.fullmatch(value["old_approval_candidate_sha256"])
+                is None
+                or value.get("new_approval_installed") is not False
+                or value.get("pull_allowed") is not False
+                or value.get("no_cache") is not True
+                or value.get("base_digest_pinned") is not True
+                or value.get("build_network") != "none"
+                or value.get("provider_http") != "NOT_RUN"
+                or value.get("can_publish") is not False
+                or value.get("manual_review") != "NOT_STARTED"
+                or any(
+                    type(value.get(field)) is not int
+                    for field in (
+                        "ai_call_count",
+                        "maximum_provider_attempts",
+                        "provider_attempt_count",
+                        "retry_count",
+                    )
+                )
+                or value.get("ai_call_count") != 0
+                or value.get("maximum_provider_attempts") != 1
+                or value.get("provider_attempt_count") != 0
+                or value.get("retry_count") != 0
+                or any(
+                    not isinstance(artifact_identity.get(field), str)
+                    or _HEX_64.fullmatch(artifact_identity[field]) is None
+                    for field in (
+                        "facts_sha256",
+                        "orchestrator_source_sha256",
+                        "projection_sha256",
+                        "timeout_contract_sha256",
+                    )
+                )
+                or not isinstance(artifact_identity.get("proxy_image_id"), str)
+                or _IMAGE_ID.fullmatch(artifact_identity["proxy_image_id"])
+                is None
+                or not isinstance(artifact_identity.get("relay_image_id"), str)
+                or _IMAGE_ID.fullmatch(artifact_identity["relay_image_id"])
+                is None
+                or (
+                    version == 2
+                    and (
+                        not isinstance(
+                            artifact_identity.get("readiness_contract_sha256"),
+                            str,
+                        )
+                        or _HEX_64.fullmatch(
+                            artifact_identity["readiness_contract_sha256"]
+                        )
+                        is None
+                    )
+                )
+            ):
+                raise OrchestratorError("historical_candidate_invalid")
+            try:
+                return ApprovalScopeIdentity(
+                    approval_candidate_sha256=candidate_sha256,
+                    symbol=value["symbol"],
+                    provider_id=value["provider"],
+                    exact_model_id=value["exact_model"],
+                    endpoint_alias=value["endpoint_alias"],
+                )
+            except (KeyError, ValidationError) as exc:
+                raise OrchestratorError(
+                    "historical_approval_identity_unresolved"
+                ) from exc
+        raise OrchestratorError("historical_approval_identity_unresolved")
+
+    def _validate_historical_evidence(
+        self,
+        ledger: AttemptLedger | ApprovalScopedAttemptLedger,
+    ) -> None:
+        path = (
+            self.historical_evidence_root
+            / "evidence"
+            / f"{ledger.identity.request_id}.json"
+        )
+        raw = _read_report_regular(path, "historical_runtime_evidence_missing")
+        try:
+            value = _strict_json_bytes(raw, "historical_runtime_evidence_invalid")
+        except OrchestratorError as exc:
+            raise OrchestratorError("historical_runtime_evidence_invalid") from exc
+        scoped = isinstance(ledger, ApprovalScopedAttemptLedger)
+        expected_fields = _RUNTIME_EVIDENCE_BASE_FIELDS
+        allowed_fields = {
+            expected_fields,
+            expected_fields | _RUNTIME_EVIDENCE_OBSERVABILITY_FIELDS,
+        }
+        if scoped:
+            expected_fields = (
+                expected_fields
+                | _RUNTIME_EVIDENCE_SCOPE_FIELDS
+                | _RUNTIME_EVIDENCE_OBSERVABILITY_FIELDS
+            )
+            allowed_fields = {expected_fields}
+        attempt = ledger.attempt if scoped else ledger
+        route_valid = (
+            value.get("route") == "inbox"
+            and value.get("terminal_state") == "SUCCEEDED"
+            if ledger.state is LedgerState.CLEANUP_COMPLETED
+            else value.get("route") == "rejected"
+            and value.get("terminal_state")
+            not in {"SUCCEEDED", "CLEANUP_COMPLETED"}
+        )
+        observability_valid = True
+        if _RUNTIME_EVIDENCE_OBSERVABILITY_FIELDS.issubset(value):
+            observability_valid = (
+                isinstance(value.get("receipt_archive_status"), str)
+                and bool(value["receipt_archive_status"])
+                and (
+                    value.get("last_proven_stage") is None
+                    or isinstance(value.get("last_proven_stage"), str)
+                )
+                and (
+                    value.get("child_terminal_reason") is None
+                    or isinstance(value.get("child_terminal_reason"), str)
+                )
+            )
+        integer_fields_valid = all(
+            type(value.get(field)) is int
+            for field in (
+                "runtime_evidence_schema_version",
+                "runtime_contract_version",
+                "provider_attempt_count",
+                "retry_count",
+                "container_residue_count",
+                "network_residue_count",
+                "secret_file_residue_count",
+                "temporary_file_residue_count",
+            )
+        ) and (
+            not scoped
+            or type(value.get("ledger_namespace_version")) is int
+        )
+        receipt_root = (
+            self.historical_evidence_root
+            / "receipts"
+            / ledger.identity.request_id
+        )
+        receipt_root_present = receipt_root.exists() or receipt_root.is_symlink()
+        declared_archive_status = value.get("receipt_archive_status")
+        if (
+            not receipt_root_present
+            and declared_archive_status not in {None, "NOT_RUN"}
+        ):
+            raise OrchestratorError("historical_receipt_missing")
+        if (
+            not receipt_root_present
+            and ledger.state is LedgerState.CLEANUP_COMPLETED
+        ):
+            raise OrchestratorError("historical_receipt_missing")
+        archive_valid = (
+            not receipt_root_present
+            and declared_archive_status in {None, "NOT_RUN"}
+        )
+        if receipt_root_present:
+            receipts = self._validate_historical_receipt_directory(
+                receipt_root,
+                ledger.identity.request_id,
+            )
+            archive = receipts.get("archive-status.json")
+            child_metadata = receipts.get("child-metadata.json")
+            child_metadata_status = (
+                archive.get("child_metadata_status")
+                if archive is not None
+                else None
+            )
+            child_metadata_valid = (
+                child_metadata_status == "VALID"
+                and child_metadata is not None
+                and isinstance(child_metadata.get("relay"), dict)
+                and isinstance(child_metadata.get("proxy"), dict)
+            ) or (
+                child_metadata_status == "PARTIAL_PRE_DISPATCH"
+                and child_metadata is not None
+                and child_metadata.get("relay") is None
+                and isinstance(child_metadata.get("proxy"), dict)
+            ) or (
+                child_metadata_status == "MISSING"
+                and child_metadata is None
+            )
+            child_terminal_reason = (
+                archive.get("child_terminal_reason")
+                if archive is not None
+                else None
+            )
+            host_child_terminal_reason = (
+                archive.get("host_child_terminal_reason")
+                if archive is not None
+                else None
+            )
+            terminal_reason_source = (
+                archive.get("terminal_reason_source")
+                if archive is not None
+                else None
+            )
+            terminal_reason_valid = (
+                terminal_reason_source is None
+                and child_terminal_reason is None
+                and host_child_terminal_reason is None
+            ) or (
+                terminal_reason_source == "relay_self"
+                and host_child_terminal_reason == "RELAY_NONZERO_EXIT"
+                and child_terminal_reason in _RELAY_TERMINAL_STATUSES
+                and child_terminal_reason != "RELAY_COMPLETED"
+            ) or (
+                terminal_reason_source in {"host_child_process", "host_timeout"}
+                and isinstance(host_child_terminal_reason, str)
+                and bool(host_child_terminal_reason)
+                and child_terminal_reason == host_child_terminal_reason
+            )
+            proxy_receipt = receipts.get("proxy-receipt.json")
+            relay_receipt = receipts.get("relay-receipt.json")
+            receipt_values = {
+                component: receipt
+                for component, receipt in (
+                    ("proxy", proxy_receipt),
+                    ("relay", relay_receipt),
+                )
+                if receipt is not None
+            }
+            relay_child = (
+                child_metadata.get("relay")
+                if child_metadata is not None
+                else None
+            )
+            proxy_http_status = (
+                proxy_receipt.get("provider_http_status")
+                if proxy_receipt is not None
+                else None
+            )
+            proxy_headers = (
+                proxy_receipt.get("response_headers_received")
+                if proxy_receipt is not None
+                else None
+            )
+            relay_response = (
+                relay_receipt.get("response_received")
+                if relay_receipt is not None
+                else None
+            )
+            http_semantics_valid = (
+                (
+                    proxy_receipt is None
+                    or value.get("provider_http_status")
+                    == proxy_http_status
+                )
+                and (
+                    proxy_receipt is None
+                    or not isinstance(proxy_headers, dict)
+                    or (
+                        proxy_headers.get("http_status")
+                        == proxy_http_status
+                    )
+                )
+                and (
+                    relay_receipt is None
+                    or proxy_receipt is None
+                    or relay_receipt.get("proxy_http_status")
+                    == proxy_http_status
+                )
+                and (
+                    relay_receipt is None
+                    or not isinstance(relay_response, dict)
+                    or relay_response.get("http_status")
+                    == relay_receipt.get("proxy_http_status")
+                )
+            )
+            expected_host_child_reason = next(
+                (
+                    child["terminal_reason"]
+                    for component in ("relay", "proxy")
+                    if child_metadata is not None
+                    and isinstance(
+                        child := child_metadata.get(component),
+                        dict,
+                    )
+                    and child.get("child_state")
+                    not in {
+                        ChildState.RUNNING.value,
+                        ChildState.EXITED_ZERO.value,
+                    }
+                ),
+                None,
+            )
+            receipt_semantics_valid = (
+                (
+                    proxy_receipt is None
+                    or proxy_receipt.get("provider_attempt_count")
+                    == ledger.provider_attempt_count
+                )
+                and (
+                    relay_receipt is None
+                    or relay_receipt.get("proxy_request_count")
+                    == ledger.provider_attempt_count
+                )
+                and (
+                    relay_receipt is None
+                    or (
+                        isinstance(relay_child, dict)
+                        and (
+                            (
+                                relay_receipt.get("status") == "SUCCEEDED"
+                                and relay_child.get("child_state")
+                                == ChildState.EXITED_ZERO.value
+                            )
+                            or (
+                                relay_receipt.get("status") == "REJECTED"
+                                and relay_child.get("child_state")
+                                != ChildState.EXITED_ZERO.value
+                            )
+                        )
+                    )
+                )
+                and http_semantics_valid
+                and archive is not None
+                and archive.get("host_child_terminal_reason")
+                == expected_host_child_reason
+                and archive.get("last_proven_stage")
+                == _select_last_proven_stage(receipt_values)
+            )
+            if not receipt_semantics_valid:
+                raise OrchestratorError("historical_receipt_conflict")
+            pre_dispatch_valid = (
+                archive is not None
+                and archive.get("archive_status") == "PRE_DISPATCH_ARCHIVED"
+                and child_metadata_status == "PARTIAL_PRE_DISPATCH"
+                and archive.get("proxy_receipt_status") == "VALID"
+                and archive.get("relay_receipt_status") == "RECEIPT_MISSING"
+                and archive.get("last_proven_stage") == "proxy_ready"
+                and ledger.state is LedgerState.FAILED_BEFORE_DISPATCH
+                and ledger.provider_attempt_count == 0
+                and terminal_reason_source is None
+                and isinstance(proxy_receipt, dict)
+                and proxy_receipt.get("provider_attempt_count") == 0
+                and proxy_receipt.get("response_category") == "PROXY_READY"
+                and proxy_receipt.get("terminal_status") == "PROXY_READY"
+            )
+            archive_valid = (
+                archive is not None
+                and set(archive) == _ARCHIVE_STATUS_FIELDS
+                and type(archive.get("archive_status_schema_version")) is int
+                and archive.get("archive_status_schema_version") == 1
+                and archive.get("request_id") == ledger.identity.request_id
+                and type(archive.get("retry_count")) is int
+                and archive.get("retry_count") == 0
+                and archive.get("archive_status")
+                in {
+                    "ARCHIVED",
+                    "CHILD_EVIDENCE_MISSING",
+                    "PRE_DISPATCH_ARCHIVED",
+                    "RECEIPT_MALFORMED",
+                    "RECEIPT_MISSING",
+                }
+                and all(
+                    isinstance(archive.get(field), str)
+                    and bool(archive[field])
+                    for field in (
+                        "archive_status",
+                        "child_metadata_status",
+                        "proxy_receipt_status",
+                        "relay_receipt_status",
+                    )
+                )
+                and all(
+                    archive.get(field) is None
+                    or (
+                        isinstance(archive.get(field), str)
+                        and bool(archive[field])
+                    )
+                    for field in (
+                        "child_terminal_reason",
+                        "host_child_terminal_reason",
+                        "last_proven_stage",
+                    )
+                )
+                and (
+                    archive.get("terminal_reason_source") is None
+                    or archive.get("terminal_reason_source")
+                    in _TERMINAL_REASON_SOURCES
+                )
+                and terminal_reason_valid
+                and archive.get("archive_status")
+                == value.get("receipt_archive_status")
+                and archive.get("child_terminal_reason")
+                == value.get("child_terminal_reason")
+                and archive.get("last_proven_stage")
+                == value.get("last_proven_stage")
+                and child_metadata_valid
+                and (
+                    (archive.get("proxy_receipt_status") == "VALID")
+                    == ("proxy-receipt.json" in receipts)
+                )
+                and (
+                    (archive.get("relay_receipt_status") == "VALID")
+                    == ("relay-receipt.json" in receipts)
+                )
+                and (
+                    archive.get("archive_status") != "PRE_DISPATCH_ARCHIVED"
+                    or pre_dispatch_valid
+                )
+            )
+        if (
+            raw != canonical_json_bytes(value)
+            or frozenset(value) not in allowed_fields
+            or value.get("runtime_evidence_schema_version") != 1
+            or value.get("runtime_contract_version") != 1
+            or value.get("request_id") != ledger.identity.request_id
+            or value.get("symbol") != ledger.identity.symbol
+            or value.get("approval_candidate_sha256")
+            != ledger.identity.approval_candidate_sha256
+            or value.get("proxy_image_id") != ledger.identity.proxy_image_id
+            or value.get("relay_image_id") != ledger.identity.relay_image_id
+            or value.get("orchestrator_source_sha256")
+            != ledger.identity.orchestrator_source_sha256
+            or value.get("timeout_contract_sha256")
+            != ledger.identity.timeout_contract_sha256
+            or value.get("attempt_ledger_state") != ledger.state.value
+            or value.get("dispatch_started_at") != attempt.dispatch_started_at
+            or value.get("response_received_at") != attempt.response_received_at
+            or value.get("candidate_ready_at") != attempt.candidate_ready_at
+            or value.get("host_validation_completed_at")
+            != attempt.host_validation_completed_at
+            or value.get("cleanup_completed_at") != attempt.cleanup_completed_at
+            or value.get("provider_attempt_count") != ledger.provider_attempt_count
+            or value.get("retry_count") != 0
+            or (
+                value.get("provider_http_status") is not None
+                and (
+                    isinstance(value.get("provider_http_status"), bool)
+                    or not isinstance(value.get("provider_http_status"), int)
+                )
+            )
+            or value.get("can_publish") is not False
+            or value.get("manual_review") != "PENDING"
+            or not route_valid
+            or not observability_valid
+            or not integer_fields_valid
+            or not archive_valid
+            or any(
+                value.get(field) != 0
+                for field in (
+                    "container_residue_count",
+                    "network_residue_count",
+                    "secret_file_residue_count",
+                    "temporary_file_residue_count",
+                )
+            )
+            or (
+                scoped
+                and (
+                    value.get("approval_scope_id") != ledger.approval_scope_id
+                    or value.get("ledger_namespace_version") != 1
+                )
+            )
+        ):
+            raise OrchestratorError("historical_runtime_evidence_invalid")
+
+    def _validate_historical_receipt_directory(
+        self,
+        request_root: Path,
+        request_id: str,
+    ) -> dict[str, dict[str, Any]]:
+        request_root = _validate_report_directory(
+            request_root,
+            "historical_artifact_directory_invalid",
+        )
+        entries = sorted(request_root.iterdir(), key=lambda item: item.name)
+        if not entries:
+            raise OrchestratorError("historical_receipt_entry_invalid")
+        raw_by_name: dict[str, bytes] = {}
+        for path in entries:
+            if path.name not in _HISTORICAL_RECEIPT_FILES:
+                raise OrchestratorError("historical_receipt_entry_invalid")
+            try:
+                metadata = os.lstat(path)
+            except OSError as exc:
+                raise OrchestratorError("historical_receipt_invalid") from exc
+            if (
+                stat.S_ISLNK(metadata.st_mode)
+                or not stat.S_ISREG(metadata.st_mode)
+                or stat.S_IMODE(metadata.st_mode) != 0o600
+            ):
+                raise OrchestratorError("historical_receipt_invalid")
+            raw_by_name[path.name] = _read_report_regular(
+                path,
+                "historical_receipt_invalid",
+            )
+        pinned_hashes = _PINNED_LEGACY_RECEIPT_BUNDLES.get(request_id)
+        pinned_legacy_bundle = (
+            pinned_hashes is not None
+            and set(raw_by_name) == set(pinned_hashes)
+            and all(
+                hashlib.sha256(raw).hexdigest() == pinned_hashes[name]
+                for name, raw in raw_by_name.items()
+            )
+        )
+        receipts: dict[str, dict[str, Any]] = {}
+        for path in entries:
+            raw = raw_by_name[path.name]
+            value = _strict_json_bytes(raw, "historical_receipt_invalid")
+            if (
+                raw != canonical_json_bytes(value)
+                or value.get("request_id") != request_id
+            ):
+                raise OrchestratorError("historical_receipt_invalid")
+            if path.name in {"relay-receipt.json", "proxy-receipt.json"}:
+                component: Literal["relay", "proxy"] = (
+                    "relay" if path.name == "relay-receipt.json" else "proxy"
+                )
+                try:
+                    if pinned_legacy_bundle and component == "relay":
+                        value = {
+                            **value,
+                            "terminal_reason_source": "host_child_process",
+                        }
+                        _validate_stage_receipt(
+                            value,
+                            component=component,
+                            request_id=request_id,
+                        )
+                    else:
+                        _parse_stage_receipt_bytes(
+                            raw,
+                            component=component,
+                            request_id=request_id,
+                        )
+                except OrchestratorError as exc:
+                    raise OrchestratorError(
+                        "historical_receipt_invalid"
+                    ) from exc
+            elif path.name == "child-metadata.json" and not (
+                _valid_historical_child_metadata(value, request_id)
+            ):
+                raise OrchestratorError("historical_receipt_invalid")
+            elif path.name == "archive-status.json" and pinned_legacy_bundle:
+                value = {
+                    **value,
+                    "host_child_terminal_reason": value.get(
+                        "child_terminal_reason"
+                    ),
+                    "terminal_reason_source": "host_child_process",
+                }
+            receipts[path.name] = value
+        return receipts
+
+    def _historical_artifact_request_ids(self) -> dict[str, set[str]]:
+        discovered: dict[str, set[str]] = {
+            "evidence": set(),
+            "rejected": set(),
+            "inbox": set(),
+            "receipts": set(),
+        }
+        for directory_name in ("evidence", "rejected", "inbox"):
+            directory = self.historical_evidence_root / directory_name
+            if not directory.exists() and not directory.is_symlink():
+                continue
+            directory = _validate_report_directory(
+                directory,
+                "historical_artifact_directory_invalid",
+            )
+            suffixes_by_request: dict[str, set[str]] = {}
+            inbox_documents: dict[str, ClaimsDocument] = {}
+            inbox_markdown: dict[str, bytes] = {}
+            for path in sorted(directory.iterdir(), key=lambda item: item.name):
+                allowed_suffixes = {".json", ".md"} if directory_name == "inbox" else {".json"}
+                if path.suffix not in allowed_suffixes or _HEX_32.fullmatch(path.stem) is None:
+                    raise OrchestratorError("historical_artifact_path_invalid")
+                raw = _read_report_regular(path, "historical_artifact_invalid")
+                if path.suffix == ".json":
+                    try:
+                        value = _strict_json_bytes(
+                            raw,
+                            "historical_artifact_invalid",
+                        )
+                    except OrchestratorError as exc:
+                        raise OrchestratorError("historical_artifact_invalid") from exc
+                    if raw != canonical_json_bytes(value):
+                        raise OrchestratorError("historical_artifact_invalid")
+                    if directory_name == "inbox":
+                        try:
+                            document = ClaimsDocument.model_validate(value)
+                        except ValidationError as exc:
+                            raise OrchestratorError(
+                                "historical_artifact_invalid"
+                            ) from exc
+                        if raw != canonical_json_bytes(
+                            document.model_dump(mode="json")
+                        ):
+                            raise OrchestratorError("historical_artifact_invalid")
+                        inbox_documents[path.stem] = document
+                    elif directory_name == "rejected":
+                        if (
+                            frozenset(value) != _REJECTION_FIELDS
+                            or value.get("request_id") != path.stem
+                            or value.get("can_publish") is not False
+                            or value.get("route") != "rejected"
+                            or not isinstance(value.get("error_category"), str)
+                            or not value["error_category"]
+                            or type(value.get("retry_count")) is not int
+                            or value.get("retry_count") != 0
+                        ):
+                            raise OrchestratorError(
+                                "historical_artifact_invalid"
+                            )
+                    elif value.get("request_id") != path.stem:
+                        raise OrchestratorError("historical_artifact_invalid")
+                elif directory_name == "inbox":
+                    inbox_markdown[path.stem] = raw
+                suffixes_by_request.setdefault(path.stem, set()).add(path.suffix)
+                discovered[directory_name].add(path.stem)
+            if directory_name == "inbox" and any(
+                suffixes != {".json", ".md"}
+                for suffixes in suffixes_by_request.values()
+            ):
+                raise OrchestratorError("historical_artifact_invalid")
+            if directory_name == "inbox":
+                try:
+                    for request_id, document in inbox_documents.items():
+                        validation = validate_claims_document(
+                            self.repo_root,
+                            document,
+                        )
+                        rendered = render_claims_document(document, validation)
+                        raw_markdown = inbox_markdown.get(request_id)
+                        if (
+                            validation.status != CLAIMS_VALID
+                            or validation.errors
+                            or raw_markdown != rendered.encode("utf-8")
+                            or validate_rendered_document(
+                                document,
+                                validation,
+                                rendered,
+                            )
+                        ):
+                            raise OrchestratorError(
+                                "historical_artifact_invalid"
+                            )
+                except OrchestratorError:
+                    raise
+                except Exception as exc:
+                    raise OrchestratorError(
+                        "historical_artifact_invalid"
+                    ) from exc
+
+        receipts = self.historical_evidence_root / "receipts"
+        if receipts.exists() or receipts.is_symlink():
+            receipts = _validate_report_directory(
+                receipts,
+                "historical_artifact_directory_invalid",
+            )
+            for request_root in sorted(receipts.iterdir(), key=lambda item: item.name):
+                if _HEX_32.fullmatch(request_root.name) is None:
+                    raise OrchestratorError("historical_artifact_path_invalid")
+                self._validate_historical_receipt_directory(
+                    request_root,
+                    request_root.name,
+                )
+                discovered["receipts"].add(request_root.name)
+        return discovered
+
+    @staticmethod
+    def _blocked(scope_id: str, error: str) -> LedgerNamespacePreflight:
+        return LedgerNamespacePreflight(
+            status="GLOBAL_LEDGER_SAFETY_BLOCKED",
+            current_scope_id=scope_id,
+            current_scope_provider_attempts=0,
+            current_scope_attempt_availability="BLOCKED",
+            historical_requests=(),
+            global_request_ids=(),
+            errors=(error,),
+        )
+
+    def preflight(self, current_scope: ApprovalScopeIdentity) -> LedgerNamespacePreflight:
+        current_scope_id = compute_approval_scope_id(current_scope)
+        try:
+            discovered = [*self._legacy_ledgers(), *self._scoped_ledgers()]
+            historical_artifacts = self._historical_artifact_request_ids()
+        except OrchestratorError as exc:
+            return self._blocked(current_scope_id, str(exc))
+        request_ids = [item.ledger.identity.request_id for item in discovered]
+        if len(request_ids) != len(set(request_ids)):
+            return self._blocked(current_scope_id, "global_request_id_collision")
+        ledger_request_ids = set(request_ids)
+        for category, artifact_request_ids in historical_artifacts.items():
+            if not artifact_request_ids.issubset(ledger_request_ids):
+                error = (
+                    "historical_runtime_evidence_orphan"
+                    if category == "evidence"
+                    else "historical_artifact_orphan"
+                )
+                return self._blocked(current_scope_id, error)
+
+        current_attempts = 0
+        historical: list[str] = []
+        for item in discovered:
+            ledger = item.ledger
+            if not item.scoped:
+                if ledger.state not in _TERMINAL_STATES:
+                    return self._blocked(
+                        current_scope_id,
+                        "historical_ledger_nonterminal",
+                    )
+                try:
+                    resolved_scope = self._candidate_identity(
+                        ledger.identity.approval_candidate_sha256
+                    )
+                except OrchestratorError as exc:
+                    return self._blocked(current_scope_id, str(exc))
+                if (
+                    resolved_scope.symbol != ledger.identity.symbol
+                    or resolved_scope.provider_id != ledger.identity.provider
+                    or resolved_scope.endpoint_alias != ledger.identity.endpoint_alias
+                ):
+                    return self._blocked(
+                        current_scope_id,
+                        "historical_approval_identity_conflict",
+                    )
+                try:
+                    self._validate_historical_evidence(ledger)
+                except OrchestratorError as exc:
+                    return self._blocked(current_scope_id, str(exc))
+                ledger_scope_id = compute_approval_scope_id(resolved_scope)
+            else:
+                ledger_scope_id = ledger.approval_scope_id
+                if ledger_scope_id != current_scope_id:
+                    if ledger.state not in _TERMINAL_STATES:
+                        return self._blocked(
+                            current_scope_id,
+                            "historical_ledger_nonterminal",
+                        )
+                    try:
+                        resolved_scope = self._candidate_identity(
+                            ledger.identity.approval_candidate_sha256
+                        )
+                    except OrchestratorError as exc:
+                        return self._blocked(current_scope_id, str(exc))
+                    if (
+                        compute_approval_scope_id(resolved_scope) != ledger_scope_id
+                        or resolved_scope.symbol != ledger.identity.symbol
+                        or resolved_scope.provider_id != ledger.identity.provider
+                        or resolved_scope.exact_model_id != ledger.exact_model_id
+                        or resolved_scope.endpoint_alias
+                        != ledger.identity.endpoint_alias
+                    ):
+                        return self._blocked(
+                            current_scope_id,
+                            "historical_approval_identity_conflict",
+                        )
+                    try:
+                        self._validate_historical_evidence(ledger)
+                    except OrchestratorError as exc:
+                        return self._blocked(current_scope_id, str(exc))
+
+            if ledger_scope_id == current_scope_id:
+                if ledger.state is LedgerState.FAILED_BEFORE_DISPATCH:
+                    try:
+                        self._validate_historical_evidence(ledger)
+                    except OrchestratorError as exc:
+                        return self._blocked(current_scope_id, str(exc))
+                    request_id = ledger.identity.request_id
+                    if (
+                        request_id in historical_artifacts["inbox"]
+                        or request_id not in historical_artifacts["rejected"]
+                    ):
+                        return self._blocked(
+                            current_scope_id,
+                            "historical_route_artifact_conflict",
+                        )
+                current_attempts += ledger.provider_attempt_count
+                if ledger.state not in _TERMINAL_STATES:
+                    return self._blocked(current_scope_id, "current_scope_nonterminal")
+            else:
+                request_id = ledger.identity.request_id
+                has_inbox = request_id in historical_artifacts["inbox"]
+                has_rejection = request_id in historical_artifacts["rejected"]
+                if (
+                    ledger.state is LedgerState.CLEANUP_COMPLETED
+                    and (not has_inbox or has_rejection)
+                ) or (
+                    ledger.state is not LedgerState.CLEANUP_COMPLETED
+                    and (has_inbox or not has_rejection)
+                ):
+                    return self._blocked(
+                        current_scope_id,
+                        "historical_route_artifact_conflict",
+                    )
+                historical.append(ledger.identity.request_id)
+
+        if current_attempts > 0:
+            return LedgerNamespacePreflight(
+                status="CURRENT_SCOPE_ATTEMPT_CONSUMED",
+                current_scope_id=current_scope_id,
+                current_scope_provider_attempts=current_attempts,
+                current_scope_attempt_availability="BLOCKED",
+                historical_requests=tuple(sorted(historical)),
+                global_request_ids=tuple(sorted(request_ids)),
+            )
+        return LedgerNamespacePreflight(
+            status="READY",
+            current_scope_id=current_scope_id,
+            current_scope_provider_attempts=0,
+            current_scope_attempt_availability="AVAILABLE",
+            historical_requests=tuple(sorted(historical)),
+            global_request_ids=tuple(sorted(request_ids)),
+        )
+
+    def assert_request_id_available(
+        self,
+        request_id: str,
+        *,
+        preflight: LedgerNamespacePreflight,
+    ) -> None:
+        if _HEX_32.fullmatch(request_id) is None:
+            raise OrchestratorError("request_id_invalid")
+        if preflight.status != "READY":
+            raise OrchestratorError(preflight.status)
+        if request_id in preflight.global_request_ids:
+            raise OrchestratorError("REQUEST_ID_COLLISION_BLOCKED")
+
+    def prove_failed_before_dispatch(
+        self,
+        approval_candidate_sha256: str,
+        approval_scope_id: str,
+        request_id: str,
+    ) -> bool:
+        if (
+            _HEX_64.fullmatch(approval_candidate_sha256) is None
+            or _HEX_64.fullmatch(approval_scope_id) is None
+            or _HEX_32.fullmatch(request_id) is None
+        ):
+            return False
+        try:
+            scope_root = _validate_state_root(
+                self.attempts_root / approval_scope_id
+            )
+            request_root = _validate_state_root(scope_root / request_id)
+            if {item.name for item in request_root.iterdir()} != {
+                _SCOPED_LEDGER_NAME
+            }:
+                return False
+            ledger = _decode_scoped_ledger(
+                _read_regular(
+                    request_root / _SCOPED_LEDGER_NAME,
+                    "scoped_ledger_target_invalid",
+                )
+            )
+            if (
+                ledger.approval_scope_id != approval_scope_id
+                or ledger.identity.request_id != request_id
+                or ledger.identity.approval_candidate_sha256
+                != approval_candidate_sha256
+                or ledger.state is not LedgerState.FAILED_BEFORE_DISPATCH
+                or ledger.provider_attempt_count != 0
+            ):
+                return False
+            self._validate_historical_evidence(ledger)
+            artifacts = self._historical_artifact_request_ids()
+            return (
+                request_id not in artifacts["inbox"]
+                and request_id in artifacts["rejected"]
+            )
+        except (OSError, OrchestratorError):
+            return False
+
+
 class ExclusiveCanaryLock:
     """A nonblocking process lock acquired before request-id generation."""
 
@@ -532,7 +2682,10 @@ class ExclusiveCanaryLock:
         self,
         state_root: Path,
         *,
+        attempts_root: Path | None = None,
+        stale_lock_validator: Callable[[str, str, str], bool] | None = None,
         approval_candidate_sha256: str,
+        approval_scope_id: str | None = None,
         pid: int,
         started_at: str,
     ) -> None:
@@ -541,7 +2694,16 @@ class ExclusiveCanaryLock:
             raise OrchestratorError("approval_candidate_sha256_invalid")
         if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
             raise OrchestratorError("lock_pid_invalid")
+        if approval_scope_id is not None and _HEX_64.fullmatch(approval_scope_id) is None:
+            raise OrchestratorError("approval_scope_id_invalid")
         self.approval_candidate_sha256 = approval_candidate_sha256
+        self.approval_scope_id = approval_scope_id
+        self.attempts_root = (
+            _validate_state_root(attempts_root)
+            if attempts_root is not None
+            else None
+        )
+        self.stale_lock_validator = stale_lock_validator
         self.pid = pid
         self.started_at = started_at
         self.path = self.root / _LOCK_NAME
@@ -558,8 +2720,10 @@ class ExclusiveCanaryLock:
         if not raw.strip():
             return True
         try:
-            value = json.loads(raw)
-        except (UnicodeDecodeError, json.JSONDecodeError):
+            value = _strict_json_bytes(raw, "stale_lock_state_unknown")
+        except OrchestratorError:
+            return False
+        if raw != _canonical_bytes(value):
             return False
         expected_fields = {
             "lock_schema_version",
@@ -570,17 +2734,44 @@ class ExclusiveCanaryLock:
             "endpoint_alias",
             "approval_candidate_sha256",
         }
+        expected_schema = 1
+        if self.approval_scope_id is not None:
+            expected_fields.update({"approval_scope_id", "request_id"})
+            expected_schema = 3
         if (
             not isinstance(value, dict)
             or set(value) != expected_fields
-            or value.get("lock_schema_version") != 1
+            or value.get("lock_schema_version") != expected_schema
             or value.get("symbol") != "000403.SZ"
             or value.get("provider") != "openai"
             or value.get("endpoint_alias") != "openai_responses_v1"
             or value.get("approval_candidate_sha256")
             != self.approval_candidate_sha256
+            or value.get("approval_scope_id") != self.approval_scope_id
+            or isinstance(value.get("pid"), bool)
+            or not isinstance(value.get("pid"), int)
+            or value["pid"] <= 0
+            or not isinstance(value.get("started_at"), str)
+            or not value["started_at"]
+            or value["started_at"] != value["started_at"].strip()
         ):
             return False
+        if self.approval_scope_id is not None:
+            request_id = value.get("request_id")
+            if (
+                self.stale_lock_validator is None
+                or not isinstance(request_id, str)
+                or _HEX_32.fullmatch(request_id) is None
+            ):
+                return False
+            try:
+                return self.stale_lock_validator(
+                    self.approval_candidate_sha256,
+                    self.approval_scope_id,
+                    request_id,
+                )
+            except Exception:
+                return False
         try:
             ledger = AttemptLedgerStore(self.root).load()
         except OrchestratorError:
@@ -590,6 +2781,39 @@ class ExclusiveCanaryLock:
             and ledger.identity.approval_candidate_sha256
             == self.approval_candidate_sha256
         )
+
+    def _payload(self, *, request_id: str | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "lock_schema_version": (
+                3 if request_id is not None else 2
+                if self.approval_scope_id is not None
+                else 1
+            ),
+            "pid": self.pid,
+            "started_at": self.started_at,
+            "symbol": "000403.SZ",
+            "provider": "openai",
+            "endpoint_alias": "openai_responses_v1",
+            "approval_candidate_sha256": self.approval_candidate_sha256,
+        }
+        if self.approval_scope_id is not None:
+            payload["approval_scope_id"] = self.approval_scope_id
+        if request_id is not None:
+            payload["request_id"] = request_id
+        return payload
+
+    @staticmethod
+    def _write_locked(descriptor: int, payload: dict[str, Any]) -> None:
+        rendered = _canonical_bytes(payload)
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        os.ftruncate(descriptor, 0)
+        offset = 0
+        while offset < len(rendered):
+            written = os.write(descriptor, rendered[offset:])
+            if written <= 0:
+                raise OrchestratorError("canary_lock_write_failed")
+            offset += written
+        os.fsync(descriptor)
 
     def acquire(self) -> None:
         if self._descriptor is not None:
@@ -615,20 +2839,7 @@ class ExclusiveCanaryLock:
             raw = self._read_locked(descriptor)
             if not self._stale_lock_is_recoverable(raw):
                 raise OrchestratorError("stale_lock_state_unknown")
-            payload = {
-                "lock_schema_version": 1,
-                "pid": self.pid,
-                "started_at": self.started_at,
-                "symbol": "000403.SZ",
-                "provider": "openai",
-                "endpoint_alias": "openai_responses_v1",
-                "approval_candidate_sha256": self.approval_candidate_sha256,
-            }
-            rendered = _canonical_bytes(payload)
-            os.lseek(descriptor, 0, os.SEEK_SET)
-            os.ftruncate(descriptor, 0)
-            os.write(descriptor, rendered)
-            os.fsync(descriptor)
+            self._write_locked(descriptor, self._payload())
             self._descriptor = descriptor
         except OrchestratorError:
             if "descriptor" in locals():
@@ -642,6 +2853,19 @@ class ExclusiveCanaryLock:
                     fcntl.flock(descriptor, fcntl.LOCK_UN)
                 os.close(descriptor)
             raise OrchestratorError("canary_lock_failed") from exc
+
+    def bind_request_id(self, request_id: str) -> None:
+        descriptor = self._descriptor
+        if (
+            descriptor is None
+            or self.approval_scope_id is None
+            or _HEX_32.fullmatch(request_id) is None
+        ):
+            raise OrchestratorError("canary_lock_request_binding_invalid")
+        raw = self._read_locked(descriptor)
+        if raw != _canonical_bytes(self._payload()):
+            raise OrchestratorError("canary_lock_request_binding_invalid")
+        self._write_locked(descriptor, self._payload(request_id=request_id))
 
     def release(self) -> None:
         descriptor = self._descriptor
@@ -702,8 +2926,11 @@ class ApprovedCanaryArtifacts(_StrictFrozenModel):
 class CanaryOrchestratorConfig:
     repo_root: Path
     state_root: Path
+    attempts_root: Path
     work_root: Path
     canary_output_root: Path
+    historical_evidence_root: Path
+    candidate_roots: tuple[Path, ...]
     facts_path: Path
 
     def __post_init__(self) -> None:
@@ -711,9 +2938,26 @@ class CanaryOrchestratorConfig:
         if not repo.is_dir():
             raise OrchestratorError("repo_root_invalid")
         object.__setattr__(self, "repo_root", repo)
-        for field in ("state_root", "work_root", "canary_output_root"):
+        for field in (
+            "state_root",
+            "attempts_root",
+            "work_root",
+            "canary_output_root",
+        ):
             path = _validate_state_root(getattr(self, field))
             object.__setattr__(self, field, path)
+        historical = _validate_report_directory(
+            self.historical_evidence_root,
+            "historical_evidence_root_invalid",
+        )
+        object.__setattr__(self, "historical_evidence_root", historical)
+        if not self.candidate_roots:
+            raise OrchestratorError("candidate_roots_missing")
+        candidate_roots = tuple(
+            _validate_report_directory(path, "candidate_root_invalid")
+            for path in self.candidate_roots
+        )
+        object.__setattr__(self, "candidate_roots", candidate_roots)
         facts = Path(os.path.abspath(os.fspath(self.facts_path)))
         _assert_no_symlink_components(facts)
         try:
@@ -763,6 +3007,8 @@ class ArchiveResult:
 
 
 class CanaryBackend(Protocol):
+    def inspect_global_residue(self, *, deadline: float) -> CleanupResult: ...
+
     def prepare(
         self,
         context: CanaryRuntimeContext,
@@ -808,6 +3054,7 @@ class BackendError(OrchestratorError):
 class CanaryRunResult:
     terminal_state: str
     request_id: str | None
+    approval_scope_id: str | None
     attempt_ledger_state: LedgerState | None
     provider_attempt_count: int
     retry_count: int
@@ -852,33 +3099,35 @@ def _write_private_file(path: Path, raw: bytes) -> None:
 
 
 def _publish_private_file(path: Path, raw: bytes) -> None:
-    if path.parent.is_symlink() or not path.parent.is_dir():
-        raise OrchestratorError("artifact_parent_invalid")
-    if path.exists() or path.is_symlink():
-        raise OrchestratorError("artifact_already_exists")
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.",
-        suffix=".partial",
-        dir=path.parent,
+    parent_descriptor = _open_private_directory(
+        path.parent,
+        "artifact_parent_invalid",
+        allow_read_only_public=True,
     )
-    temporary = Path(temporary_name)
+    temporary_name = f".{path.name}.{uuid.uuid4().hex}.partial"
+    descriptor = -1
     try:
-        os.fchmod(descriptor, 0o600)
-        offset = 0
-        while offset < len(raw):
-            written = os.write(descriptor, raw[offset:])
-            if written <= 0:
-                raise OrchestratorError("artifact_write_failed")
-            offset += written
-        os.fsync(descriptor)
+        descriptor = os.open(
+            temporary_name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NOFOLLOW,
+            0o600,
+            dir_fd=parent_descriptor,
+        )
+        _write_descriptor(descriptor, raw, "artifact_write_failed")
         os.close(descriptor)
         descriptor = -1
-        os.replace(temporary, path)
-        directory = os.open(path.parent, os.O_RDONLY | _DIRECTORY | _NOFOLLOW)
         try:
-            os.fsync(directory)
-        finally:
-            os.close(directory)
+            os.link(
+                temporary_name,
+                path.name,
+                src_dir_fd=parent_descriptor,
+                dst_dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+        except FileExistsError as exc:
+            raise OrchestratorError("artifact_already_exists") from exc
+        os.unlink(temporary_name, dir_fd=parent_descriptor)
+        os.fsync(parent_descriptor)
     except OrchestratorError:
         raise
     except OSError as exc:
@@ -887,16 +3136,136 @@ def _publish_private_file(path: Path, raw: bytes) -> None:
         if descriptor >= 0:
             os.close(descriptor)
         with contextlib.suppress(OSError):
-            temporary.unlink(missing_ok=True)
+            os.unlink(temporary_name, dir_fd=parent_descriptor)
+        os.close(parent_descriptor)
+
+
+def _publish_private_directory_no_clobber(
+    staging: Path,
+    target: Path,
+) -> None:
+    if staging.parent != target.parent or staging.name == target.name:
+        raise OrchestratorError("artifact_directory_layout_invalid")
+    parent_descriptor = _open_private_directory(
+        target.parent,
+        "artifact_directory_parent_invalid",
+    )
+    staging_descriptor = _open_private_directory(
+        staging,
+        "artifact_directory_staging_invalid",
+    )
+    target_descriptor = -1
+    try:
+        entries = sorted(
+            os.listdir(staging_descriptor),
+            key=lambda name: (name == "archive-status.json", name),
+        )
+        if not entries:
+            raise OrchestratorError("artifact_directory_staging_invalid")
+        source_metadata: dict[str, os.stat_result] = {}
+        for name in entries:
+            if name in {".", ".."} or Path(name).name != name:
+                raise OrchestratorError("artifact_directory_staging_invalid")
+            metadata = os.stat(
+                name,
+                dir_fd=staging_descriptor,
+                follow_symlinks=False,
+            )
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or stat.S_IMODE(metadata.st_mode) != 0o600
+            ):
+                raise OrchestratorError("artifact_directory_staging_invalid")
+            source_metadata[name] = metadata
+        try:
+            os.mkdir(target.name, mode=0o700, dir_fd=parent_descriptor)
+        except FileExistsError as exc:
+            raise OrchestratorError(
+                "artifact_directory_already_exists"
+            ) from exc
+        created_metadata = os.stat(
+            target.name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        if (
+            not stat.S_ISDIR(created_metadata.st_mode)
+            or stat.S_IMODE(created_metadata.st_mode) != 0o700
+        ):
+            raise OrchestratorError("artifact_directory_publish_failed")
+        target_descriptor = os.open(
+            target.name,
+            os.O_RDONLY | _DIRECTORY | _NOFOLLOW,
+            dir_fd=parent_descriptor,
+        )
+        target_metadata = os.fstat(target_descriptor)
+        if (
+            not stat.S_ISDIR(target_metadata.st_mode)
+            or stat.S_IMODE(target_metadata.st_mode) != 0o700
+            or (target_metadata.st_dev, target_metadata.st_ino)
+            != (created_metadata.st_dev, created_metadata.st_ino)
+        ):
+            raise OrchestratorError("artifact_directory_publish_failed")
+        for name in entries:
+            os.link(
+                name,
+                name,
+                src_dir_fd=staging_descriptor,
+                dst_dir_fd=target_descriptor,
+                follow_symlinks=False,
+            )
+            published = os.stat(
+                name,
+                dir_fd=target_descriptor,
+                follow_symlinks=False,
+            )
+            source = source_metadata[name]
+            if (published.st_dev, published.st_ino) != (
+                source.st_dev,
+                source.st_ino,
+            ):
+                raise OrchestratorError("artifact_directory_publish_failed")
+        os.fsync(target_descriptor)
+        published_target = os.stat(
+            target.name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        if (published_target.st_dev, published_target.st_ino) != (
+            target_metadata.st_dev,
+            target_metadata.st_ino,
+        ):
+            raise OrchestratorError("artifact_directory_publish_failed")
+        os.fsync(parent_descriptor)
+    except OrchestratorError:
+        raise
+    except OSError as exc:
+        raise OrchestratorError("artifact_directory_publish_failed") from exc
+    finally:
+        if target_descriptor >= 0:
+            os.close(target_descriptor)
+        os.close(staging_descriptor)
+        os.close(parent_descriptor)
 
 
 def _strict_json_bytes(raw: bytes, category: str) -> dict[str, Any]:
     def reject_constant(_value: str) -> None:
         raise ValueError("non-finite")
 
+    def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError("duplicate_key")
+            value[key] = item
+        return value
+
     try:
         text = raw.decode("utf-8")
-        value, end = json.JSONDecoder(parse_constant=reject_constant).raw_decode(text)
+        value, end = json.JSONDecoder(
+            parse_constant=reject_constant,
+            object_pairs_hook=reject_duplicate_keys,
+        ).raw_decode(text)
     except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         raise OrchestratorError(category) from exc
     if text[end:].strip() or not isinstance(value, dict):
@@ -1014,6 +3383,118 @@ def _valid_stage_event(value: object, expected_name: str) -> bool:
     )
 
 
+def _valid_stage_event_chain(
+    value: Mapping[str, Any],
+    events: tuple[str, ...],
+) -> bool:
+    missing_seen = False
+    previous_monotonic_ns: int | None = None
+    for name in events:
+        event = value.get(name)
+        if not _valid_stage_event(event, name):
+            return False
+        assert isinstance(event, dict)
+        if event["occurred"] is not True:
+            missing_seen = True
+            continue
+        if missing_seen:
+            return False
+        monotonic_ns = event["monotonic_ns"]
+        assert isinstance(monotonic_ns, int)
+        if (
+            previous_monotonic_ns is not None
+            and monotonic_ns <= previous_monotonic_ns
+        ):
+            return False
+        previous_monotonic_ns = monotonic_ns
+    return True
+
+
+def _valid_historical_child_process(value: object, component: str) -> bool:
+    if not isinstance(value, dict) or frozenset(value) != _CHILD_PROCESS_FIELDS:
+        return False
+    state = value.get("child_state")
+    started_ns = value.get("started_monotonic_ns")
+    exited_ns = value.get("exited_monotonic_ns")
+    elapsed_ms = value.get("elapsed_ms")
+    exit_code = value.get("exit_code")
+    signal_value = value.get("signal")
+    stderr = value.get("stderr")
+    if (
+        value.get("component") != component
+        or state not in {item.value for item in ChildState}
+        or value.get("terminal_reason")
+        != f"{component.upper()}_{state.removeprefix('CHILD_')}"
+        or not isinstance(value.get("started_at"), str)
+        or not value["started_at"]
+        or not isinstance(value.get("exited_at"), str)
+        or not value["exited_at"]
+        or type(started_ns) is not int
+        or type(exited_ns) is not int
+        or type(elapsed_ms) is not int
+        or started_ns < 0
+        or exited_ns < started_ns
+        or elapsed_ms != (exited_ns - started_ns) // 1_000_000
+        or (
+            exit_code is not None
+            and type(exit_code) is not int
+        )
+        or (
+            signal_value is not None
+            and type(signal_value) is not int
+        )
+        or not isinstance(stderr, dict)
+        or frozenset(stderr) != _CHILD_STDERR_FIELDS
+        or stderr.get("stderr_excerpt") is not None
+        or stderr.get("stderr_sha256") is not None
+        or type(stderr.get("stderr_byte_count")) is not int
+        or stderr.get("stderr_byte_count") != 0
+        or type(stderr.get("stderr_truncated")) is not bool
+        or type(stderr.get("stderr_redacted")) is not bool
+        or type(stderr.get("sensitive_hit_count")) is not int
+        or stderr.get("sensitive_hit_count") < 0
+        or (
+            stderr.get("sensitive_hit_count") > 0
+            and stderr.get("stderr_redacted") is not True
+        )
+    ):
+        return False
+    return not (
+        (state == ChildState.EXITED_ZERO.value and exit_code != 0)
+        or (
+            state == ChildState.NONZERO_EXIT.value
+            and (exit_code is None or exit_code == 0)
+        )
+        or (
+            state == ChildState.SIGNALLED.value
+            and (signal_value is None or signal_value <= 0)
+        )
+    )
+
+
+def _valid_historical_child_metadata(
+    value: object,
+    request_id: str,
+) -> bool:
+    if (
+        not isinstance(value, dict)
+        or frozenset(value) != _CHILD_METADATA_FIELDS
+        or type(value.get("child_metadata_schema_version")) is not int
+        or value.get("child_metadata_schema_version") != 1
+        or value.get("request_id") != request_id
+    ):
+        return False
+    present = 0
+    for component in ("relay", "proxy"):
+        child = value.get(component)
+        if child is None:
+            continue
+        present += 1
+        if not _valid_historical_child_process(child, component):
+            return False
+    return present > 0
+
+
 def _validate_stage_receipt(
     value: dict[str, Any],
     *,
@@ -1026,9 +3507,70 @@ def _validate_stage_receipt(
         if component == "relay"
         else _PROXY_RECEIPT_FIELDS
     )
+    proxy_contract_invalid = component == "proxy" and (
+        any(
+            type(value.get(field)) is not bool
+            for field in (
+                "auth_present",
+                "method_allowed",
+                "path_allowed",
+                "redirect_followed",
+                "tls_verification",
+            )
+        )
+        or type(value.get("provider_attempt_count")) is not int
+        or value.get("provider_attempt_count") not in {0, 1}
+        or (
+            value.get("provider_http_status") is not None
+            and (
+                type(value.get("provider_http_status")) is not int
+                or not 100 <= value["provider_http_status"] <= 599
+            )
+        )
+        or any(
+            value.get(field) is not None
+            and (
+                type(value.get(field)) is not int
+                or value[field] < 0
+            )
+            for field in ("response_bytes", "response_size")
+        )
+        or not isinstance(value.get("response_category"), str)
+        or not value.get("response_category")
+        or not isinstance(value.get("terminal_status"), str)
+        or not value.get("terminal_status")
+    )
     relay_contract_invalid = component == "relay" and (
         value.get("terminal_reason_source") not in _TERMINAL_REASON_SOURCES
         or value.get("terminal_status") not in _RELAY_TERMINAL_STATUSES
+        or type(value.get("exit_code")) is not int
+        or type(value.get("proxy_request_count")) is not int
+        or value.get("proxy_request_count") < 0
+        or (
+            value.get("response_size") is not None
+            and (
+                type(value.get("response_size")) is not int
+                or value.get("response_size") < 0
+            )
+        )
+        or (
+            value.get("proxy_http_status") is not None
+            and (
+                type(value.get("proxy_http_status")) is not int
+                or not 100 <= value["proxy_http_status"] <= 599
+            )
+        )
+        or not isinstance(value.get("started_at"), str)
+        or not value.get("started_at")
+        or not isinstance(value.get("completed_at"), str)
+        or not value.get("completed_at")
+        or (
+            value.get("response_sha256") is not None
+            and (
+                not isinstance(value.get("response_sha256"), str)
+                or _HEX_64.fullmatch(value["response_sha256"]) is None
+            )
+        )
         or (
             value.get("status") == "SUCCEEDED"
             and (
@@ -1049,13 +3591,17 @@ def _validate_stage_receipt(
     )
     if (
         set(value) != fields
+        or type(value.get("receipt_schema_version")) is not int
         or value.get("receipt_schema_version") != 2
         or value.get("request_id") != request_id
         or value.get("component") != component
+        or type(value.get("retry_count")) is not int
         or value.get("retry_count") != 0
         or any(
             not _valid_stage_event(value.get(name), name) for name in events
         )
+        or not _valid_stage_event_chain(value, events)
+        or proxy_contract_invalid
         or relay_contract_invalid
     ):
         raise OrchestratorError("RECEIPT_MALFORMED")
@@ -1296,15 +3842,7 @@ def _archive_stage_evidence(
             os.fsync(staging_descriptor)
         finally:
             os.close(staging_descriptor)
-        os.replace(staging, target)
-        parent_descriptor = os.open(
-            parent,
-            os.O_RDONLY | _DIRECTORY | _NOFOLLOW,
-        )
-        try:
-            os.fsync(parent_descriptor)
-        finally:
-            os.close(parent_descriptor)
+        _publish_private_directory_no_clobber(staging, target)
     except (OSError, OrchestratorError) as exc:
         raise OrchestratorError("RECEIPT_ARCHIVE_FAILED") from exc
     finally:
@@ -1484,7 +4022,8 @@ def _result(
     *,
     terminal_state: str,
     request_id: str | None,
-    ledger: AttemptLedger | None,
+    ledger: AttemptLedger | ApprovalScopedAttemptLedger | None,
+    approval_scope_id: str | None = None,
     provider_http_status: int | None = None,
     route: str = "none",
     host_validation_status: str = "NOT_RUN",
@@ -1499,6 +4038,11 @@ def _result(
     return CanaryRunResult(
         terminal_state=terminal_state,
         request_id=request_id,
+        approval_scope_id=(
+            ledger.approval_scope_id
+            if isinstance(ledger, ApprovalScopedAttemptLedger)
+            else approval_scope_id
+        ),
         attempt_ledger_state=ledger.state if ledger else None,
         provider_attempt_count=ledger.provider_attempt_count if ledger else 0,
         retry_count=0,
@@ -1527,7 +4071,7 @@ def _publish_runtime_evidence(
     root: Path,
     artifacts: ApprovedCanaryArtifacts,
     result: CanaryRunResult,
-    ledger: AttemptLedger,
+    ledger: AttemptLedger | ApprovalScopedAttemptLedger,
 ) -> None:
     evidence_root = root / "evidence"
     evidence_root.mkdir(mode=0o700, exist_ok=True)
@@ -1538,6 +4082,16 @@ def _publish_runtime_evidence(
         "runtime_contract_version": 1,
         "request_id": ledger.identity.request_id,
         "symbol": ledger.identity.symbol,
+        "approval_scope_id": (
+            ledger.approval_scope_id
+            if isinstance(ledger, ApprovalScopedAttemptLedger)
+            else None
+        ),
+        "ledger_namespace_version": (
+            ledger.ledger_namespace_version
+            if isinstance(ledger, ApprovalScopedAttemptLedger)
+            else None
+        ),
         "approval_candidate_sha256": artifacts.approval_candidate_sha256,
         "proxy_image_id": artifacts.proxy_image_id,
         "relay_image_id": artifacts.relay_image_id,
@@ -1574,7 +4128,7 @@ def _with_runtime_evidence(
     root: Path,
     artifacts: ApprovedCanaryArtifacts,
     result: CanaryRunResult,
-    ledger: AttemptLedger | None,
+    ledger: AttemptLedger | ApprovalScopedAttemptLedger | None,
     *,
     success_route_paths: tuple[Path, Path] | None = None,
 ) -> CanaryRunResult:
@@ -1613,8 +4167,8 @@ def run_single_symbol_canary(
 ) -> CanaryRunResult:
     """Execute one complete attempt; no code path retries a dispatch."""
     request_id: str | None = None
-    ledger: AttemptLedger | None = None
-    store: AttemptLedgerStore | None = None
+    ledger: ApprovalScopedAttemptLedger | None = None
+    store: ApprovalScopedAttemptLedgerStore | None = None
     context: CanaryRuntimeContext | None = None
     cleanup = CleanupResult(completed=True)
     archive = ArchiveResult(completed=False, status="NOT_RUN")
@@ -1676,9 +4230,27 @@ def run_single_symbol_canary(
             else:
                 workdir = None
         return cleanup, secret_residue, temporary_residue
+    scope = ApprovalScopeIdentity(
+        approval_candidate_sha256=artifacts.approval_candidate_sha256,
+        symbol="000403.SZ",
+        provider_id="openai",
+        exact_model_id=_EXACT_MODEL_ID,
+        endpoint_alias="openai_responses_v1",
+    )
+    scope_id = compute_approval_scope_id(scope)
+    namespace = ApprovalScopedLedgerNamespace(
+        repo_root=config.repo_root,
+        attempts_root=config.attempts_root,
+        legacy_state_root=config.state_root,
+        historical_evidence_root=config.historical_evidence_root,
+        candidate_roots=config.candidate_roots,
+    )
     lock = ExclusiveCanaryLock(
         config.state_root,
+        attempts_root=config.attempts_root,
+        stale_lock_validator=namespace.prove_failed_before_dispatch,
         approval_candidate_sha256=artifacts.approval_candidate_sha256,
+        approval_scope_id=scope_id,
         pid=os.getpid(),
         started_at=wall_clock(),
     )
@@ -1690,6 +4262,7 @@ def run_single_symbol_canary(
             terminal_state=category,
             request_id=None,
             ledger=None,
+            approval_scope_id=scope_id,
             error_category=category,
         )
 
@@ -1712,22 +4285,47 @@ def run_single_symbol_canary(
         if runtime_contract_sha256() != artifacts.timeout_contract_sha256:
             raise OrchestratorError("TIMEOUT_CONTRACT_MISMATCH")
 
-        store = AttemptLedgerStore(config.state_root)
-        if store.path.exists() or store.path.is_symlink():
-            existing = recover_attempt_state(store, timestamp=wall_clock())
-            category = (
-                "ATTEMPT_CONSUMED_UNKNOWN"
-                if existing.provider_attempt_count
-                else "EXISTING_ATTEMPT_LEDGER"
-            )
+        preflight = namespace.preflight(scope)
+        if preflight.status != "READY":
             return _result(
-                terminal_state=category,
-                request_id=existing.identity.request_id,
-                ledger=existing,
-                error_category=category,
+                terminal_state=preflight.status,
+                request_id=None,
+                ledger=None,
+                approval_scope_id=scope_id,
+                error_category=preflight.status,
+            )
+
+        residue_deadline = monotonic() + float(
+            runtime["cleanup_timeout_seconds"]
+        )
+        residue = backend.inspect_global_residue(deadline=residue_deadline)
+        if (
+            residue.timed_out
+            or not residue.completed
+            or residue.container_residue_count
+            or residue.network_residue_count
+        ):
+            return _result(
+                terminal_state="GLOBAL_LEDGER_SAFETY_BLOCKED",
+                request_id=None,
+                ledger=None,
+                approval_scope_id=scope_id,
+                cleanup=residue,
+                error_category="GLOBAL_LEDGER_SAFETY_BLOCKED",
             )
 
         request_id = request_id_factory()
+        try:
+            namespace.assert_request_id_available(request_id, preflight=preflight)
+        except OrchestratorError as exc:
+            category = _terminal_category(exc)
+            return _result(
+                terminal_state=category,
+                request_id=None,
+                ledger=None,
+                approval_scope_id=scope_id,
+                error_category=category,
+            )
         identity = CanaryRunIdentity(
             request_id=request_id,
             symbol="000403.SZ",
@@ -1739,7 +4337,13 @@ def run_single_symbol_canary(
                 exclude={"readiness_contract_sha256"},
             ),
         )
+        store = ApprovalScopedAttemptLedgerStore(
+            config.attempts_root,
+            scope=scope,
+            request_id=request_id,
+        )
         ledger = store.prepare(identity, timestamp=wall_clock())
+        lock.bind_request_id(request_id)
         workdir = Path(tempfile.mkdtemp(prefix="phase2-canary-", dir=config.work_root))
         workdir.chmod(0o700)
         input_dir = workdir / "input"
@@ -2054,6 +4658,10 @@ class MockCanaryBackend:
 
     def monotonic(self) -> float:
         return self._now
+
+    def inspect_global_residue(self, *, deadline: float) -> CleanupResult:
+        del deadline
+        return CleanupResult(completed=True)
 
     def prepare(
         self,
@@ -2621,6 +5229,43 @@ class DockerCanaryBackend:
             "relay": f"phase2-canary-relay-worker-{suffix}",
         }
 
+    def inspect_global_residue(self, *, deadline: float) -> CleanupResult:
+        containers = self._run(
+            ["docker", "container", "ls", "--all", "--format", "{{.Names}}"],
+            deadline=deadline,
+            category="GLOBAL_RUNTIME_SCAN_FAILED",
+            maximum_timeout=15.0,
+        )
+        networks = self._run(
+            ["docker", "network", "ls", "--format", "{{.Name}}"],
+            deadline=deadline,
+            category="GLOBAL_RUNTIME_SCAN_FAILED",
+            maximum_timeout=15.0,
+        )
+        container_prefixes = (
+            "phase2-openai-proxy-",
+            "phase2-canary-relay-worker-",
+        )
+        network_prefixes = (
+            "phase2-canary-relay-",
+            "phase2-canary-egress-",
+        )
+        container_count = sum(
+            line.startswith(container_prefixes)
+            for line in containers.stdout.splitlines()
+            if line
+        )
+        network_count = sum(
+            line.startswith(network_prefixes)
+            for line in networks.stdout.splitlines()
+            if line
+        )
+        return CleanupResult(
+            completed=not container_count and not network_count,
+            container_residue_count=container_count,
+            network_residue_count=network_count,
+        )
+
     def _wait_for_proxy_ready(
         self,
         context: CanaryRuntimeContext,
@@ -3001,7 +5646,7 @@ def load_installed_runtime_approval(
             "runtime_candidate_invalid",
         )
         approval_raw = _read_trusted_runtime_approval(approval_path)
-        candidate = _strict_json_bytes(
+        _strict_json_bytes(
             candidate_raw,
             "runtime_candidate_invalid",
         )

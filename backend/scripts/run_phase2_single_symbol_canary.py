@@ -49,6 +49,10 @@ def main(argv: list[str] | None = None) -> int:
     canary_output = _private_directory(
         repo_root / "reports/phase2_provider_canary/live_canary"
     )
+    attempts_root = _private_directory(
+        repo_root / "reports/phase2_provider_canary/attempts"
+    )
+    superseded_candidates = repo_root / "reports/phase2_provider_canary/superseded"
     facts_path = repo_root / "reports/phase2_facts/000403SZ_facts.json"
 
     artifacts = load_installed_runtime_approval(
@@ -65,8 +69,11 @@ def main(argv: list[str] | None = None) -> int:
     config = CanaryOrchestratorConfig(
         repo_root=repo_root,
         state_root=state_root,
+        attempts_root=attempts_root,
         work_root=work_root,
         canary_output_root=canary_output,
+        historical_evidence_root=canary_output,
+        candidate_roots=(superseded_candidates,),
         facts_path=facts_path,
     )
 

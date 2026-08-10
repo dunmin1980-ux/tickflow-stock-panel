@@ -16,6 +16,7 @@ from app.services.phase2_ai_worker_protocol import (
     build_worker_projection,
 )
 from app.services.phase2_canary_orchestrator import (
+    ApprovalScopedAttemptLedger,
     ApprovedCanaryArtifacts,
     AttemptLedgerStore,
     BackendError,
@@ -93,7 +94,7 @@ def test_attempt_ledger_is_mode_0600_canonical_and_identity_bound(
     state_root: Path,
     identity: CanaryRunIdentity,
 ) -> None:
-    store = AttemptLedgerStore(state_root)
+    store = AttemptLedgerStore(state_root, fixture_writes_enabled=True)
 
     ledger = store.prepare(identity, timestamp=FIXED_TIME)
 
@@ -110,11 +111,37 @@ def test_attempt_ledger_is_mode_0600_canonical_and_identity_bound(
         assert forbidden not in serialized.lower()
 
 
-def test_dispatch_transition_durably_consumes_the_only_attempt(
+def test_legacy_attempt_ledger_store_is_read_only_by_default(
     state_root: Path,
     identity: CanaryRunIdentity,
 ) -> None:
     store = AttemptLedgerStore(state_root)
+
+    with pytest.raises(OrchestratorError, match="legacy_ledger_read_only"):
+        store.prepare(identity, timestamp=FIXED_TIME)
+
+
+def test_fixture_writer_cannot_target_frozen_history(
+    state_root: Path,
+    identity: CanaryRunIdentity,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        orchestrator_module,
+        "_frozen_legacy_state_roots",
+        lambda: (state_root,),
+    )
+    store = AttemptLedgerStore(state_root, fixture_writes_enabled=True)
+
+    with pytest.raises(OrchestratorError, match="historical_ledger_immutable"):
+        store.prepare(identity, timestamp=FIXED_TIME)
+
+
+def test_dispatch_transition_durably_consumes_the_only_attempt(
+    state_root: Path,
+    identity: CanaryRunIdentity,
+) -> None:
+    store = AttemptLedgerStore(state_root, fixture_writes_enabled=True)
     store.prepare(identity, timestamp=FIXED_TIME)
 
     ledger = store.transition(
@@ -144,7 +171,7 @@ def test_illegal_ledger_transitions_fail_closed(
     state_root: Path,
     identity: CanaryRunIdentity,
 ) -> None:
-    store = AttemptLedgerStore(state_root)
+    store = AttemptLedgerStore(state_root, fixture_writes_enabled=True)
     store.prepare(identity, timestamp=FIXED_TIME)
     if current is not LedgerState.PREPARED:
         path = [
@@ -173,7 +200,7 @@ def test_atomic_ledger_update_failure_preserves_previous_bytes(
     identity: CanaryRunIdentity,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    store = AttemptLedgerStore(state_root)
+    store = AttemptLedgerStore(state_root, fixture_writes_enabled=True)
     store.prepare(identity, timestamp=FIXED_TIME)
     ledger_path = state_root / "attempt-ledger.json"
     before = ledger_path.read_bytes()
@@ -195,13 +222,36 @@ def test_atomic_ledger_update_failure_preserves_previous_bytes(
     assert not list(state_root.glob("*.partial"))
 
 
+def test_publish_private_file_does_not_overwrite_race_winner(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parent = tmp_path / "artifacts"
+    parent.mkdir(mode=0o700)
+    target = parent / "evidence.json"
+    original_link = os.link
+
+    def insert_race_winner(*args: object, **kwargs: object) -> None:
+        target.write_bytes(b"race-winner\n")
+        target.chmod(0o600)
+        original_link(*args, **kwargs)
+
+    monkeypatch.setattr(orchestrator_module.os, "link", insert_race_winner)
+
+    with pytest.raises(OrchestratorError, match="artifact_already_exists"):
+        orchestrator_module._publish_private_file(target, b"new-evidence\n")
+
+    assert target.read_bytes() == b"race-winner\n"
+    assert not list(parent.glob("*.partial"))
+
+
 def test_recovery_marks_pre_dispatch_and_unknown_dispatch_differently(
     tmp_path: Path,
     identity: CanaryRunIdentity,
 ) -> None:
     before_root = tmp_path / "before"
     before_root.mkdir(mode=0o700)
-    before = AttemptLedgerStore(before_root)
+    before = AttemptLedgerStore(before_root, fixture_writes_enabled=True)
     before.prepare(identity, timestamp=FIXED_TIME)
 
     before_recovered = recover_attempt_state(
@@ -214,7 +264,7 @@ def test_recovery_marks_pre_dispatch_and_unknown_dispatch_differently(
 
     after_root = tmp_path / "after"
     after_root.mkdir(mode=0o700)
-    after = AttemptLedgerStore(after_root)
+    after = AttemptLedgerStore(after_root, fixture_writes_enabled=True)
     after.prepare(identity, timestamp=FIXED_TIME)
     after.transition(
         LedgerState.NETWORK_DISPATCH_STARTED,
@@ -291,7 +341,10 @@ def test_state_root_and_ledger_reject_symlinks_or_unsafe_modes(
     outside.write_text("{}\n", encoding="utf-8")
     (real / "attempt-ledger.json").symlink_to(outside)
     with pytest.raises(OrchestratorError, match="ledger_target_invalid"):
-        AttemptLedgerStore(real).prepare(identity, timestamp=FIXED_TIME)
+        AttemptLedgerStore(real, fixture_writes_enabled=True).prepare(
+            identity,
+            timestamp=FIXED_TIME,
+        )
 
 
 def test_exclusive_lock_rejects_concurrent_owner_before_new_request_id(
@@ -350,12 +403,14 @@ def test_unknown_stale_lock_fails_but_failed_before_dispatch_can_recover(
     with pytest.raises(OrchestratorError, match="stale_lock_state_unknown"):
         lock.acquire()
 
-    store = AttemptLedgerStore(state_root)
+    store = AttemptLedgerStore(state_root, fixture_writes_enabled=True)
     store.prepare(identity, timestamp=FIXED_TIME)
     store.transition(
         LedgerState.FAILED_BEFORE_DISPATCH,
         timestamp="2026-08-02T12:00:01Z",
     )
+    lock_path.write_bytes(orchestrator_module._canonical_bytes(stale))
+    lock_path.chmod(0o600)
 
     lock.acquire()
     lock.release()
@@ -417,15 +472,21 @@ def artifacts(projection: dict[str, Any]) -> ApprovedCanaryArtifacts:
 @pytest.fixture
 def orchestrator_config(tmp_path: Path) -> CanaryOrchestratorConfig:
     state = tmp_path / "state"
+    attempts = tmp_path / "attempts"
     work = tmp_path / "work"
     output = tmp_path / "canary-output"
-    for path in (state, work, output):
+    historical_output = tmp_path / "historical-output"
+    candidates = tmp_path / "candidates"
+    for path in (state, attempts, work, output, historical_output, candidates):
         path.mkdir(mode=0o700)
     return CanaryOrchestratorConfig(
         repo_root=REPO_ROOT,
         state_root=state,
+        attempts_root=attempts,
         work_root=work,
         canary_output_root=output,
+        historical_evidence_root=historical_output,
+        candidate_roots=(candidates,),
         facts_path=FACTS_PATH,
     )
 
@@ -492,11 +553,11 @@ class _LedgerObservingBackend(MockCanaryBackend):
     def __init__(
         self,
         *,
-        state_root: Path,
+        attempts_root: Path,
         relay_response: dict[str, Any],
     ) -> None:
         super().__init__(scenario="provider_1s", relay_response=relay_response)
-        self.state_root = state_root
+        self.attempts_root = attempts_root
         self.ledger_state_at_archive: LedgerState | None = None
 
     def archive_evidence(
@@ -505,7 +566,11 @@ class _LedgerObservingBackend(MockCanaryBackend):
         *,
         deadline: float,
     ) -> Any:
-        self.ledger_state_at_archive = AttemptLedgerStore(self.state_root).load().state
+        ledgers = list(self.attempts_root.glob("*/*/ledger.json"))
+        assert len(ledgers) == 1
+        self.ledger_state_at_archive = ApprovalScopedAttemptLedger.model_validate_json(
+            ledgers[0].read_bytes()
+        ).state
         return super().archive_evidence(context, deadline=deadline)
 
 
@@ -523,7 +588,7 @@ class _SensitiveStderrBackend(MockCanaryBackend):
                 ["mock-relay"],
                 1,
                 stdout="",
-                stderr="Authorization: Bearer synthetic-canary-secret-value",
+                stderr="Authorization: Bearer [REDACTED_TEST_FIXTURE]",
             ),
             timing,
         )
@@ -751,7 +816,7 @@ def test_archive_precedes_terminal_ledger_transition(
     relay_response: dict[str, Any],
 ) -> None:
     backend = _LedgerObservingBackend(
-        state_root=orchestrator_config.state_root,
+        attempts_root=orchestrator_config.attempts_root,
         relay_response=relay_response,
     )
 
@@ -1118,13 +1183,16 @@ def test_concurrent_orchestrator_is_rejected_before_secret_or_request_id(
     assert secret_reads == []
 
 
-def test_interrupted_ledger_blocks_new_attempt_without_secret_read(
+def test_interrupted_legacy_ledger_blocks_globally_without_secret_read(
     orchestrator_config: CanaryOrchestratorConfig,
     artifacts: ApprovedCanaryArtifacts,
     projection: dict[str, Any],
     relay_response: dict[str, Any],
 ) -> None:
-    store = AttemptLedgerStore(orchestrator_config.state_root)
+    store = AttemptLedgerStore(
+        orchestrator_config.state_root,
+        fixture_writes_enabled=True,
+    )
     interrupted = CanaryRunIdentity(
         request_id="b" * 32,
         symbol="000403.SZ",
@@ -1152,9 +1220,9 @@ def test_interrupted_ledger_blocks_new_attempt_without_secret_read(
         secret_reads=reads,
     )
 
-    assert result.terminal_state == "ATTEMPT_CONSUMED_UNKNOWN"
-    assert result.provider_attempt_count == 1
-    assert store.load().state is LedgerState.ATTEMPT_CONSUMED_UNKNOWN
+    assert result.terminal_state == "GLOBAL_LEDGER_SAFETY_BLOCKED"
+    assert result.provider_attempt_count == 0
+    assert store.load().state is LedgerState.NETWORK_DISPATCH_STARTED
     assert reads == []
     assert backend.dispatch_count == 0
 
@@ -1327,6 +1395,58 @@ class _RecordingExecutor:
                 f"Error response from daemon: network {command[-1]} not found",
             )
         return subprocess.CompletedProcess(command, 0, "", "")
+
+
+class _GlobalResidueExecutor(_RecordingExecutor):
+    def __call__(
+        self,
+        command: list[str],
+        timeout: float,
+    ) -> subprocess.CompletedProcess[str]:
+        self.calls.append((command, timeout))
+        if command[:3] == ["docker", "container", "ls"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                "\n".join(
+                    (
+                        "unrelated-container",
+                        "phase2-openai-proxy-deadbeef0000",
+                        "phase2-canary-relay-worker-deadbeef0000",
+                    )
+                ),
+                "",
+            )
+        if command[:3] == ["docker", "network", "ls"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                "\n".join(
+                    (
+                        "bridge",
+                        "phase2-canary-relay-deadbeef0000",
+                        "phase2-canary-egress-deadbeef0000",
+                    )
+                ),
+                "",
+            )
+        raise AssertionError(f"unexpected command: {command}")
+
+
+def test_docker_backend_global_residue_scan_is_prefix_exact_and_bounded() -> None:
+    executor = _GlobalResidueExecutor()
+    backend = DockerCanaryBackend(executor=executor, monotonic=lambda: 0.0)
+
+    result = backend.inspect_global_residue(deadline=20.0)
+
+    assert result.completed is False
+    assert result.container_residue_count == 2
+    assert result.network_residue_count == 2
+    assert [command[:3] for command, _timeout in executor.calls] == [
+        ["docker", "container", "ls"],
+        ["docker", "network", "ls"],
+    ]
+    assert all(timeout <= 15.0 for _command, timeout in executor.calls)
 
 
 class _ChildOutcomeExecutor(_RecordingExecutor):
@@ -1658,6 +1778,95 @@ def test_last_proven_stage_uses_persisted_monotonic_time_across_components(
     )
     assert archive.last_proven_stage == "candidate_ready_published"
     assert status["last_proven_stage"] == "candidate_ready_published"
+
+
+def test_receipt_directory_publication_does_not_replace_a_racing_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parent = tmp_path / "receipts"
+    parent.mkdir(mode=0o700)
+    staging = parent / ".request.partial"
+    staging.mkdir(mode=0o700)
+    source = staging / "archive-status.json"
+    source.write_bytes(b"{}\n")
+    source.chmod(0o600)
+    target = parent / ("2" * 32)
+    original_mkdir = os.mkdir
+    racing_inode: list[int] = []
+
+    def race_target(
+        path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+        mode: int = 0o777,
+        *,
+        dir_fd: int | None = None,
+    ) -> None:
+        if path == target.name and dir_fd is not None:
+            original_mkdir(path, mode, dir_fd=dir_fd)
+            racing_inode.append(os.stat(path, dir_fd=dir_fd).st_ino)
+            raise FileExistsError(path)
+        original_mkdir(path, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(orchestrator_module.os, "mkdir", race_target)
+
+    with pytest.raises(OrchestratorError, match="artifact_directory_already_exists"):
+        orchestrator_module._publish_private_directory_no_clobber(
+            staging,
+            target,
+        )
+
+    assert racing_inode
+    assert target.is_dir()
+    assert target.stat().st_ino == racing_inode[0]
+    assert source.is_file()
+
+
+def test_receipt_directory_publication_binds_created_target_inode(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parent = tmp_path / "receipts"
+    parent.mkdir(mode=0o700)
+    staging = parent / ".request.partial"
+    staging.mkdir(mode=0o700)
+    source = staging / "archive-status.json"
+    source.write_bytes(b"{}\n")
+    source.chmod(0o600)
+    target = parent / ("2" * 32)
+    displaced = parent / f"{target.name}.displaced"
+    original_open = os.open
+    raced = False
+
+    def replace_before_open(
+        path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+        flags: int,
+        mode: int = 0o777,
+        *,
+        dir_fd: int | None = None,
+    ) -> int:
+        nonlocal raced
+        if path == target.name and dir_fd is not None and not raced:
+            raced = True
+            os.rename(
+                target.name,
+                displaced.name,
+                src_dir_fd=dir_fd,
+                dst_dir_fd=dir_fd,
+            )
+            os.mkdir(target.name, mode=0o700, dir_fd=dir_fd)
+        return original_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(orchestrator_module.os, "open", replace_before_open)
+
+    with pytest.raises(OrchestratorError, match="artifact_directory_publish_failed"):
+        orchestrator_module._publish_private_directory_no_clobber(
+            staging,
+            target,
+        )
+
+    assert raced
+    assert displaced.is_dir()
+    assert source.is_file()
 
 
 def test_relay_self_reason_refines_host_nonzero_exit_without_losing_child_evidence(

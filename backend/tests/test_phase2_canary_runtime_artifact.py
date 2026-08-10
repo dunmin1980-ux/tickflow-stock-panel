@@ -31,10 +31,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 OLD_CANDIDATE = (
     REPO_ROOT
     / "reports/phase2_provider_canary/superseded"
-    / "45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127.json"
+    / "769f4d762594ac496bbaf14b90b8dd3cb7eae572ac9bf05f0484abfe3b86ffaf.json"
 )
 OLD_CANDIDATE_SHA256 = (
-    "45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127"
+    "769f4d762594ac496bbaf14b90b8dd3cb7eae572ac9bf05f0484abfe3b86ffaf"
 )
 PREVIOUS_CANDIDATE = (
     REPO_ROOT
@@ -174,6 +174,14 @@ def test_old_approval_candidate_is_preserved_exactly() -> None:
     )
     assert hashlib.sha256(PREVIOUS_CANDIDATE.read_bytes()).hexdigest() == (
         "e77596da06c1054a01a02066b2ef28f47db3db6f69d981723f7277faf61ade2b"
+    )
+    blocked_candidate = (
+        REPO_ROOT
+        / "reports/phase2_provider_canary/superseded"
+        / "45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127.json"
+    )
+    assert hashlib.sha256(blocked_candidate.read_bytes()).hexdigest() == (
+        "45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127"
     )
     assert hashlib.sha256(LEGACY_CANDIDATE.read_bytes()).hexdigest() == (
         LEGACY_CANDIDATE_SHA256

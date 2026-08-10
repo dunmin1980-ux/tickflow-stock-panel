@@ -1,0 +1,39 @@
+{
+  "ai_call_count": 0,
+  "approval_candidate_sha256": "039551809431a0af3044613295f1df860c3c329001510b793c5017740b1b3e4f",
+  "container_residue_count": 0,
+  "current_approval_scope_id": "b9fef659680b81c7ed9a0a1e00e31970bc575cb1b2db21b4ae974c59357f7444",
+  "current_scope_attempt_availability": "AVAILABLE",
+  "current_scope_historical_attempts": 0,
+  "errors": [],
+  "global_lock_state": "NONE",
+  "global_request_id_uniqueness": true,
+  "historical_evidence_unchanged": true,
+  "historical_ledger_bytes_unchanged": true,
+  "historical_requests": [
+    {
+      "disposition": "CONSUMED_PRESERVED",
+      "ledger_sha256": "ded0f39813dd70657cedd6a8c92669d3508480e97efc6ed44b1a45f9470b5772",
+      "ledger_state": "ATTEMPT_CONSUMED_UNKNOWN",
+      "request_id": "d59766101b63450e8148541d589a90bf"
+    },
+    {
+      "disposition": "CONSUMED_PRESERVED",
+      "ledger_sha256": "4adcce4ffff6364c0a2552b59be17f6cdd646cb2232d5c02eb16f19716ebf64b",
+      "ledger_state": "FAILED_AFTER_DISPATCH",
+      "request_id": "3d3e6adbe5b74c98ad18a2efe0fd1d0c"
+    }
+  ],
+  "ledger_namespace_preflight_schema_version": 1,
+  "ledger_namespace_version": 1,
+  "network_residue_count": 0,
+  "new_approval_installed": false,
+  "old_769f_approval": "SUPERSEDED_AND_PRESERVED",
+  "old_active_unknown_ledger_safety": true,
+  "provider_http": "NOT_RUN",
+  "real_provider_attempt_count": 0,
+  "secret_content_read": false,
+  "secret_file_residue_count": 0,
+  "status": "PHASE2B_CANARY_LEDGER_NAMESPACE_READY_FOR_REAPPROVAL",
+  "temporary_residue_count": 0
+}

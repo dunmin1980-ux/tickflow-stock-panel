@@ -36,7 +36,7 @@ RELAY_IMAGE_NAME = "tickflow-phase2-canary-relay:runtime-v1"
 RUNTIME_USER = "65532:65532"
 READY_STATUS = "PHASE2B_CANARY_RUNTIME_CONTRACT_READY_FOR_REAPPROVAL"
 OLD_CANDIDATE_SHA256 = (
-    "45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127"
+    "769f4d762594ac496bbaf14b90b8dd3cb7eae572ac9bf05f0484abfe3b86ffaf"
 )
 
 _PROXY_CONTEXT = Path("docker/phase2-openai-egress-proxy")
@@ -52,7 +52,7 @@ _RUNBOOK = Path("docs/phase2-single-call-orchestrator-runbook.md")
 _FACTS = Path("reports/phase2_facts/000403SZ_facts.json")
 _OLD_CANDIDATE = Path(
     "reports/phase2_provider_canary/superseded/"
-    "45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127.json"
+    "769f4d762594ac496bbaf14b90b8dd3cb7eae572ac9bf05f0484abfe3b86ffaf.json"
 )
 _PROXY_FILES = {
     "Dockerfile",
@@ -229,7 +229,7 @@ class RuntimeArtifactCandidate(_StrictFrozenModel):
     no_cache: Literal[True]
     base_digest_pinned: Literal[True]
     old_approval_candidate_sha256: Literal[
-        "45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127"
+        "769f4d762594ac496bbaf14b90b8dd3cb7eae572ac9bf05f0484abfe3b86ffaf"
     ]
     new_approval_installed: Literal[False]
     provider_attempt_count: Literal[0]

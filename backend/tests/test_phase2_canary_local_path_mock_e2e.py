@@ -18,6 +18,8 @@ from scripts.run_phase2_canary_local_path_mock_e2e import (
     _frozen_manifest_matches,
     _historical_manifest,
     _load_mock_approved_artifacts,
+    _mock_scope_candidate_sha256,
+    _mock_scoped_artifacts,
     _provider_response,
     _run_pre_fix_replay,
     _topology_command_diffs_verified,
@@ -90,6 +92,48 @@ def test_local_mock_approved_artifacts_bind_readiness_contract() -> None:
     artifacts = _approved_artifacts(candidate_raw, candidate)
 
     assert artifacts.readiness_contract_sha256 == "6" * 64
+
+
+def test_mock_scope_candidates_are_deterministic_distinct_and_secret_free() -> None:
+    production_candidate_sha256 = "8" * 64
+
+    observed = tuple(
+        _mock_scope_candidate_sha256(production_candidate_sha256, index)
+        for index in range(1, 4)
+    )
+
+    assert len(set(observed)) == 3
+    assert observed == tuple(
+        _mock_scope_candidate_sha256(production_candidate_sha256, index)
+        for index in range(1, 4)
+    )
+    assert all(value != production_candidate_sha256 for value in observed)
+
+
+def test_mock_scoped_artifacts_change_only_the_approval_identity() -> None:
+    candidate_raw = b'{"candidate":"test"}\n'
+    candidate = {
+        "artifact_identity": {
+            "facts_sha256": "1" * 64,
+            "projection_sha256": "2" * 64,
+            "proxy_image_id": "sha256:" + "3" * 64,
+            "relay_image_id": "sha256:" + "4" * 64,
+            "timeout_contract_sha256": "5" * 64,
+            "readiness_contract_sha256": "6" * 64,
+            "orchestrator_source_sha256": "7" * 64,
+        }
+    }
+    production = _approved_artifacts(candidate_raw, candidate)
+
+    scoped = _mock_scoped_artifacts(production, run_index=2)
+
+    assert scoped.approval_candidate_sha256 == _mock_scope_candidate_sha256(
+        production.approval_candidate_sha256,
+        2,
+    )
+    assert scoped.model_dump(exclude={"approval_candidate_sha256"}) == (
+        production.model_dump(exclude={"approval_candidate_sha256"})
+    )
 
 
 def test_local_mock_requires_external_candidate_sha_before_approval_load(

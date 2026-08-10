@@ -1,6 +1,6 @@
 {
   "ai_call_count": 0,
-  "approval_candidate_sha256": "769f4d762594ac496bbaf14b90b8dd3cb7eae572ac9bf05f0484abfe3b86ffaf",
+  "approval_candidate_sha256": "039551809431a0af3044613295f1df860c3c329001510b793c5017740b1b3e4f",
   "base_digest_pinned": true,
   "base_image": {
     "base_available": true,
@@ -59,10 +59,10 @@
   "input_hashes_stable": true,
   "inputs_after": {
     "artifact_builder_source_sha256": "50ef15ca64304530c74251de04628105dc821f12f207090d60b035a33cba1f52",
-    "artifact_verifier_source_sha256": "823fcedf03d0931cb94bd4bed3a9c1d0c903b72fae3f319258aae54553c15536",
-    "launcher_source_sha256": "7a6dfb2ca4dda9a282e4099433483639dd082afd6ae4cdd5398b4b202cf32259",
+    "artifact_verifier_source_sha256": "cb83c5562a13c6fc0e12ff8c98fc1bbb7698d36d51a283edd666623287c14067",
+    "launcher_source_sha256": "89f6571812356b89b16de2dbeec96cf53fb25cb67c651d67dfa85668a775489a",
     "observability_source_sha256": "ea80b0e4e5d5e1fcf5f2a7901da92fe7bdb3decbda8cd0b54337ead10e960f43",
-    "orchestrator_source_sha256": "dc2d9562c8c5d92612308b07d07d40293478783a0c1dee3270a25f7163724810",
+    "orchestrator_source_sha256": "22e76a11dd02726c7411631ab78179e17fa7af7b0da228190f1413368d647afa",
     "proxy_dockerfile_sha256": "4451af54a04671b79a1f800c596308ac5abcddf160fac81ddc2368ad0ecbd99d",
     "proxy_policy_sha256": "f9819264a0d815644ef8a95d95ff60ac2b930ce40646899cdc565b8bf95b2274",
     "proxy_source_sha256": "c965e699201cfe0d9dc5a737823857bd5aa3ef5aff3f5d9a0c11a2e90f00a66e",
@@ -70,15 +70,15 @@
     "relay_dockerfile_sha256": "039acb0f4b8c742e45f16fa621f2500c63e4ace5070ef1d55271b32c02629e58",
     "relay_source_sha256": "db5a9d3207797f03f32fdde330cb77451838d8cd9c24f4ffd4c4df343cfbe435",
     "responses_contract_sha256": "29cbd048ee6b34e3495fc1a5f8d1bff0a1f7e0c466006c2f40082e1f00481526",
-    "runbook_sha256": "cb65e5ba3ce242003c5198822ee0a6b2302d86ef889f2b885758c952e85f07fe",
+    "runbook_sha256": "d83e49f5d27a14637dbb12f2eaf89271bbe9e4070a207cce675a74feff2c861a",
     "runtime_contract_sha256": "34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68"
   },
   "inputs_before": {
     "artifact_builder_source_sha256": "50ef15ca64304530c74251de04628105dc821f12f207090d60b035a33cba1f52",
-    "artifact_verifier_source_sha256": "823fcedf03d0931cb94bd4bed3a9c1d0c903b72fae3f319258aae54553c15536",
-    "launcher_source_sha256": "7a6dfb2ca4dda9a282e4099433483639dd082afd6ae4cdd5398b4b202cf32259",
+    "artifact_verifier_source_sha256": "cb83c5562a13c6fc0e12ff8c98fc1bbb7698d36d51a283edd666623287c14067",
+    "launcher_source_sha256": "89f6571812356b89b16de2dbeec96cf53fb25cb67c651d67dfa85668a775489a",
     "observability_source_sha256": "ea80b0e4e5d5e1fcf5f2a7901da92fe7bdb3decbda8cd0b54337ead10e960f43",
-    "orchestrator_source_sha256": "dc2d9562c8c5d92612308b07d07d40293478783a0c1dee3270a25f7163724810",
+    "orchestrator_source_sha256": "22e76a11dd02726c7411631ab78179e17fa7af7b0da228190f1413368d647afa",
     "proxy_dockerfile_sha256": "4451af54a04671b79a1f800c596308ac5abcddf160fac81ddc2368ad0ecbd99d",
     "proxy_policy_sha256": "f9819264a0d815644ef8a95d95ff60ac2b930ce40646899cdc565b8bf95b2274",
     "proxy_source_sha256": "c965e699201cfe0d9dc5a737823857bd5aa3ef5aff3f5d9a0c11a2e90f00a66e",
@@ -86,13 +86,13 @@
     "relay_dockerfile_sha256": "039acb0f4b8c742e45f16fa621f2500c63e4ace5070ef1d55271b32c02629e58",
     "relay_source_sha256": "db5a9d3207797f03f32fdde330cb77451838d8cd9c24f4ffd4c4df343cfbe435",
     "responses_contract_sha256": "29cbd048ee6b34e3495fc1a5f8d1bff0a1f7e0c466006c2f40082e1f00481526",
-    "runbook_sha256": "cb65e5ba3ce242003c5198822ee0a6b2302d86ef889f2b885758c952e85f07fe",
+    "runbook_sha256": "d83e49f5d27a14637dbb12f2eaf89271bbe9e4070a207cce675a74feff2c861a",
     "runtime_contract_sha256": "34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68"
   },
   "network_residue_count": 0,
   "new_approval_installed": false,
   "no_cache": true,
-  "old_approval_candidate_sha256": "45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127",
+  "old_approval_candidate_sha256": "769f4d762594ac496bbaf14b90b8dd3cb7eae572ac9bf05f0484abfe3b86ffaf",
   "provider_attempt_count": 0,
   "provider_http": "NOT_RUN",
   "proxy_contents": {
@@ -113,7 +113,7 @@
       "/proxy/proxy.py"
     ],
     "history_clean": true,
-    "image_id": "sha256:97f410e482119c2aa6d4c9cabf58c5510c7dd9c92189ae6d3306777315db3dc8",
+    "image_id": "sha256:7825e2b19b7c703c16d10601939a423b31b84771bce6bf09de42b8afbd89b247",
     "image_name": "tickflow-phase2-openai-egress-proxy:runtime-v1",
     "image_valid": true,
     "proxy_policy_sha256": "f9819264a0d815644ef8a95d95ff60ac2b930ce40646899cdc565b8bf95b2274",
@@ -145,7 +145,7 @@
       "/relay/relay.py"
     ],
     "history_clean": true,
-    "image_id": "sha256:92a18952b6a6ab140879194cfa18d3e81080bab2f2f214630ae42758213c3c0f",
+    "image_id": "sha256:54b4cbf91f578a6d6d328cb2a249444c0cdbdc633cbf63f6cf6f3b1ff8af3627",
     "image_name": "tickflow-phase2-canary-relay:runtime-v1",
     "image_valid": true,
     "proxy_policy_sha256": null,

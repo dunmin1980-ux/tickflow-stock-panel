@@ -73,6 +73,10 @@ _HISTORICAL_FROZEN_SHA256 = {
     "45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127.json": (
         "45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127"
     ),
+    "reports/phase2_provider_canary/superseded/"
+    "769f4d762594ac496bbaf14b90b8dd3cb7eae572ac9bf05f0484abfe3b86ffaf.json": (
+        "769f4d762594ac496bbaf14b90b8dd3cb7eae572ac9bf05f0484abfe3b86ffaf"
+    ),
     "reports/phase2_provider_canary/live_canary/evidence/"
     "d59766101b63450e8148541d589a90bf.json": (
         "0ef11071083053ac7db825b39492e7e5d24ce27d32cc40c6daa90f43138603e4"
@@ -791,6 +795,40 @@ def _approved_artifacts(candidate_raw: bytes, candidate: dict[str, Any]) -> Appr
     )
 
 
+def _mock_scope_candidate_sha256(
+    production_candidate_sha256: str,
+    run_index: int,
+) -> str:
+    if _HEX_64.fullmatch(production_candidate_sha256) is None:
+        raise LocalMockError("production_candidate_sha256_invalid")
+    if isinstance(run_index, bool) or run_index not in {1, 2, 3}:
+        raise LocalMockError("mock_run_index_invalid")
+    material = canonical_json_bytes(
+        {
+            "mock_approval_scope_schema_version": 1,
+            "production_candidate_sha256": production_candidate_sha256,
+            "purpose": "phase2_canary_local_path_mock_e2e",
+            "run_index": run_index,
+        }
+    )
+    return hashlib.sha256(material).hexdigest()
+
+
+def _mock_scoped_artifacts(
+    production: ApprovedCanaryArtifacts,
+    *,
+    run_index: int,
+) -> ApprovedCanaryArtifacts:
+    return production.model_copy(
+        update={
+            "approval_candidate_sha256": _mock_scope_candidate_sha256(
+                production.approval_candidate_sha256,
+                run_index,
+            )
+        }
+    )
+
+
 def _load_mock_approved_artifacts(
     *,
     candidate_path: Path,
@@ -937,6 +975,7 @@ def _run_once(
     repo_root: Path,
     root: Path,
     candidate_path: Path,
+    production_candidate_sha256: str,
     artifacts: ApprovedCanaryArtifacts,
     projection: dict[str, Any],
     certificate: Path,
@@ -947,9 +986,10 @@ def _run_once(
     run_root = root / f"run-{index}"
     run_root.mkdir(mode=0o700)
     state_root = run_root / "state"
+    attempts_root = run_root / "attempts"
     work_root = run_root / "work"
     output_root = run_root / "output"
-    for path in (state_root, work_root, output_root):
+    for path in (state_root, attempts_root, work_root, output_root):
         path.mkdir(mode=0o700)
     request_id = f"{index:032x}"
     executor = LocalMockTopologyExecutor(
@@ -963,21 +1003,32 @@ def _run_once(
     config = CanaryOrchestratorConfig(
         repo_root=repo_root,
         state_root=state_root,
+        attempts_root=attempts_root,
         work_root=work_root,
         canary_output_root=output_root,
+        historical_evidence_root=output_root,
+        candidate_roots=(
+            repo_root / "reports/phase2_provider_canary/superseded",
+        ),
         facts_path=repo_root / "reports/phase2_facts/000403SZ_facts.json",
     )
+
+    def verify_mock_scope(approved: ApprovedCanaryArtifacts) -> None:
+        if approved.approval_candidate_sha256 != artifacts.approval_candidate_sha256:
+            raise OrchestratorError("mock_approval_scope_identity_mismatch")
+        verify_runtime_artifact_candidate(
+            repo_root,
+            candidate_path,
+            expected_candidate_sha256=production_candidate_sha256,
+        )
+
     try:
         result = run_single_symbol_canary(
             config=config,
             artifacts=artifacts,
             projection=projection,
             backend=DockerCanaryBackend(executor=executor),
-            artifact_verifier=lambda approved: verify_runtime_artifact_candidate(
-                repo_root,
-                candidate_path,
-                expected_candidate_sha256=approved.approval_candidate_sha256,
-            ),
+            artifact_verifier=verify_mock_scope,
             secret_reader=lambda: "phase2-local-mock-only",
             request_id_factory=lambda: request_id,
             wall_clock=_timestamp,
@@ -1013,6 +1064,9 @@ def _run_once(
         return {
             "run": index,
             "request_id": request_id,
+            "production_candidate_sha256": production_candidate_sha256,
+            "mock_approval_candidate_sha256": artifacts.approval_candidate_sha256,
+            "mock_approval_scope_id": result.approval_scope_id,
             "result": result_value,
             "mock_provider_attempt_count": mock_receipt.get("attempt_count"),
             "mock_request_contract_valid": mock_receipt.get("request_contract_valid"),
@@ -1101,7 +1155,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     old_candidate_path = (
         repo_root
         / "reports/phase2_provider_canary/superseded"
-        / "45c5a569eb542ff8b03c53cd0be995d769a2a9a998a8319c2df0618d410d5127.json"
+        / "769f4d762594ac496bbaf14b90b8dd3cb7eae572ac9bf05f0484abfe3b86ffaf.json"
     )
     if _sha256(old_candidate_path) != old_candidate_path.stem:
         raise LocalMockError("old_approval_not_preserved")
@@ -1137,16 +1191,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         certificate, private_key = _generate_certificate(root)
         runs = []
         for index in range(1, 4):
-            artifacts = _load_mock_approved_artifacts(
+            production_artifacts = _load_mock_approved_artifacts(
                 candidate_path=candidate_path,
                 expected_candidate_sha256=args.expected_candidate_sha256,
                 approval_root=root / f"approval-{index}",
+            )
+            artifacts = _mock_scoped_artifacts(
+                production_artifacts,
+                run_index=index,
             )
             run = _run_once(
                 index=index,
                 repo_root=repo_root,
                 root=root,
                 candidate_path=candidate_path,
+                production_candidate_sha256=args.expected_candidate_sha256,
                 artifacts=artifacts,
                 projection=projection,
                 certificate=certificate,
@@ -1163,15 +1222,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     historical_after = _historical_manifest(repo_root)
     renderer_hashes = {run["renderer_sha256"] for run in runs}
     document_hashes = {run["document_sha256"] for run in runs}
+    mock_candidate_hashes = {
+        run["mock_approval_candidate_sha256"] for run in runs
+    }
+    mock_scope_ids = {run["mock_approval_scope_id"] for run in runs}
     passed = (
         all(run["passed"] for run in runs)
         and all(run["approval_loader"] == "APPROVED" for run in runs)
         and len(renderer_hashes) == 1
         and len(document_hashes) == 1
+        and len(mock_candidate_hashes) == 3
+        and len(mock_scope_ids) == 3
         and historical_before == historical_after
     )
     evidence = {
-        "local_path_mock_e2e_schema_version": 1,
+        "local_path_mock_e2e_schema_version": 2,
         "status": "PASSED" if passed else "FAILED",
         "symbol": "000403.SZ",
         "trade_date": "2026-07-31",
@@ -1180,7 +1245,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "external_candidate_sha256_bound": True,
         "approval_loader": "APPROVED",
         "old_approval_candidate_sha256": old_candidate_path.stem,
-        "old_approval_status": "INVALID_FOR_RUNTIME",
+        "old_approval_status": "SUPERSEDED_AND_PRESERVED",
         "old_approval_preserved": True,
         "new_approval_installed": False,
         "mock_topology_deltas": list(_MOCK_TOPOLOGY_DELTAS),
@@ -1195,6 +1260,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
         "requested_run_count": 3,
         "completed_run_count": len(runs),
+        "distinct_mock_approval_scope_count": len(mock_scope_ids),
         "runs": runs,
         "renderer_deterministic": len(renderer_hashes) == 1,
         "claims_document_deterministic": len(document_hashes) == 1,
