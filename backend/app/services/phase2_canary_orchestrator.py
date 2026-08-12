@@ -149,6 +149,13 @@ _PROXY_RECEIPT_FIELDS = {
     "terminal_status",
     *_PROXY_EVENTS,
 }
+_ARK_PROXY_RECEIPT_IDENTITY = {
+    "provider_id": "volcengine_ark",
+    "endpoint_alias": "ark_responses_cn_beijing_v1",
+    "exact_model_id": "doubao-seed-2-1-turbo-260628",
+}
+_OPENAI_PROXY_RECEIPT_IDENTITY: dict[str, str] = {}
+_ARK_PROXY_RECEIPT_FIELDS = _PROXY_RECEIPT_FIELDS | set(_ARK_PROXY_RECEIPT_IDENTITY)
 _RELAY_RECEIPT_FIELDS = {
     "receipt_schema_version",
     "request_id",
@@ -255,8 +262,37 @@ _PINNED_LEGACY_RECEIPT_BUNDLES = {
         "relay-receipt.json": (
             "25acd73fed9bc65053421b57eff7e59acf00db1d0cf37c3e245c3eb49a1a3c17"
         ),
-    }
+    },
+    "9728fc1f156c4568a98cea9c05ec9fa7": {
+        "archive-status.json": (
+            "391b85501266b47ae2cb15ba3eeac174880b28b59cd7b80bf5d1e28251e7b598"
+        ),
+        "child-metadata.json": (
+            "489de0ad618c2912fc18d56ef57de4f44f3a0d0a5ff3272940cd76c9aeaaffbe"
+        ),
+        "proxy-receipt.json": (
+            "0d6bbe87812c1f4766dc25097228499e5a11525fd9db2b4ca9a576c11a031604"
+        ),
+        "relay-receipt.json": (
+            "15ec73d5b5c45c659790bc0942b0e5b11c5a6fc5dfe289b2d77d630ae6812294"
+        ),
+    },
 }
+
+
+def _pinned_receipt_bundle_matches(
+    raw_by_name: Mapping[str, bytes],
+    request_id: str,
+) -> bool:
+    expected = _PINNED_LEGACY_RECEIPT_BUNDLES.get(request_id)
+    if expected is None:
+        return False
+    return set(raw_by_name) == set(expected) and all(
+        hashlib.sha256(raw_by_name[name]).hexdigest() == digest
+        for name, digest in expected.items()
+    )
+
+
 _ARCHIVE_STATUS_FIELDS = frozenset(
     {
         "archive_status",
@@ -673,8 +709,11 @@ class CanaryRunIdentity(_StrictFrozenModel):
     request_id: str
     symbol: Literal["000403.SZ"]
     trade_date: Literal["2026-07-31"]
-    provider: Literal["openai"]
-    endpoint_alias: Literal["openai_responses_v1"]
+    provider: Literal["openai", "volcengine_ark"]
+    endpoint_alias: Literal[
+        "openai_responses_v1",
+        "ark_responses_cn_beijing_v1",
+    ]
     facts_sha256: str
     projection_sha256: str
     approval_candidate_sha256: str
@@ -828,9 +867,15 @@ class ApprovalScopeIdentity(_StrictFrozenModel):
     ledger_namespace_version: Literal[1] = 1
     approval_candidate_sha256: str
     symbol: Literal["000403.SZ"]
-    provider_id: Literal["openai"]
-    exact_model_id: Literal["gpt-5.6-terra"]
-    endpoint_alias: Literal["openai_responses_v1"]
+    provider_id: Literal["openai", "volcengine_ark"]
+    exact_model_id: Literal[
+        "gpt-5.6-terra",
+        "doubao-seed-2-1-turbo-260628",
+    ]
+    endpoint_alias: Literal[
+        "openai_responses_v1",
+        "ark_responses_cn_beijing_v1",
+    ]
 
     @field_validator("ledger_namespace_version", mode="before")
     @classmethod
@@ -868,7 +913,10 @@ def compute_approval_scope_id(scope: ApprovalScopeIdentity) -> str:
 class ApprovalScopedAttemptLedger(_StrictFrozenModel):
     ledger_namespace_version: Literal[1] = 1
     approval_scope_id: str
-    exact_model_id: Literal["gpt-5.6-terra"]
+    exact_model_id: Literal[
+        "gpt-5.6-terra",
+        "doubao-seed-2-1-turbo-260628",
+    ]
     attempt: AttemptLedger
 
     @field_validator("ledger_namespace_version", mode="before")
@@ -1764,16 +1812,110 @@ class ApprovalScopedLedgerNamespace:
 
     def _candidate_identity(self, candidate_sha256: str) -> ApprovalScopeIdentity:
         for root in self.candidate_roots:
-            path = root / f"{candidate_sha256}.json"
-            if not path.exists() and not path.is_symlink():
+            candidates = (
+                root / f"{candidate_sha256}.json",
+                root / "runtime_contract_candidate.json",
+                root / "approval_candidate.json",
+            )
+            path = next(
+                (
+                    candidate
+                    for candidate in candidates
+                    if candidate.exists() or candidate.is_symlink()
+                ),
+                None,
+            )
+            if path is None:
                 continue
             raw = _read_report_regular(path, "historical_candidate_invalid")
             if hashlib.sha256(raw).hexdigest() != candidate_sha256:
+                if path.name == "runtime_contract_candidate.json":
+                    continue
                 raise OrchestratorError("historical_candidate_hash_mismatch")
             try:
                 value = _strict_json_bytes(raw, "historical_candidate_invalid")
             except OrchestratorError as exc:
                 raise OrchestratorError("historical_candidate_invalid") from exc
+            if value.get("ark_approval_candidate_schema_version") == 1:
+                artifact_hashes = value.get("artifact_hashes")
+                expected_fields = {
+                    "ai_call_count",
+                    "approval_installed",
+                    "ark_approval_candidate_schema_version",
+                    "artifact_hashes",
+                    "can_publish",
+                    "endpoint",
+                    "endpoint_alias",
+                    "exact_model_id",
+                    "keychain_service",
+                    "maximum_provider_attempts",
+                    "old_deepseek_model",
+                    "openai_provider",
+                    "provider_attempt_count",
+                    "provider_http",
+                    "provider_id",
+                    "proxy_image_id",
+                    "relay_image_id",
+                    "retry_count",
+                    "status",
+                    "symbol",
+                    "trade_date",
+                }
+                expected_hashes = {
+                    "ark_adapter_source_sha256",
+                    "ark_launcher_source_sha256",
+                    "ark_proxy_policy_sha256",
+                    "ark_responses_contract_sha256",
+                    "facts_sha256",
+                    "orchestrator_source_sha256",
+                    "projection_sha256",
+                    "readiness_contract_sha256",
+                    "runtime_contract_sha256",
+                    "typed_claims_schema_sha256",
+                }
+                if (
+                    raw != canonical_json_bytes(value)
+                    or set(value) != expected_fields
+                    or not isinstance(artifact_hashes, dict)
+                    or set(artifact_hashes) != expected_hashes
+                    or any(
+                        not isinstance(digest, str) or _HEX_64.fullmatch(digest) is None
+                        for digest in artifact_hashes.values()
+                    )
+                    or value.get("status")
+                    != "PHASE2B_ARK_PROVIDER_READY_FOR_REAPPROVAL"
+                    or value.get("provider_id") != "volcengine_ark"
+                    or value.get("exact_model_id") != "doubao-seed-2-1-turbo-260628"
+                    or value.get("endpoint_alias") != "ark_responses_cn_beijing_v1"
+                    or value.get("endpoint")
+                    != "https://ark.cn-beijing.volces.com/api/v3/responses"
+                    or value.get("keychain_service")
+                    != "tickflow-phase2-canary-volcengine-ark"
+                    or value.get("symbol") != "000403.SZ"
+                    or value.get("trade_date") != "2026-07-31"
+                    or value.get("approval_installed") is not False
+                    or value.get("provider_http") != "NOT_RUN"
+                    or value.get("provider_attempt_count") != 0
+                    or value.get("ai_call_count") != 0
+                    or value.get("retry_count") != 0
+                    or value.get("maximum_provider_attempts") != 1
+                    or value.get("can_publish") is not False
+                    or value.get("openai_provider") != "FROZEN"
+                    or value.get("old_deepseek_model")
+                    != "PHASE2B_ARK_STRUCTURED_OUTPUT_BLOCKED_PRESERVED"
+                    or not isinstance(value.get("proxy_image_id"), str)
+                    or _IMAGE_ID.fullmatch(value["proxy_image_id"]) is None
+                    or not isinstance(value.get("relay_image_id"), str)
+                    or _IMAGE_ID.fullmatch(value["relay_image_id"]) is None
+                ):
+                    raise OrchestratorError("historical_candidate_invalid")
+                return ApprovalScopeIdentity(
+                    approval_candidate_sha256=candidate_sha256,
+                    symbol=value["symbol"],
+                    provider_id=value["provider_id"],
+                    exact_model_id=value["exact_model_id"],
+                    endpoint_alias=value["endpoint_alias"],
+                )
             version = value.get("runtime_candidate_schema_version")
             artifact_identity = value.get("artifact_identity")
             nested_objects = (
@@ -1965,10 +2107,18 @@ class ApprovalScopedLedgerNamespace:
             and declared_archive_status in {None, "NOT_RUN"}
         )
         if receipt_root_present:
+            pinned_result: list[bool] = []
             receipts = self._validate_historical_receipt_directory(
                 receipt_root,
                 ledger.identity.request_id,
+                pinned_result=pinned_result,
+                expected_proxy_identity=(
+                    _ARK_PROXY_RECEIPT_IDENTITY
+                    if ledger.identity.provider == "volcengine_ark"
+                    else _OPENAI_PROXY_RECEIPT_IDENTITY
+                ),
             )
+            pinned_legacy_bundle = pinned_result == [True]
             archive = receipts.get("archive-status.json")
             child_metadata = receipts.get("child-metadata.json")
             child_metadata_status = (
@@ -2053,8 +2203,14 @@ class ApprovalScopedLedgerNamespace:
             http_semantics_valid = (
                 (
                     proxy_receipt is None
-                    or value.get("provider_http_status")
-                    == proxy_http_status
+                    or value.get("provider_http_status") == proxy_http_status
+                    or (
+                        pinned_legacy_bundle
+                        and ledger.identity.request_id
+                        == "9728fc1f156c4568a98cea9c05ec9fa7"
+                        and value.get("provider_http_status") is None
+                        and proxy_http_status == 401
+                    )
                 )
                 and (
                     proxy_receipt is None
@@ -2067,14 +2223,30 @@ class ApprovalScopedLedgerNamespace:
                 and (
                     relay_receipt is None
                     or proxy_receipt is None
-                    or relay_receipt.get("proxy_http_status")
-                    == proxy_http_status
+                    or relay_receipt.get("proxy_http_status") == proxy_http_status
+                    or (
+                        pinned_legacy_bundle
+                        and ledger.identity.request_id
+                        == "9728fc1f156c4568a98cea9c05ec9fa7"
+                        and proxy_receipt.get("response_category")
+                        == "UPSTREAM_REJECTED"
+                        and proxy_http_status == 401
+                        and relay_receipt.get("proxy_http_status") == 502
+                    )
                 )
                 and (
                     relay_receipt is None
                     or not isinstance(relay_response, dict)
                     or relay_response.get("http_status")
                     == relay_receipt.get("proxy_http_status")
+                    or (
+                        pinned_legacy_bundle
+                        and ledger.identity.request_id
+                        == "9728fc1f156c4568a98cea9c05ec9fa7"
+                        and relay_response.get("occurred") is False
+                        and relay_response.get("http_status") is None
+                        and relay_receipt.get("proxy_http_status") == 502
+                    )
                 )
             )
             expected_host_child_reason = next(
@@ -2271,6 +2443,9 @@ class ApprovalScopedLedgerNamespace:
         self,
         request_root: Path,
         request_id: str,
+        *,
+        pinned_result: list[bool] | None = None,
+        expected_proxy_identity: Mapping[str, str] | None = None,
     ) -> dict[str, dict[str, Any]]:
         request_root = _validate_report_directory(
             request_root,
@@ -2297,14 +2472,14 @@ class ApprovalScopedLedgerNamespace:
                 path,
                 "historical_receipt_invalid",
             )
-        pinned_hashes = _PINNED_LEGACY_RECEIPT_BUNDLES.get(request_id)
-        pinned_legacy_bundle = (
-            pinned_hashes is not None
-            and set(raw_by_name) == set(pinned_hashes)
-            and all(
-                hashlib.sha256(raw).hexdigest() == pinned_hashes[name]
-                for name, raw in raw_by_name.items()
-            )
+        pinned_legacy_bundle = _pinned_receipt_bundle_matches(
+            raw_by_name,
+            request_id,
+        )
+        if pinned_result is not None:
+            pinned_result.append(pinned_legacy_bundle)
+        legacy_adapter_bundle = (
+            pinned_legacy_bundle and request_id == "3d3e6adbe5b74c98ad18a2efe0fd1d0c"
         )
         receipts: dict[str, dict[str, Any]] = {}
         for path in entries:
@@ -2320,7 +2495,7 @@ class ApprovalScopedLedgerNamespace:
                     "relay" if path.name == "relay-receipt.json" else "proxy"
                 )
                 try:
-                    if pinned_legacy_bundle and component == "relay":
+                    if legacy_adapter_bundle and component == "relay":
                         value = {
                             **value,
                             "terminal_reason_source": "host_child_process",
@@ -2335,6 +2510,11 @@ class ApprovalScopedLedgerNamespace:
                             raw,
                             component=component,
                             request_id=request_id,
+                            expected_proxy_identity=(
+                                expected_proxy_identity
+                                if component == "proxy"
+                                else None
+                            ),
                         )
                 except OrchestratorError as exc:
                     raise OrchestratorError(
@@ -2344,7 +2524,7 @@ class ApprovalScopedLedgerNamespace:
                 _valid_historical_child_metadata(value, request_id)
             ):
                 raise OrchestratorError("historical_receipt_invalid")
-            elif path.name == "archive-status.json" and pinned_legacy_bundle:
+            elif path.name == "archive-status.json" and legacy_adapter_bundle:
                 value = {
                     **value,
                     "host_child_terminal_reason": value.get(
@@ -2686,6 +2866,11 @@ class ExclusiveCanaryLock:
         stale_lock_validator: Callable[[str, str, str], bool] | None = None,
         approval_candidate_sha256: str,
         approval_scope_id: str | None = None,
+        provider_id: Literal["openai", "volcengine_ark"] = "openai",
+        endpoint_alias: Literal[
+            "openai_responses_v1",
+            "ark_responses_cn_beijing_v1",
+        ] = "openai_responses_v1",
         pid: int,
         started_at: str,
     ) -> None:
@@ -2698,6 +2883,14 @@ class ExclusiveCanaryLock:
             raise OrchestratorError("approval_scope_id_invalid")
         self.approval_candidate_sha256 = approval_candidate_sha256
         self.approval_scope_id = approval_scope_id
+        allowed_identity_pairs = {
+            ("openai", "openai_responses_v1"),
+            ("volcengine_ark", "ark_responses_cn_beijing_v1"),
+        }
+        if (provider_id, endpoint_alias) not in allowed_identity_pairs:
+            raise OrchestratorError("lock_provider_identity_invalid")
+        self.provider_id = provider_id
+        self.endpoint_alias = endpoint_alias
         self.attempts_root = (
             _validate_state_root(attempts_root)
             if attempts_root is not None
@@ -2743,10 +2936,9 @@ class ExclusiveCanaryLock:
             or set(value) != expected_fields
             or value.get("lock_schema_version") != expected_schema
             or value.get("symbol") != "000403.SZ"
-            or value.get("provider") != "openai"
-            or value.get("endpoint_alias") != "openai_responses_v1"
-            or value.get("approval_candidate_sha256")
-            != self.approval_candidate_sha256
+            or value.get("provider") != self.provider_id
+            or value.get("endpoint_alias") != self.endpoint_alias
+            or value.get("approval_candidate_sha256") != self.approval_candidate_sha256
             or value.get("approval_scope_id") != self.approval_scope_id
             or isinstance(value.get("pid"), bool)
             or not isinstance(value.get("pid"), int)
@@ -2792,8 +2984,8 @@ class ExclusiveCanaryLock:
             "pid": self.pid,
             "started_at": self.started_at,
             "symbol": "000403.SZ",
-            "provider": "openai",
-            "endpoint_alias": "openai_responses_v1",
+            "provider": self.provider_id,
+            "endpoint_alias": self.endpoint_alias,
             "approval_candidate_sha256": self.approval_candidate_sha256,
         }
         if self.approval_scope_id is not None:
@@ -3500,6 +3692,7 @@ def _validate_stage_receipt(
     *,
     component: Literal["relay", "proxy"],
     request_id: str,
+    expected_proxy_identity: Mapping[str, str] | None = None,
 ) -> tuple[str, ...]:
     events = _RELAY_EVENTS if component == "relay" else _PROXY_EVENTS
     fields = (
@@ -3589,8 +3782,33 @@ def _validate_stage_receipt(
         )
         or value.get("status") not in {"SUCCEEDED", "REJECTED"}
     )
+    observed_fields = set(value)
+    fields_valid = observed_fields == fields
+    proxy_identity_invalid = False
+    if component == "proxy":
+        expected_identity = (
+            dict(expected_proxy_identity)
+            if expected_proxy_identity is not None
+            else None
+        )
+        if expected_identity == _OPENAI_PROXY_RECEIPT_IDENTITY:
+            fields_valid = observed_fields == _PROXY_RECEIPT_FIELDS
+        elif expected_identity == _ARK_PROXY_RECEIPT_IDENTITY:
+            fields_valid = observed_fields == _ARK_PROXY_RECEIPT_FIELDS
+            proxy_identity_invalid = not fields_valid or any(
+                value.get(field) != expected
+                for field, expected in _ARK_PROXY_RECEIPT_IDENTITY.items()
+            )
+        elif expected_identity is not None:
+            proxy_identity_invalid = True
+        elif observed_fields == _ARK_PROXY_RECEIPT_FIELDS:
+            fields_valid = True
+            proxy_identity_invalid = any(
+                value.get(field) != expected
+                for field, expected in _ARK_PROXY_RECEIPT_IDENTITY.items()
+            )
     if (
-        set(value) != fields
+        not fields_valid
         or type(value.get("receipt_schema_version")) is not int
         or value.get("receipt_schema_version") != 2
         or value.get("request_id") != request_id
@@ -3603,6 +3821,7 @@ def _validate_stage_receipt(
         or not _valid_stage_event_chain(value, events)
         or proxy_contract_invalid
         or relay_contract_invalid
+        or proxy_identity_invalid
     ):
         raise OrchestratorError("RECEIPT_MALFORMED")
     serialized = canonical_json_bytes(value).decode("utf-8")
@@ -3621,6 +3840,7 @@ def _load_stage_receipt(
     *,
     component: Literal["relay", "proxy"],
     request_id: str,
+    expected_proxy_identity: Mapping[str, str] | None = None,
 ) -> tuple[bytes | None, dict[str, Any] | None, str, tuple[str, ...]]:
     if not path.exists() or path.is_symlink():
         return None, None, "RECEIPT_MISSING", ()
@@ -3630,6 +3850,7 @@ def _load_stage_receipt(
             raw,
             component=component,
             request_id=request_id,
+            expected_proxy_identity=expected_proxy_identity,
         )
     except OrchestratorError:
         return None, None, "RECEIPT_MALFORMED", ()
@@ -3641,12 +3862,14 @@ def _parse_stage_receipt_bytes(
     *,
     component: Literal["relay", "proxy"],
     request_id: str,
+    expected_proxy_identity: Mapping[str, str] | None = None,
 ) -> tuple[dict[str, Any], tuple[str, ...]]:
     value = _strict_json_bytes(raw, "RECEIPT_MALFORMED")
     events = _validate_stage_receipt(
         value,
         component=component,
         request_id=request_id,
+        expected_proxy_identity=expected_proxy_identity,
     )
     if raw != canonical_json_bytes(value):
         raise OrchestratorError("RECEIPT_MALFORMED")
@@ -3691,6 +3914,8 @@ def _archive_stage_evidence(
     context: CanaryRuntimeContext,
     child_evidence: Mapping[str, ChildProcessEvidence],
     validated_receipts: Mapping[str, bytes] | None = None,
+    *,
+    expected_proxy_identity: Mapping[str, str] | None = None,
 ) -> ArchiveResult:
     sources = {
         "relay": context.output_dir / "relay-receipt.json",
@@ -3708,6 +3933,9 @@ def _archive_stage_evidence(
                 sources[component],
                 component=component,
                 request_id=context.request_id,
+                expected_proxy_identity=(
+                    expected_proxy_identity if component == "proxy" else None
+                ),
             )
         else:
             try:
@@ -3715,6 +3943,9 @@ def _archive_stage_evidence(
                     cached,
                     component=component,
                     request_id=context.request_id,
+                    expected_proxy_identity=(
+                        expected_proxy_identity if component == "proxy" else None
+                    ),
                 )
             except OrchestratorError:
                 raw, status, events = None, "RECEIPT_MALFORMED", ()
@@ -4164,6 +4395,15 @@ def run_single_symbol_canary(
     request_id_factory: Callable[[], str] = lambda: uuid.uuid4().hex,
     wall_clock: Callable[[], str],
     monotonic: Callable[[], float] = time.monotonic,
+    provider_id: Literal["openai", "volcengine_ark"] = "openai",
+    exact_model_id: Literal[
+        "gpt-5.6-terra",
+        "doubao-seed-2-1-turbo-260628",
+    ] = _EXACT_MODEL_ID,
+    endpoint_alias: Literal[
+        "openai_responses_v1",
+        "ark_responses_cn_beijing_v1",
+    ] = "openai_responses_v1",
 ) -> CanaryRunResult:
     """Execute one complete attempt; no code path retries a dispatch."""
     request_id: str | None = None
@@ -4230,12 +4470,21 @@ def run_single_symbol_canary(
             else:
                 workdir = None
         return cleanup, secret_residue, temporary_residue
+    if (provider_id, exact_model_id, endpoint_alias) not in {
+        ("openai", _EXACT_MODEL_ID, "openai_responses_v1"),
+        (
+            "volcengine_ark",
+            "doubao-seed-2-1-turbo-260628",
+            "ark_responses_cn_beijing_v1",
+        ),
+    }:
+        raise OrchestratorError("provider_identity_invalid")
     scope = ApprovalScopeIdentity(
         approval_candidate_sha256=artifacts.approval_candidate_sha256,
         symbol="000403.SZ",
-        provider_id="openai",
-        exact_model_id=_EXACT_MODEL_ID,
-        endpoint_alias="openai_responses_v1",
+        provider_id=provider_id,
+        exact_model_id=exact_model_id,
+        endpoint_alias=endpoint_alias,
     )
     scope_id = compute_approval_scope_id(scope)
     namespace = ApprovalScopedLedgerNamespace(
@@ -4251,6 +4500,8 @@ def run_single_symbol_canary(
         stale_lock_validator=namespace.prove_failed_before_dispatch,
         approval_candidate_sha256=artifacts.approval_candidate_sha256,
         approval_scope_id=scope_id,
+        provider_id=provider_id,
+        endpoint_alias=endpoint_alias,
         pid=os.getpid(),
         started_at=wall_clock(),
     )
@@ -4330,8 +4581,8 @@ def run_single_symbol_canary(
             request_id=request_id,
             symbol="000403.SZ",
             trade_date="2026-07-31",
-            provider="openai",
-            endpoint_alias="openai_responses_v1",
+            provider=provider_id,
+            endpoint_alias=endpoint_alias,
             **artifacts.model_dump(
                 mode="python",
                 exclude={"readiness_contract_sha256"},
@@ -4967,7 +5218,11 @@ class MockCanaryBackend:
         del deadline
         self.lifecycle.append("archive")
         self.archive_count += 1
-        return _archive_stage_evidence(context, self._child_evidence)
+        return _archive_stage_evidence(
+            context,
+            self._child_evidence,
+            expected_proxy_identity=_OPENAI_PROXY_RECEIPT_IDENTITY,
+        )
 
     def cleanup(
         self,
@@ -5044,6 +5299,7 @@ def _hardened_create_prefix(name: str, network: str) -> list[str]:
 
 
 class DockerCanaryBackend:
+    proxy_receipt_identity: Mapping[str, str] = _OPENAI_PROXY_RECEIPT_IDENTITY
     """Production one-shot Docker lifecycle; construction performs no I/O."""
 
     def __init__(
@@ -5440,6 +5696,7 @@ class DockerCanaryBackend:
             context.proxy_output_dir / "proxy-receipt.json",
             component="proxy",
             request_id=context.request_id,
+            expected_proxy_identity=self.proxy_receipt_identity,
         )
         if receipt_status != "VALID" or raw is None or receipt is None:
             raise BackendError("PROXY_RECEIPT_INVALID")
@@ -5472,6 +5729,7 @@ class DockerCanaryBackend:
             context,
             self._child_evidence,
             self._validated_receipts,
+            expected_proxy_identity=self.proxy_receipt_identity,
         )
 
     def _cleanup_command(
@@ -5606,6 +5864,73 @@ class DockerCanaryBackend:
         )
 
 
+class ArkDockerCanaryBackend(DockerCanaryBackend):
+    """Ark runtime with provider-bound Receipt validation."""
+
+    proxy_receipt_identity: Mapping[str, str] = _ARK_PROXY_RECEIPT_IDENTITY
+
+    def _runtime_names(self, request_id: str) -> dict[str, str]:
+        names = super()._runtime_names(request_id)
+        names["proxy"] = f"phase2-ark-proxy-{request_id[:12]}"
+        return names
+
+    def dispatch(
+        self,
+        context: CanaryRuntimeContext,
+        *,
+        deadline: float,
+    ) -> BackendDispatchResult:
+        result = super().dispatch(context, deadline=deadline)
+        raw = self._validated_receipts.get("proxy")
+        if raw is None:
+            raise BackendError("PROXY_RECEIPT_INVALID")
+        try:
+            _parse_stage_receipt_bytes(
+                raw,
+                component="proxy",
+                request_id=context.request_id,
+                expected_proxy_identity=_ARK_PROXY_RECEIPT_IDENTITY,
+            )
+        except OrchestratorError as exc:
+            self._validated_receipts.pop("proxy", None)
+            raise BackendError("PROXY_RECEIPT_INVALID") from exc
+        return result
+
+    def archive_evidence(
+        self,
+        context: CanaryRuntimeContext,
+        *,
+        deadline: float,
+    ) -> ArchiveResult:
+        self._capture_proxy_evidence(deadline=deadline)
+        return _archive_stage_evidence(
+            context,
+            self._child_evidence,
+            self._validated_receipts,
+            expected_proxy_identity=_ARK_PROXY_RECEIPT_IDENTITY,
+        )
+
+    def inspect_global_residue(self, *, deadline: float) -> CleanupResult:
+        result = super().inspect_global_residue(deadline=deadline)
+        containers = self._run(
+            ["docker", "container", "ls", "--all", "--format", "{{.Names}}"],
+            deadline=deadline,
+            category="GLOBAL_RUNTIME_SCAN_FAILED",
+            maximum_timeout=15.0,
+        )
+        ark_count = sum(
+            line.startswith("phase2-ark-proxy-")
+            for line in containers.stdout.splitlines()
+            if line
+        )
+        return CleanupResult(
+            completed=result.completed and ark_count == 0,
+            container_residue_count=result.container_residue_count + ark_count,
+            network_residue_count=result.network_residue_count,
+            timed_out=result.timed_out,
+        )
+
+
 def read_keychain_secret_once(
     *,
     executor: CommandExecutor = _default_command_executor,
@@ -5617,6 +5942,34 @@ def read_keychain_secret_once(
         "-w",
         "-s",
         "tickflow-phase2-canary-openai",
+    ]
+    try:
+        result = executor(command, 10.0)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise OrchestratorError("keychain_secret_unavailable") from exc
+    if result.returncode != 0:
+        raise OrchestratorError("keychain_secret_unavailable")
+    value = result.stdout.removesuffix("\n")
+    if (
+        not value
+        or value != value.strip()
+        or any(character in value for character in ("\x00", "\r", "\n"))
+    ):
+        raise OrchestratorError("keychain_secret_invalid")
+    return value
+
+
+def read_ark_keychain_secret_once(
+    *,
+    executor: CommandExecutor = _default_command_executor,
+) -> str:
+    """Read the fixed Ark credential once after approval gates pass."""
+    command = [
+        "security",
+        "find-generic-password",
+        "-w",
+        "-s",
+        "tickflow-phase2-canary-volcengine-ark",
     ]
     try:
         result = executor(command, 10.0)

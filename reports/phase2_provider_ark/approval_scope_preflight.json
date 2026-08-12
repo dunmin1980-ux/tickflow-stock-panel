@@ -1,0 +1,16 @@
+{
+  "approval_candidate_sha256": "0fee5a1c509c77ae9b03107dfddf8caefa453673106cced13db4a4d6ac523ffc",
+  "approval_installed": false,
+  "approval_scope_id": "898079e765f188ba48b2de143ff5fce81e1191ec7bfc6cb773352b2bed90982d",
+  "ark_approval_scope_schema_version": 1,
+  "attempt_availability": "AVAILABLE",
+  "endpoint_alias": "ark_responses_cn_beijing_v1",
+  "exact_model_id": "doubao-seed-2-1-turbo-260628",
+  "global_request_id_count": 3,
+  "historical_attempts": 0,
+  "ledger_namespace_version": 1,
+  "ledger_preflight_status": "READY",
+  "mock_e2e_sha256": "0252360307c125812c7dfde87dc652223967e8ffdac2261acaad1b8df67fd05d",
+  "provider_id": "volcengine_ark",
+  "symbol": "000403.SZ"
+}

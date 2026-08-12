@@ -51,10 +51,11 @@ def test_local_mock_response_is_exact_completed_responses_envelope() -> None:
     assert candidate["trade_date"] == "2026-07-31"
 
 
-def test_local_mock_scope_freezes_both_consumed_requests() -> None:
+def test_local_mock_scope_freezes_all_consumed_requests() -> None:
     assert _HISTORICAL_REQUESTS == (
         "d59766101b63450e8148541d589a90bf",
         "3d3e6adbe5b74c98ad18a2efe0fd1d0c",
+        "9728fc1f156c4568a98cea9c05ec9fa7",
     )
 
 
@@ -67,7 +68,9 @@ def test_historical_manifest_is_bound_to_frozen_hashes_and_absence_markers() -> 
         "3d3e6adbe5b74c98ad18a2efe0fd1d0c.json"
     ] == "bcabab31b35bf8805b1474d508f1e8067c62299aa7d501425f98cb77e8b1a01e"
     assert not any(
-        path.endswith("proxy-receipt.json") for path in manifest
+        path.endswith("proxy-receipt.json")
+        and "3d3e6adbe5b74c98ad18a2efe0fd1d0c" in path
+        for path in manifest
     )
     assert _frozen_manifest_matches(manifest) is True
     assert _frozen_manifest_matches(

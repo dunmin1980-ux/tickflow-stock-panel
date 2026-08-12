@@ -1,0 +1,25 @@
+"""Closed Ark mock failure catalog; no scenario opens a network socket."""
+
+ARK_FAILURE_SCENARIOS = {
+    "valid_response": "PASSED",
+    "401": "REJECTED",
+    "403": "REJECTED",
+    "429": "REJECTED",
+    "500": "REJECTED",
+    "timeout": "REJECTED",
+    "invalid_json": "REJECTED",
+    "invalid_envelope": "REJECTED",
+    "missing_structured_output": "REJECTED",
+    "schema_mismatch": "REJECTED",
+    "empty_candidate": "REJECTED",
+    "wrong_symbol": "REJECTED",
+    "wrong_projection_sha": "REJECTED",
+    "wrong_facts_sha": "REJECTED",
+    "unknown_claim_type": "REJECTED",
+    "unknown_predicate": "REJECTED",
+    "raw_qfq_mismatch": "REJECTED",
+    "trading_claim": "REJECTED",
+    "free_text_field": "REJECTED",
+    "oversized_response": "REJECTED",
+    "redirect": "REJECTED",
+}

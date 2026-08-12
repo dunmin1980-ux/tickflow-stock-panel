@@ -50,6 +50,7 @@ _PROVIDER_EVENTS = (
 _HISTORICAL_REQUESTS = (
     "d59766101b63450e8148541d589a90bf",
     "3d3e6adbe5b74c98ad18a2efe0fd1d0c",
+    "9728fc1f156c4568a98cea9c05ec9fa7",
 )
 _HISTORICAL_FROZEN_SHA256 = {
     "reports/phase2_provider_canary/consumed_unknown_diagnosis.json": (
@@ -104,6 +105,30 @@ _HISTORICAL_FROZEN_SHA256 = {
     "reports/phase2_provider_canary/live_canary/receipts/"
     "3d3e6adbe5b74c98ad18a2efe0fd1d0c/relay-receipt.json": (
         "25acd73fed9bc65053421b57eff7e59acf00db1d0cf37c3e245c3eb49a1a3c17"
+    ),
+    "reports/phase2_provider_canary/live_canary/evidence/"
+    "9728fc1f156c4568a98cea9c05ec9fa7.json": (
+        "46f36aad32f3c8f0ef708d6d395b166eeef3c60572ad9cac50deeed5e3fc759d"
+    ),
+    "reports/phase2_provider_canary/live_canary/rejected/"
+    "9728fc1f156c4568a98cea9c05ec9fa7.json": (
+        "fd01ac78185e01e6ec1e198683bf5525a7a83148363402b1e433a196e116656b"
+    ),
+    "reports/phase2_provider_canary/live_canary/receipts/"
+    "9728fc1f156c4568a98cea9c05ec9fa7/archive-status.json": (
+        "391b85501266b47ae2cb15ba3eeac174880b28b59cd7b80bf5d1e28251e7b598"
+    ),
+    "reports/phase2_provider_canary/live_canary/receipts/"
+    "9728fc1f156c4568a98cea9c05ec9fa7/child-metadata.json": (
+        "489de0ad618c2912fc18d56ef57de4f44f3a0d0a5ff3272940cd76c9aeaaffbe"
+    ),
+    "reports/phase2_provider_canary/live_canary/receipts/"
+    "9728fc1f156c4568a98cea9c05ec9fa7/proxy-receipt.json": (
+        "0d6bbe87812c1f4766dc25097228499e5a11525fd9db2b4ca9a576c11a031604"
+    ),
+    "reports/phase2_provider_canary/live_canary/receipts/"
+    "9728fc1f156c4568a98cea9c05ec9fa7/relay-receipt.json": (
+        "15ec73d5b5c45c659790bc0942b0e5b11c5a6fc5dfe289b2d77d630ae6812294"
     ),
 }
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")

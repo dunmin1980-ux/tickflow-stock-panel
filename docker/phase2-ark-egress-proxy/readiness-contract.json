@@ -1,0 +1,8 @@
+{
+  "readiness_contract_version": 1,
+  "provider_id": "volcengine_ark",
+  "endpoint_alias": "ark_responses_cn_beijing_v1",
+  "listener_host": "0.0.0.0",
+  "listener_port": 8080,
+  "listener_path": "/v1/typed-claims"
+}
