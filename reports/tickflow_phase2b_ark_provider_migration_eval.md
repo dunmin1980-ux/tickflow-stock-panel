@@ -3,12 +3,12 @@
 ## 1. Final status
 
 ```text
-PHASE2B_ARK_MODEL_ID_BLOCKED
+PHASE2B_ARK_STRUCTURED_OUTPUT_BLOCKED
 ```
 
-Implementation stopped at the mandatory model capability gate. No Ark runtime,
-adapter, proxy policy, mock provider, approval candidate, or live request was
-created.
+Implementation stopped at the mandatory structured-output capability gate. No
+Ark runtime, adapter, proxy policy, mock provider, approval candidate, or live
+request was created.
 
 ## 2. Baseline
 
@@ -48,30 +48,35 @@ endpoint_alias=ark_responses_cn_beijing_v1
 endpoint=https://ark.cn-beijing.volces.com:443/api/v3/responses
 ```
 
-The repository's current tree, all local Git history, neighboring TickFlow
-worktrees, and existing reports contain no official capability snapshot for
-`deepseek-v4-flash-ga-260731`. The only local occurrence was the migration
-instruction itself, which is a requirement rather than independent evidence.
+Volcengine's official model-list page embeds the complete model table in its
+public HTML. That table proves the exact Model ID is
+`deepseek-v4-flash-ga-260731` and identifies Responses API as a supported API.
+The exact model identity gate therefore passes.
 
-Volcengine's official documentation confirms the Beijing Ark Responses
-endpoint and shows model IDs are supplied to `POST /api/v3/responses`. Its
-model-list page was updated on 2026-08-11, but the accessible static document
-did not expose the model table. Public search found an official Volcengine
-developer article announcing DeepSeek V4 Flash as a product, but did not expose
-the exact API model ID. It also did not establish that this exact model supports
-the required Responses `json_schema` contract.
+The same model-specific capability row lists deep thinking, text generation,
+and tool calling, but does not list structured output or `json_schema`. This is
+material because the same official table explicitly labels structured-output
+support for models that provide it, including a control row which recommends
+`json_schema`.
+
+The official Responses API parameter reference exposes
+`text.format.type=json_schema`, `text.format.schema`, and
+`text.format.strict`, while warning that JSON modes are beta. This establishes
+an API-level request shape, not model-level support. It does not override the
+target model's capability row.
 
 Official references:
 
 - [Volcengine Ark Responses quick start](https://www.volcengine.com/docs/82379/1795150)
 - [Volcengine Ark model list](https://docs.volcengine.com/docs/82379/1330310?lang=zh)
-- [Volcengine DeepSeek V4 announcement](https://developer.volcengine.com/articles/7645133105870667830)
+- [Volcengine Ark Responses API](https://docs.volcengine.com/docs/82379/1569618?lang=zh)
 
-Consequently, neither of the following P0 assertions is proven:
+The P0 gate results are therefore:
 
 ```text
-exact_model_id == deepseek-v4-flash-ga-260731
-Responses json_schema support == CONFIRMED_FOR_EXACT_MODEL
+exact_model_id == deepseek-v4-flash-ga-260731: PASSED
+Responses API support: PASSED
+Responses json_schema support for exact model: NOT_CONFIRMED
 ```
 
 The approved specification prohibits guessing the model ID and prohibits
@@ -97,12 +102,9 @@ runtime probe was executed by the project.
 
 ## 6. Required evidence to unblock
 
-Before implementation can resume, preserve a non-secret official capability
-snapshot in the repository that proves both:
-
-1. the exact Ark API Model ID is `deepseek-v4-flash-ga-260731`; and
-2. that exact model supports Responses API structured output with the current
-   strict Typed Claims `json_schema` contract.
+Before implementation can resume, obtain non-secret official evidence that the
+exact model supports Responses API structured output with the current strict
+Typed Claims `json_schema` contract.
 
 Acceptable evidence is an official Volcengine model-list/capability document,
 downloaded official PDF, or a redacted console capability export. It must not
@@ -110,5 +112,5 @@ contain an Ark Key, account identifier, billing data, Authorization header, or
 other credentials.
 
 ```text
-next_action=PROVIDE_OFFICIAL_ARK_MODEL_CAPABILITY_SNAPSHOT
+next_action=OBTAIN_OFFICIAL_EXACT_MODEL_STRUCTURED_OUTPUT_CONFIRMATION
 ```

@@ -1,0 +1,21 @@
+source_url=https://docs.volcengine.com/docs/82379/1330310?lang=zh
+source_title=Volcengine Ark model list
+source_updated_at=2026-08-11T06:12:06Z
+fetched_at=2026-08-12T21:04:13+08:00
+source_html_sha256=4267504ac17a4e15c3e1189f0fe770521180ceddb6d695a0ea09396ade3e4f5d
+
+The following rows are exact text extracted from the official page's embedded
+model table. The snapshot contains no account or credential data.
+
+TARGET MODEL CAPABILITY ROW
+| deepseek-v4-flash-ga-260731 | 深度思考 | 文本生成 | 工具调用 | 上下文窗口: 1024k | 最大输入: 1024k | 最大回答: 384k | 最大思维链: 128k | 最大 RPM: 500 | 最大 TPM: 1000000 |
+
+TARGET MODEL API SUPPORT ROW
+| deepseek-v4-flash-ga-260731 | Responses API | Chat API | Responses API | 前缀缓存 | Session缓存 |
+
+POSITIVE STRUCTURED OUTPUT CONTROL ROW
+| doubao-seed-character-260628 | 深度思考 | 文本生成 | 多模态理解 | 工具调用 | 结构化输出（推荐使用 json_schema 模式） |
+
+NEGATIVE OBSERVATION
+The target model row does not list 结构化输出 or json_schema. The same official
+table explicitly lists that capability for models which support it.

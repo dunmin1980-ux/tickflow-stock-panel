@@ -1,0 +1,23 @@
+source_url=https://docs.volcengine.com/docs/82379/1569618?lang=zh
+source_title=Volcengine Ark Responses API
+fetched_at=2026-08-12T21:04:13+08:00
+source_html_sha256=dc20585fc91a4206e4ac3336c61569eee4f7aebdddf3d88003b38ddb9386f503
+
+The following lines are exact semantic excerpts from the official Responses
+API parameter reference. The snapshot contains no account or credential data.
+
+text.format.type
+输出格式类型。可选值：text、json_schema、json_object。
+
+json_object / json_schema 能力尚在 beta 阶段，请谨慎在生产环境使用。
+
+text.format.schema
+JSON Schema 定义。当 type 为 json_schema 时必填。
+
+text.format.strict
+仅当 type 为 json_schema 时生效。
+
+INTERPRETATION BOUNDARY
+This page proves the Responses API exposes json_schema parameters. It does not
+override the model-specific capability table and does not prove that every
+model supports structured output.
