@@ -57,7 +57,8 @@ The same model-specific capability row lists deep thinking, text generation,
 and tool calling, but does not list structured output or `json_schema`. This is
 material because the same official table explicitly labels structured-output
 support for models that provide it, including a control row which recommends
-`json_schema`.
+`json_schema`. The source table header explicitly identifies this column as
+`模型能力`, so the absence is not inferred from an unrelated API matrix.
 
 The official Responses API parameter reference exposes
 `text.format.type=json_schema`, `text.format.schema`, and

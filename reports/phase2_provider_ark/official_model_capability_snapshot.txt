@@ -7,6 +7,9 @@ source_html_sha256=4267504ac17a4e15c3e1189f0fe770521180ceddb6d695a0ea09396ade3e4
 The following rows are exact text extracted from the official page's embedded
 model table. The snapshot contains no account or credential data.
 
+MODEL CAPABILITY TABLE HEADER
+| 模型 ID (Model ID) | 能力支持 | 长度限制（token） | 限流 |
+
 TARGET MODEL CAPABILITY ROW
 | deepseek-v4-flash-ga-260731 | 深度思考 | 文本生成 | 工具调用 | 上下文窗口: 1024k | 最大输入: 1024k | 最大回答: 384k | 最大思维链: 128k | 最大 RPM: 500 | 最大 TPM: 1000000 |
 
