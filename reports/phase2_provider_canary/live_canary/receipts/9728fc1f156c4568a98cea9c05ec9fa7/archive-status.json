@@ -1,0 +1,13 @@
+{
+  "archive_status": "ARCHIVED",
+  "archive_status_schema_version": 1,
+  "child_metadata_status": "VALID",
+  "child_terminal_reason": "RELAY_PROTOCOL_REJECTED",
+  "host_child_terminal_reason": "RELAY_NONZERO_EXIT",
+  "last_proven_stage": "response_headers_received",
+  "proxy_receipt_status": "VALID",
+  "relay_receipt_status": "VALID",
+  "request_id": "9728fc1f156c4568a98cea9c05ec9fa7",
+  "retry_count": 0,
+  "terminal_reason_source": "relay_self"
+}

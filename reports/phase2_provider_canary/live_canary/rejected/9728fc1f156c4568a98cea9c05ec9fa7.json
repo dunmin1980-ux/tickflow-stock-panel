@@ -1,0 +1,7 @@
+{
+  "can_publish": false,
+  "error_category": "RELAY_PROTOCOL_REJECTED",
+  "request_id": "9728fc1f156c4568a98cea9c05ec9fa7",
+  "retry_count": 0,
+  "route": "rejected"
+}

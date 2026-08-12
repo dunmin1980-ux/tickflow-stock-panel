@@ -1,0 +1,32 @@
+{
+  "approval_scope_id": "b9fef659680b81c7ed9a0a1e00e31970bc575cb1b2db21b4ae974c59357f7444",
+  "attempt": {
+    "candidate_ready_at": null,
+    "cleanup_completed_at": null,
+    "dispatch_started_at": "2026-08-10T06:08:04.402055Z",
+    "failed_at": "2026-08-10T06:08:07.684277Z",
+    "host_validation_completed_at": null,
+    "identity": {
+      "approval_candidate_sha256": "039551809431a0af3044613295f1df860c3c329001510b793c5017740b1b3e4f",
+      "endpoint_alias": "openai_responses_v1",
+      "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+      "orchestrator_source_sha256": "22e76a11dd02726c7411631ab78179e17fa7af7b0da228190f1413368d647afa",
+      "projection_sha256": "0ffe5b7fbd57d6b16af073db12d826c940c88b43547870f6b9513401eb49fb1f",
+      "provider": "openai",
+      "proxy_image_id": "sha256:7825e2b19b7c703c16d10601939a423b31b84771bce6bf09de42b8afbd89b247",
+      "relay_image_id": "sha256:54b4cbf91f578a6d6d328cb2a249444c0cdbdc633cbf63f6cf6f3b1ff8af3627",
+      "request_id": "9728fc1f156c4568a98cea9c05ec9fa7",
+      "symbol": "000403.SZ",
+      "timeout_contract_sha256": "34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68",
+      "trade_date": "2026-07-31"
+    },
+    "ledger_schema_version": 1,
+    "prepared_at": "2026-08-10T06:08:01.262941Z",
+    "provider_attempt_count": 1,
+    "response_received_at": null,
+    "retry_count": 0,
+    "state": "FAILED_AFTER_DISPATCH"
+  },
+  "exact_model_id": "gpt-5.6-terra",
+  "ledger_namespace_version": 1
+}

@@ -1,0 +1,97 @@
+{
+  "auth_present": true,
+  "component": "proxy",
+  "method_allowed": true,
+  "path_allowed": true,
+  "process_started": {
+    "byte_count": null,
+    "event": "process_started",
+    "http_status": null,
+    "monotonic_ns": 4658151620217,
+    "occurred": true,
+    "wall_time": "2026-08-10T06:08:04.267743Z"
+  },
+  "provider_attempt_count": 1,
+  "provider_connect_completed": {
+    "byte_count": null,
+    "event": "provider_connect_completed",
+    "http_status": null,
+    "monotonic_ns": 4660428379027,
+    "occurred": true,
+    "wall_time": "2026-08-10T06:08:06.546665Z"
+  },
+  "provider_connect_started": {
+    "byte_count": null,
+    "event": "provider_connect_started",
+    "http_status": null,
+    "monotonic_ns": 4659912756441,
+    "occurred": true,
+    "wall_time": "2026-08-10T06:08:06.031213Z"
+  },
+  "provider_http_status": 401,
+  "proxy_ready": {
+    "byte_count": null,
+    "event": "proxy_ready",
+    "http_status": null,
+    "monotonic_ns": 4658240118136,
+    "occurred": true,
+    "wall_time": "2026-08-10T06:08:04.358649Z"
+  },
+  "receipt_schema_version": 2,
+  "redirect_followed": false,
+  "relay_request_received": {
+    "byte_count": null,
+    "event": "relay_request_received",
+    "http_status": null,
+    "monotonic_ns": 4659720719318,
+    "occurred": true,
+    "wall_time": "2026-08-10T06:08:05.839257Z"
+  },
+  "request_id": "9728fc1f156c4568a98cea9c05ec9fa7",
+  "request_write_completed": {
+    "byte_count": 33667,
+    "event": "request_write_completed",
+    "http_status": null,
+    "monotonic_ns": 4660429356587,
+    "occurred": true,
+    "wall_time": "2026-08-10T06:08:06.547801Z"
+  },
+  "request_write_started": {
+    "byte_count": null,
+    "event": "request_write_started",
+    "http_status": null,
+    "monotonic_ns": 4660428456469,
+    "occurred": true,
+    "wall_time": "2026-08-10T06:08:06.546997Z"
+  },
+  "response_body_completed": {
+    "byte_count": null,
+    "event": "response_body_completed",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "response_bytes": null,
+  "response_category": "UPSTREAM_REJECTED",
+  "response_headers_received": {
+    "byte_count": null,
+    "event": "response_headers_received",
+    "http_status": 401,
+    "monotonic_ns": 4661274694316,
+    "occurred": true,
+    "wall_time": "2026-08-10T06:08:07.393216Z"
+  },
+  "response_size": null,
+  "retry_count": 0,
+  "terminal_status": "UPSTREAM_REJECTED",
+  "tls_completed": {
+    "byte_count": null,
+    "event": "tls_completed",
+    "http_status": null,
+    "monotonic_ns": 4660428413626,
+    "occurred": true,
+    "wall_time": "2026-08-10T06:08:06.546951Z"
+  },
+  "tls_verification": true
+}
