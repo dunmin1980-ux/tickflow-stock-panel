@@ -66,6 +66,17 @@ The official Responses API parameter reference exposes
 an API-level request shape, not model-level support. It does not override the
 target model's capability row.
 
+The official 36-page model-list PDF was also downloaded and visually checked.
+PDF page 8 (printed page 5/33) shows the target model with only deep thinking,
+text generation, and tool calling in its capability column, while models above
+it visibly include structured output when supported. PDF page 26 (printed page
+23/33) separately lists Responses API for the target model. The PDF SHA-256 is
+`bffa2ad960654d483a98aa33a533da67af4c0ab13c0f7e43ff309ad40914a35b`.
+The PDF also contains a dedicated `结构化输出能力 (beta)` section on pages
+27-30 (printed pages 24/33-27/33). The target model is absent from the complete
+structured-output model list. This is direct model-level evidence, rather than
+an inference based only on a missing label in the general capability table.
+
 Official references:
 
 - [Volcengine Ark Responses quick start](https://www.volcengine.com/docs/82379/1795150)
