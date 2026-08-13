@@ -1,7 +1,7 @@
 {
-  "approval_candidate_sha256": "1958c91ee1a6f2f0590de78a87af939311525017b8ab3972fc5650624dbb09e0",
+  "approval_candidate_sha256": "75263d87a2ae6c368ce6c2ce4d65dfbc20b29f4c5bf38e827b2da07290dda2a1",
   "approval_installed": false,
-  "approval_scope_id": "0b66e3128f5bd9312afe0ffb15c4f089f64eea1ffc27bb9c5c2e8720e0b17a72",
+  "approval_scope_id": "8e42a251cfa4e5b4cbdc95b3aceca9d59152ce574e65f5ba2300a0009df8a019",
   "ark_approval_scope_schema_version": 1,
   "attempt_availability": "AVAILABLE",
   "endpoint_alias": "ark_responses_cn_beijing_v1",
@@ -10,7 +10,7 @@
   "historical_attempts": 0,
   "ledger_namespace_version": 1,
   "ledger_preflight_status": "READY",
-  "mock_e2e_sha256": "d5c6f3d2616499ee1e72e60d415b589d9bb5d0409a91d1bdc46808d070be319b",
+  "mock_e2e_sha256": "fb67c11b1a2ee041f6a6b18cfddf997aea8bf4daff97e7e6c881637ba450de73",
   "provider_id": "volcengine_ark",
   "symbol": "000403.SZ"
 }

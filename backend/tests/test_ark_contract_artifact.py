@@ -10,13 +10,20 @@ from types import SimpleNamespace
 import pytest
 
 from app.providers.ark_contract import (
+    _ARK_CANDIDATE_SOURCE_FILES,
+    _ark_source_bindings,
+    ark_source_snapshot,
     build_ark_approval_candidate,
+    build_ark_artifact_generation_manifest,
     build_ark_build_provenance,
     build_ark_responses_contract,
-    validate_ark_mock_e2e_evidence,
-    validate_ark_build_provenance,
+    exclusive_ark_artifact_lock,
+    load_ark_artifact_generation,
     validate_ark_approval_candidate,
+    validate_ark_artifact_generation_manifest,
+    validate_ark_build_provenance,
     validate_ark_image_set,
+    validate_ark_mock_e2e_evidence,
 )
 from app.services.phase2_canary_runtime_artifact import BASE_IMAGE_REFERENCE
 from app.services.phase2_claims_service import canonical_json_bytes
@@ -44,10 +51,7 @@ def _expected_labels(role: str) -> dict[str, str]:
                 (REPO_ROOT / "docker/phase2-ark-egress-proxy/proxy.py").read_bytes()
             ).hexdigest(),
             "org.tickflow.phase2.responses-contract-sha256": hashlib.sha256(
-                (
-                    REPO_ROOT
-                    / "docker/phase2-ark-egress-proxy/responses-contract.json"
-                ).read_bytes()
+                (REPO_ROOT / "docker/phase2-ark-egress-proxy/responses-contract.json").read_bytes()
             ).hexdigest(),
             "org.tickflow.phase2.proxy-policy-sha256": (
                 "406f837966c47ee842c8b7e338a021dbf9007872135a0349d4326cd0abda061c"
@@ -131,9 +135,7 @@ def test_ark_runtime_builder_uses_read_only_staging_contexts() -> None:
         assert REPO_ROOT not in context.parents
         assert not any(path.is_symlink() for path in context.rglob("*"))
         assert all(
-            path.stat().st_mode & 0o222 == 0
-            for path in context.rglob("*")
-            if path.is_file()
+            path.stat().st_mode & 0o222 == 0 for path in context.rglob("*") if path.is_file()
         )
         assert command[command.index("--network") + 1] == "none"
         assert "--pull=false" in command
@@ -141,9 +143,7 @@ def test_ark_runtime_builder_uses_read_only_staging_contexts() -> None:
 
     ark_image_builder._build_runtime_images(
         REPO_ROOT,
-        runtime_sha=(
-            "3cb3064e4e68bb2e9a07a9153f9c2bcef8de127ac0fd779b2c41e1ab9e0ac681"
-        ),
+        runtime_sha=("3cb3064e4e68bb2e9a07a9153f9c2bcef8de127ac0fd779b2c41e1ab9e0ac681"),
         runner=fake_run,
         image_inspector=lambda _reference: {"Id": BASE_IMAGE_REFERENCE.rsplit("@", 1)[1]},
     )
@@ -169,9 +169,7 @@ def test_ark_runtime_builder_requires_local_pinned_base_before_build() -> None:
     ):
         ark_image_builder._build_runtime_images(
             REPO_ROOT,
-            runtime_sha=(
-                "3cb3064e4e68bb2e9a07a9153f9c2bcef8de127ac0fd779b2c41e1ab9e0ac681"
-            ),
+            runtime_sha=("3cb3064e4e68bb2e9a07a9153f9c2bcef8de127ac0fd779b2c41e1ab9e0ac681"),
             runner=unexpected_build,
             image_inspector=missing_base,
         )
@@ -190,6 +188,212 @@ def test_ark_runtime_builder_rejects_symlink_in_source_context(tmp_path: Path) -
         ark_image_builder._copy_readonly_context(source, tmp_path / "staging")
 
 
+def test_ark_source_bindings_reject_terminal_symlink(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    proxy = root / "docker/phase2-ark-egress-proxy"
+    relay = root / "docker/phase2-ark-canary-relay"
+    proxy.mkdir(parents=True)
+    relay.mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.write_bytes(b"outside")
+    (proxy / "Dockerfile").symlink_to(outside)
+    (proxy / "proxy.py").write_bytes(b"proxy")
+    (relay / "Dockerfile").write_bytes(b"relay dockerfile")
+    (relay / "relay.py").write_bytes(b"relay")
+
+    with pytest.raises(ValueError, match="ark_source_snapshot_invalid"):
+        _ark_source_bindings(root)
+
+
+def test_ark_source_bindings_reject_ancestor_symlink(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    real = tmp_path / "real-proxy"
+    real.mkdir()
+    (real / "Dockerfile").write_bytes(b"dockerfile")
+    (real / "proxy.py").write_bytes(b"proxy")
+    docker = root / "docker"
+    docker.mkdir(parents=True)
+    (docker / "phase2-ark-egress-proxy").symlink_to(real, target_is_directory=True)
+    relay = docker / "phase2-ark-canary-relay"
+    relay.mkdir()
+    (relay / "Dockerfile").write_bytes(b"relay dockerfile")
+    (relay / "relay.py").write_bytes(b"relay")
+
+    with pytest.raises(ValueError, match="ark_source_snapshot_invalid"):
+        _ark_source_bindings(root)
+
+
+def test_ark_source_bindings_need_only_image_build_sources(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    for relative in _ARK_CANDIDATE_SOURCE_FILES[:4]:
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(relative.encode())
+
+    bindings = _ark_source_bindings(root)
+
+    assert bindings["base_image_digest"].startswith("sha256:")
+    assert (
+        bindings["proxy_source_sha256"]
+        == hashlib.sha256(b"docker/phase2-ark-egress-proxy/proxy.py").hexdigest()
+    )
+
+
+def test_ark_candidate_snapshot_rejects_non_docker_source_symlink(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "repo"
+    outside = tmp_path / "outside"
+    outside.write_bytes(b"outside")
+    target = "backend/app/providers/ark_provider.py"
+    for relative in _ARK_CANDIDATE_SOURCE_FILES:
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if relative == target:
+            path.symlink_to(outside)
+        else:
+            path.write_bytes(b"snapshot")
+
+    with (
+        pytest.raises(ValueError, match="ark_source_snapshot_invalid"),
+        ark_source_snapshot(root),
+    ):
+        pass
+
+
+def test_ark_artifact_generation_manifest_binds_every_published_file() -> None:
+    artifacts = {
+        relative: f"{relative}\n".encode()
+        for relative in ark_contract_builder._ARTIFACT_GENERATION_FILES
+    }
+
+    manifest = build_ark_artifact_generation_manifest(artifacts)
+
+    validate_ark_artifact_generation_manifest(manifest, artifacts)
+    assert set(manifest["artifact_sha256"]) == set(artifacts)
+    altered = dict(artifacts)
+    altered["reports/phase2_provider_ark/approval_candidate.json"] = b"changed\n"
+    with pytest.raises(ValueError, match="ark_artifact_generation_invalid"):
+        validate_ark_artifact_generation_manifest(manifest, altered)
+
+
+def test_ark_artifact_generation_publish_never_leaves_old_ready_manifest(
+    tmp_path: Path,
+) -> None:
+    manifest = tmp_path / "generation.json"
+    manifest.write_bytes(b"old-ready\n")
+    first = tmp_path / "first.json"
+    second = tmp_path / "second.json"
+    calls = 0
+
+    def failing_writer(path: Path, raw: bytes) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("injected publication failure")
+        path.write_bytes(raw)
+
+    with pytest.raises(OSError, match="injected publication failure"):
+        ark_contract_builder._publish_artifact_generation(
+            targets={first: b"first\n", second: b"second\n"},
+            manifest_path=manifest,
+            manifest_raw=b"new-ready\n",
+            validate_published=lambda: None,
+            writer=failing_writer,
+        )
+
+    assert not manifest.exists()
+
+
+def test_ark_artifact_generation_publish_commits_manifest_last(tmp_path: Path) -> None:
+    manifest = tmp_path / "generation.json"
+    first = tmp_path / "first.json"
+    second = tmp_path / "second.json"
+    events: list[str] = []
+
+    def writer(path: Path, raw: bytes) -> None:
+        events.append(f"write:{path.name}")
+        path.write_bytes(raw)
+
+    def validate() -> None:
+        events.append("validate")
+        assert first.read_bytes() == b"first\n"
+        assert second.read_bytes() == b"second\n"
+        assert not manifest.exists()
+
+    ark_contract_builder._publish_artifact_generation(
+        targets={first: b"first\n", second: b"second\n"},
+        manifest_path=manifest,
+        manifest_raw=b"ready\n",
+        validate_published=validate,
+        writer=writer,
+    )
+
+    assert events == ["write:first.json", "write:second.json", "validate", "write:generation.json"]
+    assert manifest.read_bytes() == b"ready\n"
+
+
+def test_ark_artifact_generation_lock_rejects_concurrent_builder() -> None:
+    with (
+        exclusive_ark_artifact_lock(REPO_ROOT),
+        pytest.raises(RuntimeError, match="lock_unavailable"),
+        exclusive_ark_artifact_lock(REPO_ROOT),
+    ):
+        pass
+
+
+def test_ark_contract_main_does_not_hold_source_snapshot_across_provenance_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entered = False
+    observed: list[str] = []
+
+    class Lock:
+        def __enter__(self):
+            observed.append("lock_enter")
+
+        def __exit__(self, *_args):
+            observed.append("lock_exit")
+
+    class Snapshot:
+        def __enter__(self):
+            nonlocal entered
+            entered = True
+            observed.append("snapshot_enter")
+
+        def __exit__(self, *_args):
+            nonlocal entered
+            entered = False
+            observed.append("snapshot_exit")
+
+    monkeypatch.setattr(ark_contract_builder, "exclusive_ark_artifact_lock", lambda _root: Lock())
+    monkeypatch.setattr(ark_contract_builder, "ark_source_snapshot", lambda _root: Snapshot())
+    monkeypatch.setattr(
+        ark_contract_builder,
+        "_main_locked",
+        lambda _args: observed.append(f"main_snapshot={entered}") or 0,
+    )
+    monkeypatch.setattr(
+        ark_contract_builder.argparse.ArgumentParser,
+        "parse_args",
+        lambda _self: SimpleNamespace(
+            write=False,
+            capture_build_provenance=False,
+            build_path="READ_ONLY_EXISTING_IMAGE_INSPECT",
+        ),
+    )
+
+    assert ark_contract_builder.main() == 0
+    assert observed == ["lock_enter", "main_snapshot=False", "lock_exit"]
+
+
+def test_committed_ark_artifact_generation_is_current() -> None:
+    manifest = load_ark_artifact_generation(REPO_ROOT)
+
+    assert manifest["artifact_generation_schema_version"] == 1
+    assert manifest["status"] == "READY"
+
+
 def test_ark_mock_runs_use_distinct_docker_name_prefixes() -> None:
     request_ids = [ark_mock_runner._mock_request_id(index) for index in range(1, 4)]
 
@@ -198,27 +402,8 @@ def test_ark_mock_runs_use_distinct_docker_name_prefixes() -> None:
     assert len({request_id[:12] for request_id in request_ids}) == 3
 
 
-def test_ark_mock_global_lock_rejects_concurrent_invocation(tmp_path: Path) -> None:
-    with ark_mock_runner._exclusive_mock_lock(tmp_path):
-        with pytest.raises(ark_mock_runner.ArkMockE2EError, match="global_lock"):
-            with ark_mock_runner._exclusive_mock_lock(tmp_path):
-                pass
-
-
-def test_ark_mock_global_lock_never_creates_missing_path(tmp_path: Path) -> None:
-    missing = tmp_path / "missing"
-
-    with pytest.raises(ark_mock_runner.ArkMockE2EError, match="global_lock"):
-        with ark_mock_runner._exclusive_mock_lock(missing):
-            pass
-
-    assert not missing.exists()
-
-
 def test_committed_ark_mock_e2e_is_semantically_valid() -> None:
-    observed = json.loads(
-        (REPO_ROOT / "reports/phase2_provider_ark/mock_e2e.json").read_text()
-    )
+    observed = json.loads((REPO_ROOT / "reports/phase2_provider_ark/mock_e2e.json").read_text())
 
     validate_ark_mock_e2e_evidence(REPO_ROOT, observed)
 
@@ -265,6 +450,7 @@ def test_committed_ark_candidate_binds_all_required_hashes() -> None:
             (REPO_ROOT / "docker/phase2-ark-canary-relay/relay.py").read_bytes()
         ).hexdigest(),
     }
+    assert observed["artifact_generation_required"] is True
     assert len(hashlib.sha256(path.read_bytes()).hexdigest()) == 64
     assert "approval_scope" not in observed
 
@@ -276,15 +462,16 @@ def test_committed_ark_build_provenance_is_canonical_and_current() -> None:
     validate_ark_build_provenance(REPO_ROOT, observed)
 
     candidate = json.loads(
-        (
-            REPO_ROOT / "reports/phase2_provider_ark/approval_candidate.json"
-        ).read_text(encoding="utf-8")
+        (REPO_ROOT / "reports/phase2_provider_ark/approval_candidate.json").read_text(
+            encoding="utf-8"
+        )
     )
     assert candidate["proxy_image_id"] == observed["proxy_image_id"]
     assert candidate["relay_image_id"] == observed["relay_image_id"]
-    assert candidate["artifact_hashes"]["build_provenance_sha256"] == hashlib.sha256(
-        path.read_bytes()
-    ).hexdigest()
+    assert (
+        candidate["artifact_hashes"]["build_provenance_sha256"]
+        == hashlib.sha256(path.read_bytes()).hexdigest()
+    )
 
 
 def test_ark_candidate_validator_rejects_any_field_tampering() -> None:
@@ -611,9 +798,7 @@ def test_ark_mock_e2e_validator_rejects_semantic_tampering(
     path: tuple[object, ...],
     value: object,
 ) -> None:
-    observed = json.loads(
-        (REPO_ROOT / "reports/phase2_provider_ark/mock_e2e.json").read_text()
-    )
+    observed = json.loads((REPO_ROOT / "reports/phase2_provider_ark/mock_e2e.json").read_text())
     target = observed
     for part in path[:-1]:
         target = target[part]  # type: ignore[index]
@@ -624,9 +809,7 @@ def test_ark_mock_e2e_validator_rejects_semantic_tampering(
 
 
 def test_ark_mock_e2e_validator_requires_identical_renderer_hashes() -> None:
-    observed = json.loads(
-        (REPO_ROOT / "reports/phase2_provider_ark/mock_e2e.json").read_text()
-    )
+    observed = json.loads((REPO_ROOT / "reports/phase2_provider_ark/mock_e2e.json").read_text())
     for index, run in enumerate(observed["runs"], start=1):
         run["renderer_sha256"] = f"{index:064x}"
 
@@ -652,9 +835,7 @@ def test_ark_mock_e2e_validator_rejects_boolean_numeric_fields(
     path: tuple[object, ...],
     value: bool,
 ) -> None:
-    observed = json.loads(
-        (REPO_ROOT / "reports/phase2_provider_ark/mock_e2e.json").read_text()
-    )
+    observed = json.loads((REPO_ROOT / "reports/phase2_provider_ark/mock_e2e.json").read_text())
     target = observed
     for part in path[:-1]:
         target = target[part]  # type: ignore[index]

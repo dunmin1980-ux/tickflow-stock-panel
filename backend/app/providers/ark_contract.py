@@ -2,18 +2,24 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
 import re
 import stat
 from collections.abc import Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from app.providers.ark_capability_gate import validate_ark_capability_evidence
+from app.providers.ark_capability_gate import (
+    validate_ark_capability_evidence,
+    validate_ark_capability_evidence_bytes,
+)
 from app.providers.ark_provider import (
     ARK_ENDPOINT_ALIAS,
     ARK_EXACT_MODEL_ID,
@@ -28,6 +34,7 @@ from app.services.phase2_ai_worker_protocol import build_worker_projection
 from app.services.phase2_ark_timeout_contract import (
     ark_runtime_contract_sha256,
     load_ark_runtime_contract,
+    load_ark_runtime_contract_bytes,
 )
 from app.services.phase2_canary_orchestrator import (
     ApprovalScopedLedgerNamespace,
@@ -51,15 +58,48 @@ _ARK_HISTORY_HASHES = {
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")
 _IMAGE_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
 _LAYER_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
-_BASE_IMAGE_DIGEST = (
-    "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5"
+_BASE_IMAGE_DIGEST = "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5"
+_BUILD_PROVENANCE_PATH = Path("reports/phase2_provider_ark/ark_build_provenance.json")
+_ARTIFACT_GENERATION_PATH = Path("reports/phase2_provider_ark/artifact_generation.json")
+_ARTIFACT_GENERATION_FILES = (
+    "docker/phase2-ark-egress-proxy/responses-contract.json",
+    "reports/phase2_provider_ark/approval_candidate.json",
+    "reports/phase2_provider_ark/approval_scope_preflight.json",
+    "reports/phase2_provider_ark/ark_build_provenance.json",
+    "reports/phase2_provider_ark/mock_e2e.json",
+    "reports/phase2_provider_ark/timeout_mock_e2e.json",
 )
-_BUILD_PROVENANCE_PATH = Path(
-    "reports/phase2_provider_ark/ark_build_provenance.json"
+_ARK_SOURCE_PATHS = {
+    "proxy_dockerfile_sha256": "docker/phase2-ark-egress-proxy/Dockerfile",
+    "proxy_source_sha256": "docker/phase2-ark-egress-proxy/proxy.py",
+    "relay_dockerfile_sha256": "docker/phase2-ark-canary-relay/Dockerfile",
+    "relay_source_sha256": "docker/phase2-ark-canary-relay/relay.py",
+}
+_ARK_CANDIDATE_SOURCE_FILES = tuple(
+    dict.fromkeys(
+        (
+            *_ARK_SOURCE_PATHS.values(),
+            "backend/app/providers/ark_provider.py",
+            "backend/app/services/phase2_canary_orchestrator.py",
+            "backend/app/services/phase2_ark_timeout_contract.json",
+            "backend/scripts/run_phase2_ark_single_symbol_canary.py",
+            "docker/phase2-ark-egress-proxy/readiness-contract.json",
+            "docker/phase2-ark-egress-proxy/responses-contract.json",
+            "reports/phase2_facts/000403SZ_facts.json",
+            "reports/phase2_provider_ark/ark_build_provenance.json",
+            "reports/phase2_provider_ark/mock_e2e.json",
+            "reports/phase2_provider_ark/official_model_capability_snapshot.txt",
+            "reports/phase2_provider_ark/official_responses_json_schema_snapshot.txt",
+            "reports/phase2_provider_ark/timeout_contract_history_baseline.json",
+            "reports/phase2_provider_ark/timeout_mock_e2e.json",
+            *_ARK_HISTORY_HASHES.keys(),
+        )
+    )
 )
-_UTC_TIMESTAMP = re.compile(
-    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$"
+_ACTIVE_ARK_SOURCE_SNAPSHOT: ContextVar[tuple[Path, dict[str, bytes]] | None] = ContextVar(
+    "active_ark_source_snapshot", default=None
 )
+_UTC_TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$")
 
 
 def _exact_int(value: object, expected: int) -> bool:
@@ -87,7 +127,239 @@ def _sha256(raw: bytes) -> str:
 
 
 def _file_sha256(path: Path) -> str:
+    current = _ACTIVE_ARK_SOURCE_SNAPSHOT.get()
+    if current is not None:
+        try:
+            relative = path.relative_to(current[0]).as_posix()
+        except ValueError:
+            relative = ""
+        if relative in current[1]:
+            return _sha256(current[1][relative])
     return _sha256(path.read_bytes())
+
+
+def _snapshot_bytes(repo_root: Path, relative: str) -> bytes:
+    root = repo_root.resolve(strict=True)
+    current = _ACTIVE_ARK_SOURCE_SNAPSHOT.get()
+    if current is not None and current[0] == root and relative in current[1]:
+        return current[1][relative]
+    return _read_repo_regular_files(root, (relative,))[relative]
+
+
+def _runtime_contract_identity(repo_root: Path) -> tuple[Any, str]:
+    root = repo_root.resolve(strict=True)
+    current = _ACTIVE_ARK_SOURCE_SNAPSHOT.get()
+    if current is not None and current[0] == root:
+        raw = _snapshot_bytes(
+            root,
+            "backend/app/services/phase2_ark_timeout_contract.json",
+        )
+        return load_ark_runtime_contract_bytes(raw), _sha256(raw)
+    return load_ark_runtime_contract(), ark_runtime_contract_sha256()
+
+
+def _read_repo_regular_files(
+    repo_root: Path,
+    relative_paths: tuple[str, ...],
+    *,
+    maximum_bytes: int = 8 * 1024 * 1024,
+) -> dict[str, bytes]:
+    root = repo_root.resolve(strict=True)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    directory_flags = flags | os.O_DIRECTORY
+    try:
+        root_fd = os.open(root, directory_flags)
+    except OSError as exc:
+        raise ValueError("ark_source_snapshot_invalid") from exc
+    values: dict[str, bytes] = {}
+    try:
+        for relative in relative_paths:
+            parts = Path(relative).parts
+            if not parts or Path(relative).is_absolute() or ".." in parts:
+                raise ValueError("ark_source_snapshot_invalid")
+            directory_fd = os.dup(root_fd)
+            try:
+                for part in parts[:-1]:
+                    next_fd = os.open(part, directory_flags, dir_fd=directory_fd)
+                    os.close(directory_fd)
+                    directory_fd = next_fd
+                descriptor = os.open(parts[-1], flags, dir_fd=directory_fd)
+                try:
+                    before = os.fstat(descriptor)
+                    if not stat.S_ISREG(before.st_mode) or before.st_size > maximum_bytes:
+                        raise ValueError("ark_source_snapshot_invalid")
+                    raw = b""
+                    while len(raw) <= maximum_bytes:
+                        chunk = os.read(
+                            descriptor,
+                            min(65_536, maximum_bytes + 1 - len(raw)),
+                        )
+                        if not chunk:
+                            break
+                        raw += chunk
+                    after = os.fstat(descriptor)
+                    if (
+                        len(raw) > maximum_bytes
+                        or before.st_dev != after.st_dev
+                        or before.st_ino != after.st_ino
+                        or before.st_size != after.st_size
+                        or before.st_mtime_ns != after.st_mtime_ns
+                        or before.st_ctime_ns != after.st_ctime_ns
+                        or len(raw) != after.st_size
+                    ):
+                        raise ValueError("ark_source_snapshot_invalid")
+                    values[relative] = raw
+                finally:
+                    os.close(descriptor)
+            except OSError as exc:
+                raise ValueError("ark_source_snapshot_invalid") from exc
+            finally:
+                os.close(directory_fd)
+    finally:
+        os.close(root_fd)
+    return values
+
+
+@contextmanager
+def ark_source_snapshot(repo_root: Path):
+    root = repo_root.resolve(strict=True)
+    current = _ACTIVE_ARK_SOURCE_SNAPSHOT.get()
+    if current is not None and current[0] == root:
+        yield current[1]
+        return
+    snapshots = _read_repo_regular_files(root, _ARK_CANDIDATE_SOURCE_FILES)
+    token = _ACTIVE_ARK_SOURCE_SNAPSHOT.set((root, snapshots))
+    try:
+        yield snapshots
+    finally:
+        _ACTIVE_ARK_SOURCE_SNAPSHOT.reset(token)
+
+
+def validate_ark_source_snapshot(repo_root: Path) -> None:
+    root = repo_root.resolve(strict=True)
+    current = _ACTIVE_ARK_SOURCE_SNAPSHOT.get()
+    if current is None or current[0] != root:
+        raise ValueError("ark_source_snapshot_invalid")
+    observed = _read_repo_regular_files(root, _ARK_CANDIDATE_SOURCE_FILES)
+    if observed != current[1]:
+        raise ValueError("ark_source_snapshot_invalid")
+
+
+@contextmanager
+def exclusive_ark_artifact_lock(repo_root: Path):
+    root = repo_root.resolve(strict=True)
+    lock_root = root / "reports/phase2_provider_ark"
+    try:
+        descriptor = os.open(
+            lock_root,
+            os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0),
+        )
+    except OSError as exc:
+        raise RuntimeError("ark_artifact_generation_lock_invalid") from exc
+    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError("ark_artifact_generation_lock_unavailable") from exc
+        yield
+    finally:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(descriptor)
+
+
+def invalidate_ark_artifact_generation(repo_root: Path) -> None:
+    root = repo_root.resolve(strict=True)
+    manifest = root / _ARTIFACT_GENERATION_PATH
+    try:
+        metadata = manifest.lstat()
+    except FileNotFoundError:
+        return
+    if not stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+        raise RuntimeError("ark_artifact_generation_invalid")
+    manifest.unlink()
+    directory = os.open(
+        manifest.parent,
+        os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
+def build_ark_artifact_generation_manifest(
+    artifacts: Mapping[str, bytes],
+) -> dict[str, Any]:
+    if set(artifacts) != set(_ARTIFACT_GENERATION_FILES) or any(
+        not isinstance(raw, bytes) or not raw for raw in artifacts.values()
+    ):
+        raise ValueError("ark_artifact_generation_invalid")
+    value: dict[str, Any] = {
+        "artifact_generation_schema_version": 1,
+        "status": "READY",
+        "artifact_sha256": {
+            relative: _sha256(artifacts[relative])
+            for relative in sorted(_ARTIFACT_GENERATION_FILES)
+        },
+        "provider_attempt_count": 0,
+        "ai_call_count": 0,
+        "provider_http": "NOT_RUN",
+    }
+    value["generation_sha256"] = _sha256(canonical_json_bytes(value))
+    return value
+
+
+def validate_ark_artifact_generation_manifest(
+    value: Mapping[str, Any],
+    artifacts: Mapping[str, bytes],
+) -> None:
+    if not isinstance(value, Mapping):
+        raise ValueError("ark_artifact_generation_invalid")
+    payload = dict(value)
+    generation_sha256 = payload.pop("generation_sha256", None)
+    expected = build_ark_artifact_generation_manifest(artifacts)
+    if (
+        set(value)
+        != {
+            "artifact_generation_schema_version",
+            "status",
+            "artifact_sha256",
+            "provider_attempt_count",
+            "ai_call_count",
+            "provider_http",
+            "generation_sha256",
+        }
+        or value != expected
+        or generation_sha256 != _sha256(canonical_json_bytes(payload))
+    ):
+        raise ValueError("ark_artifact_generation_invalid")
+
+
+def _load_ark_artifact_generation_snapshot(
+    repo_root: Path,
+) -> tuple[dict[str, Any], dict[str, bytes]]:
+    root = repo_root.resolve(strict=True)
+    relative_paths = (
+        _ARTIFACT_GENERATION_PATH.as_posix(),
+        *_ARTIFACT_GENERATION_FILES,
+    )
+    try:
+        snapshots = _read_repo_regular_files(root, relative_paths)
+        manifest_raw = snapshots.pop(_ARTIFACT_GENERATION_PATH.as_posix())
+        manifest = json.loads(manifest_raw)
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("ark_artifact_generation_invalid") from exc
+    if manifest_raw != canonical_json_bytes(manifest):
+        raise ValueError("ark_artifact_generation_invalid")
+    validate_ark_artifact_generation_manifest(manifest, snapshots)
+    return dict(manifest), snapshots
+
+
+def load_ark_artifact_generation(repo_root: Path) -> dict[str, Any]:
+    manifest, _ = _load_ark_artifact_generation_snapshot(repo_root)
+    return manifest
 
 
 def _is_utc_timestamp(value: object) -> bool:
@@ -105,37 +377,31 @@ def ark_proxy_policy_sha256() -> str:
 
 
 def _ark_source_bindings(root: Path) -> dict[str, str]:
+    current = _ACTIVE_ARK_SOURCE_SNAPSHOT.get()
+    snapshots = (
+        current[1]
+        if current is not None and current[0] == root.resolve(strict=True)
+        else _read_repo_regular_files(root, tuple(_ARK_SOURCE_PATHS.values()))
+    )
     return {
         "base_image_digest": _BASE_IMAGE_DIGEST,
-        "proxy_dockerfile_sha256": _file_sha256(
-            root / "docker/phase2-ark-egress-proxy/Dockerfile"
-        ),
-        "proxy_source_sha256": _file_sha256(
-            root / "docker/phase2-ark-egress-proxy/proxy.py"
-        ),
-        "relay_dockerfile_sha256": _file_sha256(
-            root / "docker/phase2-ark-canary-relay/Dockerfile"
-        ),
-        "relay_source_sha256": _file_sha256(
-            root / "docker/phase2-ark-canary-relay/relay.py"
-        ),
+        **{field: _sha256(snapshots[relative]) for field, relative in _ARK_SOURCE_PATHS.items()},
     }
 
 
 def _expected_ark_image_labels(root: Path) -> tuple[dict[str, str], dict[str, str]]:
     source = _ark_source_bindings(root)
+    _, runtime_sha256 = _runtime_contract_identity(root)
     proxy = {
         "org.tickflow.phase2.provider-id": ARK_PROVIDER_ID,
         "org.tickflow.phase2.base-image-digest": source["base_image_digest"],
-        "org.tickflow.phase2.proxy-dockerfile-sha256": source[
-            "proxy_dockerfile_sha256"
-        ],
+        "org.tickflow.phase2.proxy-dockerfile-sha256": source["proxy_dockerfile_sha256"],
         "org.tickflow.phase2.proxy-source-sha256": source["proxy_source_sha256"],
         "org.tickflow.phase2.responses-contract-sha256": _file_sha256(
             root / "docker/phase2-ark-egress-proxy/responses-contract.json"
         ),
         "org.tickflow.phase2.proxy-policy-sha256": ark_proxy_policy_sha256(),
-        "org.tickflow.phase2.runtime-contract-sha256": ark_runtime_contract_sha256(),
+        "org.tickflow.phase2.runtime-contract-sha256": runtime_sha256,
         "org.tickflow.phase2.readiness-contract-sha256": _file_sha256(
             root / "docker/phase2-ark-egress-proxy/readiness-contract.json"
         ),
@@ -143,11 +409,9 @@ def _expected_ark_image_labels(root: Path) -> tuple[dict[str, str], dict[str, st
     relay = {
         "org.tickflow.phase2.provider-id": ARK_PROVIDER_ID,
         "org.tickflow.phase2.base-image-digest": source["base_image_digest"],
-        "org.tickflow.phase2.relay-dockerfile-sha256": source[
-            "relay_dockerfile_sha256"
-        ],
+        "org.tickflow.phase2.relay-dockerfile-sha256": source["relay_dockerfile_sha256"],
         "org.tickflow.phase2.relay-source-sha256": source["relay_source_sha256"],
-        "org.tickflow.phase2.runtime-contract-sha256": ark_runtime_contract_sha256(),
+        "org.tickflow.phase2.runtime-contract-sha256": runtime_sha256,
     }
     return proxy, relay
 
@@ -158,7 +422,9 @@ def _sanitize_ark_inspect(
     expected_labels: Mapping[str, str],
 ) -> dict[str, Any]:
     rootfs = value.get("RootFS")
-    labels = value.get("Config", {}).get("Labels") if isinstance(value.get("Config"), Mapping) else None
+    labels = (
+        value.get("Config", {}).get("Labels") if isinstance(value.get("Config"), Mapping) else None
+    )
     layers = rootfs.get("Layers") if isinstance(rootfs, Mapping) else None
     if (
         not isinstance(value.get("Id"), str)
@@ -169,10 +435,7 @@ def _sanitize_ark_inspect(
         or not value["Created"]
         or not isinstance(layers, list)
         or not layers
-        or any(
-            not isinstance(layer, str) or _LAYER_ID.fullmatch(layer) is None
-            for layer in layers
-        )
+        or any(not isinstance(layer, str) or _LAYER_ID.fullmatch(layer) is None for layer in layers)
         or not isinstance(labels, Mapping)
         or dict(labels) != dict(expected_labels)
         or any(labels.get(key) != expected for key, expected in expected_labels.items())
@@ -236,6 +499,7 @@ def build_ark_build_provenance(
     ):
         raise ValueError("ark_build_provenance_invalid")
     source = _ark_source_bindings(root)
+    _, runtime_sha256 = _runtime_contract_identity(root)
     value: dict[str, Any] = {
         "evidence_schema_version": 1,
         "captured_at": captured_at,
@@ -244,7 +508,7 @@ def build_ark_build_provenance(
         **source,
         "base_image_id": base_id,
         "base_rootfs_layers": list(base_layers),
-        "runtime_contract_sha256": ark_runtime_contract_sha256(),
+        "runtime_contract_sha256": runtime_sha256,
         "readiness_contract_sha256": _file_sha256(
             root / "docker/phase2-ark-egress-proxy/readiness-contract.json"
         ),
@@ -313,6 +577,7 @@ def validate_ark_build_provenance(
     payload = dict(value)
     evidence_sha256 = payload.pop("evidence_sha256", None)
     source = _ark_source_bindings(root)
+    _, runtime_sha256 = _runtime_contract_identity(root)
     proxy_labels, relay_labels = _expected_ark_image_labels(root)
     if (
         set(value) != expected_fields
@@ -324,7 +589,7 @@ def validate_ark_build_provenance(
         or value.get("base_image_id") != _BASE_IMAGE_DIGEST
         or not isinstance(value.get("base_rootfs_layers"), list)
         or not value["base_rootfs_layers"]
-        or value.get("runtime_contract_sha256") != ark_runtime_contract_sha256()
+        or value.get("runtime_contract_sha256") != runtime_sha256
         or value.get("readiness_contract_sha256")
         != _file_sha256(root / "docker/phase2-ark-egress-proxy/readiness-contract.json")
         or _IMAGE_ID.fullmatch(str(value.get("proxy_image_id", ""))) is None
@@ -350,18 +615,9 @@ def validate_ark_build_provenance(
         != value["base_rootfs_layers"]
         or len(value["proxy_rootfs_layers"]) <= len(value["base_rootfs_layers"])
         or len(value["relay_rootfs_layers"]) <= len(value["base_rootfs_layers"])
-        or any(
-            _LAYER_ID.fullmatch(str(layer)) is None
-            for layer in value["base_rootfs_layers"]
-        )
-        or any(
-            _LAYER_ID.fullmatch(str(layer)) is None
-            for layer in value["proxy_rootfs_layers"]
-        )
-        or any(
-            _LAYER_ID.fullmatch(str(layer)) is None
-            for layer in value["relay_rootfs_layers"]
-        )
+        or any(_LAYER_ID.fullmatch(str(layer)) is None for layer in value["base_rootfs_layers"])
+        or any(_LAYER_ID.fullmatch(str(layer)) is None for layer in value["proxy_rootfs_layers"])
+        or any(_LAYER_ID.fullmatch(str(layer)) is None for layer in value["relay_rootfs_layers"])
         or not _exact_int(value.get("provider_attempt_count"), 0)
         or not _exact_int(value.get("ai_call_count"), 0)
         or value.get("provider_http") != "NOT_RUN"
@@ -376,7 +632,7 @@ def load_ark_build_provenance(repo_root: Path) -> tuple[dict[str, Any], bytes]:
     path = root / _BUILD_PROVENANCE_PATH
     try:
         _assert_no_symlink_below(root, path)
-        raw = path.read_bytes()
+        raw = _snapshot_bytes(root, _BUILD_PROVENANCE_PATH.as_posix())
         value = json.loads(raw)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         raise ValueError("ark_build_provenance_invalid") from exc
@@ -387,6 +643,7 @@ def load_ark_build_provenance(repo_root: Path) -> tuple[dict[str, Any], bytes]:
 
 
 def validate_ark_timeout_mock_evidence(value: Any) -> None:
+    _, runtime_sha256 = _runtime_contract_identity(Path(__file__).resolve().parents[3])
     expected_identity = {
         "endpoint_alias": ARK_ENDPOINT_ALIAS,
         "exact_model_id": ARK_EXACT_MODEL_ID,
@@ -463,7 +720,7 @@ def validate_ark_timeout_mock_evidence(value: Any) -> None:
         or not _exact_int(value.get("real_provider_attempt_count"), 0)
         or not _exact_int(value.get("real_ai_call_count"), 0)
         or value.get("public_network_used") is not False
-        or value.get("runtime_contract_sha256") != ark_runtime_contract_sha256()
+        or value.get("runtime_contract_sha256") != runtime_sha256
         or not isinstance(runs, list)
         or len(runs) != 4
     ):
@@ -519,8 +776,10 @@ def validate_ark_timeout_mock_evidence(value: Any) -> None:
 def validate_ark_mock_e2e_evidence(repo_root: Path, value: Any) -> None:
     root = repo_root.resolve(strict=True)
     provenance, _ = load_ark_build_provenance(root)
-    facts_path = root / "reports/phase2_facts/000403SZ_facts.json"
-    facts_raw = facts_path.read_bytes()
+    facts_raw = _snapshot_bytes(
+        root,
+        "reports/phase2_facts/000403SZ_facts.json",
+    )
     projection = build_worker_projection(
         json.loads(facts_raw),
         _sha256(facts_raw),
@@ -592,7 +851,7 @@ def validate_ark_mock_e2e_evidence(repo_root: Path, value: Any) -> None:
     expected_orchestrator = _file_sha256(
         root / "backend/app/services/phase2_canary_orchestrator.py"
     )
-    expected_runtime = ark_runtime_contract_sha256()
+    _, expected_runtime = _runtime_contract_identity(root)
     if (
         not isinstance(value, Mapping)
         or set(value) != top_fields
@@ -693,7 +952,10 @@ def validate_ark_history_baseline(repo_root: Path) -> dict[str, Any]:
     path = root / "reports/phase2_provider_ark/timeout_contract_history_baseline.json"
     _assert_no_symlink_below(root, path)
     try:
-        raw = path.read_bytes()
+        raw = _snapshot_bytes(
+            root,
+            "reports/phase2_provider_ark/timeout_contract_history_baseline.json",
+        )
         value = json.loads(raw)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError("ark_history_baseline_invalid") from exc
@@ -734,7 +996,7 @@ def validate_ark_history_baseline(repo_root: Path) -> dict[str, Any]:
         if (
             candidate.is_symlink()
             or not candidate.is_file()
-            or _file_sha256(candidate) != expected_sha256
+            or _sha256(_snapshot_bytes(root, relative)) != expected_sha256
         ):
             raise ValueError("ark_history_baseline_invalid")
     historical_files = {
@@ -749,8 +1011,10 @@ def validate_ark_history_baseline(repo_root: Path) -> dict[str, Any]:
 
 
 def _provider_request(repo_root: Path) -> ProviderRequest:
-    facts_path = repo_root / "reports/phase2_facts/000403SZ_facts.json"
-    facts_raw = facts_path.read_bytes()
+    facts_raw = _snapshot_bytes(
+        repo_root,
+        "reports/phase2_facts/000403SZ_facts.json",
+    )
     projection = build_worker_projection(
         json.loads(facts_raw),
         _sha256(facts_raw),
@@ -771,12 +1035,31 @@ def _provider_request(repo_root: Path) -> ProviderRequest:
 
 def build_ark_responses_contract(repo_root: Path) -> dict[str, Any]:
     root = repo_root.resolve(strict=True)
-    capability = validate_ark_capability_evidence(root)
+    current = _ACTIVE_ARK_SOURCE_SNAPSHOT.get()
+    if current is not None and current[0] == root:
+        capability = validate_ark_capability_evidence_bytes(
+            _snapshot_bytes(
+                root,
+                "reports/phase2_provider_ark/official_model_capability_snapshot.txt",
+            ),
+            _snapshot_bytes(
+                root,
+                "reports/phase2_provider_ark/official_responses_json_schema_snapshot.txt",
+            ),
+        )
+        runtime_raw = _snapshot_bytes(
+            root,
+            "backend/app/services/phase2_ark_timeout_contract.json",
+        )
+        runtime = load_ark_runtime_contract_bytes(runtime_raw)
+        runtime_sha256 = _sha256(runtime_raw)
+    else:
+        capability = validate_ark_capability_evidence(root)
+        runtime = load_ark_runtime_contract()
+        runtime_sha256 = ark_runtime_contract_sha256()
     request = build_ark_responses_request(_provider_request(root))
     from app.schemas.phase2_claims import ALLOWED_CLAIM_TYPES
 
-    runtime = load_ark_runtime_contract()
-    runtime_sha256 = ark_runtime_contract_sha256()
     value = {
         "contract_schema_version": 1,
         "ark_responses_contract_version": ARK_RESPONSES_CONTRACT_VERSION,
@@ -845,8 +1128,10 @@ def build_ark_approval_candidate(
     relay_image_id: str,
 ) -> dict[str, Any]:
     root = repo_root.resolve(strict=True)
-    facts_path = root / "reports/phase2_facts/000403SZ_facts.json"
-    facts_raw = facts_path.read_bytes()
+    facts_raw = _snapshot_bytes(
+        root,
+        "reports/phase2_facts/000403SZ_facts.json",
+    )
     projection = build_worker_projection(
         json.loads(facts_raw),
         _sha256(facts_raw),
@@ -856,7 +1141,12 @@ def build_ark_approval_candidate(
     schema_raw = canonical_json_bytes(WorkerClaimsCandidate.model_json_schema(mode="validation"))
     timeout_mock_path = root / "reports/phase2_provider_ark/timeout_mock_e2e.json"
     try:
-        timeout_mock = json.loads(timeout_mock_path.read_bytes())
+        timeout_mock = json.loads(
+            _snapshot_bytes(
+                root,
+                "reports/phase2_provider_ark/timeout_mock_e2e.json",
+            )
+        )
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError("ark_timeout_mock_evidence_invalid") from exc
     validate_ark_timeout_mock_evidence(timeout_mock)
@@ -869,13 +1159,19 @@ def build_ark_approval_candidate(
         raise ValueError("ark_build_provenance_invalid")
     mock_path = root / "reports/phase2_provider_ark/mock_e2e.json"
     try:
-        mock_e2e = json.loads(mock_path.read_bytes())
+        mock_e2e = json.loads(
+            _snapshot_bytes(
+                root,
+                "reports/phase2_provider_ark/mock_e2e.json",
+            )
+        )
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError("ark_mock_e2e_invalid") from exc
     validate_ark_mock_e2e_evidence(root, mock_e2e)
     history_baseline_path = (
         root / "reports/phase2_provider_ark/timeout_contract_history_baseline.json"
     )
+    _, runtime_sha256 = _runtime_contract_identity(root)
     hashes = {
         "ark_responses_contract_sha256": _sha256(contract_raw),
         "ark_proxy_policy_sha256": ark_proxy_policy_sha256(),
@@ -886,7 +1182,7 @@ def build_ark_approval_candidate(
         "orchestrator_source_sha256": _file_sha256(
             root / "backend/app/services/phase2_canary_orchestrator.py"
         ),
-        "runtime_contract_sha256": ark_runtime_contract_sha256(),
+        "runtime_contract_sha256": runtime_sha256,
         "readiness_contract_sha256": _file_sha256(
             root / "docker/phase2-ark-egress-proxy/readiness-contract.json"
         ),
@@ -894,12 +1190,8 @@ def build_ark_approval_candidate(
         "history_baseline_sha256": _file_sha256(history_baseline_path),
         "projection_sha256": projection["projection_sha256"],
         "typed_claims_schema_sha256": _sha256(schema_raw),
-        "timeout_mock_e2e_sha256": _file_sha256(
-            timeout_mock_path
-        ),
-        "mock_e2e_sha256": _file_sha256(
-            mock_path
-        ),
+        "timeout_mock_e2e_sha256": _file_sha256(timeout_mock_path),
+        "mock_e2e_sha256": _file_sha256(mock_path),
         "build_provenance_sha256": _sha256(provenance_raw),
     }
     candidate_without_hash: dict[str, Any] = {
@@ -916,6 +1208,7 @@ def build_ark_approval_candidate(
         "source_bindings": _ark_source_bindings(root),
         "proxy_image_id": proxy_image_id,
         "relay_image_id": relay_image_id,
+        "artifact_generation_required": True,
         "approval_installed": False,
         "provider_http": "NOT_RUN",
         "provider_attempt_count": 0,
@@ -953,7 +1246,10 @@ def build_ark_approval_scope_evidence(
     mock_path = root / "reports/phase2_provider_ark/mock_e2e.json"
     try:
         _assert_no_symlink_below(root, mock_path)
-        mock_raw = mock_path.read_bytes()
+        mock_raw = _snapshot_bytes(
+            root,
+            "reports/phase2_provider_ark/mock_e2e.json",
+        )
         mock_value = json.loads(mock_raw)
         if _sha256(mock_raw) != mock_e2e_sha256:
             raise ValueError("ark_mock_e2e_sha256_mismatch")
@@ -969,9 +1265,7 @@ def build_ark_approval_scope_evidence(
         endpoint_alias=ARK_ENDPOINT_ALIAS,
     )
     attempts_root = root / "reports/phase2_provider_canary/attempts"
-    legacy_state_root = (
-        Path.home() / "Library/Application Support/TickFlowPhase2Canary/runtime-v1"
-    )
+    legacy_state_root = Path.home() / "Library/Application Support/TickFlowPhase2Canary/runtime-v1"
     historical_root = root / "reports/phase2_provider_canary/live_canary"
     candidate_roots = (
         root / "reports/phase2_provider_canary/superseded",
@@ -984,9 +1278,7 @@ def build_ark_approval_scope_evidence(
         legacy_state_root=legacy_state_root,
         historical_evidence_root=historical_root,
         candidate_roots=candidate_roots,
-        additional_historical_evidence_roots=(
-            root / "reports/phase2_provider_ark/live_canary",
-        ),
+        additional_historical_evidence_roots=(root / "reports/phase2_provider_ark/live_canary",),
     ).preflight(scope)
     if preflight.status != "READY":
         raise ValueError("ark_approval_scope_preflight_blocked")
@@ -1040,11 +1332,12 @@ def validate_ark_approval_candidate(
     if not isinstance(value, Mapping):
         raise ValueError("ark_approval_candidate_invalid")
     try:
-        expected = build_ark_approval_candidate(
-            repo_root,
-            proxy_image_id=str(value.get("proxy_image_id")),
-            relay_image_id=str(value.get("relay_image_id")),
-        )
+        with ark_source_snapshot(repo_root):
+            expected = build_ark_approval_candidate(
+                repo_root,
+                proxy_image_id=str(value.get("proxy_image_id")),
+                relay_image_id=str(value.get("relay_image_id")),
+            )
     except ValueError as exc:
         raise ValueError("ark_approval_candidate_invalid") from exc
     try:
@@ -1143,7 +1436,14 @@ def load_installed_ark_approval(
         or approval_metadata.st_uid != os.geteuid()
     ):
         raise ValueError("ark_approval_invalid")
+    manifest, artifacts = _load_ark_artifact_generation_snapshot(candidate_path.parents[2])
     candidate_raw = _read_regular_snapshot(candidate_path)
+    if (
+        manifest.get("status") != "READY"
+        or artifacts.get(candidate_path.relative_to(candidate_path.parents[2]).as_posix())
+        != candidate_raw
+    ):
+        raise ValueError("ark_approval_invalid")
     approval_raw = _read_regular_snapshot(
         approval_path,
         required_mode=0o600,

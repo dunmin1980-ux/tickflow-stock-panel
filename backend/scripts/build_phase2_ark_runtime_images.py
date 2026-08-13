@@ -15,6 +15,8 @@ from pathlib import Path
 from app.providers.ark_contract import (
     ark_proxy_policy_sha256,
     build_ark_responses_contract,
+    exclusive_ark_artifact_lock,
+    invalidate_ark_artifact_generation,
 )
 from app.services.phase2_ark_timeout_contract import (
     ark_runtime_contract_sha256,
@@ -177,14 +179,10 @@ def _build_runtime_images(
                     "BASE_IMAGE_DIGEST": BASE_IMAGE_DIGEST,
                     "PROXY_DOCKERFILE_SHA256": proxy_hashes["Dockerfile"],
                     "PROXY_SOURCE_SHA256": proxy_hashes["proxy.py"],
-                    "RESPONSES_CONTRACT_SHA256": proxy_hashes[
-                        "responses-contract.json"
-                    ],
+                    "RESPONSES_CONTRACT_SHA256": proxy_hashes["responses-contract.json"],
                     "PROXY_POLICY_SHA256": ark_proxy_policy_sha256(),
                     "RUNTIME_CONTRACT_SHA256": runtime_sha,
-                    "READINESS_CONTRACT_SHA256": proxy_hashes[
-                        "readiness-contract.json"
-                    ],
+                    "READINESS_CONTRACT_SHA256": proxy_hashes["readiness-contract.json"],
                 },
             ),
             cwd=root,
@@ -211,8 +209,8 @@ def _build_runtime_images(
             raise RuntimeError("ark_build_context_changed")
 
 
-def main() -> int:
-    root = Path(__file__).resolve().parents[2]
+def _main_locked(root: Path) -> int:
+    invalidate_ark_artifact_generation(root)
     write_ark_runtime_contract_copies(root)
     contract = canonical_json_bytes(build_ark_responses_contract(root))
     contract_path = root / "docker/phase2-ark-egress-proxy/responses-contract.json"
@@ -248,6 +246,12 @@ def main() -> int:
         )
     )
     return 0
+
+
+def main() -> int:
+    root = Path(__file__).resolve().parents[2]
+    with exclusive_ark_artifact_lock(root):
+        return _main_locked(root)
 
 
 if __name__ == "__main__":

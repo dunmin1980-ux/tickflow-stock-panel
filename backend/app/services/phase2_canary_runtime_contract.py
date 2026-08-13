@@ -88,9 +88,9 @@ def _read_regular(path: Path) -> bytes:
         raise RuntimeContractError("runtime_contract_open_failed") from exc
     try:
         opened = os.fstat(descriptor)
-        if (
-            not stat.S_ISREG(opened.st_mode)
-            or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)
+        if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (
+            before.st_dev,
+            before.st_ino,
         ):
             raise RuntimeContractError("runtime_contract_replaced")
         raw = os.read(descriptor, _MAXIMUM_CONTRACT_BYTES + 1)
@@ -126,6 +126,10 @@ def load_runtime_contract(path: Path | None = None) -> CanaryRuntimeContract:
     """Load the committed contract without consulting environment variables."""
     candidate = path or Path(__file__).with_name(_CONTRACT_FILENAME)
     return _decode_contract(_read_regular(candidate))
+
+
+def load_runtime_contract_bytes(raw: bytes) -> CanaryRuntimeContract:
+    return _decode_contract(raw)
 
 
 def canonical_runtime_contract_bytes() -> bytes:

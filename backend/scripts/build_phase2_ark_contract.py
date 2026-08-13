@@ -7,19 +7,30 @@ import argparse
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
 from app.providers.ark_contract import (
+    _ARTIFACT_GENERATION_FILES,
+    _ARTIFACT_GENERATION_PATH,
+    ark_source_snapshot,
     build_ark_approval_candidate,
     build_ark_approval_scope_evidence,
+    build_ark_artifact_generation_manifest,
     build_ark_build_provenance,
     build_ark_responses_contract,
+    exclusive_ark_artifact_lock,
+    load_ark_artifact_generation,
     load_ark_build_provenance,
+    validate_ark_approval_candidate,
     validate_ark_build_provenance,
     validate_ark_image_set,
+    validate_ark_mock_e2e_evidence,
+    validate_ark_source_snapshot,
+    validate_ark_timeout_mock_evidence,
 )
 from app.services.phase2_claims_service import canonical_json_bytes
 from scripts.run_phase2_ark_single_symbol_canary import (
@@ -73,25 +84,87 @@ def _atomic_write(path: Path, raw: bytes) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--write", action="store_true")
-    parser.add_argument("--capture-build-provenance", action="store_true")
-    parser.add_argument(
-        "--build-path",
-        choices=("READ_ONLY_EXISTING_IMAGE_INSPECT", "FRESH_OFFLINE_REBUILD"),
-        default="READ_ONLY_EXISTING_IMAGE_INSPECT",
+def _invalidate_artifact_generation(manifest_path: Path) -> None:
+    try:
+        metadata = manifest_path.lstat()
+    except FileNotFoundError:
+        return
+    if not stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+        raise RuntimeError("ark_artifact_generation_invalid")
+    manifest_path.unlink()
+    directory = os.open(
+        manifest_path.parent,
+        os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0),
     )
-    args = parser.parse_args()
-    root = Path(__file__).resolve().parents[2]
-    normalize_committed_runtime_modes(root)
-    proxy_inspect = _inspect_image(PROXY_IMAGE)
-    relay_inspect = _inspect_image(RELAY_IMAGE)
-    base_inspect = _inspect_image(BASE_IMAGE)
-    proxy_image_id = str(proxy_inspect.get("Id"))
-    relay_image_id = str(relay_inspect.get("Id"))
-    proxy_labels = proxy_inspect.get("Config", {}).get("Labels", {})
-    relay_labels = relay_inspect.get("Config", {}).get("Labels", {})
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
+def _publish_artifact_generation(
+    *,
+    targets: dict[Path, bytes],
+    manifest_path: Path,
+    manifest_raw: bytes,
+    validate_published,
+    writer=_atomic_write,
+) -> None:
+    _invalidate_artifact_generation(manifest_path)
+    for path, raw in targets.items():
+        writer(path, raw)
+    validate_published()
+    writer(manifest_path, manifest_raw)
+
+
+def _validate_published_generation(root: Path, expected_scope: bytes) -> None:
+    provenance, _ = load_ark_build_provenance(root)
+    validate_ark_build_provenance(root, provenance)
+    mock = json.loads((root / "reports/phase2_provider_ark/mock_e2e.json").read_bytes())
+    validate_ark_mock_e2e_evidence(root, mock)
+    timeout_mock = json.loads(
+        (root / "reports/phase2_provider_ark/timeout_mock_e2e.json").read_bytes()
+    )
+    validate_ark_timeout_mock_evidence(timeout_mock)
+    candidate_path = root / "reports/phase2_provider_ark/approval_candidate.json"
+    candidate = json.loads(candidate_path.read_bytes())
+    validate_ark_approval_candidate(root, candidate)
+    if (
+        root.joinpath("reports/phase2_provider_ark/approval_scope_preflight.json").read_bytes()
+        != expected_scope
+    ):
+        raise RuntimeError("ark_artifact_generation_invalid")
+
+
+def _build_candidate_generation(
+    root: Path,
+    args: argparse.Namespace,
+    *,
+    proxy_image_id: str,
+    relay_image_id: str,
+    proxy_labels,
+    relay_labels,
+) -> int:
+    with ark_source_snapshot(root):
+        return _build_candidate_generation_snapshot(
+            root,
+            args,
+            proxy_image_id=proxy_image_id,
+            relay_image_id=relay_image_id,
+            proxy_labels=proxy_labels,
+            relay_labels=relay_labels,
+        )
+
+
+def _build_candidate_generation_snapshot(
+    root: Path,
+    args: argparse.Namespace,
+    *,
+    proxy_image_id: str,
+    relay_image_id: str,
+    proxy_labels,
+    relay_labels,
+) -> int:
     validate_ark_image_set(
         repo_root=root,
         proxy_image_id=proxy_image_id,
@@ -100,20 +173,6 @@ def main() -> int:
         relay_labels=relay_labels,
     )
     provenance_path = root / "reports/phase2_provider_ark/ark_build_provenance.json"
-    if args.capture_build_provenance:
-        provenance = canonical_json_bytes(
-            build_ark_build_provenance(
-                root,
-                base_inspect=base_inspect,
-                proxy_inspect=proxy_inspect,
-                relay_inspect=relay_inspect,
-                captured_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-                build_path=args.build_path,
-            )
-        )
-        if not args.write:
-            raise RuntimeError("ark_build_provenance_write_required")
-        _atomic_write(provenance_path, provenance)
     provenance, provenance_raw = load_ark_build_provenance(root)
     validate_ark_build_provenance(root, provenance)
     if (
@@ -145,11 +204,76 @@ def main() -> int:
         root / "reports/phase2_provider_ark/approval_candidate.json": candidate,
         root / "reports/phase2_provider_ark/approval_scope_preflight.json": scope,
     }
+    validate_ark_source_snapshot(root)
     if args.write:
-        for path, raw in targets.items():
-            _atomic_write(path, raw)
+        artifact_raw: dict[str, bytes] = {}
+        for relative in _ARTIFACT_GENERATION_FILES:
+            path = root / relative
+            artifact_raw[relative] = targets[path] if path in targets else path.read_bytes()
+        manifest_raw = canonical_json_bytes(build_ark_artifact_generation_manifest(artifact_raw))
+        _publish_artifact_generation(
+            targets=targets,
+            manifest_path=root / _ARTIFACT_GENERATION_PATH,
+            manifest_raw=manifest_raw,
+            validate_published=lambda: _validate_published_generation(root, scope),
+        )
+        load_ark_artifact_generation(root)
         return 0
-    return 0 if all(path.read_bytes() == raw for path, raw in targets.items()) else 2
+    if not all(path.read_bytes() == raw for path, raw in targets.items()):
+        return 2
+    load_ark_artifact_generation(root)
+    return 0
+
+
+def _main_locked(args: argparse.Namespace) -> int:
+    root = Path(__file__).resolve().parents[2]
+    normalize_committed_runtime_modes(root)
+    proxy_inspect = _inspect_image(PROXY_IMAGE)
+    relay_inspect = _inspect_image(RELAY_IMAGE)
+    base_inspect = _inspect_image(BASE_IMAGE)
+    proxy_image_id = str(proxy_inspect.get("Id"))
+    relay_image_id = str(relay_inspect.get("Id"))
+    proxy_labels = proxy_inspect.get("Config", {}).get("Labels", {})
+    relay_labels = relay_inspect.get("Config", {}).get("Labels", {})
+    provenance_path = root / "reports/phase2_provider_ark/ark_build_provenance.json"
+    if args.capture_build_provenance:
+        provenance = canonical_json_bytes(
+            build_ark_build_provenance(
+                root,
+                base_inspect=base_inspect,
+                proxy_inspect=proxy_inspect,
+                relay_inspect=relay_inspect,
+                captured_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                build_path=args.build_path,
+            )
+        )
+        if not args.write:
+            raise RuntimeError("ark_build_provenance_write_required")
+        _invalidate_artifact_generation(root / _ARTIFACT_GENERATION_PATH)
+        _atomic_write(provenance_path, provenance)
+    return _build_candidate_generation(
+        root,
+        args,
+        proxy_image_id=proxy_image_id,
+        relay_image_id=relay_image_id,
+        proxy_labels=proxy_labels,
+        relay_labels=relay_labels,
+    )
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--write", action="store_true")
+    parser.add_argument("--capture-build-provenance", action="store_true")
+    parser.add_argument(
+        "--build-path",
+        choices=("READ_ONLY_EXISTING_IMAGE_INSPECT", "FRESH_OFFLINE_REBUILD"),
+        default="READ_ONLY_EXISTING_IMAGE_INSPECT",
+    )
+    args = parser.parse_args()
+    root = Path(__file__).resolve().parents[2]
+    with exclusive_ark_artifact_lock(root):
+        return _main_locked(args)
 
 
 if __name__ == "__main__":

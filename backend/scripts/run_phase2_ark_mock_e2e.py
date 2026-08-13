@@ -4,12 +4,9 @@
 from __future__ import annotations
 
 import argparse
-import contextlib
-import fcntl
 import hashlib
 import json
 import os
-import stat
 import subprocess
 import tempfile
 import time
@@ -19,7 +16,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from app.providers.ark_contract import ark_mock_request_id
+from app.providers.ark_contract import (
+    ark_mock_request_id,
+    exclusive_ark_artifact_lock,
+    invalidate_ark_artifact_generation,
+)
 from app.providers.ark_provider import ARK_ENDPOINT_ALIAS, ARK_EXACT_MODEL_ID
 from app.services.phase2_ai_worker_protocol import build_worker_projection
 from app.services.phase2_ark_timeout_contract import ark_runtime_contract_sha256
@@ -48,32 +49,6 @@ MOCK_SECRET = "PHASE2_" + "TEST_SECRET_DO_NOT_USE"
 
 class ArkMockE2EError(RuntimeError):
     pass
-
-
-@contextlib.contextmanager
-def _exclusive_mock_lock(lock_path: Path | None = None):
-    if lock_path is None:
-        raise ArkMockE2EError("ark_mock_global_lock_path_required")
-    try:
-        descriptor = os.open(
-            lock_path,
-            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-        )
-    except OSError as exc:
-        raise ArkMockE2EError("ark_mock_global_lock_invalid") from exc
-    try:
-        if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
-            raise ArkMockE2EError("ark_mock_global_lock_invalid")
-        try:
-            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            raise ArkMockE2EError("ark_mock_global_lock_unavailable") from exc
-        yield
-    finally:
-        try:
-            fcntl.flock(descriptor, fcntl.LOCK_UN)
-        finally:
-            os.close(descriptor)
 
 
 def _run(command: Sequence[str], timeout: float = 30.0) -> subprocess.CompletedProcess[str]:
@@ -567,6 +542,7 @@ def _run_locked(runs_requested: int) -> int:
     if runs_requested != 3:
         raise ArkMockE2EError("ark_mock_run_count_must_equal_three")
     repo_root = Path(__file__).resolve().parents[2]
+    invalidate_ark_artifact_generation(repo_root)
     proxy = _run(["docker", "image", "inspect", ARK_PROXY_IMAGE, "--format", "{{.Id}}"])
     _require_success(proxy, "ark_proxy_image_missing")
     proxy_image_id = proxy.stdout.strip()
@@ -652,7 +628,7 @@ def main() -> int:
     parser.add_argument("--runs", type=int, default=3)
     args = parser.parse_args()
     repo_root = Path(__file__).resolve().parents[2]
-    with _exclusive_mock_lock(repo_root / "reports/phase2_provider_ark"):
+    with exclusive_ark_artifact_lock(repo_root):
         return _run_locked(args.runs)
 
 

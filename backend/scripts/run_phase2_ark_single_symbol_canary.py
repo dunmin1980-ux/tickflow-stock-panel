@@ -15,6 +15,7 @@ from pathlib import Path
 
 from app.providers.ark_contract import (
     ApprovedArkCandidateSnapshot,
+    exclusive_ark_artifact_lock,
     load_installed_ark_approval,
     validate_ark_approval_candidate,
 )
@@ -104,17 +105,14 @@ def normalize_committed_runtime_modes(repo_root: Path) -> None:
                     raise RuntimeError("committed_runtime_mode_invalid")
                 _directory_without_symlink(request)
                 entries = tuple(request.iterdir())
-                if not entries or any(
-                    entry.name not in _RECEIPT_FILES for entry in entries
-                ):
+                if not entries or any(entry.name not in _RECEIPT_FILES for entry in entries):
                     raise RuntimeError("committed_runtime_mode_invalid")
                 for entry in entries:
                     _regular_without_symlink(entry)
             continue
         for entry in sorted(category.iterdir(), key=lambda item: item.name):
-            if (
-                _HEX_32.fullmatch(entry.stem) is None
-                or entry.suffix not in ({".json", ".md"} if category.name == "inbox" else {".json"})
+            if _HEX_32.fullmatch(entry.stem) is None or entry.suffix not in (
+                {".json", ".md"} if category.name == "inbox" else {".json"}
             ):
                 raise RuntimeError("committed_runtime_mode_invalid")
             _regular_without_symlink(entry)
@@ -137,10 +135,7 @@ def _approved_artifacts(approved: ApprovedArkCandidateSnapshot) -> ApprovedCanar
     )
 
 
-def main(argv: list[str] | None = None) -> int:
-    if argv not in (None, []):
-        return 2
-    repo_root = Path(__file__).resolve().parents[2]
+def _main_locked(repo_root: Path) -> int:
     ark_support = Path.home() / "Library/Application Support/TickFlowPhase2CanaryArk"
     shared_support = Path.home() / "Library/Application Support/TickFlowPhase2Canary"
     candidate_path = repo_root / "reports/phase2_provider_ark/approval_candidate.json"
@@ -207,6 +202,14 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
     return 0 if result.terminal_state == "SUCCEEDED" else 2
+
+
+def main(argv: list[str] | None = None) -> int:
+    if argv not in (None, []):
+        return 2
+    repo_root = Path(__file__).resolve().parents[2]
+    with exclusive_ark_artifact_lock(repo_root):
+        return _main_locked(repo_root)
 
 
 if __name__ == "__main__":

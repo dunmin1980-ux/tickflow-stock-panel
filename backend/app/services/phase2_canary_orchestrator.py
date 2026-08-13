@@ -236,9 +236,7 @@ _RUNTIME_EVIDENCE_BASE_FIELDS = frozenset(
         "timeout_contract_sha256",
     }
 )
-_RUNTIME_EVIDENCE_SCOPE_FIELDS = frozenset(
-    {"approval_scope_id", "ledger_namespace_version"}
-)
+_RUNTIME_EVIDENCE_SCOPE_FIELDS = frozenset({"approval_scope_id", "ledger_namespace_version"})
 _RUNTIME_EVIDENCE_OBSERVABILITY_FIELDS = frozenset(
     {"receipt_archive_status", "last_proven_stage", "child_terminal_reason"}
 )
@@ -257,43 +255,21 @@ _REJECTION_FIELDS = frozenset(
 # supplies fields added later without rewriting the preserved audit evidence.
 _PINNED_LEGACY_RECEIPT_BUNDLES = {
     "3d3e6adbe5b74c98ad18a2efe0fd1d0c": {
-        "archive-status.json": (
-            "f62dfc0ab09307cb0cd21aa9fa43a746bc8e32dd9a263ab31eb7586414739b8d"
-        ),
-        "child-metadata.json": (
-            "c13fd267d78f57550d229fd76ce84d9b3b0d45494e40226cc159ffd0973fdad7"
-        ),
-        "relay-receipt.json": (
-            "25acd73fed9bc65053421b57eff7e59acf00db1d0cf37c3e245c3eb49a1a3c17"
-        ),
+        "archive-status.json": ("f62dfc0ab09307cb0cd21aa9fa43a746bc8e32dd9a263ab31eb7586414739b8d"),
+        "child-metadata.json": ("c13fd267d78f57550d229fd76ce84d9b3b0d45494e40226cc159ffd0973fdad7"),
+        "relay-receipt.json": ("25acd73fed9bc65053421b57eff7e59acf00db1d0cf37c3e245c3eb49a1a3c17"),
     },
     "9728fc1f156c4568a98cea9c05ec9fa7": {
-        "archive-status.json": (
-            "391b85501266b47ae2cb15ba3eeac174880b28b59cd7b80bf5d1e28251e7b598"
-        ),
-        "child-metadata.json": (
-            "489de0ad618c2912fc18d56ef57de4f44f3a0d0a5ff3272940cd76c9aeaaffbe"
-        ),
-        "proxy-receipt.json": (
-            "0d6bbe87812c1f4766dc25097228499e5a11525fd9db2b4ca9a576c11a031604"
-        ),
-        "relay-receipt.json": (
-            "15ec73d5b5c45c659790bc0942b0e5b11c5a6fc5dfe289b2d77d630ae6812294"
-        ),
+        "archive-status.json": ("391b85501266b47ae2cb15ba3eeac174880b28b59cd7b80bf5d1e28251e7b598"),
+        "child-metadata.json": ("489de0ad618c2912fc18d56ef57de4f44f3a0d0a5ff3272940cd76c9aeaaffbe"),
+        "proxy-receipt.json": ("0d6bbe87812c1f4766dc25097228499e5a11525fd9db2b4ca9a576c11a031604"),
+        "relay-receipt.json": ("15ec73d5b5c45c659790bc0942b0e5b11c5a6fc5dfe289b2d77d630ae6812294"),
     },
     "2f17745f58534063bdd7eda1eb0d16f1": {
-        "archive-status.json": (
-            "a540da4a95be4081225750dffa93c643cafee09c613ec90f21e23f649ae29f2e"
-        ),
-        "child-metadata.json": (
-            "e598dff711ff759e1fdd84576ce55af30b897891bd8225771077a0fab0e7f2db"
-        ),
-        "proxy-receipt.json": (
-            "46c05c526067bed736262354bd492e809ca0c8294d7523376d806f050e8be9e4"
-        ),
-        "relay-receipt.json": (
-            "e64a6de0dfa81e51e6ff50ea11fa516db6e20dbdce0f7d3ceb4c3e717579e9d9"
-        ),
+        "archive-status.json": ("a540da4a95be4081225750dffa93c643cafee09c613ec90f21e23f649ae29f2e"),
+        "child-metadata.json": ("e598dff711ff759e1fdd84576ce55af30b897891bd8225771077a0fab0e7f2db"),
+        "proxy-receipt.json": ("46c05c526067bed736262354bd492e809ca0c8294d7523376d806f050e8be9e4"),
+        "relay-receipt.json": ("e64a6de0dfa81e51e6ff50ea11fa516db6e20dbdce0f7d3ceb4c3e717579e9d9"),
     },
 }
 
@@ -306,8 +282,7 @@ def _pinned_receipt_bundle_matches(
     if expected is None:
         return False
     return set(raw_by_name) == set(expected) and all(
-        hashlib.sha256(raw_by_name[name]).hexdigest() == digest
-        for name, digest in expected.items()
+        hashlib.sha256(raw_by_name[name]).hexdigest() == digest for name, digest in expected.items()
     )
 
 
@@ -331,10 +306,8 @@ def _is_pinned_ark_response_header_bridge(
     proxy_headers = proxy_receipt.get("response_headers_received")
     relay_response = relay_receipt.get("response_received")
     return (
-        proxy_receipt.get("response_category")
-        == "RESPONSE_HEADERS_NOT_RECEIVED"
-        and proxy_receipt.get("terminal_status")
-        == "RESPONSE_HEADERS_NOT_RECEIVED"
+        proxy_receipt.get("response_category") == "RESPONSE_HEADERS_NOT_RECEIVED"
+        and proxy_receipt.get("terminal_status") == "RESPONSE_HEADERS_NOT_RECEIVED"
         and proxy_receipt.get("provider_http_status") is None
         and isinstance(proxy_headers, Mapping)
         and proxy_headers.get("occurred") is False
@@ -481,9 +454,7 @@ _HISTORICAL_INPUT_FIELDS = {
     ),
 }
 _PINNED_OBSERVABILITY_V1_CANDIDATES = frozenset(
-    {
-        "b30c156bee1f5f2a1c8d44004fcbd25934e56a1caf6739ab58ffe7ead0e881fb"
-    }
+    {"b30c156bee1f5f2a1c8d44004fcbd25934e56a1caf6739ab58ffe7ead0e881fb"}
 )
 _HISTORICAL_IMAGE_FIELDS = {
     1: frozenset(
@@ -576,20 +547,14 @@ def _historical_candidate_nested_valid(
     identity = value.get("artifact_identity")
     runtime_contract = value.get("runtime_contract")
     expected_input_fields = _HISTORICAL_INPUT_FIELDS[version]
-    if (
-        version == 1
-        and candidate_sha256 in _PINNED_OBSERVABILITY_V1_CANDIDATES
-    ):
-        expected_input_fields = expected_input_fields | {
-            "observability_source_sha256"
-        }
+    if version == 1 and candidate_sha256 in _PINNED_OBSERVABILITY_V1_CANDIDATES:
+        expected_input_fields = expected_input_fields | {"observability_source_sha256"}
     if (
         not isinstance(inputs, dict)
         or frozenset(inputs) != expected_input_fields
         or any(not _is_sha256(item) for item in inputs.values())
         or not isinstance(identity, dict)
-        or frozenset(identity)
-        != _HISTORICAL_ARTIFACT_IDENTITY_FIELDS[version]
+        or frozenset(identity) != _HISTORICAL_ARTIFACT_IDENTITY_FIELDS[version]
         or any(
             not _is_sha256(identity.get(field))
             for field in identity
@@ -651,36 +616,23 @@ def _historical_candidate_nested_valid(
     return not (
         identity.get("proxy_image_id") != images["proxy"].get("image_id")
         or identity.get("relay_image_id") != images["relay"].get("image_id")
-        or identity.get("timeout_contract_sha256")
-        != inputs.get("runtime_contract_sha256")
-        or identity.get("orchestrator_source_sha256")
-        != inputs.get("orchestrator_source_sha256")
-        or images["proxy"].get("source_sha256")
-        != inputs.get("proxy_source_sha256")
-        or images["relay"].get("source_sha256")
-        != inputs.get("relay_source_sha256")
-        or images["proxy"].get("dockerfile_sha256")
-        != inputs.get("proxy_dockerfile_sha256")
-        or images["relay"].get("dockerfile_sha256")
-        != inputs.get("relay_dockerfile_sha256")
-        or images["proxy"].get("runtime_contract_sha256")
-        != inputs.get("runtime_contract_sha256")
-        or images["relay"].get("runtime_contract_sha256")
-        != inputs.get("runtime_contract_sha256")
+        or identity.get("timeout_contract_sha256") != inputs.get("runtime_contract_sha256")
+        or identity.get("orchestrator_source_sha256") != inputs.get("orchestrator_source_sha256")
+        or images["proxy"].get("source_sha256") != inputs.get("proxy_source_sha256")
+        or images["relay"].get("source_sha256") != inputs.get("relay_source_sha256")
+        or images["proxy"].get("dockerfile_sha256") != inputs.get("proxy_dockerfile_sha256")
+        or images["relay"].get("dockerfile_sha256") != inputs.get("relay_dockerfile_sha256")
+        or images["proxy"].get("runtime_contract_sha256") != inputs.get("runtime_contract_sha256")
+        or images["relay"].get("runtime_contract_sha256") != inputs.get("runtime_contract_sha256")
         or images["proxy"].get("responses_contract_sha256")
         != inputs.get("responses_contract_sha256")
         or images["relay"].get("responses_contract_sha256") is not None
-        or images["proxy"].get("proxy_policy_sha256")
-        != inputs.get("proxy_policy_sha256")
+        or images["proxy"].get("proxy_policy_sha256") != inputs.get("proxy_policy_sha256")
         or images["relay"].get("proxy_policy_sha256") is not None
-        or contents["proxy"].get("source_sha256")
-        != inputs.get("proxy_source_sha256")
-        or contents["relay"].get("source_sha256")
-        != inputs.get("relay_source_sha256")
-        or contents["proxy"].get("runtime_contract_sha256")
-        != inputs.get("runtime_contract_sha256")
-        or contents["relay"].get("runtime_contract_sha256")
-        != inputs.get("runtime_contract_sha256")
+        or contents["proxy"].get("source_sha256") != inputs.get("proxy_source_sha256")
+        or contents["relay"].get("source_sha256") != inputs.get("relay_source_sha256")
+        or contents["proxy"].get("runtime_contract_sha256") != inputs.get("runtime_contract_sha256")
+        or contents["relay"].get("runtime_contract_sha256") != inputs.get("runtime_contract_sha256")
         or contents["proxy"].get("responses_contract_sha256")
         != inputs.get("responses_contract_sha256")
         or contents["relay"].get("responses_contract_sha256") is not None
@@ -688,11 +640,9 @@ def _historical_candidate_nested_valid(
             version == 2
             and (
                 identity.get("readiness_contract_sha256") != readiness_hash
-                or images["proxy"].get("readiness_contract_sha256")
-                != readiness_hash
+                or images["proxy"].get("readiness_contract_sha256") != readiness_hash
                 or images["relay"].get("readiness_contract_sha256") is not None
-                or contents["proxy"].get("readiness_contract_sha256")
-                != readiness_hash
+                or contents["proxy"].get("readiness_contract_sha256") != readiness_hash
                 or contents["relay"].get("readiness_contract_sha256") is not None
             )
         )
@@ -897,20 +847,13 @@ class AttemptLedger(_StrictFrozenModel):
             LedgerState.CLEANUP_COMPLETED,
             LedgerState.FAILED_BEFORE_DISPATCH,
         } and any(
-            value is not None
-            for field, value in timestamps.items()
-            if field not in required_set
+            value is not None for field, value in timestamps.items() if field not in required_set
         ):
             raise ValueError("ledger_timeline_contradictory")
         if (
-            self.candidate_ready_at is not None
-            and self.response_received_at is None
-        ) or (
-            self.host_validation_completed_at is not None
-            and self.candidate_ready_at is None
-        ) or (
-            self.cleanup_completed_at is not None
-            and self.host_validation_completed_at is None
+            (self.candidate_ready_at is not None and self.response_received_at is None)
+            or (self.host_validation_completed_at is not None and self.candidate_ready_at is None)
+            or (self.cleanup_completed_at is not None and self.host_validation_completed_at is None)
         ):
             raise ValueError("ledger_timeline_contradictory")
         return self
@@ -1096,9 +1039,9 @@ def _read_regular(path: Path, category: str) -> bytes:
         raise OrchestratorError(category) from exc
     try:
         opened = os.fstat(descriptor)
-        if (
-            not stat.S_ISREG(opened.st_mode)
-            or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)
+        if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (
+            before.st_dev,
+            before.st_ino,
         ):
             raise OrchestratorError(category)
         raw = os.read(descriptor, _MAXIMUM_LEDGER_BYTES + 1)
@@ -1173,10 +1116,7 @@ def _atomic_write(path: Path, raw: bytes) -> None:
 
 
 def _frozen_legacy_state_roots() -> tuple[Path, ...]:
-    return (
-        Path.home()
-        / "Library/Application Support/TickFlowPhase2Canary/runtime-v1",
-    )
+    return (Path.home() / "Library/Application Support/TickFlowPhase2Canary/runtime-v1",)
 
 
 class AttemptLedgerStore:
@@ -1252,9 +1192,7 @@ class AttemptLedgerStore:
         }[state]
         updates[timestamp_field] = timestamp
         ledger = current.model_copy(update=updates)
-        ledger = AttemptLedger.model_validate_json(
-            _canonical_bytes(ledger.model_dump(mode="json"))
-        )
+        ledger = AttemptLedger.model_validate_json(_canonical_bytes(ledger.model_dump(mode="json")))
         _atomic_write(self.path, _canonical_bytes(ledger.model_dump(mode="json")))
         return ledger
 
@@ -1358,10 +1296,7 @@ def _open_private_directory(
     if (
         stat.S_ISLNK(before.st_mode)
         or not stat.S_ISDIR(before.st_mode)
-        or (
-            mode != 0o700
-            and not (allow_read_only_public and mode & 0o022 == 0)
-        )
+        or (mode != 0o700 and not (allow_read_only_public and mode & 0o022 == 0))
         or not stat.S_ISDIR(opened.st_mode)
         or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)
     ):
@@ -1507,8 +1442,7 @@ def _atomic_replace_expected(
         os.lseek(target_descriptor, 0, os.SEEK_SET)
         moved_raw = os.read(target_descriptor, _MAXIMUM_LEDGER_BYTES + 1)
         if (
-            (moved.st_dev, moved.st_ino)
-            != (target_metadata.st_dev, target_metadata.st_ino)
+            (moved.st_dev, moved.st_ino) != (target_metadata.st_dev, target_metadata.st_ino)
             or moved_raw != expected_raw
             or len(moved_raw) != moved.st_size
         ):
@@ -1582,10 +1516,7 @@ def _private_namespace_child(parent: Path, name: str) -> Path:
     try:
         if stat.S_ISLNK(metadata.st_mode):
             raise OrchestratorError("ledger_namespace_symlink_forbidden")
-        if (
-            not stat.S_ISDIR(metadata.st_mode)
-            or stat.S_IMODE(metadata.st_mode) != 0o700
-        ):
+        if not stat.S_ISDIR(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) != 0o700:
             raise OrchestratorError("ledger_namespace_mode_invalid")
         child_descriptor = os.open(
             name,
@@ -1655,10 +1586,7 @@ class ApprovalScopedAttemptLedgerStore:
                 raise OrchestratorError("scoped_ledger_missing") from exc
             if stat.S_ISLNK(metadata.st_mode):
                 raise OrchestratorError("ledger_namespace_symlink_forbidden")
-            if (
-                not stat.S_ISDIR(metadata.st_mode)
-                or stat.S_IMODE(metadata.st_mode) != 0o700
-            ):
+            if not stat.S_ISDIR(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) != 0o700:
                 raise OrchestratorError("ledger_namespace_mode_invalid")
 
     def prepare(
@@ -1670,8 +1598,7 @@ class ApprovalScopedAttemptLedgerStore:
         if (
             not isinstance(identity, CanaryRunIdentity)
             or identity.request_id != self.request_id
-            or identity.approval_candidate_sha256
-            != self.scope.approval_candidate_sha256
+            or identity.approval_candidate_sha256 != self.scope.approval_candidate_sha256
             or identity.symbol != self.scope.symbol
             or identity.provider != self.scope.provider_id
             or identity.endpoint_alias != self.scope.endpoint_alias
@@ -1697,9 +1624,7 @@ class ApprovalScopedAttemptLedgerStore:
 
     def load(self) -> ApprovalScopedAttemptLedger:
         self._validate_existing_root()
-        ledger = _decode_scoped_ledger(
-            _read_regular(self.path, "scoped_ledger_target_invalid")
-        )
+        ledger = _decode_scoped_ledger(_read_regular(self.path, "scoped_ledger_target_invalid"))
         if (
             ledger.approval_scope_id != self.scope_id
             or ledger.identity.request_id != self.request_id
@@ -1795,23 +1720,17 @@ class ApprovalScopedLedgerNamespace:
             self.historical_evidence_root,
             *additional_roots,
         )
-        if len(set(self.historical_evidence_roots)) != len(
-            self.historical_evidence_roots
-        ):
+        if len(set(self.historical_evidence_roots)) != len(self.historical_evidence_roots):
             raise OrchestratorError("historical_evidence_root_duplicate")
         if not candidate_roots:
             raise OrchestratorError("candidate_roots_missing")
         self.candidate_roots = tuple(
-            _validate_report_directory(path, "candidate_root_invalid")
-            for path in candidate_roots
+            _validate_report_directory(path, "candidate_root_invalid") for path in candidate_roots
         )
 
     def _legacy_ledgers(self) -> list[_DiscoveredLedger]:
         allowed_entries = {_LEDGER_NAME, "history", ".runtime.lock"}
-        if any(
-            entry.name not in allowed_entries
-            for entry in self.legacy_state_root.iterdir()
-        ):
+        if any(entry.name not in allowed_entries for entry in self.legacy_state_root.iterdir()):
             raise OrchestratorError("historical_state_entries_invalid")
         paths: list[Path] = []
         current = self.legacy_state_root / _LEDGER_NAME
@@ -1824,12 +1743,8 @@ class ApprovalScopedLedgerNamespace:
                 if _HEX_32.fullmatch(request_root.name) is None:
                     raise OrchestratorError("historical_request_path_invalid")
                 request_root = _validate_state_root(request_root)
-                if {item.name for item in request_root.iterdir()} != {
-                    _LEDGER_NAME
-                }:
-                    raise OrchestratorError(
-                        "historical_request_entries_invalid"
-                    )
+                if {item.name for item in request_root.iterdir()} != {_LEDGER_NAME}:
+                    raise OrchestratorError("historical_request_entries_invalid")
                 ledger_path = request_root / _LEDGER_NAME
                 if not ledger_path.exists() and not ledger_path.is_symlink():
                     raise OrchestratorError("historical_ledger_missing")
@@ -1856,9 +1771,7 @@ class ApprovalScopedLedgerNamespace:
                 if _HEX_32.fullmatch(request_root.name) is None:
                     raise OrchestratorError("scoped_request_path_invalid")
                 request_root = _validate_state_root(request_root)
-                if {item.name for item in request_root.iterdir()} != {
-                    _SCOPED_LEDGER_NAME
-                }:
+                if {item.name for item in request_root.iterdir()} != {_SCOPED_LEDGER_NAME}:
                     raise OrchestratorError("scoped_request_entries_invalid")
                 ledger_path = request_root / _SCOPED_LEDGER_NAME
                 if not ledger_path.exists() and not ledger_path.is_symlink():
@@ -1871,9 +1784,7 @@ class ApprovalScopedLedgerNamespace:
                     or ledger.identity.request_id != request_root.name
                 ):
                     raise OrchestratorError("scoped_ledger_path_binding_invalid")
-                discovered.append(
-                    _DiscoveredLedger(ledger=ledger, path=ledger_path, scoped=True)
-                )
+                discovered.append(_DiscoveredLedger(ledger=ledger, path=ledger_path, scoped=True))
         return discovered
 
     def _candidate_identity(self, candidate_sha256: str) -> ApprovalScopeIdentity:
@@ -1957,18 +1868,26 @@ class ApprovalScopedLedgerNamespace:
                     and isinstance(artifact_hashes, dict)
                     and set(artifact_hashes) == provenance_hashes
                 )
+                generation_candidate = (
+                    current_provenance_candidate and "artifact_generation_required" in value
+                )
                 if current_provenance_candidate:
                     expected_fields = expected_fields | {"source_bindings"}
+                if generation_candidate:
+                    expected_fields = expected_fields | {"artifact_generation_required"}
                 if (
                     raw != canonical_json_bytes(value)
                     or set(value) != expected_fields
                     or not isinstance(artifact_hashes, dict)
                     or not (
-                        (status == "PHASE2B_ARK_PROVIDER_READY_FOR_REAPPROVAL"
-                        and set(artifact_hashes) == historical_hashes)
-                        or (status
-                        == "PHASE2B_ARK_TIMEOUT_CONTRACT_READY_FOR_REAPPROVAL"
-                        and set(artifact_hashes) == timeout_contract_hashes)
+                        (
+                            status == "PHASE2B_ARK_PROVIDER_READY_FOR_REAPPROVAL"
+                            and set(artifact_hashes) == historical_hashes
+                        )
+                        or (
+                            status == "PHASE2B_ARK_TIMEOUT_CONTRACT_READY_FOR_REAPPROVAL"
+                            and set(artifact_hashes) == timeout_contract_hashes
+                        )
                         or current_provenance_candidate
                     )
                     or any(
@@ -1978,10 +1897,8 @@ class ApprovalScopedLedgerNamespace:
                     or value.get("provider_id") != "volcengine_ark"
                     or value.get("exact_model_id") != "doubao-seed-2-1-turbo-260628"
                     or value.get("endpoint_alias") != "ark_responses_cn_beijing_v1"
-                    or value.get("endpoint")
-                    != "https://ark.cn-beijing.volces.com/api/v3/responses"
-                    or value.get("keychain_service")
-                    != "tickflow-phase2-canary-volcengine-ark"
+                    or value.get("endpoint") != "https://ark.cn-beijing.volces.com/api/v3/responses"
+                    or value.get("keychain_service") != "tickflow-phase2-canary-volcengine-ark"
                     or value.get("symbol") != "000403.SZ"
                     or value.get("trade_date") != "2026-07-31"
                     or value.get("approval_installed") is not False
@@ -1994,6 +1911,10 @@ class ApprovalScopedLedgerNamespace:
                     or value.get("openai_provider") != "FROZEN"
                     or value.get("old_deepseek_model")
                     != "PHASE2B_ARK_STRUCTURED_OUTPUT_BLOCKED_PRESERVED"
+                    or (
+                        generation_candidate
+                        and value.get("artifact_generation_required") is not True
+                    )
                     or not isinstance(value.get("proxy_image_id"), str)
                     or _IMAGE_ID.fullmatch(value["proxy_image_id"]) is None
                     or not isinstance(value.get("relay_image_id"), str)
@@ -2013,8 +1934,7 @@ class ApprovalScopedLedgerNamespace:
                             or source_bindings.get("base_image_digest")
                             != "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5"
                             or any(
-                                not isinstance(digest, str)
-                                or _HEX_64.fullmatch(digest) is None
+                                not isinstance(digest, str) or _HEX_64.fullmatch(digest) is None
                                 for key, digest in source_bindings.items()
                                 if key != "base_image_digest"
                             )
@@ -2046,26 +1966,21 @@ class ApprovalScopedLedgerNamespace:
                 or type(version) is not int
                 or version not in _HISTORICAL_ARTIFACT_IDENTITY_FIELDS
                 or not isinstance(artifact_identity, dict)
-                or frozenset(artifact_identity)
-                != _HISTORICAL_ARTIFACT_IDENTITY_FIELDS[version]
+                or frozenset(artifact_identity) != _HISTORICAL_ARTIFACT_IDENTITY_FIELDS[version]
                 or any(not isinstance(value.get(field), dict) for field in nested_objects)
                 or not _historical_candidate_nested_valid(
                     value,
                     version,
                     candidate_sha256,
                 )
-                or value.get("status")
-                != "PHASE2B_CANARY_RUNTIME_CONTRACT_READY_FOR_REAPPROVAL"
+                or value.get("status") != "PHASE2B_CANARY_RUNTIME_CONTRACT_READY_FOR_REAPPROVAL"
                 or value.get("symbol") != "000403.SZ"
                 or value.get("trade_date") != "2026-07-31"
                 or value.get("provider") != "openai"
                 or value.get("exact_model") != _EXACT_MODEL_ID
                 or value.get("endpoint_alias") != "openai_responses_v1"
-                or not isinstance(
-                    value.get("old_approval_candidate_sha256"), str
-                )
-                or _HEX_64.fullmatch(value["old_approval_candidate_sha256"])
-                is None
+                or not isinstance(value.get("old_approval_candidate_sha256"), str)
+                or _HEX_64.fullmatch(value["old_approval_candidate_sha256"]) is None
                 or value.get("new_approval_installed") is not False
                 or value.get("pull_allowed") is not False
                 or value.get("no_cache") is not True
@@ -2098,11 +2013,9 @@ class ApprovalScopedLedgerNamespace:
                     )
                 )
                 or not isinstance(artifact_identity.get("proxy_image_id"), str)
-                or _IMAGE_ID.fullmatch(artifact_identity["proxy_image_id"])
-                is None
+                or _IMAGE_ID.fullmatch(artifact_identity["proxy_image_id"]) is None
                 or not isinstance(artifact_identity.get("relay_image_id"), str)
-                or _IMAGE_ID.fullmatch(artifact_identity["relay_image_id"])
-                is None
+                or _IMAGE_ID.fullmatch(artifact_identity["relay_image_id"]) is None
                 or (
                     version == 2
                     and (
@@ -2110,10 +2023,7 @@ class ApprovalScopedLedgerNamespace:
                             artifact_identity.get("readiness_contract_sha256"),
                             str,
                         )
-                        or _HEX_64.fullmatch(
-                            artifact_identity["readiness_contract_sha256"]
-                        )
-                        is None
+                        or _HEX_64.fullmatch(artifact_identity["readiness_contract_sha256"]) is None
                     )
                 )
             ):
@@ -2127,9 +2037,7 @@ class ApprovalScopedLedgerNamespace:
                     endpoint_alias=value["endpoint_alias"],
                 )
             except (KeyError, ValidationError) as exc:
-                raise OrchestratorError(
-                    "historical_approval_identity_unresolved"
-                ) from exc
+                raise OrchestratorError("historical_approval_identity_unresolved") from exc
         raise OrchestratorError("historical_approval_identity_unresolved")
 
     def _validate_historical_evidence(
@@ -2139,23 +2047,15 @@ class ApprovalScopedLedgerNamespace:
         matching_roots = tuple(
             root
             for root in self.historical_evidence_roots
-            if (
-                root / "evidence" / f"{ledger.identity.request_id}.json"
-            ).exists()
-            or (
-                root / "evidence" / f"{ledger.identity.request_id}.json"
-            ).is_symlink()
+            if (root / "evidence" / f"{ledger.identity.request_id}.json").exists()
+            or (root / "evidence" / f"{ledger.identity.request_id}.json").is_symlink()
         )
         if not matching_roots:
             raise OrchestratorError("historical_runtime_evidence_missing")
         if len(matching_roots) != 1:
             raise OrchestratorError("historical_runtime_evidence_duplicate")
         historical_root = matching_roots[0]
-        path = (
-            historical_root
-            / "evidence"
-            / f"{ledger.identity.request_id}.json"
-        )
+        path = historical_root / "evidence" / f"{ledger.identity.request_id}.json"
         raw = _read_report_regular(path, "historical_runtime_evidence_missing")
         try:
             value = _strict_json_bytes(raw, "historical_runtime_evidence_invalid")
@@ -2176,12 +2076,10 @@ class ApprovalScopedLedgerNamespace:
             allowed_fields = {expected_fields}
         attempt = ledger.attempt if scoped else ledger
         route_valid = (
-            value.get("route") == "inbox"
-            and value.get("terminal_state") == "SUCCEEDED"
+            value.get("route") == "inbox" and value.get("terminal_state") == "SUCCEEDED"
             if ledger.state is LedgerState.CLEANUP_COMPLETED
             else value.get("route") == "rejected"
-            and value.get("terminal_state")
-            not in {"SUCCEEDED", "CLEANUP_COMPLETED"}
+            and value.get("terminal_state") not in {"SUCCEEDED", "CLEANUP_COMPLETED"}
         )
         observability_valid = True
         if _RUNTIME_EVIDENCE_OBSERVABILITY_FIELDS.issubset(value):
@@ -2209,31 +2107,15 @@ class ApprovalScopedLedgerNamespace:
                 "secret_file_residue_count",
                 "temporary_file_residue_count",
             )
-        ) and (
-            not scoped
-            or type(value.get("ledger_namespace_version")) is int
-        )
-        receipt_root = (
-            historical_root
-            / "receipts"
-            / ledger.identity.request_id
-        )
+        ) and (not scoped or type(value.get("ledger_namespace_version")) is int)
+        receipt_root = historical_root / "receipts" / ledger.identity.request_id
         receipt_root_present = receipt_root.exists() or receipt_root.is_symlink()
         declared_archive_status = value.get("receipt_archive_status")
-        if (
-            not receipt_root_present
-            and declared_archive_status not in {None, "NOT_RUN"}
-        ):
+        if not receipt_root_present and declared_archive_status not in {None, "NOT_RUN"}:
             raise OrchestratorError("historical_receipt_missing")
-        if (
-            not receipt_root_present
-            and ledger.state is LedgerState.CLEANUP_COMPLETED
-        ):
+        if not receipt_root_present and ledger.state is LedgerState.CLEANUP_COMPLETED:
             raise OrchestratorError("historical_receipt_missing")
-        archive_valid = (
-            not receipt_root_present
-            and declared_archive_status in {None, "NOT_RUN"}
-        )
+        archive_valid = not receipt_root_present and declared_archive_status in {None, "NOT_RUN"}
         if receipt_root_present:
             pinned_result: list[bool] = []
             receipts = self._validate_historical_receipt_directory(
@@ -2250,53 +2132,50 @@ class ApprovalScopedLedgerNamespace:
             archive = receipts.get("archive-status.json")
             child_metadata = receipts.get("child-metadata.json")
             child_metadata_status = (
-                archive.get("child_metadata_status")
-                if archive is not None
-                else None
+                archive.get("child_metadata_status") if archive is not None else None
             )
             child_metadata_valid = (
-                child_metadata_status == "VALID"
-                and child_metadata is not None
-                and isinstance(child_metadata.get("relay"), dict)
-                and isinstance(child_metadata.get("proxy"), dict)
-            ) or (
-                child_metadata_status == "PARTIAL_PRE_DISPATCH"
-                and child_metadata is not None
-                and child_metadata.get("relay") is None
-                and isinstance(child_metadata.get("proxy"), dict)
-            ) or (
-                child_metadata_status == "MISSING"
-                and child_metadata is None
+                (
+                    child_metadata_status == "VALID"
+                    and child_metadata is not None
+                    and isinstance(child_metadata.get("relay"), dict)
+                    and isinstance(child_metadata.get("proxy"), dict)
+                )
+                or (
+                    child_metadata_status == "PARTIAL_PRE_DISPATCH"
+                    and child_metadata is not None
+                    and child_metadata.get("relay") is None
+                    and isinstance(child_metadata.get("proxy"), dict)
+                )
+                or (child_metadata_status == "MISSING" and child_metadata is None)
             )
             child_terminal_reason = (
-                archive.get("child_terminal_reason")
-                if archive is not None
-                else None
+                archive.get("child_terminal_reason") if archive is not None else None
             )
             host_child_terminal_reason = (
-                archive.get("host_child_terminal_reason")
-                if archive is not None
-                else None
+                archive.get("host_child_terminal_reason") if archive is not None else None
             )
             terminal_reason_source = (
-                archive.get("terminal_reason_source")
-                if archive is not None
-                else None
+                archive.get("terminal_reason_source") if archive is not None else None
             )
             terminal_reason_valid = (
-                terminal_reason_source is None
-                and child_terminal_reason is None
-                and host_child_terminal_reason is None
-            ) or (
-                terminal_reason_source == "relay_self"
-                and host_child_terminal_reason == "RELAY_NONZERO_EXIT"
-                and child_terminal_reason in _RELAY_TERMINAL_STATUSES
-                and child_terminal_reason != "RELAY_COMPLETED"
-            ) or (
-                terminal_reason_source in {"host_child_process", "host_timeout"}
-                and isinstance(host_child_terminal_reason, str)
-                and bool(host_child_terminal_reason)
-                and child_terminal_reason == host_child_terminal_reason
+                (
+                    terminal_reason_source is None
+                    and child_terminal_reason is None
+                    and host_child_terminal_reason is None
+                )
+                or (
+                    terminal_reason_source == "relay_self"
+                    and host_child_terminal_reason == "RELAY_NONZERO_EXIT"
+                    and child_terminal_reason in _RELAY_TERMINAL_STATUSES
+                    and child_terminal_reason != "RELAY_COMPLETED"
+                )
+                or (
+                    terminal_reason_source in {"host_child_process", "host_timeout"}
+                    and isinstance(host_child_terminal_reason, str)
+                    and bool(host_child_terminal_reason)
+                    and child_terminal_reason == host_child_terminal_reason
+                )
             )
             proxy_receipt = receipts.get("proxy-receipt.json")
             relay_receipt = receipts.get("relay-receipt.json")
@@ -2308,15 +2187,9 @@ class ApprovalScopedLedgerNamespace:
                 )
                 if receipt is not None
             }
-            relay_child = (
-                child_metadata.get("relay")
-                if child_metadata is not None
-                else None
-            )
+            relay_child = child_metadata.get("relay") if child_metadata is not None else None
             proxy_http_status = (
-                proxy_receipt.get("provider_http_status")
-                if proxy_receipt is not None
-                else None
+                proxy_receipt.get("provider_http_status") if proxy_receipt is not None else None
             )
             proxy_headers = (
                 proxy_receipt.get("response_headers_received")
@@ -2324,18 +2197,14 @@ class ApprovalScopedLedgerNamespace:
                 else None
             )
             relay_response = (
-                relay_receipt.get("response_received")
-                if relay_receipt is not None
-                else None
+                relay_receipt.get("response_received") if relay_receipt is not None else None
             )
-            response_headers_not_received_bridge = (
-                _is_pinned_ark_response_header_bridge(
-                    request_id=ledger.identity.request_id,
-                    provider_id=ledger.identity.provider,
-                    pinned_receipt_bundle=pinned_legacy_bundle,
-                    proxy_receipt=proxy_receipt,
-                    relay_receipt=relay_receipt,
-                )
+            response_headers_not_received_bridge = _is_pinned_ark_response_header_bridge(
+                request_id=ledger.identity.request_id,
+                provider_id=ledger.identity.provider,
+                pinned_receipt_bundle=pinned_legacy_bundle,
+                proxy_receipt=proxy_receipt,
+                relay_receipt=relay_receipt,
             )
             http_semantics_valid = (
                 (
@@ -2343,8 +2212,7 @@ class ApprovalScopedLedgerNamespace:
                     or value.get("provider_http_status") == proxy_http_status
                     or (
                         pinned_legacy_bundle
-                        and ledger.identity.request_id
-                        == "9728fc1f156c4568a98cea9c05ec9fa7"
+                        and ledger.identity.request_id == "9728fc1f156c4568a98cea9c05ec9fa7"
                         and value.get("provider_http_status") is None
                         and proxy_http_status == 401
                     )
@@ -2352,10 +2220,7 @@ class ApprovalScopedLedgerNamespace:
                 and (
                     proxy_receipt is None
                     or not isinstance(proxy_headers, dict)
-                    or (
-                        proxy_headers.get("http_status")
-                        == proxy_http_status
-                    )
+                    or (proxy_headers.get("http_status") == proxy_http_status)
                 )
                 and (
                     relay_receipt is None
@@ -2364,10 +2229,8 @@ class ApprovalScopedLedgerNamespace:
                     or response_headers_not_received_bridge
                     or (
                         pinned_legacy_bundle
-                        and ledger.identity.request_id
-                        == "9728fc1f156c4568a98cea9c05ec9fa7"
-                        and proxy_receipt.get("response_category")
-                        == "UPSTREAM_REJECTED"
+                        and ledger.identity.request_id == "9728fc1f156c4568a98cea9c05ec9fa7"
+                        and proxy_receipt.get("response_category") == "UPSTREAM_REJECTED"
                         and proxy_http_status == 401
                         and relay_receipt.get("proxy_http_status") == 502
                     )
@@ -2375,13 +2238,11 @@ class ApprovalScopedLedgerNamespace:
                 and (
                     relay_receipt is None
                     or not isinstance(relay_response, dict)
-                    or relay_response.get("http_status")
-                    == relay_receipt.get("proxy_http_status")
+                    or relay_response.get("http_status") == relay_receipt.get("proxy_http_status")
                     or response_headers_not_received_bridge
                     or (
                         pinned_legacy_bundle
-                        and ledger.identity.request_id
-                        == "9728fc1f156c4568a98cea9c05ec9fa7"
+                        and ledger.identity.request_id == "9728fc1f156c4568a98cea9c05ec9fa7"
                         and relay_response.get("occurred") is False
                         and relay_response.get("http_status") is None
                         and relay_receipt.get("proxy_http_status") == 502
@@ -2408,13 +2269,11 @@ class ApprovalScopedLedgerNamespace:
             receipt_semantics_valid = (
                 (
                     proxy_receipt is None
-                    or proxy_receipt.get("provider_attempt_count")
-                    == ledger.provider_attempt_count
+                    or proxy_receipt.get("provider_attempt_count") == ledger.provider_attempt_count
                 )
                 and (
                     relay_receipt is None
-                    or relay_receipt.get("proxy_request_count")
-                    == ledger.provider_attempt_count
+                    or relay_receipt.get("proxy_request_count") == ledger.provider_attempt_count
                 )
                 and (
                     relay_receipt is None
@@ -2423,23 +2282,19 @@ class ApprovalScopedLedgerNamespace:
                         and (
                             (
                                 relay_receipt.get("status") == "SUCCEEDED"
-                                and relay_child.get("child_state")
-                                == ChildState.EXITED_ZERO.value
+                                and relay_child.get("child_state") == ChildState.EXITED_ZERO.value
                             )
                             or (
                                 relay_receipt.get("status") == "REJECTED"
-                                and relay_child.get("child_state")
-                                != ChildState.EXITED_ZERO.value
+                                and relay_child.get("child_state") != ChildState.EXITED_ZERO.value
                             )
                         )
                     )
                 )
                 and http_semantics_valid
                 and archive is not None
-                and archive.get("host_child_terminal_reason")
-                == expected_host_child_reason
-                and archive.get("last_proven_stage")
-                == _select_last_proven_stage(receipt_values)
+                and archive.get("host_child_terminal_reason") == expected_host_child_reason
+                and archive.get("last_proven_stage") == _select_last_proven_stage(receipt_values)
             )
             if not receipt_semantics_valid:
                 raise OrchestratorError("historical_receipt_conflict")
@@ -2475,8 +2330,7 @@ class ApprovalScopedLedgerNamespace:
                     "RECEIPT_MISSING",
                 }
                 and all(
-                    isinstance(archive.get(field), str)
-                    and bool(archive[field])
+                    isinstance(archive.get(field), str) and bool(archive[field])
                     for field in (
                         "archive_status",
                         "child_metadata_status",
@@ -2486,10 +2340,7 @@ class ApprovalScopedLedgerNamespace:
                 )
                 and all(
                     archive.get(field) is None
-                    or (
-                        isinstance(archive.get(field), str)
-                        and bool(archive[field])
-                    )
+                    or (isinstance(archive.get(field), str) and bool(archive[field]))
                     for field in (
                         "child_terminal_reason",
                         "host_child_terminal_reason",
@@ -2498,16 +2349,12 @@ class ApprovalScopedLedgerNamespace:
                 )
                 and (
                     archive.get("terminal_reason_source") is None
-                    or archive.get("terminal_reason_source")
-                    in _TERMINAL_REASON_SOURCES
+                    or archive.get("terminal_reason_source") in _TERMINAL_REASON_SOURCES
                 )
                 and terminal_reason_valid
-                and archive.get("archive_status")
-                == value.get("receipt_archive_status")
-                and archive.get("child_terminal_reason")
-                == value.get("child_terminal_reason")
-                and archive.get("last_proven_stage")
-                == value.get("last_proven_stage")
+                and archive.get("archive_status") == value.get("receipt_archive_status")
+                and archive.get("child_terminal_reason") == value.get("child_terminal_reason")
+                and archive.get("last_proven_stage") == value.get("last_proven_stage")
                 and child_metadata_valid
                 and (
                     (archive.get("proxy_receipt_status") == "VALID")
@@ -2517,10 +2364,7 @@ class ApprovalScopedLedgerNamespace:
                     (archive.get("relay_receipt_status") == "VALID")
                     == ("relay-receipt.json" in receipts)
                 )
-                and (
-                    archive.get("archive_status") != "PRE_DISPATCH_ARCHIVED"
-                    or pre_dispatch_valid
-                )
+                and (archive.get("archive_status") != "PRE_DISPATCH_ARCHIVED" or pre_dispatch_valid)
             )
         if (
             raw != canonical_json_bytes(value)
@@ -2529,20 +2373,16 @@ class ApprovalScopedLedgerNamespace:
             or value.get("runtime_contract_version") != 1
             or value.get("request_id") != ledger.identity.request_id
             or value.get("symbol") != ledger.identity.symbol
-            or value.get("approval_candidate_sha256")
-            != ledger.identity.approval_candidate_sha256
+            or value.get("approval_candidate_sha256") != ledger.identity.approval_candidate_sha256
             or value.get("proxy_image_id") != ledger.identity.proxy_image_id
             or value.get("relay_image_id") != ledger.identity.relay_image_id
-            or value.get("orchestrator_source_sha256")
-            != ledger.identity.orchestrator_source_sha256
-            or value.get("timeout_contract_sha256")
-            != ledger.identity.timeout_contract_sha256
+            or value.get("orchestrator_source_sha256") != ledger.identity.orchestrator_source_sha256
+            or value.get("timeout_contract_sha256") != ledger.identity.timeout_contract_sha256
             or value.get("attempt_ledger_state") != ledger.state.value
             or value.get("dispatch_started_at") != attempt.dispatch_started_at
             or value.get("response_received_at") != attempt.response_received_at
             or value.get("candidate_ready_at") != attempt.candidate_ready_at
-            or value.get("host_validation_completed_at")
-            != attempt.host_validation_completed_at
+            or value.get("host_validation_completed_at") != attempt.host_validation_completed_at
             or value.get("cleanup_completed_at") != attempt.cleanup_completed_at
             or value.get("provider_attempt_count") != ledger.provider_attempt_count
             or value.get("retry_count") != 0
@@ -2624,10 +2464,7 @@ class ApprovalScopedLedgerNamespace:
         for path in entries:
             raw = raw_by_name[path.name]
             value = _strict_json_bytes(raw, "historical_receipt_invalid")
-            if (
-                raw != canonical_json_bytes(value)
-                or value.get("request_id") != request_id
-            ):
+            if raw != canonical_json_bytes(value) or value.get("request_id") != request_id:
                 raise OrchestratorError("historical_receipt_invalid")
             if path.name in {"relay-receipt.json", "proxy-receipt.json"}:
                 component: Literal["relay", "proxy"] = (
@@ -2650,15 +2487,11 @@ class ApprovalScopedLedgerNamespace:
                             component=component,
                             request_id=request_id,
                             expected_proxy_identity=(
-                                expected_proxy_identity
-                                if component == "proxy"
-                                else None
+                                expected_proxy_identity if component == "proxy" else None
                             ),
                         )
                 except OrchestratorError as exc:
-                    raise OrchestratorError(
-                        "historical_receipt_invalid"
-                    ) from exc
+                    raise OrchestratorError("historical_receipt_invalid") from exc
             elif path.name == "child-metadata.json" and not (
                 _valid_historical_child_metadata(value, request_id)
             ):
@@ -2666,9 +2499,7 @@ class ApprovalScopedLedgerNamespace:
             elif path.name == "archive-status.json" and legacy_adapter_bundle:
                 value = {
                     **value,
-                    "host_child_terminal_reason": value.get(
-                        "child_terminal_reason"
-                    ),
+                    "host_child_terminal_reason": value.get("child_terminal_reason"),
                     "terminal_reason_source": "host_child_process",
                 }
             receipts[path.name] = value
@@ -2682,9 +2513,7 @@ class ApprovalScopedLedgerNamespace:
             "receipts": set(),
         }
         for historical_root in self.historical_evidence_roots:
-            root_discovered = self._historical_artifact_request_ids_single_root(
-                historical_root
-            )
+            root_discovered = self._historical_artifact_request_ids_single_root(historical_root)
             for category, request_ids in root_discovered.items():
                 if discovered[category].intersection(request_ids):
                     raise OrchestratorError("historical_artifact_duplicate")
@@ -2751,8 +2580,7 @@ class ApprovalScopedLedgerNamespace:
                 suffixes_by_request.setdefault(path.stem, set()).add(path.suffix)
                 discovered[directory_name].add(path.stem)
             if directory_name == "inbox" and any(
-                suffixes != {".json", ".md"}
-                for suffixes in suffixes_by_request.values()
+                suffixes != {".json", ".md"} for suffixes in suffixes_by_request.values()
             ):
                 raise OrchestratorError("historical_artifact_invalid")
             if directory_name == "inbox":
@@ -2786,8 +2614,7 @@ class ApprovalScopedLedgerNamespace:
                     )
                     value = _strict_json_bytes(raw, "historical_receipt_invalid")
                     identity_fields = {
-                        field: value.get(field)
-                        for field in _ARK_PROXY_RECEIPT_IDENTITY
+                        field: value.get(field) for field in _ARK_PROXY_RECEIPT_IDENTITY
                     }
                     identity_presence = tuple(
                         field in value for field in _ARK_PROXY_RECEIPT_IDENTITY
@@ -2887,8 +2714,7 @@ class ApprovalScopedLedgerNamespace:
                         or resolved_scope.symbol != ledger.identity.symbol
                         or resolved_scope.provider_id != ledger.identity.provider
                         or resolved_scope.exact_model_id != ledger.exact_model_id
-                        or resolved_scope.endpoint_alias
-                        != ledger.identity.endpoint_alias
+                        or resolved_scope.endpoint_alias != ledger.identity.endpoint_alias
                     ):
                         return self._blocked(
                             current_scope_id,
@@ -2978,13 +2804,9 @@ class ApprovalScopedLedgerNamespace:
         ):
             return False
         try:
-            scope_root = _validate_state_root(
-                self.attempts_root / approval_scope_id
-            )
+            scope_root = _validate_state_root(self.attempts_root / approval_scope_id)
             request_root = _validate_state_root(scope_root / request_id)
-            if {item.name for item in request_root.iterdir()} != {
-                _SCOPED_LEDGER_NAME
-            }:
+            if {item.name for item in request_root.iterdir()} != {_SCOPED_LEDGER_NAME}:
                 return False
             ledger = _decode_scoped_ledger(
                 _read_regular(
@@ -2995,18 +2817,14 @@ class ApprovalScopedLedgerNamespace:
             if (
                 ledger.approval_scope_id != approval_scope_id
                 or ledger.identity.request_id != request_id
-                or ledger.identity.approval_candidate_sha256
-                != approval_candidate_sha256
+                or ledger.identity.approval_candidate_sha256 != approval_candidate_sha256
                 or ledger.state is not LedgerState.FAILED_BEFORE_DISPATCH
                 or ledger.provider_attempt_count != 0
             ):
                 return False
             self._validate_historical_evidence(ledger)
             artifacts = self._historical_artifact_request_ids()
-            return (
-                request_id not in artifacts["inbox"]
-                and request_id in artifacts["rejected"]
-            )
+            return request_id not in artifacts["inbox"] and request_id in artifacts["rejected"]
         except (OSError, OrchestratorError):
             return False
 
@@ -3048,9 +2866,7 @@ class ExclusiveCanaryLock:
         self.provider_id = provider_id
         self.endpoint_alias = endpoint_alias
         self.attempts_root = (
-            _validate_state_root(attempts_root)
-            if attempts_root is not None
-            else None
+            _validate_state_root(attempts_root) if attempts_root is not None else None
         )
         self.stale_lock_validator = stale_lock_validator
         self.pid = pid
@@ -3126,16 +2942,13 @@ class ExclusiveCanaryLock:
             return False
         return (
             ledger.state is LedgerState.FAILED_BEFORE_DISPATCH
-            and ledger.identity.approval_candidate_sha256
-            == self.approval_candidate_sha256
+            and ledger.identity.approval_candidate_sha256 == self.approval_candidate_sha256
         )
 
     def _payload(self, *, request_id: str | None = None) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "lock_schema_version": (
-                3 if request_id is not None else 2
-                if self.approval_scope_id is not None
-                else 1
+                3 if request_id is not None else 2 if self.approval_scope_id is not None else 1
             ),
             "pid": self.pid,
             "started_at": self.started_at,
@@ -3173,10 +2986,7 @@ class ExclusiveCanaryLock:
                 0o600,
             )
             metadata = os.fstat(descriptor)
-            if (
-                not stat.S_ISREG(metadata.st_mode)
-                or stat.S_IMODE(metadata.st_mode) != 0o600
-            ):
+            if not stat.S_ISREG(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) != 0o600:
                 raise OrchestratorError("canary_lock_target_invalid")
             try:
                 fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -3529,18 +3339,13 @@ def _publish_private_directory_no_clobber(
                 dir_fd=staging_descriptor,
                 follow_symlinks=False,
             )
-            if (
-                not stat.S_ISREG(metadata.st_mode)
-                or stat.S_IMODE(metadata.st_mode) != 0o600
-            ):
+            if not stat.S_ISREG(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) != 0o600:
                 raise OrchestratorError("artifact_directory_staging_invalid")
             source_metadata[name] = metadata
         try:
             os.mkdir(target.name, mode=0o700, dir_fd=parent_descriptor)
         except FileExistsError as exc:
-            raise OrchestratorError(
-                "artifact_directory_already_exists"
-            ) from exc
+            raise OrchestratorError("artifact_directory_already_exists") from exc
         created_metadata = os.stat(
             target.name,
             dir_fd=parent_descriptor,
@@ -3713,10 +3518,7 @@ def _valid_stage_event(value: object, expected_name: str) -> bool:
     if value.get("event") != expected_name or not isinstance(occurred, bool):
         return False
     if not occurred:
-        return all(
-            item is None
-            for item in (wall_time, monotonic_ns, http_status, byte_count)
-        )
+        return all(item is None for item in (wall_time, monotonic_ns, http_status, byte_count))
     if (
         not isinstance(wall_time, str)
         or not wall_time
@@ -3733,11 +3535,7 @@ def _valid_stage_event(value: object, expected_name: str) -> bool:
         return False
     return not (
         byte_count is not None
-        and (
-            isinstance(byte_count, bool)
-            or not isinstance(byte_count, int)
-            or byte_count < 0
-        )
+        and (isinstance(byte_count, bool) or not isinstance(byte_count, int) or byte_count < 0)
     )
 
 
@@ -3759,10 +3557,7 @@ def _valid_stage_event_chain(
             return False
         monotonic_ns = event["monotonic_ns"]
         assert isinstance(monotonic_ns, int)
-        if (
-            previous_monotonic_ns is not None
-            and monotonic_ns <= previous_monotonic_ns
-        ):
+        if previous_monotonic_ns is not None and monotonic_ns <= previous_monotonic_ns:
             return False
         previous_monotonic_ns = monotonic_ns
     return True
@@ -3781,8 +3576,7 @@ def _valid_historical_child_process(value: object, component: str) -> bool:
     if (
         value.get("component") != component
         or state not in {item.value for item in ChildState}
-        or value.get("terminal_reason")
-        != f"{component.upper()}_{state.removeprefix('CHILD_')}"
+        or value.get("terminal_reason") != f"{component.upper()}_{state.removeprefix('CHILD_')}"
         or not isinstance(value.get("started_at"), str)
         or not value["started_at"]
         or not isinstance(value.get("exited_at"), str)
@@ -3793,14 +3587,8 @@ def _valid_historical_child_process(value: object, component: str) -> bool:
         or started_ns < 0
         or exited_ns < started_ns
         or elapsed_ms != (exited_ns - started_ns) // 1_000_000
-        or (
-            exit_code is not None
-            and type(exit_code) is not int
-        )
-        or (
-            signal_value is not None
-            and type(signal_value) is not int
-        )
+        or (exit_code is not None and type(exit_code) is not int)
+        or (signal_value is not None and type(signal_value) is not int)
         or not isinstance(stderr, dict)
         or frozenset(stderr) != _CHILD_STDERR_FIELDS
         or stderr.get("stderr_excerpt") is not None
@@ -3811,22 +3599,13 @@ def _valid_historical_child_process(value: object, component: str) -> bool:
         or type(stderr.get("stderr_redacted")) is not bool
         or type(stderr.get("sensitive_hit_count")) is not int
         or stderr.get("sensitive_hit_count") < 0
-        or (
-            stderr.get("sensitive_hit_count") > 0
-            and stderr.get("stderr_redacted") is not True
-        )
+        or (stderr.get("sensitive_hit_count") > 0 and stderr.get("stderr_redacted") is not True)
     ):
         return False
     return not (
         (state == ChildState.EXITED_ZERO.value and exit_code != 0)
-        or (
-            state == ChildState.NONZERO_EXIT.value
-            and (exit_code is None or exit_code == 0)
-        )
-        or (
-            state == ChildState.SIGNALLED.value
-            and (signal_value is None or signal_value <= 0)
-        )
+        or (state == ChildState.NONZERO_EXIT.value and (exit_code is None or exit_code == 0))
+        or (state == ChildState.SIGNALLED.value and (signal_value is None or signal_value <= 0))
     )
 
 
@@ -3861,11 +3640,7 @@ def _validate_stage_receipt(
     expected_proxy_identity: Mapping[str, str] | None = None,
 ) -> tuple[str, ...]:
     events = _RELAY_EVENTS if component == "relay" else _PROXY_EVENTS
-    fields = (
-        _RELAY_RECEIPT_FIELDS
-        if component == "relay"
-        else _PROXY_RECEIPT_FIELDS
-    )
+    fields = _RELAY_RECEIPT_FIELDS if component == "relay" else _PROXY_RECEIPT_FIELDS
     proxy_contract_invalid = component == "proxy" and (
         any(
             type(value.get(field)) is not bool
@@ -3887,11 +3662,7 @@ def _validate_stage_receipt(
             )
         )
         or any(
-            value.get(field) is not None
-            and (
-                type(value.get(field)) is not int
-                or value[field] < 0
-            )
+            value.get(field) is not None and (type(value.get(field)) is not int or value[field] < 0)
             for field in ("response_bytes", "response_size")
         )
         or not isinstance(value.get("response_category"), str)
@@ -3907,10 +3678,7 @@ def _validate_stage_receipt(
         or value.get("proxy_request_count") < 0
         or (
             value.get("response_size") is not None
-            and (
-                type(value.get("response_size")) is not int
-                or value.get("response_size") < 0
-            )
+            and (type(value.get("response_size")) is not int or value.get("response_size") < 0)
         )
         or (
             value.get("proxy_http_status") is not None
@@ -3953,9 +3721,7 @@ def _validate_stage_receipt(
     proxy_identity_invalid = False
     if component == "proxy":
         expected_identity = (
-            dict(expected_proxy_identity)
-            if expected_proxy_identity is not None
-            else None
+            dict(expected_proxy_identity) if expected_proxy_identity is not None else None
         )
         if expected_identity == _OPENAI_PROXY_RECEIPT_IDENTITY:
             fields_valid = observed_fields == _PROXY_RECEIPT_FIELDS
@@ -3981,9 +3747,7 @@ def _validate_stage_receipt(
         or value.get("component") != component
         or type(value.get("retry_count")) is not int
         or value.get("retry_count") != 0
-        or any(
-            not _valid_stage_event(value.get(name), name) for name in events
-        )
+        or any(not _valid_stage_event(value.get(name), name) for name in events)
         or not _valid_stage_event_chain(value, events)
         or proxy_contract_invalid
         or relay_contract_invalid
@@ -3996,8 +3760,7 @@ def _validate_stage_receipt(
     return tuple(
         name
         for name in events
-        if isinstance(value.get(name), dict)
-        and value[name].get("occurred") is True
+        if isinstance(value.get(name), dict) and value[name].get("occurred") is True
     )
 
 
@@ -4099,9 +3862,7 @@ def _archive_stage_evidence(
                 sources[component],
                 component=component,
                 request_id=context.request_id,
-                expected_proxy_identity=(
-                    expected_proxy_identity if component == "proxy" else None
-                ),
+                expected_proxy_identity=(expected_proxy_identity if component == "proxy" else None),
             )
         else:
             try:
@@ -4169,16 +3930,8 @@ def _archive_stage_evidence(
     child_payload = {
         "child_metadata_schema_version": 1,
         "request_id": context.request_id,
-        "relay": (
-            asdict(child_evidence["relay"])
-            if "relay" in child_evidence
-            else None
-        ),
-        "proxy": (
-            asdict(child_evidence["proxy"])
-            if "proxy" in child_evidence
-            else None
-        ),
+        "relay": (asdict(child_evidence["relay"]) if "relay" in child_evidence else None),
+        "proxy": (asdict(child_evidence["proxy"]) if "proxy" in child_evidence else None),
     }
     status_payload = {
         "archive_status_schema_version": 1,
@@ -4202,9 +3955,7 @@ def _archive_stage_evidence(
         "retry_count": 0,
     }
     for value in (child_payload, status_payload):
-        if _SENSITIVE_EVIDENCE.search(
-            canonical_json_bytes(value).decode("utf-8")
-        ):
+        if _SENSITIVE_EVIDENCE.search(canonical_json_bytes(value).decode("utf-8")):
             raise OrchestratorError("RECEIPT_SECURITY_BLOCKED")
 
     target = context.receipt_archive_dir
@@ -4282,10 +4033,8 @@ def _collect_candidate(
     )
     marker = _strict_json_object(marker_path, "CANDIDATE_INVALID")
     if (
-        set(marker)
-        != {"candidate_sha256", "projection_sha256", "request_id"}
-        or marker.get("candidate_sha256")
-        != hashlib.sha256(candidate_raw).hexdigest()
+        set(marker) != {"candidate_sha256", "projection_sha256", "request_id"}
+        or marker.get("candidate_sha256") != hashlib.sha256(candidate_raw).hexdigest()
         or marker.get("projection_sha256") != projection.get("projection_sha256")
         or marker.get("request_id") != context.request_id
     ):
@@ -4346,9 +4095,7 @@ def _host_validate_and_render(
                     "news_scope": scope["news_scope"],
                     "industry_scope": "unavailable",
                 },
-                "claims": [
-                    item.model_dump(mode="json") for item in parsed.claims
-                ],
+                "claims": [item.model_dump(mode="json") for item in parsed.claims],
                 "vendor_pending": projection["safe_facts"]["vendor_pending"],
                 "trading_advice": False,
             }
@@ -4490,9 +4237,7 @@ def _publish_runtime_evidence(
         "request_id": ledger.identity.request_id,
         "symbol": ledger.identity.symbol,
         "approval_scope_id": (
-            ledger.approval_scope_id
-            if isinstance(ledger, ApprovalScopedAttemptLedger)
-            else None
+            ledger.approval_scope_id if isinstance(ledger, ApprovalScopedAttemptLedger) else None
         ),
         "ledger_namespace_version": (
             ledger.ledger_namespace_version
@@ -4598,18 +4343,12 @@ def run_single_symbol_canary(
         nonlocal archive
         if archive.status != "NOT_RUN":
             return archive
-        if (
-            context is None
-            or ledger is None
-        ):
+        if context is None or ledger is None:
             return archive
         try:
             archive = backend.archive_evidence(
                 context,
-                deadline=(
-                    monotonic()
-                    + context.runtime_contract["cleanup_timeout_seconds"]
-                ),
+                deadline=(monotonic() + context.runtime_contract["cleanup_timeout_seconds"]),
             )
         except Exception:
             archive = ArchiveResult(
@@ -4624,10 +4363,7 @@ def run_single_symbol_canary(
             try:
                 cleanup = backend.cleanup(
                     context,
-                    deadline=(
-                        monotonic()
-                        + context.runtime_contract["cleanup_timeout_seconds"]
-                    ),
+                    deadline=(monotonic() + context.runtime_contract["cleanup_timeout_seconds"]),
                 )
             except Exception:
                 cleanup = CleanupResult(completed=False, timed_out=True)
@@ -4646,6 +4382,7 @@ def run_single_symbol_canary(
             else:
                 workdir = None
         return cleanup, secret_residue, temporary_residue
+
     if (provider_id, exact_model_id, endpoint_alias) not in {
         ("openai", _EXACT_MODEL_ID, "openai_responses_v1"),
         (
@@ -4669,9 +4406,7 @@ def run_single_symbol_canary(
         legacy_state_root=config.state_root,
         historical_evidence_root=config.historical_evidence_root,
         candidate_roots=config.candidate_roots,
-        additional_historical_evidence_roots=(
-            config.additional_historical_evidence_roots
-        ),
+        additional_historical_evidence_roots=(config.additional_historical_evidence_roots),
     )
     lock = ExclusiveCanaryLock(
         config.state_root,
@@ -4705,10 +4440,8 @@ def run_single_symbol_canary(
         if (
             hashlib.sha256(facts_raw).hexdigest() != artifacts.facts_sha256
             or projection.get("facts_sha256") != artifacts.facts_sha256
-            or projection.get("projection_sha256")
-            != artifacts.projection_sha256
-            or compute_projection_sha256(projection)
-            != artifacts.projection_sha256
+            or projection.get("projection_sha256") != artifacts.projection_sha256
+            or compute_projection_sha256(projection) != artifacts.projection_sha256
         ):
             raise OrchestratorError("PROJECTION_BINDING_INVALID")
         if provider_id == "volcengine_ark":
@@ -4730,9 +4463,7 @@ def run_single_symbol_canary(
                 error_category=preflight.status,
             )
 
-        residue_deadline = monotonic() + float(
-            runtime["cleanup_timeout_seconds"]
-        )
+        residue_deadline = monotonic() + float(runtime["cleanup_timeout_seconds"])
         residue = backend.inspect_global_residue(deadline=residue_deadline)
         if (
             residue.timed_out
@@ -4828,9 +4559,7 @@ def run_single_symbol_canary(
             relay_image_id=artifacts.relay_image_id,
             runtime_contract=runtime,
         )
-        host_deadline = (
-            monotonic() + runtime["host_orchestrator_timeout_seconds"]
-        )
+        host_deadline = monotonic() + runtime["host_orchestrator_timeout_seconds"]
         prepared = True
         backend.prepare(context, deadline=host_deadline)
         ledger = store.transition(
@@ -4920,11 +4649,7 @@ def run_single_symbol_canary(
         )
     except BackendError as exc:
         archive = archive_runtime_evidence()
-        category = (
-            "ATTEMPT_CONSUMED_UNKNOWN"
-            if exc.unknown_dispatch_state
-            else exc.category
-        )
+        category = "ATTEMPT_CONSUMED_UNKNOWN" if exc.unknown_dispatch_state else exc.category
         unknown_dispatch_state = exc.unknown_dispatch_state
         if archive.child_terminal_reason is not None:
             category = archive.child_terminal_reason
@@ -5055,9 +4780,7 @@ def _mock_stage_event(
     return {
         "event": name,
         "occurred": occurred,
-        "wall_time": (
-            f"2026-08-08T08:23:{index:02d}.000000Z" if occurred else None
-        ),
+        "wall_time": (f"2026-08-08T08:23:{index:02d}.000000Z" if occurred else None),
         "monotonic_ns": index * 1_000_000_000 if occurred else None,
         "http_status": http_status if occurred else None,
         "byte_count": byte_count if occurred else None,
@@ -5234,15 +4957,12 @@ class MockCanaryBackend:
                 index=index,
                 http_status=(
                     200
-                    if name
-                    in {"response_headers_received", "response_body_completed"}
-                    and occurred
+                    if name in {"response_headers_received", "response_body_completed"} and occurred
                     else None
                 ),
                 byte_count=(
                     1
-                    if name in {"request_write_completed", "response_body_completed"}
-                    and occurred
+                    if name in {"request_write_completed", "response_body_completed"} and occurred
                     else None
                 ),
             )
@@ -5265,20 +4985,14 @@ class MockCanaryBackend:
             "provider_attempt_count": 1,
             "retry_count": 0,
             "provider_http_status": (
-                None
-                if self.scenario == "proxy_exit_after_request" or provider_timed_out
-                else 200
+                None if self.scenario == "proxy_exit_after_request" or provider_timed_out else 200
             ),
             "response_category": proxy_category,
             "response_size": (
-                None
-                if self.scenario == "proxy_exit_after_request" or provider_timed_out
-                else 1
+                None if self.scenario == "proxy_exit_after_request" or provider_timed_out else 1
             ),
             "response_bytes": (
-                None
-                if self.scenario == "proxy_exit_after_request" or provider_timed_out
-                else 1
+                None if self.scenario == "proxy_exit_after_request" or provider_timed_out else 1
             ),
             "terminal_status": proxy_category,
             **self.proxy_receipt_identity,
@@ -5300,7 +5014,9 @@ class MockCanaryBackend:
                 occurred=occurred,
                 index=index,
                 http_status=(200 if name == "response_received" and occurred else None),
-                byte_count=(1 if name in {"request_submitted", "response_received"} and occurred else None),
+                byte_count=(
+                    1 if name in {"request_submitted", "response_received"} and occurred else None
+                ),
             )
         relay_terminal = (
             "RELAY_NONZERO_EXIT"
@@ -5351,9 +5067,7 @@ class MockCanaryBackend:
             exited_monotonic_ns=40_000_000_000,
         )
         relay_code = (
-            1
-            if self.scenario in {"relay_exit_before_candidate", "nonzero_container_exit"}
-            else 0
+            1 if self.scenario in {"relay_exit_before_candidate", "nonzero_container_exit"} else 0
         )
         self._child_evidence["relay"] = classify_completed_child(
             "relay",
@@ -5421,9 +5135,7 @@ class MockCanaryBackend:
         if self.scenario == "nonzero_container_exit":
             raise BackendError("CONTAINER_EXIT_NONZERO")
         if self.scenario == "candidate_partial_write":
-            (context.output_dir / ".candidate.json.synthetic.partial").write_bytes(
-                b"{\n"
-            )
+            (context.output_dir / ".candidate.json.synthetic.partial").write_bytes(b"{\n")
             return BackendDispatchResult(200, True)
         if self.scenario in {"candidate_rename_failure", "candidate_missing"}:
             return BackendDispatchResult(200, True)
@@ -5594,9 +5306,7 @@ class DockerCanaryBackend:
         started_monotonic_ns = self.monotonic_ns()
         remaining = self._remaining(deadline, f"{component.upper()}_TIMEOUT")
         timeout = min(remaining, maximum_timeout or remaining)
-        host_timeout_is_binding = (
-            maximum_timeout is not None and remaining < maximum_timeout
-        )
+        host_timeout_is_binding = maximum_timeout is not None and remaining < maximum_timeout
         try:
             result = self.executor(command, timeout)
         except Exception as exc:
@@ -5618,9 +5328,7 @@ class DockerCanaryBackend:
             self._child_evidence[component] = evidence
             raise BackendError(
                 evidence.terminal_reason,
-                unknown_dispatch_state=(
-                    evidence.child_state is ChildState.EXIT_UNKNOWN
-                ),
+                unknown_dispatch_state=(evidence.child_state is ChildState.EXIT_UNKNOWN),
             ) from exc
         timing = ChildExecutionTiming(
             started_at=started_at,
@@ -5638,9 +5346,7 @@ class DockerCanaryBackend:
         if evidence.child_state is not ChildState.EXITED_ZERO:
             raise BackendError(
                 evidence.terminal_reason,
-                unknown_dispatch_state=(
-                    evidence.child_state is ChildState.EXIT_UNKNOWN
-                ),
+                unknown_dispatch_state=(evidence.child_state is ChildState.EXIT_UNKNOWN),
             )
         return result
 
@@ -5689,11 +5395,7 @@ class DockerCanaryBackend:
                         ["docker", "inspect", self._names["proxy"]],
                         exit_code,
                         stdout="",
-                        stderr=(
-                            state.get("Error")
-                            if isinstance(state.get("Error"), str)
-                            else ""
-                        ),
+                        stderr=(state.get("Error") if isinstance(state.get("Error"), str) else ""),
                     ),
                     timing,
                     interpret_positive_signal=True,
@@ -5742,14 +5444,10 @@ class DockerCanaryBackend:
             "phase2-canary-egress-",
         )
         container_count = sum(
-            line.startswith(container_prefixes)
-            for line in containers.stdout.splitlines()
-            if line
+            line.startswith(container_prefixes) for line in containers.stdout.splitlines() if line
         )
         network_count = sum(
-            line.startswith(network_prefixes)
-            for line in networks.stdout.splitlines()
-            if line
+            line.startswith(network_prefixes) for line in networks.stdout.splitlines() if line
         )
         return CleanupResult(
             completed=not container_count and not network_count,
@@ -5766,8 +5464,7 @@ class DockerCanaryBackend:
         ready_path = context.proxy_output_dir / "proxy-ready.json"
         readiness_deadline = min(
             deadline,
-            self.monotonic()
-            + float(context.runtime_contract["provider_connect_timeout_seconds"]),
+            self.monotonic() + float(context.runtime_contract["provider_connect_timeout_seconds"]),
         )
         while self.monotonic() <= readiness_deadline:
             if ready_path.exists() or ready_path.is_symlink():
@@ -5911,9 +5608,7 @@ class DockerCanaryBackend:
             ["docker", "start", "--attach", self._names["relay"]],
             component="relay",
             deadline=deadline,
-            maximum_timeout=float(
-                context.runtime_contract["relay_candidate_wait_timeout_seconds"]
-            ),
+            maximum_timeout=float(context.runtime_contract["relay_candidate_wait_timeout_seconds"]),
         )
         self._capture_proxy_evidence(deadline=deadline)
         proxy_evidence = self._child_evidence.get("proxy")
@@ -5923,9 +5618,7 @@ class DockerCanaryBackend:
         }:
             raise BackendError(
                 proxy_evidence.terminal_reason,
-                unknown_dispatch_state=(
-                    proxy_evidence.child_state is ChildState.EXIT_UNKNOWN
-                ),
+                unknown_dispatch_state=(proxy_evidence.child_state is ChildState.EXIT_UNKNOWN),
             )
         raw, receipt, receipt_status, _events = _load_stage_receipt(
             context.proxy_output_dir / "proxy-receipt.json",
@@ -6025,19 +5718,25 @@ class DockerCanaryBackend:
         names = self._names or self._runtime_names(context.request_id)
         completed = True
         for role in ("relay", "proxy"):
-            completed = self._cleanup_command(
-                ["docker", "rm", "--force", names[role]],
-                resource_kind="container",
-                resource_name=names[role],
-                deadline=deadline,
-            ) and completed
+            completed = (
+                self._cleanup_command(
+                    ["docker", "rm", "--force", names[role]],
+                    resource_kind="container",
+                    resource_name=names[role],
+                    deadline=deadline,
+                )
+                and completed
+            )
         for role in ("relay_network", "egress_network"):
-            completed = self._cleanup_command(
-                ["docker", "network", "rm", names[role]],
-                resource_kind="network",
-                resource_name=names[role],
-                deadline=deadline,
-            ) and completed
+            completed = (
+                self._cleanup_command(
+                    ["docker", "network", "rm", names[role]],
+                    resource_kind="network",
+                    resource_name=names[role],
+                    deadline=deadline,
+                )
+                and completed
+            )
         container_residue = 0
         network_residue = 0
         for role in ("relay", "proxy"):
@@ -6154,9 +5853,7 @@ class ArkDockerCanaryBackend(DockerCanaryBackend):
             maximum_timeout=15.0,
         )
         ark_count = sum(
-            line.startswith("phase2-ark-proxy-")
-            for line in containers.stdout.splitlines()
-            if line
+            line.startswith("phase2-ark-proxy-") for line in containers.stdout.splitlines() if line
         )
         return CleanupResult(
             completed=result.completed and ark_count == 0,
@@ -6249,14 +5946,10 @@ def load_installed_runtime_approval(
     if approval_raw != canonical_json_bytes(approval):
         raise OrchestratorError("runtime_approval_invalid")
     try:
-        candidate_model = RuntimeArtifactCandidate.model_validate_json(
-            candidate_raw
-        )
+        candidate_model = RuntimeArtifactCandidate.model_validate_json(candidate_raw)
     except ValidationError as exc:
         raise OrchestratorError("runtime_candidate_invalid") from exc
-    if candidate_raw != canonical_json_bytes(
-        candidate_model.model_dump(mode="json")
-    ):
+    if candidate_raw != canonical_json_bytes(candidate_model.model_dump(mode="json")):
         raise OrchestratorError("runtime_candidate_invalid")
     expected_approval_fields = {
         "runtime_approval_schema_version",
@@ -6271,8 +5964,7 @@ def load_installed_runtime_approval(
     if (
         set(approval) != expected_approval_fields
         or approval.get("runtime_approval_schema_version") != 2
-        or approval.get("approval_scope")
-        != "single_symbol_openai_canary_runtime_v2"
+        or approval.get("approval_scope") != "single_symbol_openai_canary_runtime_v2"
         or approval.get("symbol") != "000403.SZ"
         or approval.get("provider") != "openai"
         or approval.get("maximum_provider_attempts") != 1

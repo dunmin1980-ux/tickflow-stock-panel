@@ -12,6 +12,7 @@ from app.services.phase2_canary_runtime_contract import (
     CanaryRuntimeContract,
     RuntimeContractError,
     load_runtime_contract,
+    load_runtime_contract_bytes,
 )
 
 _CONTRACT_FILENAME = "phase2_ark_timeout_contract.json"
@@ -38,6 +39,10 @@ def load_ark_runtime_contract(path: Path | None = None) -> CanaryRuntimeContract
     """Load the committed Ark contract without environment overrides."""
     candidate = path or Path(__file__).with_name(_CONTRACT_FILENAME)
     return load_runtime_contract(candidate)
+
+
+def load_ark_runtime_contract_bytes(raw: bytes) -> CanaryRuntimeContract:
+    return load_runtime_contract_bytes(raw)
 
 
 def canonical_ark_runtime_contract_bytes() -> bytes:

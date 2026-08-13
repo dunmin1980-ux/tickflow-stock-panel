@@ -41,10 +41,12 @@ Relay sha256:5447846b77d5918d5280ecbcbcfde7fa06ae427af3c82b7cab52edc747ea259c: M
 |---|---|
 | Build Provenance 文件 SHA-256 | `390fe01c366d8ca78effa44e450dd0d459a240ee9b4f165dd6a1a5804e67bf39` |
 | Build Provenance 内嵌 self-hash | `6820449c2bec2e6d2121f0528da93a7891d758f178d3364d7f73aa5605c4b093` |
-| Exact Ark Mock E2E 文件 SHA-256 | `d5c6f3d2616499ee1e72e60d415b589d9bb5d0409a91d1bdc46808d070be319b` |
-| New Candidate SHA-256 | `1958c91ee1a6f2f0590de78a87af939311525017b8ab3972fc5650624dbb09e0` |
-| New Approval Scope ID | `0b66e3128f5bd9312afe0ffb15c4f089f64eea1ffc27bb9c5c2e8720e0b17a72` |
-| Approval Scope 文件 SHA-256 | `925244074f964817bf2d041d03f39c402b14fb2e0aa7d60b83d2c005f25c52b0` |
+| Exact Ark Mock E2E 文件 SHA-256 | `fb67c11b1a2ee041f6a6b18cfddf997aea8bf4daff97e7e6c881637ba450de73` |
+| New Candidate SHA-256 | `75263d87a2ae6c368ce6c2ce4d65dfbc20b29f4c5bf38e827b2da07290dda2a1` |
+| New Approval Scope ID | `8e42a251cfa4e5b4cbdc95b3aceca9d59152ce574e65f5ba2300a0009df8a019` |
+| Approval Scope 文件 SHA-256 | `3c2b6c386e1633deb30c0609da62a3c850a5a5b5bb2a2e609542b96d72b23067` |
+| Artifact Generation 文件 SHA-256 | `01239091c691b72e96d2f40ba81c6f1fe896f941529fa0bac2b930dd4c61f544` |
+| Artifact Generation self-hash | `5d3256616846413b7014d3b549a22ea601f02b0f22806d94ee7d58993057f85f` |
 
 新 Scope 结果：
 
@@ -59,6 +61,12 @@ Candidate 显式逐文件绑定 Dockerfile、Proxy/Relay source、Build Provenan
 runtime/readiness contract、orchestrator、Ark adapter/launcher、Responses contract、
 proxy policy、Facts、Projection、Typed Claims Schema 和 Mock E2E。目录聚合哈希未被
 用作单文件绑定的替代品。
+
+独立复审后又补强两层失败关闭边界：Candidate 的全部文件输入由同一 `O_NOFOLLOW`
+只读快照提供，并在发布前重新核对；镜像构建、Mock、Candidate 生成和真实 launcher
+共用同一跨进程锁。生成流程先撤销旧 READY manifest，逐文件原子发布并完整重验，
+最后才原子提交 `artifact_generation.json`。因此并发更新或中途失败不能留下可被
+Approval loader 接受的混合代际工件。
 
 ## 4. Mock 与防误放行
 
@@ -97,6 +105,7 @@ WAITING_FOR_PROVIDER_RESPONSE_HEADERS
 | History baseline | `704a4e4a3341e0c04943468ed02b6ea7c4757bec0794b5946eb5097405698853` |
 | Old Approval | `0fee5a1c509c77ae9b03107dfddf8caefa453673106cced13db4a4d6ac523ffc` / `SUPERSEDED_AND_PRESERVED` |
 | Old incomplete Candidate | `c9a305de7f0064a47ff6d3549ee00190120c67428cde1fd9b7f31aace682fbad` / `INVALID_FOR_INSTALL / SUPERSEDED_AND_PRESERVED` |
+| Previous provenance Candidate | `1958c91ee1a6f2f0590de78a87af939311525017b8ab3972fc5650624dbb09e0` / `SUPERSEDED_AND_PRESERVED` |
 
 上述历史证据原字节哈希未变化。旧 `c9a305...` Candidate 会被当前 verifier 拒绝，
 且不能生成 `READY / AVAILABLE` 的新 Scope。
@@ -104,8 +113,8 @@ WAITING_FOR_PROVIDER_RESPONSE_HEADERS
 ## 6. 验证结果
 
 ```text
-Ark focused: 126 passed
-Backend full: 2562 passed, 13 warnings
+Ark focused: 265 passed
+Backend full: 2573 passed, 13 warnings
 compileall: PASSED
 Ruff F821: PASSED
 git diff --check: PASSED
@@ -113,7 +122,7 @@ Exact Ark Mock E2E x3: PASSED
 container_residue: 0
 network_residue: 0
 temporary_residue: 0
-Independent review: NO ACTIONABLE FINDINGS
+Independent review: multiple focused rounds, final NO ACTIONABLE FINDINGS
 ```
 
 敏感扫描只命中 Proxy 源码中预期的运行时 `Authorization` header 构造语句；生成的

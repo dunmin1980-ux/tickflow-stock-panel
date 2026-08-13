@@ -22,14 +22,10 @@ class ArkCapabilityEvidence(BaseModel):
     responses_snapshot_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
-def validate_ark_capability_evidence(repo_root: Path) -> ArkCapabilityEvidence:
-    root = repo_root.resolve(strict=True)
-    model_path = root / "reports/phase2_provider_ark/official_model_capability_snapshot.txt"
-    responses_path = (
-        root / "reports/phase2_provider_ark/official_responses_json_schema_snapshot.txt"
-    )
-    model_raw = model_path.read_bytes()
-    responses_raw = responses_path.read_bytes()
+def validate_ark_capability_evidence_bytes(
+    model_raw: bytes,
+    responses_raw: bytes,
+) -> ArkCapabilityEvidence:
     model_text = model_raw.decode("utf-8")
     responses_text = responses_raw.decode("utf-8")
     required_model = (
@@ -56,4 +52,16 @@ def validate_ark_capability_evidence(repo_root: Path) -> ArkCapabilityEvidence:
         approved_mode="json_schema",
         model_snapshot_sha256=hashlib.sha256(model_raw).hexdigest(),
         responses_snapshot_sha256=hashlib.sha256(responses_raw).hexdigest(),
+    )
+
+
+def validate_ark_capability_evidence(repo_root: Path) -> ArkCapabilityEvidence:
+    root = repo_root.resolve(strict=True)
+    model_path = root / "reports/phase2_provider_ark/official_model_capability_snapshot.txt"
+    responses_path = (
+        root / "reports/phase2_provider_ark/official_responses_json_schema_snapshot.txt"
+    )
+    return validate_ark_capability_evidence_bytes(
+        model_path.read_bytes(),
+        responses_path.read_bytes(),
     )

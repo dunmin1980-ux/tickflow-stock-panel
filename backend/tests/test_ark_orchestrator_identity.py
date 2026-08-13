@@ -240,6 +240,24 @@ def test_ark_approval_loader_returns_the_approved_single_snapshot(tmp_path: Path
     assert snapshot.candidate_sha256 == hashlib.sha256(candidate_raw).hexdigest()
 
 
+def test_ark_approval_loader_rejects_missing_generation_manifest(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    candidate_directory = root / "reports/phase2_provider_ark"
+    candidate_directory.mkdir(parents=True)
+    candidate_path = candidate_directory / "approval_candidate.json"
+    candidate_path.write_bytes(
+        (REPO_ROOT / "reports/phase2_provider_ark/approval_candidate.json").read_bytes()
+    )
+    approval_root = tmp_path / "approval"
+    approval_root.mkdir(mode=0o700)
+    approval_path = approval_root / "runtime-approval.json"
+    approval_path.write_bytes(b"{}\n")
+    approval_path.chmod(0o600)
+
+    with pytest.raises(ValueError, match="ark_artifact_generation_invalid"):
+        load_installed_ark_approval(candidate_path, approval_path)
+
+
 def test_ark_launcher_stops_before_secret_or_network_without_approval(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -304,3 +322,59 @@ def test_ark_launcher_wires_the_only_approved_provider_identity(
     assert observed["endpoint_alias"] == "ark_responses_cn_beijing_v1"
     assert observed["secret_reader"] is read_ark_keychain_secret_once
     assert isinstance(observed["backend"], ArkDockerCanaryBackend)
+
+
+def test_ark_launcher_holds_artifact_lock_through_canary(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+
+    class Lock:
+        def __enter__(self):
+            events.append("lock_enter")
+
+        def __exit__(self, *_args):
+            events.append("lock_exit")
+
+    candidate_path = REPO_ROOT / "reports/phase2_provider_ark/approval_candidate.json"
+    candidate_raw = candidate_path.read_bytes()
+    approved = ApprovedArkCandidateSnapshot(
+        candidate=json.loads(candidate_raw),
+        candidate_raw=candidate_raw,
+        candidate_sha256=hashlib.sha256(candidate_raw).hexdigest(),
+    )
+    monkeypatch.setattr(ark_launcher, "exclusive_ark_artifact_lock", lambda _root: Lock())
+    monkeypatch.setattr(
+        ark_launcher,
+        "load_installed_ark_approval",
+        lambda *_args: events.append("approval_loaded") or approved,
+    )
+    monkeypatch.setattr(ark_launcher, "validate_ark_approval_candidate", lambda *_args: None)
+    monkeypatch.setattr(
+        ark_launcher,
+        "_private_directory",
+        lambda path: (
+            (tmp_path / path.name).mkdir(mode=0o700, exist_ok=True) or (tmp_path / path.name)
+        ),
+    )
+    monkeypatch.setattr(
+        ark_launcher,
+        "run_single_symbol_canary",
+        lambda **_kwargs: (
+            events.append("canary_finished") or SimpleNamespace(terminal_state="SUCCEEDED")
+        ),
+    )
+    monkeypatch.setattr(
+        ark_launcher,
+        "asdict",
+        lambda result: {"terminal_state": result.terminal_state},
+    )
+
+    assert ark_launcher.main([]) == 0
+    assert events == [
+        "lock_enter",
+        "approval_loaded",
+        "canary_finished",
+        "lock_exit",
+    ]

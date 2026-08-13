@@ -21,9 +21,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def _current_image_ids() -> dict[str, str]:
     value = json.loads(
-        (
-            REPO_ROOT / "reports/phase2_provider_ark/ark_build_provenance.json"
-        ).read_text(encoding="utf-8")
+        (REPO_ROOT / "reports/phase2_provider_ark/ark_build_provenance.json").read_text(
+            encoding="utf-8"
+        )
     )
     return {
         "proxy_image_id": value["proxy_image_id"],
@@ -102,9 +102,12 @@ def test_ark_scope_evidence_uses_final_candidate_file_hash() -> None:
     assert evidence["approval_installed"] is False
     assert evidence["ledger_preflight_status"] == "READY"
     assert evidence["global_request_id_count"] == 4
-    assert evidence["mock_e2e_sha256"] == hashlib.sha256(
-        (REPO_ROOT / "reports/phase2_provider_ark/mock_e2e.json").read_bytes()
-    ).hexdigest()
+    assert (
+        evidence["mock_e2e_sha256"]
+        == hashlib.sha256(
+            (REPO_ROOT / "reports/phase2_provider_ark/mock_e2e.json").read_bytes()
+        ).hexdigest()
+    )
     assert "scope_id_seed_sha256" not in json.dumps(evidence)
 
 
@@ -205,3 +208,25 @@ def test_incomplete_superseded_candidate_cannot_generate_ready_scope() -> None:
             mock_e2e_sha256="a" * 64,
             repo_root=REPO_ROOT,
         )
+
+
+def test_previous_provenance_candidate_identity_remains_resolvable(
+    tmp_path: Path,
+) -> None:
+    path = (
+        REPO_ROOT
+        / "reports/phase2_provider_ark/superseded"
+        / "1958c91ee1a6f2f0590de78a87af939311525017b8ab3972fc5650624dbb09e0.json"
+    )
+    raw = path.read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == path.stem
+    root = tmp_path / "candidates"
+    root.mkdir(mode=0o700)
+    (root / "approval_candidate.json").write_bytes(raw)
+    namespace = object.__new__(ApprovalScopedLedgerNamespace)
+    namespace.candidate_roots = (root,)
+
+    identity = namespace._candidate_identity(path.stem)
+
+    assert identity.provider_id == "volcengine_ark"
+    assert identity.exact_model_id == "doubao-seed-2-1-turbo-260628"
