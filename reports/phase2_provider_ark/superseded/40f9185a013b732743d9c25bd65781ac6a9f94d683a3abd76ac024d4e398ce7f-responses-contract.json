@@ -2,7 +2,7 @@
   "ark_responses_contract_version": 1,
   "capability_evidence_sha256": "13bd5580dfec504c08a1416472fb169b68db4231ce92dff8f5bf2947f164a469",
   "contract_schema_version": 1,
-  "contract_sha256": "9704745f75d338bd669314b6aa8fcdf4fb4efc0ef6ba4f2487c57c35dd1a8c79",
+  "contract_sha256": "785eca4ed9ae1417e33f871f2bcf600e1c17725d12fa2c525ec00c1465208b19",
   "fixed_instructions": [
     "Use only supplied projection facts and pointers.",
     "Return exactly one schema-valid candidate object.",
@@ -22,13 +22,13 @@
     "minimum_tls_version": "TLSv1_2",
     "model_id": "doubao-seed-2-1-turbo-260628",
     "provider_id": "volcengine_ark",
-    "read_timeout_seconds": 180,
+    "read_timeout_seconds": 60,
     "retry_count": 0,
     "store": false,
     "stream": false,
     "tls_verification": true,
     "tools": [],
-    "total_timeout_seconds": 180
+    "total_timeout_seconds": 60
   },
   "relay_contract": {
     "allowed_claim_types": [
@@ -96,7 +96,7 @@
       "retry_count": 0,
       "streaming": false,
       "temperature": 0,
-      "timeout_seconds": 195,
+      "timeout_seconds": 75,
       "tool_use": false,
       "web_browsing": false
     },
@@ -1112,5 +1112,5 @@
     "strict": true,
     "type": "json_schema"
   },
-  "runtime_contract_sha256": "3cb3064e4e68bb2e9a07a9153f9c2bcef8de127ac0fd779b2c41e1ab9e0ac681"
+  "runtime_contract_sha256": "34aa9235d25ecc3f2b658551382f2a8ade031eb84f46cc2a1d79bcbc86bdcf68"
 }

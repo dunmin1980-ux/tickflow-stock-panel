@@ -1,0 +1,89 @@
+{
+  "candidate_ready_published": {
+    "byte_count": null,
+    "event": "candidate_ready_published",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "candidate_write_completed": {
+    "byte_count": null,
+    "event": "candidate_write_completed",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "candidate_write_started": {
+    "byte_count": null,
+    "event": "candidate_write_started",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "completed_at": "2026-08-13T02:39:38.422260Z",
+  "component": "relay",
+  "error_category": "HTTP_REJECTED",
+  "exit_code": 2,
+  "proxy_connect_completed": {
+    "byte_count": null,
+    "event": "proxy_connect_completed",
+    "http_status": null,
+    "monotonic_ns": 1427589431289,
+    "occurred": true,
+    "wall_time": "2026-08-13T02:38:38.371384Z"
+  },
+  "proxy_connect_started": {
+    "byte_count": null,
+    "event": "proxy_connect_started",
+    "http_status": null,
+    "monotonic_ns": 1427578718217,
+    "occurred": true,
+    "wall_time": "2026-08-13T02:38:38.360673Z"
+  },
+  "proxy_http_status": 502,
+  "proxy_request_count": 1,
+  "receipt_schema_version": 2,
+  "relay_started": {
+    "byte_count": null,
+    "event": "relay_started",
+    "http_status": null,
+    "monotonic_ns": 1427574899346,
+    "occurred": true,
+    "wall_time": "2026-08-13T02:38:38.356859Z"
+  },
+  "request_id": "2f17745f58534063bdd7eda1eb0d16f1",
+  "request_submitted": {
+    "byte_count": 5997,
+    "event": "request_submitted",
+    "http_status": null,
+    "monotonic_ns": 1427589603818,
+    "occurred": true,
+    "wall_time": "2026-08-13T02:38:38.371567Z"
+  },
+  "response_received": {
+    "byte_count": null,
+    "event": "response_received",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "response_sha256": null,
+  "response_size": null,
+  "response_wait_started": {
+    "byte_count": null,
+    "event": "response_wait_started",
+    "http_status": null,
+    "monotonic_ns": 1427589618772,
+    "occurred": true,
+    "wall_time": "2026-08-13T02:38:38.371586Z"
+  },
+  "retry_count": 0,
+  "started_at": "2026-08-13T02:38:38.356800Z",
+  "status": "REJECTED",
+  "terminal_reason_source": "relay_self",
+  "terminal_status": "RELAY_PROTOCOL_REJECTED"
+}

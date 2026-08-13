@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import stat
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -23,16 +24,50 @@ from app.providers.ark_proxy_policy import ArkProxyPolicy
 from app.providers.base import ProviderRequest
 from app.schemas.phase2_claims import WorkerClaimsCandidate
 from app.services.phase2_ai_worker_protocol import build_worker_projection
+from app.services.phase2_ark_timeout_contract import (
+    ark_runtime_contract_sha256,
+    load_ark_runtime_contract,
+)
 from app.services.phase2_canary_orchestrator import (
     ApprovalScopedLedgerNamespace,
     ApprovalScopeIdentity,
     compute_approval_scope_id,
 )
-from app.services.phase2_canary_runtime_contract import runtime_contract_sha256
 from app.services.phase2_claims_service import (
     PREDICATE_RULES,
     canonical_json_bytes,
 )
+
+_ARK_HISTORY_HASHES = {
+    "reports/phase2_provider_ark/live_canary/evidence/2f17745f58534063bdd7eda1eb0d16f1.json": "35f957462c493331fe89c39f43420b3699a52346df4b8d3f6ff5beeebab1466e",
+    "reports/phase2_provider_ark/live_canary/receipts/2f17745f58534063bdd7eda1eb0d16f1/archive-status.json": "a540da4a95be4081225750dffa93c643cafee09c613ec90f21e23f649ae29f2e",
+    "reports/phase2_provider_ark/live_canary/receipts/2f17745f58534063bdd7eda1eb0d16f1/child-metadata.json": "e598dff711ff759e1fdd84576ce55af30b897891bd8225771077a0fab0e7f2db",
+    "reports/phase2_provider_ark/live_canary/receipts/2f17745f58534063bdd7eda1eb0d16f1/proxy-receipt.json": "46c05c526067bed736262354bd492e809ca0c8294d7523376d806f050e8be9e4",
+    "reports/phase2_provider_ark/live_canary/receipts/2f17745f58534063bdd7eda1eb0d16f1/relay-receipt.json": "e64a6de0dfa81e51e6ff50ea11fa516db6e20dbdce0f7d3ceb4c3e717579e9d9",
+    "reports/phase2_provider_ark/live_canary/rejected/2f17745f58534063bdd7eda1eb0d16f1.json": "31aedcefc27797eebccbc18ad9665738559aa31484fe46f2ec511508305e2853",
+    "reports/phase2_provider_canary/attempts/898079e765f188ba48b2de143ff5fce81e1191ec7bfc6cb773352b2bed90982d/2f17745f58534063bdd7eda1eb0d16f1/ledger.json": "5eeba9e7068c9225a1963883f7b814b87fe6198c53202502595a177f671bc8ed",
+}
+_HEX_64 = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _exact_int(value: object, expected: int) -> bool:
+    return type(value) is int and value == expected
+
+
+def _assert_no_symlink_below(root: Path, target: Path) -> None:
+    try:
+        relative = target.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("ark_history_baseline_invalid") from exc
+    current = root
+    for part in relative.parts:
+        current /= part
+        try:
+            metadata = os.lstat(current)
+        except OSError as exc:
+            raise ValueError("ark_history_baseline_invalid") from exc
+        if stat.S_ISLNK(metadata.st_mode):
+            raise ValueError("ark_history_baseline_invalid")
 
 
 def _sha256(raw: bytes) -> str:
@@ -45,6 +80,196 @@ def _file_sha256(path: Path) -> str:
 
 def ark_proxy_policy_sha256() -> str:
     return _sha256(canonical_json_bytes(ArkProxyPolicy().model_dump(mode="json")))
+
+
+def validate_ark_timeout_mock_evidence(value: Any) -> None:
+    expected_identity = {
+        "endpoint_alias": ARK_ENDPOINT_ALIAS,
+        "exact_model_id": ARK_EXACT_MODEL_ID,
+        "provider_id": ARK_PROVIDER_ID,
+    }
+    runs = value.get("runs") if isinstance(value, Mapping) else None
+    expected_runs = (
+        ("fast_response", 1.0, "SUCCEEDED", True, "VALID", "inbox", None),
+        ("about_60s_response", 60.0, "SUCCEEDED", True, "VALID", "inbox", None),
+        ("before_180s_response", 179.0, "SUCCEEDED", True, "VALID", "inbox", None),
+        (
+            "at_180s_deadline",
+            180.0,
+            "PROVIDER_TIMEOUT",
+            False,
+            "NOT_RUN",
+            "rejected",
+            "WAITING_FOR_PROVIDER_RESPONSE_HEADERS",
+        ),
+    )
+    top_level_fields = {
+        "ark_timeout_mock_e2e_schema_version",
+        "exact_model_id",
+        "host_timeout_seconds",
+        "maximum_provider_attempts",
+        "provider_id",
+        "provider_timeout_seconds",
+        "public_network_used",
+        "real_ai_call_count",
+        "real_provider_attempt_count",
+        "relay_timeout_seconds",
+        "retry_count",
+        "runs",
+        "runtime_contract_sha256",
+        "status",
+    }
+    run_fields = {
+        "candidate_valid",
+        "claims_valid",
+        "failure_stage",
+        "passed",
+        "provider_attempt_count",
+        "provider_http",
+        "proxy_receipt_identity",
+        "real_provider_attempt_count",
+        "renderer_deterministic",
+        "result",
+        "retry_count",
+        "scenario",
+        "terminal_state",
+        "virtual_elapsed_seconds",
+    }
+    result_fields = {
+        "approval_scope_id",
+        "container_residue_count",
+        "host_validation_status",
+        "network_residue_count",
+        "route",
+        "secret_file_residue_count",
+        "temporary_file_residue_count",
+    }
+    if (
+        not isinstance(value, Mapping)
+        or set(value) != top_level_fields
+        or not _exact_int(value.get("ark_timeout_mock_e2e_schema_version"), 1)
+        or value.get("status") != "PASSED"
+        or value.get("provider_id") != ARK_PROVIDER_ID
+        or value.get("exact_model_id") != ARK_EXACT_MODEL_ID
+        or not _exact_int(value.get("provider_timeout_seconds"), 180)
+        or not _exact_int(value.get("relay_timeout_seconds"), 195)
+        or not _exact_int(value.get("host_timeout_seconds"), 210)
+        or not _exact_int(value.get("retry_count"), 0)
+        or not _exact_int(value.get("maximum_provider_attempts"), 1)
+        or not _exact_int(value.get("real_provider_attempt_count"), 0)
+        or not _exact_int(value.get("real_ai_call_count"), 0)
+        or value.get("public_network_used") is not False
+        or value.get("runtime_contract_sha256") != ark_runtime_contract_sha256()
+        or not isinstance(runs, list)
+        or len(runs) != 4
+    ):
+        raise ValueError("ark_timeout_mock_evidence_invalid")
+    for run, expected in zip(runs, expected_runs, strict=True):
+        scenario, elapsed, terminal, succeeded, validation, route, failure = expected
+        result = run.get("result") if isinstance(run, Mapping) else None
+        expected_scope_id = compute_approval_scope_id(
+            ApprovalScopeIdentity(
+                approval_candidate_sha256=_sha256(scenario.encode("utf-8")),
+                symbol="000403.SZ",
+                provider_id=ARK_PROVIDER_ID,
+                exact_model_id=ARK_EXACT_MODEL_ID,
+                endpoint_alias=ARK_ENDPOINT_ALIAS,
+            )
+        )
+        if (
+            not isinstance(run, Mapping)
+            or set(run) != run_fields
+            or run.get("scenario") != scenario
+            or isinstance(run.get("virtual_elapsed_seconds"), bool)
+            or run.get("virtual_elapsed_seconds") != elapsed
+            or run.get("terminal_state") != terminal
+            or not _exact_int(run.get("provider_attempt_count"), 1)
+            or not _exact_int(run.get("retry_count"), 0)
+            or run.get("provider_http") != "MOCK_ONLY"
+            or not _exact_int(run.get("real_provider_attempt_count"), 0)
+            or run.get("proxy_receipt_identity") != expected_identity
+            or run.get("candidate_valid") is not succeeded
+            or run.get("claims_valid") is not succeeded
+            or run.get("renderer_deterministic") is not succeeded
+            or run.get("failure_stage") != failure
+            or run.get("passed") is not True
+            or not isinstance(result, Mapping)
+            or set(result) != result_fields
+            or result.get("approval_scope_id") != expected_scope_id
+            or _HEX_64.fullmatch(str(result.get("approval_scope_id", ""))) is None
+            or result.get("host_validation_status") != validation
+            or result.get("route") != route
+            or any(
+                not _exact_int(result.get(field), 0)
+                for field in (
+                    "container_residue_count",
+                    "network_residue_count",
+                    "secret_file_residue_count",
+                    "temporary_file_residue_count",
+                )
+            )
+        ):
+            raise ValueError("ark_timeout_mock_evidence_invalid")
+
+
+def validate_ark_history_baseline(repo_root: Path) -> dict[str, Any]:
+    root = repo_root.resolve(strict=True)
+    path = root / "reports/phase2_provider_ark/timeout_contract_history_baseline.json"
+    _assert_no_symlink_below(root, path)
+    try:
+        raw = path.read_bytes()
+        value = json.loads(raw)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("ark_history_baseline_invalid") from exc
+    hashes = value.get("historical_hashes") if isinstance(value, dict) else None
+    if (
+        raw != canonical_json_bytes(value)
+        or set(value)
+        != {
+            "attempt_status",
+            "baseline_schema_version",
+            "failure_stage",
+            "historical_hashes",
+            "old_approval_candidate_sha256",
+            "request_id",
+            "terminal_state",
+        }
+        or value.get("baseline_schema_version") != 1
+        or value.get("request_id") != "2f17745f58534063bdd7eda1eb0d16f1"
+        or value.get("terminal_state") != "FAILED_AFTER_DISPATCH"
+        or value.get("attempt_status") != "CONSUMED"
+        or value.get("failure_stage") != "WAITING_FOR_PROVIDER_RESPONSE_HEADERS"
+        or value.get("old_approval_candidate_sha256")
+        != "0fee5a1c509c77ae9b03107dfddf8caefa453673106cced13db4a4d6ac523ffc"
+        or hashes != _ARK_HISTORY_HASHES
+    ):
+        raise ValueError("ark_history_baseline_invalid")
+    historical_roots = (
+        root / "reports/phase2_provider_ark/live_canary",
+        root
+        / "reports/phase2_provider_canary/attempts"
+        / "898079e765f188ba48b2de143ff5fce81e1191ec7bfc6cb773352b2bed90982d",
+    )
+    for historical_root in historical_roots:
+        _assert_no_symlink_below(root, historical_root)
+    for relative, expected_sha256 in _ARK_HISTORY_HASHES.items():
+        candidate = root / relative
+        _assert_no_symlink_below(root, candidate)
+        if (
+            candidate.is_symlink()
+            or not candidate.is_file()
+            or _file_sha256(candidate) != expected_sha256
+        ):
+            raise ValueError("ark_history_baseline_invalid")
+    historical_files = {
+        path.relative_to(root).as_posix()
+        for base in historical_roots
+        for path in base.rglob("*")
+        if path.is_file() or path.is_symlink()
+    }
+    if historical_files != set(_ARK_HISTORY_HASHES):
+        raise ValueError("ark_history_baseline_invalid")
+    return value
 
 
 def _provider_request(repo_root: Path) -> ProviderRequest:
@@ -74,7 +299,8 @@ def build_ark_responses_contract(repo_root: Path) -> dict[str, Any]:
     request = build_ark_responses_request(_provider_request(root))
     from app.schemas.phase2_claims import ALLOWED_CLAIM_TYPES
 
-    runtime_sha256 = runtime_contract_sha256()
+    runtime = load_ark_runtime_contract()
+    runtime_sha256 = ark_runtime_contract_sha256()
     value = {
         "contract_schema_version": 1,
         "ark_responses_contract_version": ARK_RESPONSES_CONTRACT_VERSION,
@@ -94,9 +320,9 @@ def build_ark_responses_contract(repo_root: Path) -> dict[str, Any]:
             "tools": [],
             "retry_count": 0,
             "maximum_attempts": 1,
-            "connect_timeout_seconds": 10,
-            "read_timeout_seconds": 60,
-            "total_timeout_seconds": 60,
+            "connect_timeout_seconds": runtime.provider_connect_timeout_seconds,
+            "read_timeout_seconds": runtime.provider_read_timeout_seconds,
+            "total_timeout_seconds": runtime.provider_total_timeout_seconds,
             "maximum_bytes": 1_048_576,
             "approved_symbol": "000403.SZ",
         },
@@ -119,7 +345,7 @@ def build_ark_responses_contract(repo_root: Path) -> dict[str, Any]:
                 "streaming": False,
                 "retry_count": 0,
                 "maximum_output_bytes": 1_048_576,
-                "timeout_seconds": 75,
+                "timeout_seconds": runtime.relay_candidate_wait_timeout_seconds,
             },
         },
         "fixed_instructions": [
@@ -152,6 +378,16 @@ def build_ark_approval_candidate(
     )
     contract_raw = canonical_json_bytes(build_ark_responses_contract(root))
     schema_raw = canonical_json_bytes(WorkerClaimsCandidate.model_json_schema(mode="validation"))
+    timeout_mock_path = root / "reports/phase2_provider_ark/timeout_mock_e2e.json"
+    try:
+        timeout_mock = json.loads(timeout_mock_path.read_bytes())
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("ark_timeout_mock_evidence_invalid") from exc
+    validate_ark_timeout_mock_evidence(timeout_mock)
+    validate_ark_history_baseline(root)
+    history_baseline_path = (
+        root / "reports/phase2_provider_ark/timeout_contract_history_baseline.json"
+    )
     hashes = {
         "ark_responses_contract_sha256": _sha256(contract_raw),
         "ark_proxy_policy_sha256": ark_proxy_policy_sha256(),
@@ -162,17 +398,21 @@ def build_ark_approval_candidate(
         "orchestrator_source_sha256": _file_sha256(
             root / "backend/app/services/phase2_canary_orchestrator.py"
         ),
-        "runtime_contract_sha256": runtime_contract_sha256(),
+        "runtime_contract_sha256": ark_runtime_contract_sha256(),
         "readiness_contract_sha256": _file_sha256(
             root / "docker/phase2-ark-egress-proxy/readiness-contract.json"
         ),
         "facts_sha256": _sha256(facts_raw),
+        "history_baseline_sha256": _file_sha256(history_baseline_path),
         "projection_sha256": projection["projection_sha256"],
         "typed_claims_schema_sha256": _sha256(schema_raw),
+        "timeout_mock_e2e_sha256": _file_sha256(
+            timeout_mock_path
+        ),
     }
     candidate_without_hash: dict[str, Any] = {
         "ark_approval_candidate_schema_version": 1,
-        "status": "PHASE2B_ARK_PROVIDER_READY_FOR_REAPPROVAL",
+        "status": "PHASE2B_ARK_TIMEOUT_CONTRACT_READY_FOR_REAPPROVAL",
         "provider_id": ARK_PROVIDER_ID,
         "exact_model_id": ARK_EXACT_MODEL_ID,
         "endpoint_alias": ARK_ENDPOINT_ALIAS,
@@ -238,6 +478,9 @@ def build_ark_approval_scope_evidence(
             legacy_state_root=legacy_state_root,
             historical_evidence_root=historical_root,
             candidate_roots=candidate_roots,
+            additional_historical_evidence_roots=(
+                root / "reports/phase2_provider_ark/live_canary",
+            ),
         ).preflight(scope)
         if preflight.status != "READY":
             raise ValueError("ark_approval_scope_preflight_blocked")
@@ -281,16 +524,17 @@ def validate_ark_image_set(
             root / "docker/phase2-ark-egress-proxy/responses-contract.json"
         ),
         "org.tickflow.phase2.proxy-policy-sha256": ark_proxy_policy_sha256(),
-        "org.tickflow.phase2.runtime-contract-sha256": runtime_contract_sha256(),
+        "org.tickflow.phase2.runtime-contract-sha256": ark_runtime_contract_sha256(),
         "org.tickflow.phase2.readiness-contract-sha256": _file_sha256(
             root / "docker/phase2-ark-egress-proxy/readiness-contract.json"
         ),
     }
     expected_relay_labels = {
         "org.tickflow.phase2.relay-source-sha256": _file_sha256(
-            root / "docker/phase2-canary-relay/relay.py"
+            root / "docker/phase2-ark-canary-relay/relay.py"
         ),
-        "org.tickflow.phase2.runtime-contract-sha256": runtime_contract_sha256(),
+        "org.tickflow.phase2.provider-id": ARK_PROVIDER_ID,
+        "org.tickflow.phase2.runtime-contract-sha256": ark_runtime_contract_sha256(),
     }
     if (
         not proxy_image_id.startswith("sha256:")

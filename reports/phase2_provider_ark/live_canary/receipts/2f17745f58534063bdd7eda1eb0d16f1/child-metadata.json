@@ -1,0 +1,44 @@
+{
+  "child_metadata_schema_version": 1,
+  "proxy": {
+    "child_state": "CHILD_RUNNING",
+    "component": "proxy",
+    "elapsed_ms": 64879,
+    "exit_code": null,
+    "exited_at": "2026-08-13T02:39:38.820160Z",
+    "exited_monotonic_ns": 3525827084800,
+    "signal": null,
+    "started_at": "2026-08-13T02:38:33.941511Z",
+    "started_monotonic_ns": 3460947572401,
+    "stderr": {
+      "sensitive_hit_count": 0,
+      "stderr_byte_count": 0,
+      "stderr_excerpt": null,
+      "stderr_redacted": false,
+      "stderr_sha256": null,
+      "stderr_truncated": false
+    },
+    "terminal_reason": "PROXY_RUNNING"
+  },
+  "relay": {
+    "child_state": "CHILD_NONZERO_EXIT",
+    "component": "relay",
+    "elapsed_ms": 61742,
+    "exit_code": 2,
+    "exited_at": "2026-08-13T02:39:38.720884Z",
+    "exited_monotonic_ns": 3525727983764,
+    "signal": null,
+    "started_at": "2026-08-13T02:38:36.979734Z",
+    "started_monotonic_ns": 3463985720568,
+    "stderr": {
+      "sensitive_hit_count": 0,
+      "stderr_byte_count": 0,
+      "stderr_excerpt": null,
+      "stderr_redacted": false,
+      "stderr_sha256": null,
+      "stderr_truncated": false
+    },
+    "terminal_reason": "RELAY_NONZERO_EXIT"
+  },
+  "request_id": "2f17745f58534063bdd7eda1eb0d16f1"
+}

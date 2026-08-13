@@ -63,6 +63,9 @@ def derived_source() -> bytes:
         '            "store": False,\n            "tools": [],\n            "temperature": 0,\n            "input": [',
         1,
     )
+    if text.count("if monotonic() > deadline:") != 2:
+        raise RuntimeError("ark_proxy_deadline_anchor_invalid")
+    text = text.replace("if monotonic() > deadline:", "if monotonic() >= deadline:")
     contract = json.loads(
         (REPO_ROOT / "docker/phase2-ark-egress-proxy/responses-contract.json").read_text(
             encoding="utf-8"

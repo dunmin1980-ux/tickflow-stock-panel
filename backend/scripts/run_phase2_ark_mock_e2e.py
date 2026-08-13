@@ -18,6 +18,7 @@ from typing import Any
 
 from app.providers.ark_provider import ARK_ENDPOINT_ALIAS, ARK_EXACT_MODEL_ID
 from app.services.phase2_ai_worker_protocol import build_worker_projection
+from app.services.phase2_ark_timeout_contract import ark_runtime_contract_sha256
 from app.services.phase2_canary_orchestrator import (
     ApprovedCanaryArtifacts,
     ArkDockerCanaryBackend,
@@ -25,12 +26,10 @@ from app.services.phase2_canary_orchestrator import (
     run_single_symbol_canary,
 )
 from app.services.phase2_canary_runtime_artifact import BASE_IMAGE_REFERENCE
-from app.services.phase2_canary_runtime_contract import runtime_contract_sha256
 from app.services.phase2_claims_service import canonical_json_bytes
 
-ARK_PROXY_IMAGE = "tickflow-phase2-ark-egress-proxy:runtime-v1"
-ARK_RELAY_IMAGE = "tickflow-phase2-canary-relay:runtime-v1"
-RELAY_IMAGE_ID = "sha256:54b4cbf91f578a6d6d328cb2a249444c0cdbdc633cbf63f6cf6f3b1ff8af3627"
+ARK_PROXY_IMAGE = "tickflow-phase2-ark-egress-proxy:timeout-v2"
+ARK_RELAY_IMAGE = "tickflow-phase2-ark-canary-relay:timeout-v2"
 PROVIDER_EVENTS = (
     "provider_connect_started",
     "provider_connect_completed",
@@ -376,6 +375,7 @@ def _run_once(
     root: Path,
     projection: dict[str, Any],
     proxy_image_id: str,
+    relay_image_id: str,
     certificate: Path,
     private_key: Path,
     response_path: Path,
@@ -394,8 +394,8 @@ def _run_once(
         facts_sha256=projection["facts_sha256"],
         projection_sha256=projection["projection_sha256"],
         proxy_image_id=proxy_image_id,
-        relay_image_id=RELAY_IMAGE_ID,
-        timeout_contract_sha256=runtime_contract_sha256(),
+        relay_image_id=relay_image_id,
+        timeout_contract_sha256=ark_runtime_contract_sha256(),
         readiness_contract_sha256=_sha256(
             repo_root / "docker/phase2-ark-egress-proxy/readiness-contract.json"
         ),
@@ -542,8 +542,6 @@ def main() -> int:
     relay = _run(["docker", "image", "inspect", ARK_RELAY_IMAGE, "--format", "{{.Id}}"])
     _require_success(relay, "ark_relay_image_missing")
     relay_image_id = relay.stdout.strip()
-    if relay_image_id != RELAY_IMAGE_ID:
-        raise ArkMockE2EError("ark_relay_image_identity_mismatch")
     facts_path = repo_root / "reports/phase2_facts/000403SZ_facts.json"
     facts_raw = facts_path.read_bytes()
     projection = build_worker_projection(
@@ -555,7 +553,7 @@ def main() -> int:
         "orchestrator_source_sha256": _sha256(
             repo_root / "backend/app/services/phase2_canary_orchestrator.py"
         ),
-        "runtime_contract_sha256": runtime_contract_sha256(),
+        "runtime_contract_sha256": ark_runtime_contract_sha256(),
         "facts_sha256": projection["facts_sha256"],
         "projection_sha256": projection["projection_sha256"],
     }
@@ -574,6 +572,7 @@ def main() -> int:
                 root=root,
                 projection=projection,
                 proxy_image_id=proxy_image_id,
+                relay_image_id=relay_image_id,
                 certificate=certificate,
                 private_key=private_key,
                 response_path=response_path,

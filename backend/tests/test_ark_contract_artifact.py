@@ -43,8 +43,10 @@ def test_committed_ark_candidate_binds_all_required_hashes() -> None:
         "runtime_contract_sha256",
         "readiness_contract_sha256",
         "facts_sha256",
+        "history_baseline_sha256",
         "projection_sha256",
         "typed_claims_schema_sha256",
+        "timeout_mock_e2e_sha256",
     }
     assert set(observed["artifact_hashes"]) == required
     assert len(hashlib.sha256(path.read_bytes()).hexdigest()) == 64

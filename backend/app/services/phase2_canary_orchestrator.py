@@ -35,6 +35,10 @@ from app.schemas.phase2_claims import ClaimsDocument, WorkerClaimsCandidate
 from app.services.phase2_ai_worker_protocol import (
     compute_projection_sha256,
 )
+from app.services.phase2_ark_timeout_contract import (
+    ark_runtime_contract_sha256,
+    load_ark_runtime_contract,
+)
 from app.services.phase2_canary_observability import (
     ChildExecutionTiming,
     ChildProcessEvidence,
@@ -277,6 +281,20 @@ _PINNED_LEGACY_RECEIPT_BUNDLES = {
             "15ec73d5b5c45c659790bc0942b0e5b11c5a6fc5dfe289b2d77d630ae6812294"
         ),
     },
+    "2f17745f58534063bdd7eda1eb0d16f1": {
+        "archive-status.json": (
+            "a540da4a95be4081225750dffa93c643cafee09c613ec90f21e23f649ae29f2e"
+        ),
+        "child-metadata.json": (
+            "e598dff711ff759e1fdd84576ce55af30b897891bd8225771077a0fab0e7f2db"
+        ),
+        "proxy-receipt.json": (
+            "46c05c526067bed736262354bd492e809ca0c8294d7523376d806f050e8be9e4"
+        ),
+        "relay-receipt.json": (
+            "e64a6de0dfa81e51e6ff50ea11fa516db6e20dbdce0f7d3ceb4c3e717579e9d9"
+        ),
+    },
 }
 
 
@@ -290,6 +308,41 @@ def _pinned_receipt_bundle_matches(
     return set(raw_by_name) == set(expected) and all(
         hashlib.sha256(raw_by_name[name]).hexdigest() == digest
         for name, digest in expected.items()
+    )
+
+
+def _is_pinned_ark_response_header_bridge(
+    *,
+    request_id: str,
+    provider_id: str,
+    pinned_receipt_bundle: bool,
+    proxy_receipt: Mapping[str, Any] | None,
+    relay_receipt: Mapping[str, Any] | None,
+) -> bool:
+    """Accept one immutable pre-fix Ark 502/None receipt mismatch only."""
+    if (
+        request_id != "2f17745f58534063bdd7eda1eb0d16f1"
+        or provider_id != "volcengine_ark"
+        or not pinned_receipt_bundle
+        or proxy_receipt is None
+        or relay_receipt is None
+    ):
+        return False
+    proxy_headers = proxy_receipt.get("response_headers_received")
+    relay_response = relay_receipt.get("response_received")
+    return (
+        proxy_receipt.get("response_category")
+        == "RESPONSE_HEADERS_NOT_RECEIVED"
+        and proxy_receipt.get("terminal_status")
+        == "RESPONSE_HEADERS_NOT_RECEIVED"
+        and proxy_receipt.get("provider_http_status") is None
+        and isinstance(proxy_headers, Mapping)
+        and proxy_headers.get("occurred") is False
+        and proxy_headers.get("http_status") is None
+        and relay_receipt.get("proxy_http_status") == 502
+        and isinstance(relay_response, Mapping)
+        and relay_response.get("occurred") is False
+        and relay_response.get("http_status") is None
     )
 
 
@@ -1722,6 +1775,7 @@ class ApprovalScopedLedgerNamespace:
         legacy_state_root: Path,
         historical_evidence_root: Path,
         candidate_roots: tuple[Path, ...],
+        additional_historical_evidence_roots: tuple[Path, ...] = (),
     ) -> None:
         self.repo_root = _validate_report_directory(
             repo_root,
@@ -1733,6 +1787,18 @@ class ApprovalScopedLedgerNamespace:
             historical_evidence_root,
             "historical_evidence_root_invalid",
         )
+        additional_roots = tuple(
+            _validate_report_directory(path, "historical_evidence_root_invalid")
+            for path in additional_historical_evidence_roots
+        )
+        self.historical_evidence_roots = (
+            self.historical_evidence_root,
+            *additional_roots,
+        )
+        if len(set(self.historical_evidence_roots)) != len(
+            self.historical_evidence_roots
+        ):
+            raise OrchestratorError("historical_evidence_root_duplicate")
         if not candidate_roots:
             raise OrchestratorError("candidate_roots_missing")
         self.candidate_roots = tuple(
@@ -1814,6 +1880,7 @@ class ApprovalScopedLedgerNamespace:
         for root in self.candidate_roots:
             candidates = (
                 root / f"{candidate_sha256}.json",
+                root / "superseded" / f"{candidate_sha256}.json",
                 root / "runtime_contract_candidate.json",
                 root / "approval_candidate.json",
             )
@@ -1861,7 +1928,7 @@ class ApprovalScopedLedgerNamespace:
                     "symbol",
                     "trade_date",
                 }
-                expected_hashes = {
+                historical_hashes = {
                     "ark_adapter_source_sha256",
                     "ark_launcher_source_sha256",
                     "ark_proxy_policy_sha256",
@@ -1873,17 +1940,27 @@ class ApprovalScopedLedgerNamespace:
                     "runtime_contract_sha256",
                     "typed_claims_schema_sha256",
                 }
+                timeout_contract_hashes = {
+                    *historical_hashes,
+                    "history_baseline_sha256",
+                    "timeout_mock_e2e_sha256",
+                }
+                status = value.get("status")
                 if (
                     raw != canonical_json_bytes(value)
                     or set(value) != expected_fields
                     or not isinstance(artifact_hashes, dict)
-                    or set(artifact_hashes) != expected_hashes
+                    or not (
+                        (status == "PHASE2B_ARK_PROVIDER_READY_FOR_REAPPROVAL"
+                        and set(artifact_hashes) == historical_hashes)
+                        or (status
+                        == "PHASE2B_ARK_TIMEOUT_CONTRACT_READY_FOR_REAPPROVAL"
+                        and set(artifact_hashes) == timeout_contract_hashes)
+                    )
                     or any(
                         not isinstance(digest, str) or _HEX_64.fullmatch(digest) is None
                         for digest in artifact_hashes.values()
                     )
-                    or value.get("status")
-                    != "PHASE2B_ARK_PROVIDER_READY_FOR_REAPPROVAL"
                     or value.get("provider_id") != "volcengine_ark"
                     or value.get("exact_model_id") != "doubao-seed-2-1-turbo-260628"
                     or value.get("endpoint_alias") != "ark_responses_cn_beijing_v1"
@@ -2023,8 +2100,23 @@ class ApprovalScopedLedgerNamespace:
         self,
         ledger: AttemptLedger | ApprovalScopedAttemptLedger,
     ) -> None:
+        matching_roots = tuple(
+            root
+            for root in self.historical_evidence_roots
+            if (
+                root / "evidence" / f"{ledger.identity.request_id}.json"
+            ).exists()
+            or (
+                root / "evidence" / f"{ledger.identity.request_id}.json"
+            ).is_symlink()
+        )
+        if not matching_roots:
+            raise OrchestratorError("historical_runtime_evidence_missing")
+        if len(matching_roots) != 1:
+            raise OrchestratorError("historical_runtime_evidence_duplicate")
+        historical_root = matching_roots[0]
         path = (
-            self.historical_evidence_root
+            historical_root
             / "evidence"
             / f"{ledger.identity.request_id}.json"
         )
@@ -2086,7 +2178,7 @@ class ApprovalScopedLedgerNamespace:
             or type(value.get("ledger_namespace_version")) is int
         )
         receipt_root = (
-            self.historical_evidence_root
+            historical_root
             / "receipts"
             / ledger.identity.request_id
         )
@@ -2200,6 +2292,15 @@ class ApprovalScopedLedgerNamespace:
                 if relay_receipt is not None
                 else None
             )
+            response_headers_not_received_bridge = (
+                _is_pinned_ark_response_header_bridge(
+                    request_id=ledger.identity.request_id,
+                    provider_id=ledger.identity.provider,
+                    pinned_receipt_bundle=pinned_legacy_bundle,
+                    proxy_receipt=proxy_receipt,
+                    relay_receipt=relay_receipt,
+                )
+            )
             http_semantics_valid = (
                 (
                     proxy_receipt is None
@@ -2224,6 +2325,7 @@ class ApprovalScopedLedgerNamespace:
                     relay_receipt is None
                     or proxy_receipt is None
                     or relay_receipt.get("proxy_http_status") == proxy_http_status
+                    or response_headers_not_received_bridge
                     or (
                         pinned_legacy_bundle
                         and ledger.identity.request_id
@@ -2239,6 +2341,7 @@ class ApprovalScopedLedgerNamespace:
                     or not isinstance(relay_response, dict)
                     or relay_response.get("http_status")
                     == relay_receipt.get("proxy_http_status")
+                    or response_headers_not_received_bridge
                     or (
                         pinned_legacy_bundle
                         and ledger.identity.request_id
@@ -2542,8 +2645,28 @@ class ApprovalScopedLedgerNamespace:
             "inbox": set(),
             "receipts": set(),
         }
+        for historical_root in self.historical_evidence_roots:
+            root_discovered = self._historical_artifact_request_ids_single_root(
+                historical_root
+            )
+            for category, request_ids in root_discovered.items():
+                if discovered[category].intersection(request_ids):
+                    raise OrchestratorError("historical_artifact_duplicate")
+                discovered[category].update(request_ids)
+        return discovered
+
+    def _historical_artifact_request_ids_single_root(
+        self,
+        historical_root: Path,
+    ) -> dict[str, set[str]]:
+        discovered: dict[str, set[str]] = {
+            "evidence": set(),
+            "rejected": set(),
+            "inbox": set(),
+            "receipts": set(),
+        }
         for directory_name in ("evidence", "rejected", "inbox"):
-            directory = self.historical_evidence_root / directory_name
+            directory = historical_root / directory_name
             if not directory.exists() and not directory.is_symlink():
                 continue
             directory = _validate_report_directory(
@@ -2560,10 +2683,7 @@ class ApprovalScopedLedgerNamespace:
                 raw = _read_report_regular(path, "historical_artifact_invalid")
                 if path.suffix == ".json":
                     try:
-                        value = _strict_json_bytes(
-                            raw,
-                            "historical_artifact_invalid",
-                        )
+                        value = _strict_json_bytes(raw, "historical_artifact_invalid")
                     except OrchestratorError as exc:
                         raise OrchestratorError("historical_artifact_invalid") from exc
                     if raw != canonical_json_bytes(value):
@@ -2572,12 +2692,8 @@ class ApprovalScopedLedgerNamespace:
                         try:
                             document = ClaimsDocument.model_validate(value)
                         except ValidationError as exc:
-                            raise OrchestratorError(
-                                "historical_artifact_invalid"
-                            ) from exc
-                        if raw != canonical_json_bytes(
-                            document.model_dump(mode="json")
-                        ):
+                            raise OrchestratorError("historical_artifact_invalid") from exc
+                        if raw != canonical_json_bytes(document.model_dump(mode="json")):
                             raise OrchestratorError("historical_artifact_invalid")
                         inbox_documents[path.stem] = document
                     elif directory_name == "rejected":
@@ -2591,9 +2707,7 @@ class ApprovalScopedLedgerNamespace:
                             or type(value.get("retry_count")) is not int
                             or value.get("retry_count") != 0
                         ):
-                            raise OrchestratorError(
-                                "historical_artifact_invalid"
-                            )
+                            raise OrchestratorError("historical_artifact_invalid")
                     elif value.get("request_id") != path.stem:
                         raise OrchestratorError("historical_artifact_invalid")
                 elif directory_name == "inbox":
@@ -2608,44 +2722,50 @@ class ApprovalScopedLedgerNamespace:
             if directory_name == "inbox":
                 try:
                     for request_id, document in inbox_documents.items():
-                        validation = validate_claims_document(
-                            self.repo_root,
-                            document,
-                        )
+                        validation = validate_claims_document(self.repo_root, document)
                         rendered = render_claims_document(document, validation)
-                        raw_markdown = inbox_markdown.get(request_id)
                         if (
                             validation.status != CLAIMS_VALID
                             or validation.errors
-                            or raw_markdown != rendered.encode("utf-8")
-                            or validate_rendered_document(
-                                document,
-                                validation,
-                                rendered,
-                            )
+                            or inbox_markdown.get(request_id) != rendered.encode("utf-8")
+                            or validate_rendered_document(document, validation, rendered)
                         ):
-                            raise OrchestratorError(
-                                "historical_artifact_invalid"
-                            )
+                            raise OrchestratorError("historical_artifact_invalid")
                 except OrchestratorError:
                     raise
                 except Exception as exc:
-                    raise OrchestratorError(
-                        "historical_artifact_invalid"
-                    ) from exc
-
-        receipts = self.historical_evidence_root / "receipts"
+                    raise OrchestratorError("historical_artifact_invalid") from exc
+        receipts = historical_root / "receipts"
         if receipts.exists() or receipts.is_symlink():
-            receipts = _validate_report_directory(
-                receipts,
-                "historical_artifact_directory_invalid",
-            )
+            receipts = _validate_report_directory(receipts, "historical_artifact_directory_invalid")
             for request_root in sorted(receipts.iterdir(), key=lambda item: item.name):
                 if _HEX_32.fullmatch(request_root.name) is None:
                     raise OrchestratorError("historical_artifact_path_invalid")
+                expected_identity: Mapping[str, str] | None = None
+                proxy_receipt = request_root / "proxy-receipt.json"
+                if proxy_receipt.exists() or proxy_receipt.is_symlink():
+                    raw = _read_report_regular(
+                        proxy_receipt,
+                        "historical_receipt_invalid",
+                    )
+                    value = _strict_json_bytes(raw, "historical_receipt_invalid")
+                    identity_fields = {
+                        field: value.get(field)
+                        for field in _ARK_PROXY_RECEIPT_IDENTITY
+                    }
+                    identity_presence = tuple(
+                        field in value for field in _ARK_PROXY_RECEIPT_IDENTITY
+                    )
+                    if any(identity_presence):
+                        if not all(identity_presence):
+                            raise OrchestratorError("historical_receipt_invalid")
+                        if identity_fields != _ARK_PROXY_RECEIPT_IDENTITY:
+                            raise OrchestratorError("historical_receipt_invalid")
+                        expected_identity = _ARK_PROXY_RECEIPT_IDENTITY
                 self._validate_historical_receipt_directory(
                     request_root,
                     request_root.name,
+                    expected_proxy_identity=expected_identity,
                 )
                 discovered["receipts"].add(request_root.name)
         return discovered
@@ -3124,6 +3244,7 @@ class CanaryOrchestratorConfig:
     historical_evidence_root: Path
     candidate_roots: tuple[Path, ...]
     facts_path: Path
+    additional_historical_evidence_roots: tuple[Path, ...] = ()
 
     def __post_init__(self) -> None:
         repo = self.repo_root.resolve(strict=True)
@@ -3143,6 +3264,15 @@ class CanaryOrchestratorConfig:
             "historical_evidence_root_invalid",
         )
         object.__setattr__(self, "historical_evidence_root", historical)
+        additional_historical = tuple(
+            _validate_report_directory(path, "historical_evidence_root_invalid")
+            for path in self.additional_historical_evidence_roots
+        )
+        object.__setattr__(
+            self,
+            "additional_historical_evidence_roots",
+            additional_historical,
+        )
         if not self.candidate_roots:
             raise OrchestratorError("candidate_roots_missing")
         candidate_roots = tuple(
@@ -4291,6 +4421,16 @@ def _result(
     )
 
 
+def _host_deadline_expired(
+    *,
+    monotonic: Callable[[], float],
+    deadline: float,
+    provider_id: str,
+) -> bool:
+    observed = monotonic()
+    return observed >= deadline if provider_id == "volcengine_ark" else observed > deadline
+
+
 def _terminal_category(error: BaseException) -> str:
     value = str(error).strip()
     if not value:
@@ -4493,6 +4633,9 @@ def run_single_symbol_canary(
         legacy_state_root=config.state_root,
         historical_evidence_root=config.historical_evidence_root,
         candidate_roots=config.candidate_roots,
+        additional_historical_evidence_roots=(
+            config.additional_historical_evidence_roots
+        ),
     )
     lock = ExclusiveCanaryLock(
         config.state_root,
@@ -4532,8 +4675,13 @@ def run_single_symbol_canary(
             != artifacts.projection_sha256
         ):
             raise OrchestratorError("PROJECTION_BINDING_INVALID")
-        runtime = load_runtime_contract().model_dump(mode="json")
-        if runtime_contract_sha256() != artifacts.timeout_contract_sha256:
+        if provider_id == "volcengine_ark":
+            runtime = load_ark_runtime_contract().model_dump(mode="json")
+            runtime_sha256 = ark_runtime_contract_sha256()
+        else:
+            runtime = load_runtime_contract().model_dump(mode="json")
+            runtime_sha256 = runtime_contract_sha256()
+        if runtime_sha256 != artifacts.timeout_contract_sha256:
             raise OrchestratorError("TIMEOUT_CONTRACT_MISMATCH")
 
         preflight = namespace.preflight(scope)
@@ -4654,7 +4802,11 @@ def run_single_symbol_canary(
             timestamp=wall_clock(),
         )
         dispatch = backend.dispatch(context, deadline=host_deadline)
-        if monotonic() > host_deadline:
+        if _host_deadline_expired(
+            monotonic=monotonic,
+            deadline=host_deadline,
+            provider_id=provider_id,
+        ):
             raise BackendError("ORCHESTRATOR_TIMEOUT")
         provider_http_status = dispatch.provider_http_status
         if dispatch.response_received:
@@ -4663,7 +4815,11 @@ def run_single_symbol_canary(
                 timestamp=wall_clock(),
             )
         relay = _collect_candidate(context, projection)
-        if monotonic() > host_deadline:
+        if _host_deadline_expired(
+            monotonic=monotonic,
+            deadline=host_deadline,
+            provider_id=provider_id,
+        ):
             raise BackendError("ORCHESTRATOR_TIMEOUT")
         ledger = store.transition(
             LedgerState.CANDIDATE_COLLECTED,
@@ -4674,7 +4830,11 @@ def run_single_symbol_canary(
             relay["claims_candidate"],
             projection,
         )
-        if monotonic() > host_deadline:
+        if _host_deadline_expired(
+            monotonic=monotonic,
+            deadline=host_deadline,
+            provider_id=provider_id,
+        ):
             raise BackendError("ORCHESTRATOR_TIMEOUT")
         host_validation_status = "VALID"
         route_paths = _publish_route(
@@ -4871,11 +5031,15 @@ def _mock_stage_event(
 class MockCanaryBackend:
     """Deterministic local fault injector; it never opens a socket."""
 
+    proxy_receipt_identity: Mapping[str, str] = _OPENAI_PROXY_RECEIPT_IDENTITY
+
     FAULT_CATALOG = (
         "provider_1s",
         "provider_59s",
         "provider_60s",
         "provider_over_60s",
+        "provider_179s",
+        "provider_180s",
         "relay_exit_before_candidate",
         "proxy_exit_after_request",
         "host_crash_before_dispatch",
@@ -4951,6 +5115,7 @@ class MockCanaryBackend:
                         "response_size": None,
                         "response_bytes": None,
                         "terminal_status": "PROXY_READY",
+                        **self.proxy_receipt_identity,
                         **proxy_events,
                     }
                 ),
@@ -4984,8 +5149,10 @@ class MockCanaryBackend:
         )
 
     def _write_receipts(self, context: CanaryRuntimeContext) -> None:
+        provider_timed_out = self.scenario in {"provider_over_60s", "provider_180s"}
         relay_failed = self.scenario in {
             "provider_over_60s",
+            "provider_180s",
             "relay_exit_before_candidate",
             "nonzero_container_exit",
             "proxy_exit_after_request",
@@ -4994,6 +5161,7 @@ class MockCanaryBackend:
         }
         candidate_published = self.scenario not in {
             "provider_over_60s",
+            "provider_180s",
             "relay_exit_before_candidate",
             "nonzero_container_exit",
             "proxy_exit_after_request",
@@ -5006,13 +5174,23 @@ class MockCanaryBackend:
         proxy_events: dict[str, dict[str, Any]] = {}
         for index, name in enumerate(_PROXY_EVENTS, start=1):
             occurred = not (
-                self.scenario == "proxy_exit_after_request"
-                and name
-                in {
-                    "request_write_completed",
-                    "response_headers_received",
-                    "response_body_completed",
-                }
+                (
+                    self.scenario == "proxy_exit_after_request"
+                    and name
+                    in {
+                        "request_write_completed",
+                        "response_headers_received",
+                        "response_body_completed",
+                    }
+                )
+                or (
+                    provider_timed_out
+                    and name
+                    in {
+                        "response_headers_received",
+                        "response_body_completed",
+                    }
+                )
             )
             proxy_events[name] = _mock_stage_event(
                 name,
@@ -5035,6 +5213,8 @@ class MockCanaryBackend:
         proxy_category = (
             "REQUEST_WRITE_FAILED"
             if self.scenario == "proxy_exit_after_request"
+            else "RESPONSE_HEADERS_NOT_RECEIVED"
+            if provider_timed_out
             else "FORWARDED"
         )
         proxy_receipt = {
@@ -5049,25 +5229,36 @@ class MockCanaryBackend:
             "provider_attempt_count": 1,
             "retry_count": 0,
             "provider_http_status": (
-                None if self.scenario == "proxy_exit_after_request" else 200
+                None
+                if self.scenario == "proxy_exit_after_request" or provider_timed_out
+                else 200
             ),
             "response_category": proxy_category,
             "response_size": (
-                None if self.scenario == "proxy_exit_after_request" else 1
+                None
+                if self.scenario == "proxy_exit_after_request" or provider_timed_out
+                else 1
             ),
             "response_bytes": (
-                None if self.scenario == "proxy_exit_after_request" else 1
+                None
+                if self.scenario == "proxy_exit_after_request" or provider_timed_out
+                else 1
             ),
             "terminal_status": proxy_category,
+            **self.proxy_receipt_identity,
             **proxy_events,
         }
         relay_events: dict[str, dict[str, Any]] = {}
         for index, name in enumerate(_RELAY_EVENTS, start=20):
-            occurred = name not in {
-                "candidate_write_started",
-                "candidate_write_completed",
-                "candidate_ready_published",
-            } or candidate_published
+            occurred = (
+                name
+                not in {
+                    "candidate_write_started",
+                    "candidate_write_completed",
+                    "candidate_ready_published",
+                }
+                or candidate_published
+            ) and not (provider_timed_out and name == "response_received")
             relay_events[name] = _mock_stage_event(
                 name,
                 occurred=occurred,
@@ -5079,14 +5270,14 @@ class MockCanaryBackend:
             "RELAY_NONZERO_EXIT"
             if self.scenario in {"relay_exit_before_candidate", "nonzero_container_exit"}
             else "RELAY_TIMEOUT"
-            if self.scenario == "provider_over_60s"
+            if self.scenario in {"provider_over_60s", "provider_180s"}
             else "RELAY_PROCESS_ERROR"
             if relay_failed
             else "RELAY_COMPLETED"
         )
         relay_terminal_source = (
             "relay_self"
-            if self.scenario in {"provider_over_60s"} or not relay_failed
+            if self.scenario in {"provider_over_60s", "provider_180s"} or not relay_failed
             else "host_child_process"
         )
         relay_receipt = {
@@ -5098,7 +5289,7 @@ class MockCanaryBackend:
             "terminal_status": relay_terminal,
             "terminal_reason_source": relay_terminal_source,
             "error_category": relay_terminal if relay_failed else None,
-            "proxy_http_status": 200,
+            "proxy_http_status": 502 if provider_timed_out else 200,
             "proxy_request_count": 1,
             "retry_count": 0,
             "response_size": 1,
@@ -5173,9 +5364,11 @@ class MockCanaryBackend:
             "provider_59s": 59.0,
             "provider_60s": 60.0,
             "provider_over_60s": 60.000_001,
+            "provider_179s": 179.0,
+            "provider_180s": 180.0,
         }
         self._now += delays.get(self.scenario, 1.0)
-        if self.scenario == "provider_over_60s":
+        if self.scenario in {"provider_over_60s", "provider_180s"}:
             raise BackendError("PROVIDER_TIMEOUT")
         if self.scenario in {"proxy_exit_after_request", "host_crash_after_dispatch"}:
             raise BackendError(
@@ -5221,7 +5414,7 @@ class MockCanaryBackend:
         return _archive_stage_evidence(
             context,
             self._child_evidence,
-            expected_proxy_identity=_OPENAI_PROXY_RECEIPT_IDENTITY,
+            expected_proxy_identity=self.proxy_receipt_identity,
         )
 
     def cleanup(
@@ -5242,6 +5435,12 @@ class MockCanaryBackend:
                 network_residue_count=1,
             )
         return CleanupResult(completed=True)
+
+
+class ArkMockCanaryBackend(MockCanaryBackend):
+    """Socket-free Mock with the exact Ark receipt identity contract."""
+
+    proxy_receipt_identity: Mapping[str, str] = _ARK_PROXY_RECEIPT_IDENTITY
 
 
 CommandExecutor = Callable[

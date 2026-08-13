@@ -1,11 +1,11 @@
 {
   "canary_runtime_contract_version": 1,
   "cleanup_timeout_seconds": 15,
-  "host_orchestrator_timeout_seconds": 210,
+  "host_orchestrator_timeout_seconds": 90,
   "maximum_provider_attempts": 1,
   "provider_connect_timeout_seconds": 10,
-  "provider_read_timeout_seconds": 180,
-  "provider_total_timeout_seconds": 180,
-  "relay_candidate_wait_timeout_seconds": 195,
+  "provider_read_timeout_seconds": 60,
+  "provider_total_timeout_seconds": 60,
+  "relay_candidate_wait_timeout_seconds": 75,
   "retry_count": 0
 }

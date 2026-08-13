@@ -1,0 +1,129 @@
+{
+  "ark_timeout_mock_e2e_schema_version": 1,
+  "exact_model_id": "doubao-seed-2-1-turbo-260628",
+  "host_timeout_seconds": 210,
+  "maximum_provider_attempts": 1,
+  "provider_id": "volcengine_ark",
+  "provider_timeout_seconds": 180,
+  "public_network_used": false,
+  "real_ai_call_count": 0,
+  "real_provider_attempt_count": 0,
+  "relay_timeout_seconds": 195,
+  "retry_count": 0,
+  "runs": [
+    {
+      "candidate_valid": true,
+      "claims_valid": true,
+      "failure_stage": null,
+      "passed": true,
+      "provider_attempt_count": 1,
+      "provider_http": "MOCK_ONLY",
+      "proxy_receipt_identity": {
+        "endpoint_alias": "ark_responses_cn_beijing_v1",
+        "exact_model_id": "doubao-seed-2-1-turbo-260628",
+        "provider_id": "volcengine_ark"
+      },
+      "real_provider_attempt_count": 0,
+      "renderer_deterministic": true,
+      "result": {
+        "approval_scope_id": "675346cf0dba0a1d0233cc7576287a2fcb528083e068728149df0b865c1adf02",
+        "container_residue_count": 0,
+        "host_validation_status": "VALID",
+        "network_residue_count": 0,
+        "route": "inbox",
+        "secret_file_residue_count": 0,
+        "temporary_file_residue_count": 0
+      },
+      "retry_count": 0,
+      "scenario": "fast_response",
+      "terminal_state": "SUCCEEDED",
+      "virtual_elapsed_seconds": 1.0
+    },
+    {
+      "candidate_valid": true,
+      "claims_valid": true,
+      "failure_stage": null,
+      "passed": true,
+      "provider_attempt_count": 1,
+      "provider_http": "MOCK_ONLY",
+      "proxy_receipt_identity": {
+        "endpoint_alias": "ark_responses_cn_beijing_v1",
+        "exact_model_id": "doubao-seed-2-1-turbo-260628",
+        "provider_id": "volcengine_ark"
+      },
+      "real_provider_attempt_count": 0,
+      "renderer_deterministic": true,
+      "result": {
+        "approval_scope_id": "fa3f562eeed3623d820a88d2aedc41864031893e42f67dc7b7ffaab2207ccfc4",
+        "container_residue_count": 0,
+        "host_validation_status": "VALID",
+        "network_residue_count": 0,
+        "route": "inbox",
+        "secret_file_residue_count": 0,
+        "temporary_file_residue_count": 0
+      },
+      "retry_count": 0,
+      "scenario": "about_60s_response",
+      "terminal_state": "SUCCEEDED",
+      "virtual_elapsed_seconds": 60.0
+    },
+    {
+      "candidate_valid": true,
+      "claims_valid": true,
+      "failure_stage": null,
+      "passed": true,
+      "provider_attempt_count": 1,
+      "provider_http": "MOCK_ONLY",
+      "proxy_receipt_identity": {
+        "endpoint_alias": "ark_responses_cn_beijing_v1",
+        "exact_model_id": "doubao-seed-2-1-turbo-260628",
+        "provider_id": "volcengine_ark"
+      },
+      "real_provider_attempt_count": 0,
+      "renderer_deterministic": true,
+      "result": {
+        "approval_scope_id": "87643ee85b6fab5637736931def5393a0bd6bb39ec01d73bec6020fc7745d7e1",
+        "container_residue_count": 0,
+        "host_validation_status": "VALID",
+        "network_residue_count": 0,
+        "route": "inbox",
+        "secret_file_residue_count": 0,
+        "temporary_file_residue_count": 0
+      },
+      "retry_count": 0,
+      "scenario": "before_180s_response",
+      "terminal_state": "SUCCEEDED",
+      "virtual_elapsed_seconds": 179.0
+    },
+    {
+      "candidate_valid": false,
+      "claims_valid": false,
+      "failure_stage": "WAITING_FOR_PROVIDER_RESPONSE_HEADERS",
+      "passed": true,
+      "provider_attempt_count": 1,
+      "provider_http": "MOCK_ONLY",
+      "proxy_receipt_identity": {
+        "endpoint_alias": "ark_responses_cn_beijing_v1",
+        "exact_model_id": "doubao-seed-2-1-turbo-260628",
+        "provider_id": "volcengine_ark"
+      },
+      "real_provider_attempt_count": 0,
+      "renderer_deterministic": false,
+      "result": {
+        "approval_scope_id": "fb312381e326c709fac2e33d052e6a7dea0e9059f8976ffe1732278ba73f93f3",
+        "container_residue_count": 0,
+        "host_validation_status": "NOT_RUN",
+        "network_residue_count": 0,
+        "route": "rejected",
+        "secret_file_residue_count": 0,
+        "temporary_file_residue_count": 0
+      },
+      "retry_count": 0,
+      "scenario": "at_180s_deadline",
+      "terminal_state": "PROVIDER_TIMEOUT",
+      "virtual_elapsed_seconds": 180.0
+    }
+  ],
+  "runtime_contract_sha256": "3cb3064e4e68bb2e9a07a9153f9c2bcef8de127ac0fd779b2c41e1ab9e0ac681",
+  "status": "PASSED"
+}

@@ -31,15 +31,20 @@ artifacts and cannot be overridden by environment variables.
 
 ## Source of truth and propagation
 
-`backend/app/services/phase2_canary_runtime_contract.json` is the canonical
-contract. The synchronized proxy and relay copies are generated from it. Ark
-request policy and relay request generation must consume the canonical values,
-so there is no separate hard-coded 60/75-second path.
+`backend/app/services/phase2_ark_timeout_contract.json` is the Ark-only canonical
+contract. The existing OpenAI runtime contract remains byte-identical at
+60/75/90. Ark request policy and relay request generation consume the Ark
+contract, so there is no separate hard-coded 60/75-second Ark path.
+
+The Ark proxy receives a synchronized copy. The unchanged relay source is built
+as a distinct Ark relay image with the Ark contract in an isolated build context;
+the shared OpenAI relay image and its embedded contract remain unchanged.
 
 Artifacts whose identity binds the contract are rebuilt after the source change:
 
-- canonical runtime contract and synchronized copies;
+- canonical Ark runtime contract and synchronized Ark copies;
 - Ark proxy image and immutable image identity;
+- Ark relay image built from the unchanged relay source and Ark contract;
 - Ark approval candidate and approval scope evidence;
 - Ark mock evidence and timeout-specific evaluation evidence.
 

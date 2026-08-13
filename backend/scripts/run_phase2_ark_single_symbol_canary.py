@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import re
+import stat
 import sys
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -29,6 +32,16 @@ from app.services.phase2_canary_orchestrator import (
     run_single_symbol_canary,
 )
 
+_HEX_32 = re.compile(r"^[0-9a-f]{32}$")
+_HEX_64 = re.compile(r"^[0-9a-f]{64}$")
+_HISTORICAL_CATEGORIES = {"evidence", "inbox", "receipts", "rejected"}
+_RECEIPT_FILES = {
+    "archive-status.json",
+    "child-metadata.json",
+    "proxy-receipt.json",
+    "relay-receipt.json",
+}
+
 
 def _timestamp() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
@@ -40,6 +53,71 @@ def _private_directory(path: Path) -> Path:
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     path.chmod(0o700)
     return path
+
+
+def _directory_without_symlink(path: Path) -> None:
+    try:
+        metadata = os.lstat(path)
+    except OSError as exc:
+        raise RuntimeError("committed_runtime_mode_invalid") from exc
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+        raise RuntimeError("committed_runtime_mode_invalid")
+    path.chmod(0o700)
+
+
+def _regular_without_symlink(path: Path) -> None:
+    try:
+        metadata = os.lstat(path)
+    except OSError as exc:
+        raise RuntimeError("committed_runtime_mode_invalid") from exc
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+        raise RuntimeError("committed_runtime_mode_invalid")
+    path.chmod(0o600)
+
+
+def normalize_committed_runtime_modes(repo_root: Path) -> None:
+    """Restore private modes Git cannot preserve, without touching bytes."""
+    root = repo_root.resolve(strict=True)
+    attempts = root / "reports/phase2_provider_canary/attempts"
+    _directory_without_symlink(attempts)
+    for scope in sorted(attempts.iterdir(), key=lambda item: item.name):
+        if _HEX_64.fullmatch(scope.name) is None:
+            raise RuntimeError("committed_runtime_mode_invalid")
+        _directory_without_symlink(scope)
+        for request in sorted(scope.iterdir(), key=lambda item: item.name):
+            if _HEX_32.fullmatch(request.name) is None:
+                raise RuntimeError("committed_runtime_mode_invalid")
+            _directory_without_symlink(request)
+            if {entry.name for entry in request.iterdir()} != {"ledger.json"}:
+                raise RuntimeError("committed_runtime_mode_invalid")
+            _regular_without_symlink(request / "ledger.json")
+
+    history = root / "reports/phase2_provider_ark/live_canary"
+    _directory_without_symlink(history)
+    for category in sorted(history.iterdir(), key=lambda item: item.name):
+        if category.name not in _HISTORICAL_CATEGORIES:
+            raise RuntimeError("committed_runtime_mode_invalid")
+        _directory_without_symlink(category)
+        if category.name == "receipts":
+            for request in sorted(category.iterdir(), key=lambda item: item.name):
+                if _HEX_32.fullmatch(request.name) is None:
+                    raise RuntimeError("committed_runtime_mode_invalid")
+                _directory_without_symlink(request)
+                entries = tuple(request.iterdir())
+                if not entries or any(
+                    entry.name not in _RECEIPT_FILES for entry in entries
+                ):
+                    raise RuntimeError("committed_runtime_mode_invalid")
+                for entry in entries:
+                    _regular_without_symlink(entry)
+            continue
+        for entry in sorted(category.iterdir(), key=lambda item: item.name):
+            if (
+                _HEX_32.fullmatch(entry.stem) is None
+                or entry.suffix not in ({".json", ".md"} if category.name == "inbox" else {".json"})
+            ):
+                raise RuntimeError("committed_runtime_mode_invalid")
+            _regular_without_symlink(entry)
 
 
 def _approved_artifacts(approved: ApprovedArkCandidateSnapshot) -> ApprovedCanaryArtifacts:
@@ -68,6 +146,8 @@ def main(argv: list[str] | None = None) -> int:
     candidate_path = repo_root / "reports/phase2_provider_ark/approval_candidate.json"
     approval_path = ark_support / "runtime-approval.json"
 
+    normalize_committed_runtime_modes(repo_root)
+
     try:
         approved = load_installed_ark_approval(candidate_path, approval_path)
         validate_ark_approval_candidate(repo_root, approved.candidate)
@@ -93,6 +173,7 @@ def main(argv: list[str] | None = None) -> int:
         historical_evidence_root=_private_directory(
             repo_root / "reports/phase2_provider_canary/live_canary"
         ),
+        additional_historical_evidence_roots=(output_root,),
         candidate_roots=(
             repo_root / "reports/phase2_provider_canary/superseded",
             repo_root / "reports/phase2_provider_canary",

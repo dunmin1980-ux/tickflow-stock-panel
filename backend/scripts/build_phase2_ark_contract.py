@@ -18,9 +18,12 @@ from app.providers.ark_contract import (
     validate_ark_image_set,
 )
 from app.services.phase2_claims_service import canonical_json_bytes
+from scripts.run_phase2_ark_single_symbol_canary import (
+    normalize_committed_runtime_modes,
+)
 
-PROXY_IMAGE = "tickflow-phase2-ark-egress-proxy:runtime-v1"
-RELAY_IMAGE = "tickflow-phase2-canary-relay:runtime-v1"
+PROXY_IMAGE = "tickflow-phase2-ark-egress-proxy:timeout-v2"
+RELAY_IMAGE = "tickflow-phase2-ark-canary-relay:timeout-v2"
 
 
 def _inspect_image(reference: str) -> tuple[str, dict[str, str]]:
@@ -68,6 +71,7 @@ def main() -> int:
     parser.add_argument("--write", action="store_true")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
+    normalize_committed_runtime_modes(root)
     proxy_image_id, proxy_labels = _inspect_image(PROXY_IMAGE)
     relay_image_id, relay_labels = _inspect_image(RELAY_IMAGE)
     validate_ark_image_set(

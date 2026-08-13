@@ -39,7 +39,7 @@ READY_PATH = Path("/output/proxy-ready.json")
 AUTH_MAXIMUM_BYTES = 16_384
 
 _EXPECTED_CONTRACT_SHA256 = (
-    "785eca4ed9ae1417e33f871f2bcf600e1c17725d12fa2c525ec00c1465208b19"
+    "9704745f75d338bd669314b6aa8fcdf4fb4efc0ef6ba4f2487c57c35dd1a8c79"
 )
 _HEX_32 = re.compile(r"^[0-9a-f]{32}$")
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")
@@ -1213,7 +1213,7 @@ def perform_provider_request(
             ) from exc
         recorder.record("provider_connect_completed")
         recorder.record("tls_completed")
-        if monotonic() > deadline:
+        if monotonic() >= deadline:
             raise ProxyError("TIMEOUT", provider_attempt_count=1)
         if connection.sock is None:
             raise ProxyError("UPSTREAM_REJECTED", provider_attempt_count=1)
@@ -1310,7 +1310,7 @@ def perform_provider_request(
             http_status=status_code,
             byte_count=len(raw),
         )
-        if monotonic() > deadline:
+        if monotonic() >= deadline:
             raise ProxyError(
                 "TIMEOUT",
                 provider_http_status=status_code,

@@ -1,0 +1,100 @@
+{
+  "auth_present": true,
+  "component": "proxy",
+  "endpoint_alias": "ark_responses_cn_beijing_v1",
+  "exact_model_id": "doubao-seed-2-1-turbo-260628",
+  "method_allowed": true,
+  "path_allowed": true,
+  "process_started": {
+    "byte_count": null,
+    "event": "process_started",
+    "http_status": null,
+    "monotonic_ns": 1426007096330,
+    "occurred": true,
+    "wall_time": "2026-08-13T02:38:36.784366Z"
+  },
+  "provider_attempt_count": 1,
+  "provider_connect_completed": {
+    "byte_count": null,
+    "event": "provider_connect_completed",
+    "http_status": null,
+    "monotonic_ns": 1428470135870,
+    "occurred": true,
+    "wall_time": "2026-08-13T02:38:39.252070Z"
+  },
+  "provider_connect_started": {
+    "byte_count": null,
+    "event": "provider_connect_started",
+    "http_status": null,
+    "monotonic_ns": 1427677470847,
+    "occurred": true,
+    "wall_time": "2026-08-13T02:38:38.459414Z"
+  },
+  "provider_http_status": null,
+  "provider_id": "volcengine_ark",
+  "proxy_ready": {
+    "byte_count": null,
+    "event": "proxy_ready",
+    "http_status": null,
+    "monotonic_ns": 1426124956720,
+    "occurred": true,
+    "wall_time": "2026-08-13T02:38:36.906902Z"
+  },
+  "receipt_schema_version": 2,
+  "redirect_followed": false,
+  "relay_request_received": {
+    "byte_count": null,
+    "event": "relay_request_received",
+    "http_status": null,
+    "monotonic_ns": 1427589863849,
+    "occurred": true,
+    "wall_time": "2026-08-13T02:38:38.371822Z"
+  },
+  "request_id": "2f17745f58534063bdd7eda1eb0d16f1",
+  "request_write_completed": {
+    "byte_count": 33702,
+    "event": "request_write_completed",
+    "http_status": null,
+    "monotonic_ns": 1428470737983,
+    "occurred": true,
+    "wall_time": "2026-08-13T02:38:39.252689Z"
+  },
+  "request_write_started": {
+    "byte_count": null,
+    "event": "request_write_started",
+    "http_status": null,
+    "monotonic_ns": 1428470250261,
+    "occurred": true,
+    "wall_time": "2026-08-13T02:38:39.252213Z"
+  },
+  "response_body_completed": {
+    "byte_count": null,
+    "event": "response_body_completed",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "response_bytes": null,
+  "response_category": "RESPONSE_HEADERS_NOT_RECEIVED",
+  "response_headers_received": {
+    "byte_count": null,
+    "event": "response_headers_received",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "response_size": null,
+  "retry_count": 0,
+  "terminal_status": "RESPONSE_HEADERS_NOT_RECEIVED",
+  "tls_completed": {
+    "byte_count": null,
+    "event": "tls_completed",
+    "http_status": null,
+    "monotonic_ns": 1428470214630,
+    "occurred": true,
+    "wall_time": "2026-08-13T02:38:39.252122Z"
+  },
+  "tls_verification": true
+}

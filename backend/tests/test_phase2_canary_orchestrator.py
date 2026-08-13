@@ -1321,12 +1321,14 @@ def test_projection_binding_mismatch_fails_before_secret(
     assert backend.dispatch_count == 0
 
 
-def test_mock_fault_catalog_is_exactly_the_twenty_required_cases() -> None:
+def test_mock_fault_catalog_contains_the_required_timeout_cases() -> None:
     assert MockCanaryBackend.FAULT_CATALOG == (
         "provider_1s",
         "provider_59s",
         "provider_60s",
         "provider_over_60s",
+        "provider_179s",
+        "provider_180s",
         "relay_exit_before_candidate",
         "proxy_exit_after_request",
         "host_crash_before_dispatch",

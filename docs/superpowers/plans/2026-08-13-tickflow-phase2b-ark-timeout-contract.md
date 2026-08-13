@@ -37,21 +37,23 @@
 ## Task 3: Implement the minimal contract propagation
 
 **Files:**
-- Modify: `backend/app/services/phase2_canary_runtime_contract.json`
-- Modify: `backend/app/services/phase2_canary_runtime_contract.py`
+- Create: `backend/app/services/phase2_ark_timeout_contract.json`
+- Create: `backend/app/services/phase2_ark_timeout_contract.py`
 - Modify: `backend/app/providers/ark_contract.py`
-- Modify only if required: `backend/app/services/phase2_canary_orchestrator.py`
-- Synchronize: `docker/phase2-openai-egress-proxy/runtime-contract.json`
+- Modify: `backend/app/services/phase2_canary_orchestrator.py`
 - Synchronize: `docker/phase2-ark-egress-proxy/runtime-contract.json`
-- Synchronize: `docker/phase2-canary-relay/runtime-contract.json`
+- Create: `backend/scripts/build_phase2_ark_runtime_images.py`
 
-1. Replace only the timeout values in the canonical contract.
-2. Add the Ark proxy contract to canonical copy synchronization.
-3. Derive Ark provider and relay timeout policy from the canonical runtime contract
+1. Add an Ark-only canonical contract and keep the OpenAI 60/75/90 contract
+   byte-identical.
+2. Synchronize the Ark proxy contract from the Ark source.
+3. Build an Ark-specific relay image from the unchanged shared relay source and the
+   Ark contract in an isolated temporary context.
+4. Derive Ark provider and relay timeout policy from the Ark runtime contract
    rather than duplicate literals.
-4. Preserve provider/model/endpoint/prompt/reasoning/schema/facts/renderer and
+5. Preserve provider/model/endpoint/prompt/reasoning/schema/facts/renderer and
    retry behavior.
-5. Re-run focused tests until green.
+6. Re-run focused tests until green.
 
 ## Task 4: Produce deterministic mock evidence
 
