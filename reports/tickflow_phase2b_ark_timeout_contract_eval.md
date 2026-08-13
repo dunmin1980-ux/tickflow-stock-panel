@@ -102,7 +102,8 @@ e4eff708671ecde8f9dc8473769dd3ee86a08b8570637ae219d513fade68a964
 ## 6. 验证结果
 
 ```text
-Ark/Runtime 聚焦回归：250 passed
+Ark/Runtime 聚焦回归：255 passed
+全新 git archive 专项：49 passed
 Backend full：2501 passed
 compileall：PASSED
 Ruff F821：PASSED
@@ -111,6 +112,9 @@ git diff --check：PASSED
 敏感形态扫描：CLEAN
 独立复审：NO ACTIONABLE FINDINGS
 ```
+
+专项测试的历史 preflight fixture 只在 `tmp_path` 副本中恢复 Git 无法保存的
+`0700/0600` 权限；它不再修改工作区证据，也不依赖当前用户目录状态。
 
 Docker 收尾：
 

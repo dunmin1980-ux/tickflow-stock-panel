@@ -467,14 +467,31 @@ def test_response_header_bridge_is_restricted_to_pinned_consumed_ark_request() -
     ) is False
 
 
-def test_historical_consumed_scope_passes_narrow_response_header_bridge() -> None:
-    receipt_root = (
+def test_historical_consumed_scope_passes_narrow_response_header_bridge(
+    tmp_path: Path,
+) -> None:
+    source_hashes = {
+        relative: _sha256(REPO_ROOT / relative)
+        for relative in HISTORICAL_HASHES
+    }
+    attempts_root = tmp_path / "reports/phase2_provider_canary/attempts"
+    ark_history_root = tmp_path / "reports/phase2_provider_ark/live_canary"
+    shutil.copytree(
         REPO_ROOT
-        / "reports/phase2_provider_ark/live_canary/receipts"
-        / REQUEST_ID
+        / "reports/phase2_provider_canary/attempts"
+        / OLD_SCOPE_ID
+        / REQUEST_ID,
+        attempts_root / OLD_SCOPE_ID / REQUEST_ID,
     )
-    for path in receipt_root.iterdir():
-        path.chmod(0o600)
+    shutil.copytree(
+        REPO_ROOT / "reports/phase2_provider_ark/live_canary",
+        ark_history_root,
+    )
+    normalize_committed_runtime_modes(tmp_path)
+    legacy_state_root = tmp_path / "legacy-state"
+    historical_evidence_root = tmp_path / "empty-historical-evidence"
+    legacy_state_root.mkdir(mode=0o700)
+    historical_evidence_root.mkdir(mode=0o700)
     scope = ApprovalScopeIdentity(
         approval_candidate_sha256="f" * 64,
         symbol="000403.SZ",
@@ -484,28 +501,27 @@ def test_historical_consumed_scope_passes_narrow_response_header_bridge() -> Non
     )
     preflight = ApprovalScopedLedgerNamespace(
         repo_root=REPO_ROOT,
-        attempts_root=REPO_ROOT / "reports/phase2_provider_canary/attempts",
-        legacy_state_root=(
-            Path.home()
-            / "Library/Application Support/TickFlowPhase2Canary/runtime-v1"
-        ),
-        historical_evidence_root=(
-            REPO_ROOT / "reports/phase2_provider_canary/live_canary"
-        ),
+        attempts_root=attempts_root,
+        legacy_state_root=legacy_state_root,
+        historical_evidence_root=historical_evidence_root,
         candidate_roots=(
             REPO_ROOT / "reports/phase2_provider_canary/superseded",
             REPO_ROOT / "reports/phase2_provider_canary",
             REPO_ROOT / "reports/phase2_provider_ark",
         ),
         additional_historical_evidence_roots=(
-            REPO_ROOT / "reports/phase2_provider_ark/live_canary",
+            ark_history_root,
         ),
     ).preflight(scope)
 
-    assert preflight.status == "READY"
+    assert preflight.status == "READY", preflight.errors
     assert REQUEST_ID in preflight.historical_requests
     assert preflight.current_scope_provider_attempts == 0
     assert preflight.current_scope_attempt_availability == "AVAILABLE"
+    assert {
+        relative: _sha256(REPO_ROOT / relative)
+        for relative in HISTORICAL_HASHES
+    } == source_hashes
 
 
 def test_old_60_75_90_candidate_is_superseded_preserved_and_not_current() -> None:
