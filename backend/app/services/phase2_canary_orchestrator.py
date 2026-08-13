@@ -1945,7 +1945,20 @@ class ApprovalScopedLedgerNamespace:
                     "history_baseline_sha256",
                     "timeout_mock_e2e_sha256",
                 }
+                provenance_hashes = {
+                    *timeout_contract_hashes,
+                    "build_provenance_sha256",
+                    "mock_e2e_sha256",
+                }
                 status = value.get("status")
+                source_bindings = value.get("source_bindings")
+                current_provenance_candidate = (
+                    status == "PHASE2B_ARK_TIMEOUT_CONTRACT_READY_FOR_REAPPROVAL"
+                    and isinstance(artifact_hashes, dict)
+                    and set(artifact_hashes) == provenance_hashes
+                )
+                if current_provenance_candidate:
+                    expected_fields = expected_fields | {"source_bindings"}
                 if (
                     raw != canonical_json_bytes(value)
                     or set(value) != expected_fields
@@ -1956,6 +1969,7 @@ class ApprovalScopedLedgerNamespace:
                         or (status
                         == "PHASE2B_ARK_TIMEOUT_CONTRACT_READY_FOR_REAPPROVAL"
                         and set(artifact_hashes) == timeout_contract_hashes)
+                        or current_provenance_candidate
                     )
                     or any(
                         not isinstance(digest, str) or _HEX_64.fullmatch(digest) is None
@@ -1984,6 +1998,28 @@ class ApprovalScopedLedgerNamespace:
                     or _IMAGE_ID.fullmatch(value["proxy_image_id"]) is None
                     or not isinstance(value.get("relay_image_id"), str)
                     or _IMAGE_ID.fullmatch(value["relay_image_id"]) is None
+                    or (
+                        current_provenance_candidate
+                        and (
+                            not isinstance(source_bindings, dict)
+                            or set(source_bindings)
+                            != {
+                                "base_image_digest",
+                                "proxy_dockerfile_sha256",
+                                "proxy_source_sha256",
+                                "relay_dockerfile_sha256",
+                                "relay_source_sha256",
+                            }
+                            or source_bindings.get("base_image_digest")
+                            != "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5"
+                            or any(
+                                not isinstance(digest, str)
+                                or _HEX_64.fullmatch(digest) is None
+                                for key, digest in source_bindings.items()
+                                if key != "base_image_digest"
+                            )
+                        )
+                    )
                 ):
                     raise OrchestratorError("historical_candidate_invalid")
                 return ApprovalScopeIdentity(

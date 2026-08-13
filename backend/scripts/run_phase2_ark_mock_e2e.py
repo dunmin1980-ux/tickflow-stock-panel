@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import tempfile
 import time
@@ -16,6 +19,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from app.providers.ark_contract import ark_mock_request_id
 from app.providers.ark_provider import ARK_ENDPOINT_ALIAS, ARK_EXACT_MODEL_ID
 from app.services.phase2_ai_worker_protocol import build_worker_projection
 from app.services.phase2_ark_timeout_contract import ark_runtime_contract_sha256
@@ -44,6 +48,32 @@ MOCK_SECRET = "PHASE2_" + "TEST_SECRET_DO_NOT_USE"
 
 class ArkMockE2EError(RuntimeError):
     pass
+
+
+@contextlib.contextmanager
+def _exclusive_mock_lock(lock_path: Path | None = None):
+    if lock_path is None:
+        raise ArkMockE2EError("ark_mock_global_lock_path_required")
+    try:
+        descriptor = os.open(
+            lock_path,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+        )
+    except OSError as exc:
+        raise ArkMockE2EError("ark_mock_global_lock_invalid") from exc
+    try:
+        if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            raise ArkMockE2EError("ark_mock_global_lock_invalid")
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise ArkMockE2EError("ark_mock_global_lock_unavailable") from exc
+        yield
+    finally:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(descriptor)
 
 
 def _run(command: Sequence[str], timeout: float = 30.0) -> subprocess.CompletedProcess[str]:
@@ -368,6 +398,10 @@ def _load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _mock_request_id(index: int) -> str:
+    return ark_mock_request_id(index)
+
+
 def _run_once(
     *,
     index: int,
@@ -387,7 +421,7 @@ def _run_once(
     paths = {name: run_root / name for name in ("state", "attempts", "work", "output")}
     for path in paths.values():
         path.mkdir(mode=0o700)
-    request_id = f"{index + 10:032x}"
+    request_id = _mock_request_id(index)
     candidate_hash = hashlib.sha256(f"ark-mock-scope-{index}".encode()).hexdigest()
     artifacts = ApprovedCanaryArtifacts(
         approval_candidate_sha256=candidate_hash,
@@ -529,11 +563,8 @@ def _run_once(
             raise ArkMockE2EError("ark_mock_cleanup_residue")
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--runs", type=int, default=3)
-    args = parser.parse_args()
-    if args.runs != 3:
+def _run_locked(runs_requested: int) -> int:
+    if runs_requested != 3:
         raise ArkMockE2EError("ark_mock_run_count_must_equal_three")
     repo_root = Path(__file__).resolve().parents[2]
     proxy = _run(["docker", "image", "inspect", ARK_PROXY_IMAGE, "--format", "{{.Id}}"])
@@ -582,6 +613,11 @@ def main() -> int:
             for index in range(1, 4)
         ]
     scopes = {run["approval_scope_id"] for run in runs}
+    renderer_hashes = {run["renderer_sha256"] for run in runs}
+    if len(renderer_hashes) != 1:
+        for run in runs:
+            run["renderer_deterministic"] = False
+            run["passed"] = False
     value = {
         "ark_mock_e2e_schema_version": 1,
         "status": "PASSED" if all(run["passed"] for run in runs) else "FAILED",
@@ -609,6 +645,15 @@ def main() -> int:
     _atomic_write(output, canonical_json_bytes(value))
     print(json.dumps({"status": value["status"], "output": str(output)}, sort_keys=True))
     return 0 if value["status"] == "PASSED" else 2
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--runs", type=int, default=3)
+    args = parser.parse_args()
+    repo_root = Path(__file__).resolve().parents[2]
+    with _exclusive_mock_lock(repo_root / "reports/phase2_provider_ark"):
+        return _run_locked(args.runs)
 
 
 if __name__ == "__main__":

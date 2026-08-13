@@ -71,6 +71,22 @@ HISTORICAL_HASHES = {
 }
 
 
+def test_ark_dockerfiles_bind_their_own_source_identity() -> None:
+    proxy = (REPO_ROOT / "docker/phase2-ark-egress-proxy/Dockerfile").read_text()
+    relay = (REPO_ROOT / "docker/phase2-ark-canary-relay/Dockerfile").read_text()
+
+    assert "ARG PROXY_DOCKERFILE_SHA256" in proxy
+    assert (
+        'org.tickflow.phase2.proxy-dockerfile-sha256="${PROXY_DOCKERFILE_SHA256}"'
+        in proxy
+    )
+    assert "ARG RELAY_DOCKERFILE_SHA256" in relay
+    assert (
+        'org.tickflow.phase2.relay-dockerfile-sha256="${RELAY_DOCKERFILE_SHA256}"'
+        in relay
+    )
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
