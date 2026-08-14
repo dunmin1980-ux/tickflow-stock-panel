@@ -10,6 +10,7 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import time
 import uuid
@@ -34,6 +35,14 @@ LEDGER_PATH = OUTPUT_ROOT / "execution-ledger.json"
 LOCAL_APPROVAL_PATH = (
     Path.home()
     / "Library/Application Support/TickFlowPhase2CanaryArk/runtime-approval.json"
+)
+V2_OUTPUT_ROOT = REPO_ROOT / "reports/phase2_provider_ark/tls_probe_v2"
+V2_CANDIDATE_PATH = V2_OUTPUT_ROOT / "approval_candidate.json"
+V2_SCOPE_PATH = V2_OUTPUT_ROOT / "approval_scope.json"
+V2_ATTEMPTS_ROOT = V2_OUTPUT_ROOT / "attempts"
+V2_LOCAL_APPROVAL_PATH = (
+    Path.home()
+    / "Library/Application Support/TickFlowPhase2ArkTlsProbeV2/runtime-approval.json"
 )
 CHILD_RECEIPT_NAME = "child-receipt.json"
 READY_MARKER_NAME = "receipt.ready"
@@ -153,7 +162,24 @@ def validate_runtime_directory(path: Path) -> None:
 
 
 def canonicalize_runtime_directory(path: Path) -> Path:
-    canonical = path.resolve(strict=True)
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current /= part
+        try:
+            metadata = os.lstat(current)
+        except FileNotFoundError as error:
+            raise ValueError("runtime_directory_invalid") from error
+        if not stat.S_ISLNK(metadata.st_mode):
+            continue
+        trusted_macos_var_alias = (
+            sys.platform == "darwin"
+            and current == Path("/var")
+            and Path("/var").resolve(strict=True) == Path("/private/var")
+        )
+        if not trusted_macos_var_alias:
+            raise ValueError("runtime_path_symlink")
+    canonical = absolute.resolve(strict=True)
     validate_runtime_directory(canonical)
     return canonical
 
@@ -254,6 +280,217 @@ def _read_json_regular(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError("json_file_invalid")
     return value
+
+
+def _canonical_json_bytes(value: Any) -> bytes:
+    return (
+        json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        + "\n"
+    ).encode("utf-8")
+
+
+def _read_probe_v2_local_approval(path: Path) -> dict[str, Any]:
+    try:
+        parent_metadata = os.lstat(path.parent)
+        file_metadata = os.lstat(path)
+    except OSError as error:
+        raise ProbeRunnerError("probe_v2_approval_invalid") from error
+    if (
+        stat.S_ISLNK(parent_metadata.st_mode)
+        or not stat.S_ISDIR(parent_metadata.st_mode)
+        or stat.S_IMODE(parent_metadata.st_mode) != 0o700
+        or parent_metadata.st_uid != os.getuid()
+        or stat.S_ISLNK(file_metadata.st_mode)
+        or not stat.S_ISREG(file_metadata.st_mode)
+        or stat.S_IMODE(file_metadata.st_mode) != 0o600
+        or file_metadata.st_uid != os.getuid()
+    ):
+        raise ProbeRunnerError("probe_v2_approval_invalid")
+    try:
+        return _read_json_regular(path)
+    except (OSError, ValueError) as error:
+        raise ProbeRunnerError("probe_v2_approval_invalid") from error
+
+
+def load_probe_v2_execution_identity(
+    repo_root: Path,
+    *,
+    candidate_path: Path,
+    scope_path: Path,
+    approval_path: Path,
+    attempts_root: Path,
+) -> dict[str, Any]:
+    try:
+        candidate = _read_json_regular(candidate_path)
+        scope = _read_json_regular(scope_path)
+        approval = _read_probe_v2_local_approval(approval_path)
+    except ProbeRunnerError:
+        raise
+    except (OSError, ValueError) as error:
+        raise ProbeRunnerError("probe_v2_identity_invalid") from error
+
+    candidate_raw = _canonical_json_bytes(candidate)
+    if (
+        candidate_path.read_bytes() != candidate_raw
+        or scope_path.read_bytes() != _canonical_json_bytes(scope)
+    ):
+        raise ProbeRunnerError("probe_v2_identity_invalid")
+    candidate_sha256 = hashlib.sha256(candidate_raw).hexdigest()
+    scope_identity = {
+        "scope_type": "ark_tls_connectivity_probe_v2",
+        "approval_candidate_sha256": candidate_sha256,
+        "target_host": "ark.cn-beijing.volces.com",
+        "target_port": 443,
+    }
+    scope_id = hashlib.sha256(_canonical_json_bytes(scope_identity)).hexdigest()
+    expected_approval = {
+        "probe_v2_runtime_approval_schema_version": 1,
+        "approval_status": "APPROVED",
+        "approval_candidate_sha256": candidate_sha256,
+        "approval_scope_id": scope_id,
+        "source_git_head": candidate.get("source_git_head"),
+        "scope_type": "ark_tls_connectivity_probe_v2",
+    }
+    fixed_candidate = {
+        "probe_approval_candidate_schema_version": 2,
+        "candidate_status": "TLS_PROBE_CANDIDATE_READY_FOR_REVIEW",
+        "approval_installed": False,
+        "scope_type": "ark_tls_connectivity_probe_v2",
+        "probe_contract_version": 2,
+        "target_host": "ark.cn-beijing.volces.com",
+        "target_port": 443,
+        "sni_hostname": "ark.cn-beijing.volces.com",
+        "hostname_verification_target": "ark.cn-beijing.volces.com",
+        "retry_count": 0,
+        "maximum_probe_attempts": 1,
+        "provider_attempt_count": 0,
+        "ai_call_count": 0,
+        "authorization_constructed": False,
+        "http_request_sent": False,
+        "secret_content_read": False,
+        "real_public_network_success_count": 0,
+    }
+    if any(candidate.get(key) != value for key, value in fixed_candidate.items()):
+        raise ProbeRunnerError("probe_v2_candidate_invalid")
+    source_head = candidate.get("source_git_head")
+    if (
+        not isinstance(source_head, str)
+        or len(source_head) != 40
+        or any(character not in "0123456789abcdef" for character in source_head)
+    ):
+        raise ProbeRunnerError("probe_v2_candidate_invalid")
+    bindings = candidate.get("source_bindings")
+    artifacts = candidate.get("artifact_hashes")
+    if not isinstance(bindings, dict) or not isinstance(artifacts, dict):
+        raise ProbeRunnerError("probe_v2_candidate_invalid")
+    required_sources = {
+        "probe_runner_source": (
+            "docker/phase2-ark-tls-connectivity-probe/probe.py",
+            artifacts.get("probe_runner_source_sha256"),
+        ),
+        "probe_host_orchestrator": (
+            "backend/scripts/run_phase2_ark_tls_connectivity_probe.py",
+            artifacts.get("probe_host_orchestrator_sha256"),
+        ),
+    }
+    for name, (expected_path, artifact_sha) in required_sources.items():
+        binding = bindings.get(name)
+        source_path = repo_root / expected_path
+        if (
+            not isinstance(binding, dict)
+            or binding != {"path": expected_path, "sha256": artifact_sha}
+            or not isinstance(artifact_sha, str)
+            or len(artifact_sha) != 64
+            or not source_path.is_file()
+            or source_path.is_symlink()
+            or _sha256(source_path) != artifact_sha
+        ):
+            raise ProbeRunnerError("probe_v2_source_binding_invalid")
+    if artifacts.get("container_image_id") != PROXY_IMAGE_ID:
+        raise ProbeRunnerError("probe_v2_candidate_invalid")
+
+    expected_scope = {
+        "probe_approval_scope_schema_version": 1,
+        **scope_identity,
+        "approval_scope_id": scope_id,
+        "approval_installed": False,
+        "historical_attempts": 0,
+        "attempt_availability": "AVAILABLE",
+        "retry_count": 0,
+        "maximum_probe_attempts": 1,
+        "provider_attempt_count": 0,
+        "ai_call_count": 0,
+        "provider_scope_shared": False,
+        "ai_canary_scope_shared": False,
+        "openai_scope_shared": False,
+    }
+    if scope != expected_scope or approval != expected_approval:
+        raise ProbeRunnerError("probe_v2_identity_invalid")
+    try:
+        metadata = os.lstat(attempts_root)
+    except FileNotFoundError:
+        attempts_root.mkdir(mode=0o700, parents=True)
+        metadata = os.lstat(attempts_root)
+    if (
+        stat.S_ISLNK(metadata.st_mode)
+        or not stat.S_ISDIR(metadata.st_mode)
+        or (attempts_root / scope_id).exists()
+        or os.path.lexists(attempts_root / scope_id)
+    ):
+        raise ProbeRunnerError("probe_v2_scope_unavailable")
+    return {
+        "approval_candidate_sha256": candidate_sha256,
+        "approval_scope_id": scope_id,
+        "source_git_head": source_head,
+        "historical_attempts": 0,
+        "attempt_availability": "AVAILABLE",
+        "probe_source_sha256": artifacts["probe_runner_source_sha256"],
+        "host_orchestrator_sha256": artifacts[
+            "probe_host_orchestrator_sha256"
+        ],
+    }
+
+
+def reserve_probe_v2_scope(
+    identity: Mapping[str, Any],
+    *,
+    probe_id: str,
+    attempts_root: Path,
+) -> dict[str, Path]:
+    if (
+        len(probe_id) != 32
+        or any(character not in "0123456789abcdef" for character in probe_id)
+        or identity.get("attempt_availability") != "AVAILABLE"
+        or identity.get("historical_attempts") != 0
+    ):
+        raise ValueError("probe_scope_identity_invalid")
+    validate_runtime_directory(attempts_root)
+    scope_directory = attempts_root / str(identity["approval_scope_id"])
+    attempt_directory = scope_directory / probe_id
+    try:
+        os.mkdir(scope_directory, 0o700)
+    except FileExistsError as error:
+        raise ValueError("probe_scope_attempt_unavailable") from error
+    try:
+        root_descriptor = os.open(attempts_root, os.O_RDONLY | _DIRECTORY)
+        try:
+            os.fsync(root_descriptor)
+        finally:
+            os.close(root_descriptor)
+        os.mkdir(attempt_directory, 0o700)
+        scope_descriptor = os.open(scope_directory, os.O_RDONLY | _DIRECTORY)
+        try:
+            os.fsync(scope_descriptor)
+        finally:
+            os.close(scope_descriptor)
+    except BaseException:
+        raise
+    return {
+        "scope_directory": scope_directory,
+        "attempt_directory": attempt_directory,
+        "ledger_path": attempt_directory / "ledger.json",
+        "receipt_directory": attempt_directory / "evidence",
+    }
 
 
 def _load_probe_module() -> ModuleType:
@@ -455,9 +692,13 @@ def create_execution_ledger(
     probe_id: str,
     probe_source_sha256: str,
     wall_time: str,
+    approval_candidate_sha256: str | None = None,
+    approval_scope_id: str | None = None,
 ) -> dict[str, Any]:
     value = {
-        "probe_ledger_schema_version": 1,
+        "probe_ledger_schema_version": (
+            2 if approval_candidate_sha256 and approval_scope_id else 1
+        ),
         "probe_id": probe_id,
         "target_host": "ark.cn-beijing.volces.com",
         "target_port": 443,
@@ -474,6 +715,21 @@ def create_execution_ledger(
         "final_status": None,
         "receipt_sha256": None,
     }
+    if approval_candidate_sha256 is not None or approval_scope_id is not None:
+        if (
+            not isinstance(approval_candidate_sha256, str)
+            or len(approval_candidate_sha256) != 64
+            or not isinstance(approval_scope_id, str)
+            or len(approval_scope_id) != 64
+        ):
+            raise ValueError("probe_v2_ledger_identity_invalid")
+        value.update(
+            {
+                "approval_candidate_sha256": approval_candidate_sha256,
+                "approval_scope_id": approval_scope_id,
+                "scope_type": "ark_tls_connectivity_probe_v2",
+            }
+        )
     _exclusive_create_json(path, value)
     return value
 
@@ -990,8 +1246,22 @@ def _update_terminal_ledger(
 def run_live_probe() -> dict[str, Any]:
     probe_module = _load_probe_module()
     verify_historical_baseline(REPO_ROOT, BASELINE_PATH, LOCAL_APPROVAL_PATH)
-    if os.path.lexists(LEDGER_PATH):
-        raise ProbeRunnerError("probe_execution_already_exists")
+    execution_identity = load_probe_v2_execution_identity(
+        REPO_ROOT,
+        candidate_path=V2_CANDIDATE_PATH,
+        scope_path=V2_SCOPE_PATH,
+        approval_path=V2_LOCAL_APPROVAL_PATH,
+        attempts_root=V2_ATTEMPTS_ROOT,
+    )
+
+    probe_id = uuid.uuid4().hex
+    reservation = reserve_probe_v2_scope(
+        execution_identity,
+        probe_id=probe_id,
+        attempts_root=V2_ATTEMPTS_ROOT,
+    )
+    ledger_path = reservation["ledger_path"]
+    receipt_dir = reservation["receipt_directory"]
     image = _run(
         ["docker", "image", "inspect", PROXY_IMAGE_ID, "--format", "{{.Id}}"],
         timeout=15,
@@ -1000,16 +1270,19 @@ def run_live_probe() -> dict[str, Any]:
     if image.stdout.strip() != PROXY_IMAGE_ID:
         raise ProbeRunnerError("probe_image_identity_mismatch")
 
-    probe_id = uuid.uuid4().hex
     suffix = probe_id[:12]
     container_name = f"phase2-ark-tls-probe-{suffix}"
     network_name = f"phase2-ark-tls-probe-net-{suffix}"
     probe_source_sha256 = _sha256(PROBE_SOURCE)
     create_execution_ledger(
-        LEDGER_PATH,
+        ledger_path,
         probe_id=probe_id,
         probe_source_sha256=probe_source_sha256,
         wall_time=_wall_time(),
+        approval_candidate_sha256=execution_identity[
+            "approval_candidate_sha256"
+        ],
+        approval_scope_id=execution_identity["approval_scope_id"],
     )
 
     temporary_root: Path | None = None
@@ -1025,7 +1298,6 @@ def run_live_probe() -> dict[str, Any]:
         wall_clock=_wall_time,
         monotonic_ns=time.monotonic_ns,
     )
-    receipt_dir = OUTPUT_ROOT / probe_id
     try:
         temporary_root = canonicalize_runtime_directory(
             Path(tempfile.mkdtemp(prefix="phase2-ark-tls-probe-"))
@@ -1056,7 +1328,7 @@ def run_live_probe() -> dict[str, Any]:
                 timeout=15,
             )
             _require_success(create, "probe_container_create_failed")
-            mark_probe_dispatched(LEDGER_PATH, wall_time=_wall_time())
+            mark_probe_dispatched(ledger_path, wall_time=_wall_time())
             dispatched = True
             try:
                 start_result = _run(
@@ -1191,7 +1463,7 @@ def run_live_probe() -> dict[str, Any]:
             ),
         )
         _update_terminal_ledger(
-            LEDGER_PATH,
+            ledger_path,
             final_status=final_status,
             receipt_path=receipt_path,
             wall_time=_wall_time(),
@@ -1208,6 +1480,10 @@ def run_live_probe() -> dict[str, Any]:
             "temporary_residue_count": temporary_residue,
             "transport_error_category": transport_error_category,
             "receipt_path": receipt_path.relative_to(REPO_ROOT).as_posix(),
+            "approval_candidate_sha256": execution_identity[
+                "approval_candidate_sha256"
+            ],
+            "approval_scope_id": execution_identity["approval_scope_id"],
         }
     finally:
         if (

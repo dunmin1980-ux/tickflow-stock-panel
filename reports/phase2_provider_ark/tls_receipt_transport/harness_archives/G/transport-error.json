@@ -4,7 +4,7 @@
   "category": "RECEIPT_VALIDATION_FAILED",
   "container_exit_code": null,
   "http_request_sent": false,
-  "probe_id": "8cb3a88cabaa460ab5b64627a170f02b",
+  "probe_id": "aa60393ac21348a0b90f7306ab37939b",
   "provider_attempt_count": 0,
   "secret_content_read": false,
   "transport_error_schema_version": 1

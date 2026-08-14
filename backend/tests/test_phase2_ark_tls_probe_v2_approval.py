@@ -103,6 +103,7 @@ def test_receipt_schema_fixes_events_and_failure_taxonomy(
     terminal = receipt["properties"]["terminal_status"]["enum"]
     tls_error = receipt["properties"]["tls_error_category"]["enum"]
     assert events["required"] == EXPECTED_EVENTS
+    assert events["x-event-order"] == EXPECTED_EVENTS
     assert events["additionalProperties"] is False
     assert terminal == ["PROBE_PASSED", *EXPECTED_FAILURE_CATEGORIES]
     assert tls_error == ["NONE", *EXPECTED_FAILURE_CATEGORIES]
@@ -439,6 +440,119 @@ def test_atomic_publication_preserves_old_file_on_replace_failure(
     with pytest.raises(OSError, match="replace blocked"):
         builder_module.atomic_write_bytes(target, b"new\n")
     assert target.read_bytes() == b"old\n"
+
+
+def test_git_source_gate_requires_clean_worktree_and_matching_fork(
+    builder_module: ModuleType,
+    tmp_path: Path,
+) -> None:
+    head = "1" * 40
+    calls: list[tuple[list[str], Path]] = []
+
+    def matched(
+        command: list[str], *, cwd: Path, timeout: int, **_kwargs: Any
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append((command, cwd))
+        stdout = ""
+        if command == ["git", "rev-parse", "HEAD"]:
+            stdout = head + "\n"
+        if command == [
+            "git",
+            "rev-parse",
+            "refs/remotes/fork/codex/tickflow-phase2-ai-review",
+        ]:
+            stdout = head + "\n"
+        return subprocess.CompletedProcess(command, 0, stdout, "")
+
+    assert builder_module.verify_git_source_state(tmp_path, run=matched) == head
+    assert all(cwd == tmp_path for _, cwd in calls)
+
+    def dirty(
+        command: list[str], *, cwd: Path, timeout: int, **_kwargs: Any
+    ) -> subprocess.CompletedProcess[str]:
+        if command[:2] == ["git", "status"]:
+            return subprocess.CompletedProcess(command, 0, " M source.py\n", "")
+        return matched(command, cwd=cwd, timeout=timeout)
+
+    with pytest.raises(ValueError, match="git_worktree_dirty"):
+        builder_module.verify_git_source_state(tmp_path, run=dirty)
+
+    def mismatch(
+        command: list[str], *, cwd: Path, timeout: int, **_kwargs: Any
+    ) -> subprocess.CompletedProcess[str]:
+        if command == [
+            "git",
+            "rev-parse",
+            "refs/remotes/fork/codex/tickflow-phase2-ai-review",
+        ]:
+            return subprocess.CompletedProcess(command, 0, "2" * 40 + "\n", "")
+        return matched(command, cwd=cwd, timeout=timeout)
+
+    with pytest.raises(ValueError, match="git_fork_head_mismatch"):
+        builder_module.verify_git_source_state(tmp_path, run=mismatch)
+
+
+def test_published_artifacts_require_matching_generation_manifest(
+    builder_module: ModuleType,
+    tmp_path: Path,
+) -> None:
+    artifacts = {
+        "build_provenance": {"value": 1},
+        "approval_candidate": {"source_git_head": "1" * 40},
+        "approval_scope": {"value": 3},
+        "offline_preflight": {"value": 4},
+    }
+
+    builder_module.publish_offline_artifacts(tmp_path, artifacts)
+
+    assert builder_module.read_published_artifacts(tmp_path) == artifacts
+    manifest = _read_json(tmp_path / "artifact_generation.json")
+    assert manifest["artifact_generation_schema_version"] == 1
+    assert manifest["source_git_head"] == "1" * 40
+    assert set(manifest["artifact_hashes"]) == {
+        "approval_candidate.json",
+        "approval_scope.json",
+        "build_provenance.json",
+        "offline_preflight.json",
+    }
+    (tmp_path / "approval_scope.json").write_text("{}\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="probe_artifact_generation_mismatch"):
+        builder_module.read_published_artifacts(tmp_path)
+
+
+def test_interrupted_artifact_set_publication_fails_closed(
+    builder_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = {
+        "build_provenance": {"value": 1},
+        "approval_candidate": {"source_git_head": "1" * 40},
+        "approval_scope": {"value": 1},
+        "offline_preflight": {"value": 1},
+    }
+    second = {
+        "build_provenance": {"value": 2},
+        "approval_candidate": {"source_git_head": "2" * 40},
+        "approval_scope": {"value": 2},
+        "offline_preflight": {"value": 2},
+    }
+    builder_module.publish_offline_artifacts(tmp_path, first)
+    real_write = builder_module.atomic_write_bytes
+    writes = 0
+
+    def interrupted(path: Path, raw: bytes) -> None:
+        nonlocal writes
+        writes += 1
+        if writes == 2:
+            raise OSError("publication interrupted")
+        real_write(path, raw)
+
+    monkeypatch.setattr(builder_module, "atomic_write_bytes", interrupted)
+    with pytest.raises(OSError, match="publication interrupted"):
+        builder_module.publish_offline_artifacts(tmp_path, second)
+    with pytest.raises(ValueError, match="probe_artifact_generation_mismatch"):
+        builder_module.read_published_artifacts(tmp_path)
 
 
 def test_artifact_verification_rejects_source_mutation(

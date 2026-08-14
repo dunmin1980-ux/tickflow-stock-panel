@@ -113,7 +113,20 @@
         "probe_closed",
         "cleanup_completed"
       ],
-      "type": "object"
+      "type": "object",
+      "x-event-order": [
+        "probe_started",
+        "dns_started",
+        "dns_completed",
+        "tcp_connect_started",
+        "tcp_connect_completed",
+        "tls_handshake_started",
+        "tls_handshake_completed",
+        "certificate_verified",
+        "hostname_verified",
+        "probe_closed",
+        "cleanup_completed"
+      ]
     },
     "http_request_sent": {
       "const": false

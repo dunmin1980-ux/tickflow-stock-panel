@@ -7,27 +7,27 @@
   "host_lifecycle": {
     "cleanup_completed": {
       "category": "PASSED",
-      "monotonic_ns": 1409778349376,
+      "monotonic_ns": 5695586415737,
       "occurred": true,
-      "wall_time": "2026-08-14T13:41:37.931678Z"
+      "wall_time": "2026-08-14T14:53:03.723985Z"
     },
     "cleanup_started": {
       "category": "PASSED",
-      "monotonic_ns": 1409602988479,
+      "monotonic_ns": 5695417650926,
       "occurred": true,
-      "wall_time": "2026-08-14T13:41:37.756329Z"
+      "wall_time": "2026-08-14T14:53:03.555219Z"
     },
     "container_wait_completed": {
       "category": "PASSED",
-      "monotonic_ns": 1409596379502,
+      "monotonic_ns": 5695406361548,
       "occurred": true,
-      "wall_time": "2026-08-14T13:41:37.749700Z"
+      "wall_time": "2026-08-14T14:53:03.543886Z"
     },
     "receipt_archive_completed": {
       "category": "TRANSPORT_ERROR_PERSISTED",
-      "monotonic_ns": 1409601119445,
+      "monotonic_ns": 5695414778523,
       "occurred": true,
-      "wall_time": "2026-08-14T13:41:37.754455Z"
+      "wall_time": "2026-08-14T14:53:03.552345Z"
     },
     "receipt_validated": {
       "category": "NOT_REACHED",
@@ -39,7 +39,7 @@
   "host_metadata": null,
   "http_request_sent_count": 0,
   "network_mode": "none",
-  "probe_id": "212b85dfd926446f80eaba8adb79e96d",
+  "probe_id": "8302c67577fe4cbd959646712ed1ddf5",
   "provider_attempt_count": 0,
   "real_public_network_success_count": 0,
   "secret_content_read_count": 0,

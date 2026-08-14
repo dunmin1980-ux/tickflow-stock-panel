@@ -74,7 +74,7 @@ def _write_valid_bundle(
     return receipt, raw, marker
 
 
-def test_canonical_system_temp_path_is_readable_without_allowing_inner_symlink(
+def test_user_created_ancestor_symlink_is_rejected(
     runner_module: ModuleType,
     tmp_path: Path,
 ) -> None:
@@ -84,16 +84,21 @@ def test_canonical_system_temp_path_is_readable_without_allowing_inner_symlink(
     alias.symlink_to(real, target_is_directory=True)
     output = alias / "probe" / "output"
     output.mkdir(parents=True, mode=0o700)
-    receipt = output / "child-receipt.json"
-    receipt.write_text('{"value": 1}\n', encoding="utf-8")
-
-    canonical = runner_module.canonicalize_runtime_directory(output)
-
-    assert canonical == output.resolve(strict=True)
-    assert runner_module._read_json_regular(canonical / receipt.name) == {"value": 1}
-    (canonical / "escape").symlink_to(tmp_path / "outside")
     with pytest.raises(ValueError, match="runtime_path_symlink"):
-        runner_module.validate_runtime_directory(canonical)
+        runner_module.canonicalize_runtime_directory(output)
+
+
+def test_verified_macos_var_alias_is_allowed(
+    runner_module: ModuleType,
+    tmp_path: Path,
+) -> None:
+    canonical = tmp_path.resolve(strict=True)
+    canonical_text = str(canonical)
+    if not canonical_text.startswith("/private/var/"):
+        pytest.skip("test requires the macOS /var to /private/var system alias")
+    logical = Path("/var") / canonical.relative_to("/private/var")
+
+    assert runner_module.canonicalize_runtime_directory(logical) == canonical
 
 
 def test_historical_probe_baseline_matches_exact_file_set(
@@ -463,6 +468,8 @@ def test_validated_bundle_archive_failure_never_downgrades_to_error_only_archive
 ) -> None:
     output_root = tmp_path / "reports"
     output_root.mkdir()
+    attempts_root = output_root / "attempts"
+    attempts_root.mkdir(mode=0o700)
     runtime = tmp_path / "runtime"
     runtime.mkdir()
     container_exists = False
@@ -486,9 +493,27 @@ def test_validated_bundle_archive_failure_never_downgrades_to_error_only_archive
 
     monkeypatch.setattr(runner_module, "OUTPUT_ROOT", output_root)
     monkeypatch.setattr(runner_module, "REPO_ROOT", tmp_path)
-    monkeypatch.setattr(runner_module, "LEDGER_PATH", output_root / "ledger.json")
     monkeypatch.setattr(runner_module, "BASELINE_PATH", tmp_path / "baseline.json")
     monkeypatch.setattr(runner_module, "LOCAL_APPROVAL_PATH", tmp_path / "approval.json")
+    monkeypatch.setattr(runner_module, "V2_ATTEMPTS_ROOT", attempts_root)
+    monkeypatch.setattr(
+        runner_module,
+        "load_probe_v2_execution_identity",
+        lambda *_args, **_kwargs: {
+            "approval_candidate_sha256": "a" * 64,
+            "approval_scope_id": "b" * 64,
+            "source_git_head": "c" * 40,
+            "historical_attempts": 0,
+            "attempt_availability": "AVAILABLE",
+            "probe_source_sha256": "d" * 64,
+            "host_orchestrator_sha256": "e" * 64,
+        },
+    )
+    monkeypatch.setattr(
+        runner_module.uuid,
+        "uuid4",
+        lambda: type("FixedUUID", (), {"hex": PROBE_ID})(),
+    )
     monkeypatch.setattr(
         runner_module,
         "verify_historical_baseline",
@@ -539,7 +564,9 @@ def test_validated_bundle_archive_failure_never_downgrades_to_error_only_archive
         runner_module.run_live_probe()
 
     assert runtime.is_dir()
-    ledger = json.loads((output_root / "ledger.json").read_bytes())
+    ledger = json.loads(
+        (attempts_root / ("b" * 64) / PROBE_ID / "ledger.json").read_bytes()
+    )
     assert ledger["state"] == "NETWORK_DISPATCH_STARTED"
     assert ledger["probe_attempt_count"] == 1
 

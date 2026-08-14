@@ -25,9 +25,9 @@
     },
     "receipt_archive_completed": {
       "category": "TRANSPORT_ERROR_PERSISTED",
-      "monotonic_ns": 1409781063695,
+      "monotonic_ns": 5695589374514,
       "occurred": true,
-      "wall_time": "2026-08-14T13:41:37.934410Z"
+      "wall_time": "2026-08-14T14:53:03.726965Z"
     },
     "receipt_validated": {
       "category": "NOT_REACHED",
@@ -39,7 +39,7 @@
   "host_metadata": null,
   "http_request_sent_count": 0,
   "network_mode": "none",
-  "probe_id": "8cb3a88cabaa460ab5b64627a170f02b",
+  "probe_id": "aa60393ac21348a0b90f7306ab37939b",
   "provider_attempt_count": 0,
   "real_public_network_success_count": 0,
   "secret_content_read_count": 0,

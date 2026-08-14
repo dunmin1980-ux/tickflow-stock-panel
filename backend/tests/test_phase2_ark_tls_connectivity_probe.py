@@ -330,6 +330,69 @@ def test_receipt_validator_rejects_sensitive_or_http_fields(
             probe_module.validate_probe_receipt(tampered, require_cleanup=False)
 
 
+@pytest.mark.parametrize(
+    ("field", "invalid"),
+    [
+        ("tls_version", 13),
+        ("cipher_name", ["TLS_AES_256_GCM_SHA384"]),
+        ("certificate_not_before", 1),
+        ("certificate_not_after", False),
+        ("san_contains_hostname", "true"),
+    ],
+)
+def test_receipt_validator_matches_bound_scalar_types(
+    probe_module: ModuleType,
+    field: str,
+    invalid: Any,
+) -> None:
+    clock = _Clock()
+    receipt = probe_module.execute_probe(
+        PROBE_ID,
+        resolver=_resolver,
+        socket_factory=lambda *_args: _RawSocket(),
+        tls_context_factory=lambda: _TLSContext(),
+        wall_clock=clock.wall_time,
+        monotonic_ns=clock.monotonic_ns,
+    )
+    receipt[field] = invalid
+    with pytest.raises(ValueError, match="probe_receipt_invalid"):
+        probe_module.validate_probe_receipt(receipt, require_cleanup=False)
+
+
+def test_receipt_validator_rejects_non_monotonic_event_order(
+    probe_module: ModuleType,
+) -> None:
+    clock = _Clock()
+    receipt = probe_module.execute_probe(
+        PROBE_ID,
+        resolver=_resolver,
+        socket_factory=lambda *_args: _RawSocket(),
+        tls_context_factory=lambda: _TLSContext(),
+        wall_clock=clock.wall_time,
+        monotonic_ns=clock.monotonic_ns,
+    )
+    receipt["events"]["dns_completed"]["monotonic_ns"] = 1
+    with pytest.raises(ValueError, match="probe_receipt_invalid"):
+        probe_module.validate_probe_receipt(receipt, require_cleanup=False)
+
+
+def test_receipt_validator_fails_closed_for_malformed_event_value(
+    probe_module: ModuleType,
+) -> None:
+    clock = _Clock()
+    receipt = probe_module.execute_probe(
+        PROBE_ID,
+        resolver=_resolver,
+        socket_factory=lambda *_args: _RawSocket(),
+        tls_context_factory=lambda: _TLSContext(),
+        wall_clock=clock.wall_time,
+        monotonic_ns=clock.monotonic_ns,
+    )
+    receipt["events"]["dns_started"] = []
+    with pytest.raises(ValueError, match="probe_receipt_invalid"):
+        probe_module.validate_probe_receipt(receipt, require_cleanup=False)
+
+
 def test_tls_context_uses_fixed_ca_and_secure_verification(
     probe_module: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
@@ -705,6 +768,8 @@ def test_dispatched_timeout_is_consumed_published_and_cleaned(
 ) -> None:
     output_root = tmp_path / "reports"
     output_root.mkdir()
+    attempts_root = output_root / "attempts"
+    attempts_root.mkdir(mode=0o700)
     approval = tmp_path / "approval.json"
     approval.write_text('{"approved":true}\n', encoding="utf-8")
     baseline = output_root / "historical_baseline.json"
@@ -768,8 +833,28 @@ def test_dispatched_timeout_is_consumed_published_and_cleaned(
     monkeypatch.setattr(runner_module, "OUTPUT_ROOT", output_root)
     monkeypatch.setattr(runner_module, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(runner_module, "BASELINE_PATH", baseline)
-    monkeypatch.setattr(runner_module, "LEDGER_PATH", output_root / "execution-ledger.json")
     monkeypatch.setattr(runner_module, "LOCAL_APPROVAL_PATH", approval)
+    monkeypatch.setattr(runner_module, "V2_ATTEMPTS_ROOT", attempts_root)
+    monkeypatch.setattr(
+        runner_module,
+        "load_probe_v2_execution_identity",
+        lambda *_args, **_kwargs: {
+            "approval_candidate_sha256": "a" * 64,
+            "approval_scope_id": "b" * 64,
+            "source_git_head": "c" * 40,
+            "historical_attempts": 0,
+            "attempt_availability": "AVAILABLE",
+            "probe_source_sha256": hashlib.sha256(
+                runner_module.PROBE_SOURCE.read_bytes()
+            ).hexdigest(),
+            "host_orchestrator_sha256": "d" * 64,
+        },
+    )
+    monkeypatch.setattr(
+        runner_module.uuid,
+        "uuid4",
+        lambda: type("FixedUUID", (), {"hex": PROBE_ID})(),
+    )
     monkeypatch.setattr(runner_module.tempfile, "mkdtemp", lambda **_kwargs: str(runtime_root))
     monkeypatch.setattr(runner_module, "_run", fake_run)
 
@@ -782,21 +867,22 @@ def test_dispatched_timeout_is_consumed_published_and_cleaned(
     assert result["network_residue_count"] == 0
     assert result["temporary_residue_count"] == 0
     assert not runtime_root.exists()
-    ledger = json.loads((output_root / "execution-ledger.json").read_bytes())
+    attempt_dir = attempts_root / ("b" * 64) / PROBE_ID
+    ledger = json.loads((attempt_dir / "ledger.json").read_bytes())
     assert ledger["state"] == "COMPLETED"
     assert ledger["probe_attempt_count"] == 1
     receipt = json.loads(
-        (output_root / ledger["probe_id"] / "receipt.json").read_bytes()
+        (attempt_dir / "evidence" / "receipt.json").read_bytes()
     )
     precleanup = json.loads(
         (
-            output_root
-            / ledger["probe_id"]
+            attempt_dir
+            / "evidence"
             / "transport-evidence-precleanup.json"
         ).read_bytes()
     )
     postcleanup = json.loads(
-        (output_root / ledger["probe_id"] / "transport-evidence.json").read_bytes()
+        (attempt_dir / "evidence" / "transport-evidence.json").read_bytes()
     )
     assert receipt["tls_error_category"] == "PROCESS_ERROR"
     assert receipt["events"]["cleanup_completed"]["occurred"] is True
@@ -804,3 +890,220 @@ def test_dispatched_timeout_is_consumed_published_and_cleaned(
     assert precleanup["host_lifecycle"]["cleanup_started"]["occurred"] is False
     assert postcleanup["host_lifecycle"]["cleanup_completed"]["occurred"] is True
     assert postcleanup["temporary_residue_count"] == 0
+
+
+def _write_probe_v2_identity(
+    runner_module: ModuleType,
+    root: Path,
+    *,
+    source_head: str = "1" * 40,
+) -> dict[str, Path | str]:
+    candidate_path = root / "approval_candidate.json"
+    scope_path = root / "approval_scope.json"
+    approval_dir = root / "local-approval"
+    approval_path = approval_dir / "runtime-approval.json"
+    attempts_root = root / "attempts"
+    approval_dir.mkdir(mode=0o700)
+    attempts_root.mkdir(mode=0o700)
+    candidate = {
+        "probe_approval_candidate_schema_version": 2,
+        "candidate_status": "TLS_PROBE_CANDIDATE_READY_FOR_REVIEW",
+        "approval_installed": False,
+        "scope_type": "ark_tls_connectivity_probe_v2",
+        "source_git_head": source_head,
+        "probe_contract_version": 2,
+        "target_host": "ark.cn-beijing.volces.com",
+        "target_port": 443,
+        "sni_hostname": "ark.cn-beijing.volces.com",
+        "hostname_verification_target": "ark.cn-beijing.volces.com",
+        "retry_count": 0,
+        "maximum_probe_attempts": 1,
+        "provider_attempt_count": 0,
+        "ai_call_count": 0,
+        "authorization_constructed": False,
+        "http_request_sent": False,
+        "secret_content_read": False,
+        "real_public_network_success_count": 0,
+        "source_bindings": {
+            "probe_runner_source": {
+                "path": PROBE_PATH.relative_to(REPO_ROOT).as_posix(),
+                "sha256": hashlib.sha256(PROBE_PATH.read_bytes()).hexdigest(),
+            },
+            "probe_host_orchestrator": {
+                "path": RUNNER_PATH.relative_to(REPO_ROOT).as_posix(),
+                "sha256": hashlib.sha256(RUNNER_PATH.read_bytes()).hexdigest(),
+            },
+        },
+        "artifact_hashes": {
+            "container_image_id": runner_module.PROXY_IMAGE_ID,
+            "probe_runner_source_sha256": hashlib.sha256(
+                PROBE_PATH.read_bytes()
+            ).hexdigest(),
+            "probe_host_orchestrator_sha256": hashlib.sha256(
+                RUNNER_PATH.read_bytes()
+            ).hexdigest(),
+        },
+    }
+    candidate_raw = (
+        json.dumps(candidate, sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode()
+    candidate_path.write_bytes(candidate_raw)
+    candidate_sha = hashlib.sha256(candidate_raw).hexdigest()
+    scope_identity = {
+        "scope_type": "ark_tls_connectivity_probe_v2",
+        "approval_candidate_sha256": candidate_sha,
+        "target_host": "ark.cn-beijing.volces.com",
+        "target_port": 443,
+    }
+    scope_id = hashlib.sha256(
+        (
+            json.dumps(scope_identity, sort_keys=True, separators=(",", ":"))
+            + "\n"
+        ).encode()
+    ).hexdigest()
+    scope = {
+        "probe_approval_scope_schema_version": 1,
+        **scope_identity,
+        "approval_scope_id": scope_id,
+        "approval_installed": False,
+        "historical_attempts": 0,
+        "attempt_availability": "AVAILABLE",
+        "retry_count": 0,
+        "maximum_probe_attempts": 1,
+        "provider_attempt_count": 0,
+        "ai_call_count": 0,
+        "provider_scope_shared": False,
+        "ai_canary_scope_shared": False,
+        "openai_scope_shared": False,
+    }
+    scope_path.write_text(
+        json.dumps(scope, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    approval = {
+        "probe_v2_runtime_approval_schema_version": 1,
+        "approval_status": "APPROVED",
+        "approval_candidate_sha256": candidate_sha,
+        "approval_scope_id": scope_id,
+        "source_git_head": source_head,
+        "scope_type": "ark_tls_connectivity_probe_v2",
+    }
+    approval_path.write_text(
+        json.dumps(approval, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    approval_path.chmod(0o600)
+    return {
+        "candidate_path": candidate_path,
+        "scope_path": scope_path,
+        "approval_path": approval_path,
+        "attempts_root": attempts_root,
+        "candidate_sha": candidate_sha,
+        "scope_id": scope_id,
+    }
+
+
+def test_probe_v2_identity_is_independent_and_available(
+    runner_module: ModuleType,
+    tmp_path: Path,
+) -> None:
+    identity = _write_probe_v2_identity(runner_module, tmp_path)
+
+    loaded = runner_module.load_probe_v2_execution_identity(
+        REPO_ROOT,
+        candidate_path=identity["candidate_path"],
+        scope_path=identity["scope_path"],
+        approval_path=identity["approval_path"],
+        attempts_root=identity["attempts_root"],
+    )
+
+    assert loaded["approval_candidate_sha256"] == identity["candidate_sha"]
+    assert loaded["approval_scope_id"] == identity["scope_id"]
+    assert loaded["historical_attempts"] == 0
+    assert loaded["attempt_availability"] == "AVAILABLE"
+
+
+def test_probe_v2_identity_rejects_noncanonical_candidate_file_bytes(
+    runner_module: ModuleType,
+    tmp_path: Path,
+) -> None:
+    identity = _write_probe_v2_identity(runner_module, tmp_path)
+    candidate_path = Path(identity["candidate_path"])
+    candidate = json.loads(candidate_path.read_bytes())
+    candidate_path.write_text(
+        json.dumps(candidate, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(runner_module.ProbeRunnerError, match="probe_v2_identity_invalid"):
+        runner_module.load_probe_v2_execution_identity(
+            REPO_ROOT,
+            candidate_path=candidate_path,
+            scope_path=identity["scope_path"],
+            approval_path=identity["approval_path"],
+            attempts_root=identity["attempts_root"],
+        )
+
+
+def test_missing_probe_v2_approval_blocks_before_any_docker_action(
+    runner_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    identity = _write_probe_v2_identity(runner_module, tmp_path)
+    Path(identity["approval_path"]).unlink()
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(runner_module, "REPO_ROOT", REPO_ROOT)
+    monkeypatch.setattr(runner_module, "V2_CANDIDATE_PATH", identity["candidate_path"])
+    monkeypatch.setattr(runner_module, "V2_SCOPE_PATH", identity["scope_path"])
+    monkeypatch.setattr(runner_module, "V2_LOCAL_APPROVAL_PATH", identity["approval_path"])
+    monkeypatch.setattr(runner_module, "V2_ATTEMPTS_ROOT", identity["attempts_root"])
+    monkeypatch.setattr(
+        runner_module,
+        "verify_historical_baseline",
+        lambda *_args, **_kwargs: 7,
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "_run",
+        lambda command, **_kwargs: calls.append(command),
+    )
+
+    with pytest.raises(runner_module.ProbeRunnerError, match="probe_v2_approval_invalid"):
+        runner_module.run_live_probe()
+    assert calls == []
+
+
+def test_probe_v2_scope_reservation_ignores_historical_singleton_ledger(
+    runner_module: ModuleType,
+    tmp_path: Path,
+) -> None:
+    identity = _write_probe_v2_identity(runner_module, tmp_path)
+    historical_ledger = tmp_path / "historical-execution-ledger.json"
+    historical_ledger.write_text('{"state":"COMPLETED"}\n', encoding="utf-8")
+    historical_hash = hashlib.sha256(historical_ledger.read_bytes()).hexdigest()
+    loaded = runner_module.load_probe_v2_execution_identity(
+        REPO_ROOT,
+        candidate_path=identity["candidate_path"],
+        scope_path=identity["scope_path"],
+        approval_path=identity["approval_path"],
+        attempts_root=identity["attempts_root"],
+    )
+
+    reservation = runner_module.reserve_probe_v2_scope(
+        loaded,
+        probe_id=PROBE_ID,
+        attempts_root=identity["attempts_root"],
+    )
+
+    assert reservation["scope_directory"].is_dir()
+    assert reservation["attempt_directory"].is_dir()
+    assert reservation["ledger_path"] == reservation["attempt_directory"] / "ledger.json"
+    assert hashlib.sha256(historical_ledger.read_bytes()).hexdigest() == historical_hash
+    with pytest.raises(ValueError, match="probe_scope_attempt_unavailable"):
+        runner_module.reserve_probe_v2_scope(
+            loaded,
+            probe_id="b" * 32,
+            attempts_root=identity["attempts_root"],
+        )

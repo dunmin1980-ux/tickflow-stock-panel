@@ -7,33 +7,33 @@
   "host_lifecycle": {
     "cleanup_completed": {
       "category": "PASSED",
-      "monotonic_ns": 1397546578287,
+      "monotonic_ns": 5682918039004,
       "occurred": true,
-      "wall_time": "2026-08-14T13:41:25.699892Z"
+      "wall_time": "2026-08-14T14:52:51.055612Z"
     },
     "cleanup_started": {
       "category": "PASSED",
-      "monotonic_ns": 1397370228109,
+      "monotonic_ns": 5682749101194,
       "occurred": true,
-      "wall_time": "2026-08-14T13:41:25.523574Z"
+      "wall_time": "2026-08-14T14:52:50.886683Z"
     },
     "container_wait_completed": {
       "category": "PASSED",
-      "monotonic_ns": 1397361621675,
+      "monotonic_ns": 5682740396229,
       "occurred": true,
-      "wall_time": "2026-08-14T13:41:25.514929Z"
+      "wall_time": "2026-08-14T14:52:50.877962Z"
     },
     "receipt_archive_completed": {
       "category": "PASSED",
-      "monotonic_ns": 1397368003327,
+      "monotonic_ns": 5682746415602,
       "occurred": true,
-      "wall_time": "2026-08-14T13:41:25.521348Z"
+      "wall_time": "2026-08-14T14:52:50.883996Z"
     },
     "receipt_validated": {
       "category": "PASSED",
-      "monotonic_ns": 1397363732573,
+      "monotonic_ns": 5682742204902,
       "occurred": true,
-      "wall_time": "2026-08-14T13:41:25.517070Z"
+      "wall_time": "2026-08-14T14:52:50.879798Z"
     }
   },
   "host_metadata": {
@@ -49,7 +49,7 @@
   },
   "http_request_sent_count": 0,
   "network_mode": "none",
-  "probe_id": "32982ff27e6c441b9d718e810515f151",
+  "probe_id": "cdb0bb77e2cf4968b6a5bd2ac3895c1b",
   "provider_attempt_count": 0,
   "real_public_network_success_count": 0,
   "secret_content_read_count": 0,

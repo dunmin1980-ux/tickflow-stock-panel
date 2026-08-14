@@ -4,130 +4,130 @@
   "archived_files": [
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/A1/child-receipt.json",
-      "sha256": "d4f91241eb75509202096b9e3b3d38293dd4e0f14f921e71685f70a5b39b4f40"
+      "sha256": "c0dc557f76c16a1d17a281f6d87528fe554d20c3ad01315a7bdeb25e7e5399d5"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/A1/host-postcleanup.json",
-      "sha256": "79a7e79dde31c48e8c19d72b86d14bfd0e448c165dc93c0779011df677df2acb"
+      "sha256": "aeab79b0502fa577c9d2b8f726c333bf7b1a349ddde99c523131a3b03b498575"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/A1/host-precleanup.json",
-      "sha256": "fe3c54ba298d87c384b3c50146497e36953ad2992d93be9da078abb791e34cc4"
+      "sha256": "cad88d08b49e7dd3d57d0e6f685d056c1d65c301a8e6478e334e994ed761facb"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/A1/receipt.ready",
-      "sha256": "42f27cd6ed1cbbcf8a65708ea5e640b57c0a9946388154a184d2c36b2a6b51ad"
+      "sha256": "c5c0b5ab39cb5d1d00a9a29adf04a095960f09bfba03fd76dd9e80e7d69aa955"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/A2/child-receipt.json",
-      "sha256": "599b3af553c4fa755fd8a71e7c40817c97ebfd0135ae3e6467fd392bc4730f71"
+      "sha256": "2e448b4ef4566b1124a994f285ca807924fa37ffbd030b8415af843e3ac5d58e"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/A2/host-postcleanup.json",
-      "sha256": "c3bb36c70ebcd1194e7e5af2c3a1f359c0d8b7e50d78e2888469bbe3c45ee182"
+      "sha256": "c7e8a9980fba9467561a1f29ce0a6f73fa4dcfd4a698bfd875f4d022c2ec09e9"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/A2/host-precleanup.json",
-      "sha256": "ac93dba8b56152f135b51d8058060a03ceba69ddc3353930decd391c1dbd16fc"
+      "sha256": "6b8e1ff87a90522c67f1f116f9add51e2432ada8254876cbf0228d74e05c34ce"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/A2/receipt.ready",
-      "sha256": "deebfc2ecdb5b90665d1da4dcdc0d6167ca6919d3649246f2b6bbee35ead43b7"
+      "sha256": "b6ee3b9681668dc1f0a8dbddf9eb7abc30c743903c409abb63f58b7b49c976d9"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/A3/child-receipt.json",
-      "sha256": "7d49d18fbcabb092431cf5e27aff589d44c641899c35137f7c27aa4da358bab4"
+      "sha256": "e48f3bc30d2d993fab9de018d5c7a076dd49928758c88d66af6d75ff5f352ed3"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/A3/host-postcleanup.json",
-      "sha256": "f57f728862858849bd727f3b75654b60d26ec3f6a2fb5d405e2b125478fe7916"
+      "sha256": "faac148e53e41db9949f57603ca072e4089526ab9b5e477e9a326232a42e49f7"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/A3/host-precleanup.json",
-      "sha256": "0d25f98e4083d7da58c8b05f061eb835d84208a02ca85a907eb0e6ccd7557e3f"
+      "sha256": "1f84392b240fd77ab1e5dec684dadf3cabf820d1d38395f01235a03c630854cf"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/A3/receipt.ready",
-      "sha256": "938ce99f03a11d9f508aad37fae8f49cb000b944fb29fb9229bed1103806ab6a"
+      "sha256": "205f9e1eb8fdaaec582b3d229bfd4446f3e30de894432da60d2f6f7c82cd5254"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/B/host-postcleanup.json",
-      "sha256": "419f8000943f80bede513915bac46abf785498c2685465eb9282529cc034e367"
+      "sha256": "a9431c0e34526edee4570a5c1a1c77d12c42e9e37f981d64d28e43c72cbf2b74"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/B/host-precleanup.json",
-      "sha256": "df789e7e18f228e32db9c03ddab41f4b3985ef407c2d30f2798cafbc37f7ff6f"
+      "sha256": "2f8e12829d7b3f5aa6fcb4b7ac0bb809d9dca674d8850d9699b73e9e54fcc9b0"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/B/transport-error.json",
-      "sha256": "5d553c03f04b98ec9c793f301f9e9671a28bde6d030ae00bbec1756f5c64ece3"
+      "sha256": "45a19dc4bd58b54106ff8795892e24d63e2db87804d7388a79e744077ded0d38"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/C/host-postcleanup.json",
-      "sha256": "64d949d32eb920a2bd8194a23a5553db36ea64ef0caee4f972a62ce7a19e17fe"
+      "sha256": "0649c56275ace7de742b5626dc9f40f158e4b587c2c71f4e94c97bc4a30be07a"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/C/host-precleanup.json",
-      "sha256": "3c786ce430f7e8b49986522c0e995d36eac5bc910e30f118ff60b9bd792e7bac"
+      "sha256": "ffdbc76368346b1eab6dd4f85c61244e7a75f03c049dfb7d44e5501f97b496ca"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/C/transport-error.json",
-      "sha256": "9c58f5baf2003e980dad757d276566f1ab40a4594e5f237b08e8d3498e9c2741"
+      "sha256": "9a4a4fd201cfeac5ed5336a70823d5bda02e2a545c8ef61cf8a309df569891a2"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/D/host-postcleanup.json",
-      "sha256": "3b0e57e6061da01d210fed2d26f0a961c68356411729d5774ddbbd8de2b63661"
+      "sha256": "ba96323bd8f4654d41b7b6292ba533fc8247299d39aaa80ed53c02d12825b644"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/D/host-precleanup.json",
-      "sha256": "e0895503d8ef9d37517d7dbf31957d1d49feb887677b4fb4b7e6ffa30d1822af"
+      "sha256": "d93b156a8a4c4ac846104905a7d277fe275b7951dd73704a6a66ba43693fb988"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/D/transport-error.json",
-      "sha256": "1ca075fdcde72faf3ca7821daf60199eb83483c36ed0fe7439bb3c6e1d2e7a75"
+      "sha256": "7c8b9109135be39a48ef74820f33ce941ba6323542b9b7bc8676441e1d3334f0"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/E/host-postcleanup.json",
-      "sha256": "21ef16bfc7d19622753a34623820df33a5ee26a7c8a113d7f86e985c98013f5b"
+      "sha256": "9f2e46621f7402c1ea3195583a959a3c926f8ff09033480661cd721277174189"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/E/host-precleanup.json",
-      "sha256": "e5de1adb6c309b78ce3ed3f4c0925d25bd4883ed59b4bece5650a3f7a3458a59"
+      "sha256": "a644529a8deff9f7901087cfcc22942657c30dfdc66095f4e73e039333ac76c9"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/E/transport-error.json",
-      "sha256": "fbca6ad43e5e163b1144ddb13cb3c75e47ed5eb85e1af2088dec9caaca55d384"
+      "sha256": "1f0439719661ae9d97bcf19c28708cb5a08bcd8c19dcbe5d6366026894a7a242"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/F/host-postcleanup.json",
-      "sha256": "9c826830995bb0adba2dbb5ba82f660c6e4710e05531f9d2eb85ab37f7b54535"
+      "sha256": "ebf960c8bceb429b68efd725b90322fb23fba49f41155cb1262e4232ec4499b7"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/F/host-precleanup.json",
-      "sha256": "332de74f487482ece55c171436291cf31e8f741426702840cd57126811715263"
+      "sha256": "02d4d95231a37923bd915b8e466d6c082f857ca68ba0c2c2eaeb2b3b364e991e"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/F/transport-error.json",
-      "sha256": "db3972e8ac685f8bf3bf4949e5d91fe81832838e7333f20aa721699bd2be1f2a"
+      "sha256": "6e1f4a898e0fcd83bf70cef6ec57d5364834d5951e9b0495a3886d9caf24395f"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/G/host-postcleanup.json",
-      "sha256": "aa3d99e4ece80a9ee1e46fb2e3d4f5c54299489af90468b2ece1ab9f69ba043b"
+      "sha256": "6fd17ba9ce0f4a1d60136b7ef8c0c4a282c416132ac0e69d922b20b68b2ec3f0"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/G/host-precleanup.json",
-      "sha256": "7878a3f0c72bf75b0bad16dd4289c7d0b79c2e0f7f0aa0d243dd31d5adb04ce2"
+      "sha256": "91425bcaa3fed8e35d42202d23e089a89f6062381273f9a8362f03937b1efb88"
     },
     {
       "path": "reports/phase2_provider_ark/tls_receipt_transport/harness_archives/G/transport-error.json",
-      "sha256": "47cf8c3b8786558d72bd131511d904b772d8cc9afa6536a22f1dda4159546d29"
+      "sha256": "855d0dd363033f1f03b7783e213d8a4c3bfed978a0e8dd246bdd232e76744324"
     }
   ],
   "authorization_constructed_count": 0,
   "container_residue_count": 0,
   "fault_injection_all_fail_closed": true,
   "fixture_source_sha256": "cea386e7db8654bcab5662f918fa554078c91987086bab940a5646896dac647d",
-  "generated_at": "2026-08-14T13:41:37.945139Z",
+  "generated_at": "2026-08-14T14:53:03.741622Z",
   "happy_path_all_archived_before_cleanup": true,
   "happy_path_all_exit_zero": true,
   "happy_path_runs": 3,
@@ -139,12 +139,12 @@
   "http_request_sent_count": 0,
   "network_mode": "none",
   "network_residue_count": 0,
-  "probe_source_sha256": "28a7be51701c2d829a88ac4385c6b0ab83599a65840b902420fccaef00671e83",
+  "probe_source_sha256": "6e992ec08c7be6bc9188f37d1e8673f7a739735fc1a926c06071d447fd67ce51",
   "provider_attempt_count": 0,
   "proxy_image_id": "sha256:a8a01a003f7afc385b4e24fd2960bcdfd3eaac40c394f39aa6249fd7b2f0f79b",
   "real_public_network_success_count": 0,
   "receipt_transport_harness_schema_version": 1,
-  "runner_source_sha256": "8d5353ef71031b14b2b0407ed759d5437956fb300a8d438c13f2aa87238e6a7a",
+  "runner_source_sha256": "01e69a5c9eb1534175d09f5cb2894c4432b31f57e058eb0962ecbc432c119593",
   "scenario_count": 9,
   "scenarios": [
     {
@@ -167,7 +167,7 @@
       "network_mode": "none",
       "network_residue_count": 0,
       "permission_fault_mechanism": null,
-      "probe_id": "afcc614e8b95407188f15fecf7c0d97a",
+      "probe_id": "25c38b77ca2841e3a0d9ca5656bfa851",
       "public_operation_count": 0,
       "result": "PASSED",
       "temporary_residue_count": 0,
@@ -183,7 +183,7 @@
       "network_mode": "none",
       "network_residue_count": 0,
       "permission_fault_mechanism": "READ_ONLY_BIND_MOUNT",
-      "probe_id": "20bb607c3faf46fab8d7f1515ffd09d9",
+      "probe_id": "ec7cdf21d5ab45158a6c0857d21def2c",
       "public_operation_count": 0,
       "result": "FAILED_CLOSED",
       "temporary_residue_count": 0,
@@ -199,7 +199,7 @@
       "network_mode": "none",
       "network_residue_count": 0,
       "permission_fault_mechanism": null,
-      "probe_id": "2231d99c64f8472ab6d40b2841cbf8b9",
+      "probe_id": "5161d29655be4ffda0fcd534e1702df3",
       "public_operation_count": 0,
       "result": "FAILED_CLOSED",
       "temporary_residue_count": 0,
@@ -215,7 +215,7 @@
       "network_mode": "none",
       "network_residue_count": 0,
       "permission_fault_mechanism": null,
-      "probe_id": "5e3e43b4b6c941efa8185a0cb1e219eb",
+      "probe_id": "71deb89310ae4cee90085f124f4e312c",
       "public_operation_count": 0,
       "result": "FAILED_CLOSED",
       "temporary_residue_count": 0,
@@ -231,7 +231,7 @@
       "network_mode": "none",
       "network_residue_count": 0,
       "permission_fault_mechanism": null,
-      "probe_id": "57e3ef655d0f4677a06738066d7daafd",
+      "probe_id": "af2681ae5d4d47aaa8d26e712ac75411",
       "public_operation_count": 0,
       "result": "FAILED_CLOSED",
       "temporary_residue_count": 0,
@@ -247,7 +247,7 @@
       "network_mode": "none",
       "network_residue_count": 0,
       "permission_fault_mechanism": null,
-      "probe_id": "212b85dfd926446f80eaba8adb79e96d",
+      "probe_id": "8302c67577fe4cbd959646712ed1ddf5",
       "public_operation_count": 0,
       "result": "FAILED_CLOSED",
       "temporary_residue_count": 0,
@@ -261,7 +261,7 @@
       "name": "cleanup_before_archive",
       "network_mode": "none",
       "network_residue_count": 0,
-      "probe_id": "8cb3a88cabaa460ab5b64627a170f02b",
+      "probe_id": "aa60393ac21348a0b90f7306ab37939b",
       "public_operation_count": 0,
       "result": "FAILED_CLOSED",
       "temporary_residue_count": 0,
@@ -282,9 +282,9 @@
       "name": "three_independent_happy_runs",
       "network_mode": "none",
       "probe_ids": [
-        "afcc614e8b95407188f15fecf7c0d97a",
-        "32982ff27e6c441b9d718e810515f151",
-        "d9d4056442eb4e459a4e9a5bf5a37b50"
+        "25c38b77ca2841e3a0d9ca5656bfa851",
+        "cdb0bb77e2cf4968b6a5bd2ac3895c1b",
+        "868b51fb211948ee9c60f78b63f080d4"
       ],
       "public_operation_count": 0,
       "result": "PASSED"

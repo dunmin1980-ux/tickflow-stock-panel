@@ -371,6 +371,14 @@ def validate_probe_receipt(
     target = value.get("target") if isinstance(value, Mapping) else None
     terminal = value.get("terminal_status") if isinstance(value, Mapping) else None
     try:
+        occurred_events = [
+            name for name in EVENT_NAMES if events[name].get("occurred") is True
+        ]
+        child_occurrence = [events[name].get("occurred") for name in CHILD_SUCCESS_EVENTS]
+        child_prefix_valid = child_occurrence == (
+            [True] * sum(child_occurrence) + [False] * (len(child_occurrence) - sum(child_occurrence))
+        )
+        monotonic_values = [events[name]["monotonic_ns"] for name in occurred_events]
         valid = (
             set(value) == _RECEIPT_FIELDS
             and value.get("probe_receipt_schema_version") == 1
@@ -424,6 +432,43 @@ def validate_probe_receipt(
                 terminal != "PROBE_PASSED"
                 or all(events[name]["occurred"] is True for name in CHILD_SUCCESS_EVENTS)
             )
+            and child_prefix_valid
+            and all(
+                left < right
+                for left, right in zip(monotonic_values, monotonic_values[1:])
+            )
+            and (
+                value.get("tls_version") is None
+                or (
+                    isinstance(value.get("tls_version"), str)
+                    and bool(value["tls_version"])
+                )
+            )
+            and (
+                value.get("cipher_name") is None
+                or (
+                    isinstance(value.get("cipher_name"), str)
+                    and bool(value["cipher_name"])
+                )
+            )
+            and (
+                value.get("certificate_not_before") is None
+                or (
+                    isinstance(value.get("certificate_not_before"), str)
+                    and bool(value["certificate_not_before"])
+                )
+            )
+            and (
+                value.get("certificate_not_after") is None
+                or (
+                    isinstance(value.get("certificate_not_after"), str)
+                    and bool(value["certificate_not_after"])
+                )
+            )
+            and (
+                value.get("san_contains_hostname") is None
+                or isinstance(value.get("san_contains_hostname"), bool)
+            )
             and (
                 value.get("verify_code") is None
                 or (
@@ -439,7 +484,7 @@ def validate_probe_receipt(
                 )
             )
         )
-    except (KeyError, TypeError):
+    except (AttributeError, KeyError, TypeError):
         valid = False
     if not valid:
         raise ValueError("probe_receipt_invalid")

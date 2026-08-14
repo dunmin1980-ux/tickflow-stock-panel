@@ -28,6 +28,7 @@ TARGET_HOST = "ark.cn-beijing.volces.com"
 TARGET_PORT = 443
 SCOPE_TYPE = "ark_tls_connectivity_probe_v2"
 PROBE_CONTRACT_VERSION = 2
+FORK_REMOTE_REF = "refs/remotes/fork/codex/tickflow-phase2-ai-review"
 _HEX_40 = re.compile(r"^[0-9a-f]{40}$")
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")
 
@@ -745,33 +746,106 @@ def _artifact_paths(output_root: Path) -> dict[str, Path]:
     }
 
 
+def _artifact_generation(
+    paths: Mapping[str, Path],
+    artifacts: Mapping[str, Any],
+) -> dict[str, Any]:
+    source_head = artifacts.get("approval_candidate", {}).get("source_git_head")
+    if not isinstance(source_head, str) or _HEX_40.fullmatch(source_head) is None:
+        raise ValueError("probe_artifact_source_head_invalid")
+    hashes = {
+        path.name: _sha256_bytes(canonical_json_bytes(artifacts[name]))
+        for name, path in paths.items()
+    }
+    return {
+        "artifact_generation_schema_version": 1,
+        "source_git_head": source_head,
+        "artifact_hashes": hashes,
+        "artifact_set_sha256": _sha256_bytes(canonical_json_bytes(hashes)),
+    }
+
+
 def publish_offline_artifacts(output_root: Path, artifacts: Mapping[str, Any]) -> None:
     paths = _artifact_paths(output_root)
     if set(artifacts) != set(paths):
         raise ValueError("probe_artifact_set_invalid")
+    generation = _artifact_generation(paths, artifacts)
     for name, path in paths.items():
         atomic_write_bytes(path, canonical_json_bytes(artifacts[name]))
+    atomic_write_bytes(
+        output_root / "artifact_generation.json",
+        canonical_json_bytes(generation),
+    )
 
 
 def read_published_artifacts(output_root: Path) -> dict[str, Any]:
+    generation_path = output_root / "artifact_generation.json"
+    if generation_path.is_symlink() or not generation_path.is_file():
+        raise ValueError("probe_artifact_generation_missing")
+    try:
+        generation = json.loads(generation_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError("probe_artifact_generation_invalid") from error
     values: dict[str, Any] = {}
-    for name, path in _artifact_paths(output_root).items():
+    paths = _artifact_paths(output_root)
+    for name, path in paths.items():
         if path.is_symlink() or not path.is_file():
             raise ValueError("probe_artifact_missing")
         values[name] = json.loads(path.read_text(encoding="utf-8"))
+    expected = _artifact_generation(paths, values)
+    if generation != expected:
+        raise ValueError("probe_artifact_generation_mismatch")
     return values
 
 
-def _git_source_head(repo_root: Path) -> str:
-    result = _run_local(["git", "rev-parse", "HEAD"], timeout=15)
-    _require_success(result, "git_head_unavailable")
-    value = result.stdout.strip()
-    _assert_hex(value, _HEX_40, "git_head_invalid")
-    return value
+def verify_git_source_state(
+    repo_root: Path,
+    *,
+    run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> str:
+    status = run(
+        ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+        cwd=repo_root,
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=15,
+    )
+    _require_success(status, "git_status_unavailable")
+    if status.stdout:
+        raise ValueError("git_worktree_dirty")
+    head = run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_root,
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=15,
+    )
+    _require_success(head, "git_head_unavailable")
+    fork = run(
+        ["git", "rev-parse", FORK_REMOTE_REF],
+        cwd=repo_root,
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=15,
+    )
+    _require_success(fork, "git_fork_head_unavailable")
+    head_value = head.stdout.strip()
+    fork_value = fork.stdout.strip()
+    _assert_hex(head_value, _HEX_40, "git_head_invalid")
+    _assert_hex(fork_value, _HEX_40, "git_fork_head_invalid")
+    if head_value != fork_value:
+        raise ValueError("git_fork_head_mismatch")
+    return head_value
 
 
-def _build_current(repo_root: Path) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    source_head = _git_source_head(repo_root)
+def _build_current(
+    repo_root: Path,
+    *,
+    source_head: str,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     image_identity = inspect_probe_image()
     ca_identity = extract_ca_identity()
     artifacts = build_offline_artifacts(
@@ -789,15 +863,27 @@ def main() -> int:
     mode.add_argument("--build", action="store_true")
     mode.add_argument("--verify", action="store_true")
     args = parser.parse_args()
-    artifacts, image_identity, ca_identity = _build_current(REPO_ROOT)
     if args.build:
+        source_head = verify_git_source_state(REPO_ROOT)
+        artifacts, image_identity, ca_identity = _build_current(
+            REPO_ROOT,
+            source_head=source_head,
+        )
         publish_offline_artifacts(OUTPUT_ROOT, artifacts)
     else:
+        verify_git_source_state(REPO_ROOT)
         published = read_published_artifacts(OUTPUT_ROOT)
+        source_head = published["approval_candidate"].get("source_git_head")
+        if not isinstance(source_head, str):
+            raise ValueError("git_head_invalid")
+        artifacts, image_identity, ca_identity = _build_current(
+            REPO_ROOT,
+            source_head=source_head,
+        )
         verify_offline_artifacts(
             REPO_ROOT,
             artifacts=published,
-            source_git_head=_git_source_head(REPO_ROOT),
+            source_git_head=source_head,
             image_identity=image_identity,
             ca_identity=ca_identity,
         )
