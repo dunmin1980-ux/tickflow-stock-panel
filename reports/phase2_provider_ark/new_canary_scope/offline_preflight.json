@@ -1,0 +1,25 @@
+{
+  "approval_candidate_sha256": "c53bdd608081addb1c8fbd6a4c4e481cdc09fa2e1e5f7816f902ac016124db2f",
+  "approval_scope_id": "6c7d46709cd646a72ee9a5d71a20cc54abce194bef8c4593b66bfaa6d2b8039f",
+  "historical_evidence": "UNCHANGED",
+  "independent_review": "PENDING",
+  "keychain_secret": "PRESENT",
+  "offline_preflight_schema_version": 1,
+  "provider_http": "NOT_RUN",
+  "real_ai_calls": 0,
+  "real_ark_provider_attempts": 0,
+  "residue": {
+    "container_count": 0,
+    "network_count": 0,
+    "temporary_count": 0
+  },
+  "scope_availability": "AVAILABLE",
+  "scope_historical_attempts": 0,
+  "secret_content_read": false,
+  "source_git_head": "0bed04b7a239eba9e9ae8716732974a1f7027190",
+  "status": "CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL",
+  "tls_connectivity": "VERIFIED",
+  "tls_probe_evidence": "PASSED",
+  "tls_probe_id": "d73e91f766854ff7a64c0e725939eb64",
+  "tls_probe_scope_id": "abd999450d007f23cadccd86d22136608c3fbb04b1d92c0078153088781f919c"
+}

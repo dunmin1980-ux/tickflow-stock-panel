@@ -499,9 +499,21 @@ def test_historical_consumed_scope_passes_narrow_response_header_bridge(
         / REQUEST_ID,
         attempts_root / OLD_SCOPE_ID / REQUEST_ID,
     )
+    for category in ("evidence", "rejected"):
+        destination = ark_history_root / category
+        destination.mkdir(parents=True)
+        shutil.copy2(
+            REPO_ROOT
+            / "reports/phase2_provider_ark/live_canary"
+            / category
+            / f"{REQUEST_ID}.json",
+            destination / f"{REQUEST_ID}.json",
+        )
     shutil.copytree(
-        REPO_ROOT / "reports/phase2_provider_ark/live_canary",
-        ark_history_root,
+        REPO_ROOT
+        / "reports/phase2_provider_ark/live_canary/receipts"
+        / REQUEST_ID,
+        ark_history_root / "receipts" / REQUEST_ID,
     )
     normalize_committed_runtime_modes(tmp_path)
     legacy_state_root = tmp_path / "legacy-state"
@@ -564,7 +576,8 @@ def test_new_candidate_binds_180_195_210_and_new_scope_has_zero_attempts(
         ).read_text(encoding="utf-8")
     )
     assert hashlib.sha256(candidate_raw).hexdigest() != OLD_CANDIDATE_SHA256
-    assert candidate["status"] == "PHASE2B_ARK_TIMEOUT_CONTRACT_READY_FOR_REAPPROVAL"
+    assert candidate["status"] == "CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL"
+    assert candidate["ark_approval_candidate_schema_version"] == 2
     assert candidate["artifact_hashes"]["runtime_contract_sha256"] == (
         ark_timeout_module.ark_runtime_contract_sha256()
     )
@@ -718,7 +731,12 @@ def test_historical_baseline_rejects_unlisted_ark_history_file(
         source / "phase2_provider_canary",
         destination / "phase2_provider_canary",
     )
-    extra = destination / "phase2_provider_ark/live_canary/evidence" / ("f" * 32 + ".json")
+    extra = (
+        destination
+        / "phase2_provider_ark/live_canary/receipts"
+        / REQUEST_ID
+        / "unexpected.json"
+    )
     extra.write_text("{}\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="ark_history_baseline_invalid"):

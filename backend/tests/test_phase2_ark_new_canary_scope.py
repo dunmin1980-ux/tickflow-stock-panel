@@ -119,6 +119,7 @@ def test_new_candidate_binds_tls_probe_and_complete_single_file_sources() -> Non
         "claims_schema_source",
         "projection_builder_source",
         "build_provenance",
+        "candidate_contract_source",
         "artifact_generation",
         "tls_probe_evidence",
         "proxy_dockerfile",

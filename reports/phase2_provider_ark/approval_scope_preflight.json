@@ -1,16 +1,23 @@
 {
-  "approval_candidate_sha256": "75263d87a2ae6c368ce6c2ce4d65dfbc20b29f4c5bf38e827b2da07290dda2a1",
+  "approval_candidate_sha256": "c53bdd608081addb1c8fbd6a4c4e481cdc09fa2e1e5f7816f902ac016124db2f",
   "approval_installed": false,
-  "approval_scope_id": "8e42a251cfa4e5b4cbdc95b3aceca9d59152ce574e65f5ba2300a0009df8a019",
+  "approval_scope_id": "6c7d46709cd646a72ee9a5d71a20cc54abce194bef8c4593b66bfaa6d2b8039f",
   "ark_approval_scope_schema_version": 1,
   "attempt_availability": "AVAILABLE",
+  "attempt_directory": "ABSENT",
+  "current_git_head": "0bed04b7a239eba9e9ae8716732974a1f7027190",
   "endpoint_alias": "ark_responses_cn_beijing_v1",
   "exact_model_id": "doubao-seed-2-1-turbo-260628",
-  "global_request_id_count": 4,
+  "global_request_id_count": 5,
   "historical_attempts": 0,
   "ledger_namespace_version": 1,
   "ledger_preflight_status": "READY",
+  "maximum_provider_attempts": 1,
   "mock_e2e_sha256": "fb67c11b1a2ee041f6a6b18cfddf997aea8bf4daff97e7e6c881637ba450de73",
   "provider_id": "volcengine_ark",
-  "symbol": "000403.SZ"
+  "retry_count": 0,
+  "symbol": "000403.SZ",
+  "tls_probe_id": "d73e91f766854ff7a64c0e725939eb64",
+  "tls_probe_result": "PASSED",
+  "tls_probe_scope_id": "abd999450d007f23cadccd86d22136608c3fbb04b1d92c0078153088781f919c"
 }

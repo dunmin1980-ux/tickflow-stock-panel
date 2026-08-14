@@ -432,25 +432,42 @@ def test_committed_ark_candidate_binds_all_required_hashes() -> None:
         "timeout_mock_e2e_sha256",
         "mock_e2e_sha256",
         "build_provenance_sha256",
+        "artifact_generation_sha256",
+        "historical_evidence_binding_sha256",
+        "tls_probe_evidence_sha256",
+        "tls_probe_receipt_sha256",
     }
     assert set(observed["artifact_hashes"]) == required
-    assert observed["source_bindings"] == {
-        "base_image_digest": (
-            "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5"
-        ),
-        "proxy_dockerfile_sha256": hashlib.sha256(
-            (REPO_ROOT / "docker/phase2-ark-egress-proxy/Dockerfile").read_bytes()
-        ).hexdigest(),
-        "proxy_source_sha256": hashlib.sha256(
-            (REPO_ROOT / "docker/phase2-ark-egress-proxy/proxy.py").read_bytes()
-        ).hexdigest(),
-        "relay_dockerfile_sha256": hashlib.sha256(
-            (REPO_ROOT / "docker/phase2-ark-canary-relay/Dockerfile").read_bytes()
-        ).hexdigest(),
-        "relay_source_sha256": hashlib.sha256(
-            (REPO_ROOT / "docker/phase2-ark-canary-relay/relay.py").read_bytes()
-        ).hexdigest(),
+    assert observed["base_image_digest"] == (
+        "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5"
+    )
+    assert set(observed["source_bindings"]) == {
+        "approval_builder_source",
+        "ark_adapter_source",
+        "ark_launcher_source",
+        "ark_proxy_policy_source",
+        "artifact_generation",
+        "build_provenance",
+        "candidate_contract_source",
+        "claims_schema_source",
+        "facts",
+        "historical_evidence",
+        "orchestrator_source",
+        "projection_builder_source",
+        "proxy_dockerfile",
+        "proxy_source",
+        "readiness_contract",
+        "relay_dockerfile",
+        "relay_source",
+        "responses_contract",
+        "runtime_contract",
+        "scope_builder_source",
+        "tls_probe_evidence",
     }
+    for binding in observed["source_bindings"].values():
+        path = REPO_ROOT / binding["path"]
+        assert path.is_file() and not path.is_symlink()
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == binding["sha256"]
     assert observed["artifact_generation_required"] is True
     assert len(hashlib.sha256(path.read_bytes()).hexdigest()) == 64
     assert "approval_scope" not in observed
@@ -752,10 +769,12 @@ def test_committed_candidate_uses_the_mock_validated_relay_image() -> None:
     mock = json.loads((REPO_ROOT / "reports/phase2_provider_ark/mock_e2e.json").read_text())
     assert candidate["proxy_image_id"] == mock["proxy_image_id"]
     assert candidate["relay_image_id"] == mock["relay_image_id"]
-    assert (
-        mock["orchestrator_source_sha256"]
-        == candidate["artifact_hashes"]["orchestrator_source_sha256"]
-    )
+    assert candidate["artifact_hashes"]["mock_e2e_sha256"] == hashlib.sha256(
+        (REPO_ROOT / "reports/phase2_provider_ark/mock_e2e.json").read_bytes()
+    ).hexdigest()
+    assert candidate["artifact_hashes"]["orchestrator_source_sha256"] == hashlib.sha256(
+        (REPO_ROOT / "backend/app/services/phase2_canary_orchestrator.py").read_bytes()
+    ).hexdigest()
     assert (
         mock["runtime_contract_sha256"] == candidate["artifact_hashes"]["runtime_contract_sha256"]
     )

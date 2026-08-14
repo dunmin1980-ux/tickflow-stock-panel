@@ -1731,6 +1731,7 @@ def _ark_v2_candidate_identity_valid(value: dict[str, Any]) -> bool:
         "ark_proxy_policy_source",
         "artifact_generation",
         "build_provenance",
+        "candidate_contract_source",
         "claims_schema_source",
         "facts",
         "historical_evidence",

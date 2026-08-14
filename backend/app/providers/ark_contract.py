@@ -100,6 +100,7 @@ _ARK_COMPLETE_SOURCE_PATHS = {
     "claims_schema_source": "backend/app/schemas/phase2_claims.py",
     "projection_builder_source": "backend/app/services/phase2_ai_worker_protocol.py",
     "build_provenance": "reports/phase2_provider_ark/ark_build_provenance.json",
+    "candidate_contract_source": "backend/app/providers/ark_contract.py",
     "artifact_generation": _ARK_INHERITED_ARTIFACT_GENERATION_PATH.as_posix(),
     "tls_probe_evidence": _ARK_TLS_PROBE_BINDING_PATH.as_posix(),
     "historical_evidence": _ARK_HISTORY_EVIDENCE_BINDING_PATH.as_posix(),
@@ -1222,12 +1223,28 @@ def validate_ark_history_baseline(repo_root: Path) -> dict[str, Any]:
             or _sha256(_snapshot_bytes(root, relative)) != expected_sha256
         ):
             raise ValueError("ark_history_baseline_invalid")
-    historical_files = {
-        path.relative_to(root).as_posix()
-        for base in historical_roots
-        for path in base.rglob("*")
-        if path.is_file() or path.is_symlink()
-    }
+    request_id = "2f17745f58534063bdd7eda1eb0d16f1"
+    request_roots = (
+        root / "reports/phase2_provider_ark/live_canary/evidence" / f"{request_id}.json",
+        root / "reports/phase2_provider_ark/live_canary/rejected" / f"{request_id}.json",
+        root / "reports/phase2_provider_ark/live_canary/receipts" / request_id,
+        root
+        / "reports/phase2_provider_canary/attempts"
+        / "898079e765f188ba48b2de143ff5fce81e1191ec7bfc6cb773352b2bed90982d"
+        / request_id,
+    )
+    historical_files: set[str] = set()
+    for request_root in request_roots:
+        candidates = (
+            (request_root,)
+            if request_root.is_file() or request_root.is_symlink()
+            else tuple(request_root.rglob("*"))
+        )
+        historical_files.update(
+            candidate.relative_to(root).as_posix()
+            for candidate in candidates
+            if candidate.is_file() or candidate.is_symlink()
+        )
     if historical_files != set(_ARK_HISTORY_HASHES):
         raise ValueError("ark_history_baseline_invalid")
     return value
