@@ -1,0 +1,51 @@
+{
+  "ai_call_count": 0,
+  "approval_candidate_sha256": "26c09cc183adcd7562e53f72368a27eceff8b56603cb0ce250fe1244466b41ac",
+  "approval_scope_id": "6f696a3213c32f962c2b7f8571509b499d9d7e978e773edd09aac1543f7f265a",
+  "ark_proxy_terminal": "TLS_FAILED",
+  "candidate_status": "NOT_PRODUCED",
+  "can_publish": false,
+  "claims_status": "NOT_RUN",
+  "cleanup": {
+    "container_residue_count": 0,
+    "global_lock": "RELEASED",
+    "network_residue_count": 0,
+    "secret_file_residue_count": 0,
+    "temporary_file_residue_count": 0
+  },
+  "failure_class": "PROVIDER_TLS",
+  "facts_pointer_binding_count": 0,
+  "final_status": "PHASE2B_ARK_CANARY_PROVIDER_BLOCKED",
+  "free_text_field_count": 0,
+  "historical_evidence": "UNCHANGED",
+  "last_proven_stage": "provider_connect_started",
+  "machine_validation": "FAILED",
+  "manual_review": "PENDING",
+  "provider_attempt_count": 1,
+  "provider_events": {
+    "provider_connect_completed": false,
+    "provider_connect_started": true,
+    "request_write_completed": false,
+    "request_write_started": false,
+    "response_body_completed": false,
+    "response_headers_received": false,
+    "tls_completed": false
+  },
+  "provider_http": "NOT_PROVEN",
+  "raw_qfq": "NOT_RUN",
+  "relay_terminal": "RELAY_PROTOCOL_REJECTED",
+  "renderer": "NOT_RUN",
+  "request_id": "d57b276fe9014d35bdae5a92950ca17b",
+  "retry_count": 0,
+  "route": "REJECTED",
+  "scope_attempt_state": "FAILED_AFTER_DISPATCH_CONSUMED",
+  "secret_hits": 0,
+  "three_symbol_batch": "NOT_APPROVED",
+  "tls_probe": {
+    "probe_id": "d73e91f766854ff7a64c0e725939eb64",
+    "status": "PASSED_PRESERVED_NON_REUSABLE"
+  },
+  "trading_claim_count": 0,
+  "unsupported_claim_count": 0,
+  "verification_schema_version": 1
+}

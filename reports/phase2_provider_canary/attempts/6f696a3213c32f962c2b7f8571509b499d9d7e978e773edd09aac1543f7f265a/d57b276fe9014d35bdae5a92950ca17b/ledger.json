@@ -1,0 +1,32 @@
+{
+  "approval_scope_id": "6f696a3213c32f962c2b7f8571509b499d9d7e978e773edd09aac1543f7f265a",
+  "attempt": {
+    "candidate_ready_at": null,
+    "cleanup_completed_at": null,
+    "dispatch_started_at": "2026-08-14T17:21:00.357825Z",
+    "failed_at": "2026-08-14T17:21:08.310588Z",
+    "host_validation_completed_at": null,
+    "identity": {
+      "approval_candidate_sha256": "26c09cc183adcd7562e53f72368a27eceff8b56603cb0ce250fe1244466b41ac",
+      "endpoint_alias": "ark_responses_cn_beijing_v1",
+      "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+      "orchestrator_source_sha256": "89df850c19bc6a768e32b74497c11753d9fe007af3bdc0f735ea6e13f8a7fdf6",
+      "projection_sha256": "0ffe5b7fbd57d6b16af073db12d826c940c88b43547870f6b9513401eb49fb1f",
+      "provider": "volcengine_ark",
+      "proxy_image_id": "sha256:a8a01a003f7afc385b4e24fd2960bcdfd3eaac40c394f39aa6249fd7b2f0f79b",
+      "relay_image_id": "sha256:95a06dc938887f04358e42816a032f3e961cc45bb85d593946510d15fa6b46fb",
+      "request_id": "d57b276fe9014d35bdae5a92950ca17b",
+      "symbol": "000403.SZ",
+      "timeout_contract_sha256": "3cb3064e4e68bb2e9a07a9153f9c2bcef8de127ac0fd779b2c41e1ab9e0ac681",
+      "trade_date": "2026-07-31"
+    },
+    "ledger_schema_version": 1,
+    "prepared_at": "2026-08-14T17:20:56.609978Z",
+    "provider_attempt_count": 1,
+    "response_received_at": null,
+    "retry_count": 0,
+    "state": "FAILED_AFTER_DISPATCH"
+  },
+  "exact_model_id": "doubao-seed-2-1-turbo-260628",
+  "ledger_namespace_version": 1
+}

@@ -1,0 +1,100 @@
+{
+  "auth_present": true,
+  "component": "proxy",
+  "endpoint_alias": "ark_responses_cn_beijing_v1",
+  "exact_model_id": "doubao-seed-2-1-turbo-260628",
+  "method_allowed": true,
+  "path_allowed": true,
+  "process_started": {
+    "byte_count": null,
+    "event": "process_started",
+    "http_status": null,
+    "monotonic_ns": 14051620110849,
+    "occurred": true,
+    "wall_time": "2026-08-14T17:21:00.217821Z"
+  },
+  "provider_attempt_count": 1,
+  "provider_connect_completed": {
+    "byte_count": null,
+    "event": "provider_connect_completed",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "provider_connect_started": {
+    "byte_count": null,
+    "event": "provider_connect_started",
+    "http_status": null,
+    "monotonic_ns": 14052927654057,
+    "occurred": true,
+    "wall_time": "2026-08-14T17:21:01.528578Z"
+  },
+  "provider_http_status": null,
+  "provider_id": "volcengine_ark",
+  "proxy_ready": {
+    "byte_count": null,
+    "event": "proxy_ready",
+    "http_status": null,
+    "monotonic_ns": 14051726815313,
+    "occurred": true,
+    "wall_time": "2026-08-14T17:21:00.327741Z"
+  },
+  "receipt_schema_version": 2,
+  "redirect_followed": false,
+  "relay_request_received": {
+    "byte_count": null,
+    "event": "relay_request_received",
+    "http_status": null,
+    "monotonic_ns": 14052785549565,
+    "occurred": true,
+    "wall_time": "2026-08-14T17:21:01.386481Z"
+  },
+  "request_id": "d57b276fe9014d35bdae5a92950ca17b",
+  "request_write_completed": {
+    "byte_count": null,
+    "event": "request_write_completed",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "request_write_started": {
+    "byte_count": null,
+    "event": "request_write_started",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "response_body_completed": {
+    "byte_count": null,
+    "event": "response_body_completed",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "response_bytes": null,
+  "response_category": "TLS_FAILED",
+  "response_headers_received": {
+    "byte_count": null,
+    "event": "response_headers_received",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "response_size": null,
+  "retry_count": 0,
+  "terminal_status": "TLS_FAILED",
+  "tls_completed": {
+    "byte_count": null,
+    "event": "tls_completed",
+    "http_status": null,
+    "monotonic_ns": null,
+    "occurred": false,
+    "wall_time": null
+  },
+  "tls_verification": true
+}
