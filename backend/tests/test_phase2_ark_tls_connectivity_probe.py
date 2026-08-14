@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-import importlib.util
 import hashlib
+import importlib.util
 import json
 import os
-import subprocess
 import socket
 import ssl
 import stat
+import subprocess
 from pathlib import Path
 from types import ModuleType
 from typing import Any
 
 import pytest
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROBE_PATH = REPO_ROOT / "docker/phase2-ark-tls-connectivity-probe/probe.py"
@@ -359,12 +358,15 @@ def test_docker_command_is_restricted_and_mounts_no_secret_or_broad_path(
 ) -> None:
     output = tmp_path / "output"
     output.mkdir()
+    probe_id_file = tmp_path / "probe-id"
+    probe_id_file.write_text(PROBE_ID + "\n", encoding="ascii")
     command = runner_module.build_probe_container_command(
         probe_id=PROBE_ID,
         container_name="phase2-ark-tls-probe-aaaaaaaaaaaa",
         network_name="phase2-ark-tls-probe-net-aaaaaaaaaaaa",
         output_dir=output,
         probe_source=PROBE_PATH,
+        probe_id_file=probe_id_file,
     )
 
     assert command[:2] == ["docker", "create"]
@@ -378,8 +380,11 @@ def test_docker_command_is_restricted_and_mounts_no_secret_or_broad_path(
     )
     assert runner_module.PROXY_IMAGE_ID in command
     mounts = [command[index + 1] for index, item in enumerate(command) if item == "--mount"]
-    assert len(mounts) == 2
+    assert len(mounts) == 3
     assert any("dst=/probe/probe.py,readonly" in mount for mount in mounts)
+    assert any(
+        "dst=/run/tickflow/probe-id,readonly" in mount for mount in mounts
+    )
     assert any("dst=/output" in mount and "readonly" not in mount for mount in mounts)
     serialized = " ".join(command).lower()
     assert "docker.sock" not in serialized
@@ -783,5 +788,19 @@ def test_dispatched_timeout_is_consumed_published_and_cleaned(
     receipt = json.loads(
         (output_root / ledger["probe_id"] / "receipt.json").read_bytes()
     )
+    precleanup = json.loads(
+        (
+            output_root
+            / ledger["probe_id"]
+            / "transport-evidence-precleanup.json"
+        ).read_bytes()
+    )
+    postcleanup = json.loads(
+        (output_root / ledger["probe_id"] / "transport-evidence.json").read_bytes()
+    )
     assert receipt["tls_error_category"] == "PROCESS_ERROR"
     assert receipt["events"]["cleanup_completed"]["occurred"] is True
+    assert precleanup["host_lifecycle"]["receipt_archive_completed"]["occurred"] is True
+    assert precleanup["host_lifecycle"]["cleanup_started"]["occurred"] is False
+    assert postcleanup["host_lifecycle"]["cleanup_completed"]["occurred"] is True
+    assert postcleanup["temporary_residue_count"] == 0

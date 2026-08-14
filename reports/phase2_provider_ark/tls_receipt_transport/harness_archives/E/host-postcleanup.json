@@ -1,0 +1,47 @@
+{
+  "ai_call_count": 0,
+  "archive_schema_version": 1,
+  "authorization_constructed_count": 0,
+  "container_exit_code": 0,
+  "fixture_mode": "missing_ready",
+  "host_lifecycle": {
+    "cleanup_completed": {
+      "category": "PASSED",
+      "monotonic_ns": 1407980781458,
+      "occurred": true,
+      "wall_time": "2026-08-14T13:41:36.134111Z"
+    },
+    "cleanup_started": {
+      "category": "PASSED",
+      "monotonic_ns": 1407764582610,
+      "occurred": true,
+      "wall_time": "2026-08-14T13:41:35.917877Z"
+    },
+    "container_wait_completed": {
+      "category": "PASSED",
+      "monotonic_ns": 1407759149415,
+      "occurred": true,
+      "wall_time": "2026-08-14T13:41:35.912439Z"
+    },
+    "receipt_archive_completed": {
+      "category": "TRANSPORT_ERROR_PERSISTED",
+      "monotonic_ns": 1407762567372,
+      "occurred": true,
+      "wall_time": "2026-08-14T13:41:35.915892Z"
+    },
+    "receipt_validated": {
+      "category": "NOT_REACHED",
+      "monotonic_ns": null,
+      "occurred": false,
+      "wall_time": null
+    }
+  },
+  "host_metadata": null,
+  "http_request_sent_count": 0,
+  "network_mode": "none",
+  "probe_id": "57e3ef655d0f4677a06738066d7daafd",
+  "provider_attempt_count": 0,
+  "real_public_network_success_count": 0,
+  "secret_content_read_count": 0,
+  "transport_error_category": "RECEIPT_OPEN_FAILED"
+}

@@ -1,0 +1,57 @@
+{
+  "ai_call_count": 0,
+  "archive_schema_version": 1,
+  "authorization_constructed_count": 0,
+  "container_exit_code": 0,
+  "fixture_mode": "happy",
+  "host_lifecycle": {
+    "cleanup_completed": {
+      "category": "PASSED",
+      "monotonic_ns": 1397546578287,
+      "occurred": true,
+      "wall_time": "2026-08-14T13:41:25.699892Z"
+    },
+    "cleanup_started": {
+      "category": "PASSED",
+      "monotonic_ns": 1397370228109,
+      "occurred": true,
+      "wall_time": "2026-08-14T13:41:25.523574Z"
+    },
+    "container_wait_completed": {
+      "category": "PASSED",
+      "monotonic_ns": 1397361621675,
+      "occurred": true,
+      "wall_time": "2026-08-14T13:41:25.514929Z"
+    },
+    "receipt_archive_completed": {
+      "category": "PASSED",
+      "monotonic_ns": 1397368003327,
+      "occurred": true,
+      "wall_time": "2026-08-14T13:41:25.521348Z"
+    },
+    "receipt_validated": {
+      "category": "PASSED",
+      "monotonic_ns": 1397363732573,
+      "occurred": true,
+      "wall_time": "2026-08-14T13:41:25.517070Z"
+    }
+  },
+  "host_metadata": {
+    "directory_gid": 20,
+    "directory_mode": "0700",
+    "directory_uid": 501,
+    "marker_gid": 20,
+    "marker_mode": "0600",
+    "marker_uid": 501,
+    "receipt_gid": 20,
+    "receipt_mode": "0600",
+    "receipt_uid": 501
+  },
+  "http_request_sent_count": 0,
+  "network_mode": "none",
+  "probe_id": "32982ff27e6c441b9d718e810515f151",
+  "provider_attempt_count": 0,
+  "real_public_network_success_count": 0,
+  "secret_content_read_count": 0,
+  "transport_error_category": null
+}

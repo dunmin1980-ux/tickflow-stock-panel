@@ -1,0 +1,11 @@
+{
+  "ai_call_count": 0,
+  "authorization_constructed": false,
+  "category": "RECEIPT_OPEN_FAILED",
+  "container_exit_code": 0,
+  "http_request_sent": false,
+  "probe_id": "57e3ef655d0f4677a06738066d7daafd",
+  "provider_attempt_count": 0,
+  "secret_content_read": false,
+  "transport_error_schema_version": 1
+}

@@ -13,12 +13,11 @@ import subprocess
 import tempfile
 import time
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
 from typing import Any
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROBE_SOURCE = (
@@ -37,6 +36,15 @@ LOCAL_APPROVAL_PATH = (
     / "Library/Application Support/TickFlowPhase2CanaryArk/runtime-approval.json"
 )
 CHILD_RECEIPT_NAME = "child-receipt.json"
+READY_MARKER_NAME = "receipt.ready"
+TRANSPORT_ERROR_CATEGORIES = {
+    "RECEIPT_OPEN_FAILED",
+    "RECEIPT_WRITE_FAILED",
+    "RECEIPT_FSYNC_FAILED",
+    "RECEIPT_RENAME_FAILED",
+    "RECEIPT_PARENT_FSYNC_FAILED",
+    "RECEIPT_VALIDATION_FAILED",
+}
 MAXIMUM_JSON_BYTES = 131_072
 _NOFOLLOW = os.O_NOFOLLOW if hasattr(os, "O_NOFOLLOW") else 0
 _DIRECTORY = os.O_DIRECTORY if hasattr(os, "O_DIRECTORY") else 0
@@ -44,6 +52,62 @@ _DIRECTORY = os.O_DIRECTORY if hasattr(os, "O_DIRECTORY") else 0
 
 class ProbeRunnerError(RuntimeError):
     pass
+
+
+class ReceiptTransportError(RuntimeError):
+    def __init__(self, category: str) -> None:
+        super().__init__(category)
+        self.category = category
+
+
+class HostLifecycleRecorder:
+    EVENT_NAMES = (
+        "container_wait_completed",
+        "receipt_validated",
+        "receipt_archive_completed",
+        "cleanup_started",
+        "cleanup_completed",
+    )
+
+    def __init__(
+        self,
+        *,
+        wall_clock: Callable[[], str],
+        monotonic_ns: Callable[[], int],
+    ) -> None:
+        self._wall_clock = wall_clock
+        self._monotonic_ns = monotonic_ns
+        self._events = {
+            name: {
+                "occurred": False,
+                "wall_time": None,
+                "monotonic_ns": None,
+                "category": "NOT_REACHED",
+            }
+            for name in self.EVENT_NAMES
+        }
+
+    def record(self, name: str, *, category: str = "PASSED") -> None:
+        if name not in self._events or self._events[name]["occurred"]:
+            raise ValueError("host_lifecycle_event_invalid")
+        if (
+            name == "cleanup_started"
+            and not self._events["receipt_archive_completed"]["occurred"]
+        ):
+            raise ValueError("archive_required_before_cleanup")
+        if name == "receipt_archive_completed" and self._events[
+            "cleanup_started"
+        ]["occurred"]:
+            raise ValueError("archive_required_before_cleanup")
+        self._events[name] = {
+            "occurred": True,
+            "wall_time": self._wall_clock(),
+            "monotonic_ns": self._monotonic_ns(),
+            "category": category,
+        }
+
+    def values(self) -> dict[str, dict[str, Any]]:
+        return {name: dict(value) for name, value in self._events.items()}
 
 
 def _wall_time() -> str:
@@ -79,11 +143,49 @@ def _ensure_directory(path: Path, *, mode: int) -> None:
     os.chmod(path, mode)
 
 
+def validate_runtime_directory(path: Path) -> None:
+    metadata = os.lstat(path)
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+        raise ValueError("runtime_directory_invalid")
+    for child in path.iterdir():
+        if child.is_symlink():
+            raise ValueError("runtime_path_symlink")
+
+
+def canonicalize_runtime_directory(path: Path) -> Path:
+    canonical = path.resolve(strict=True)
+    validate_runtime_directory(canonical)
+    return canonical
+
+
 def _atomic_write_json(path: Path, value: Mapping[str, Any], *, mode: int = 0o600) -> None:
     _ensure_directory(path.parent, mode=0o700)
     raw = (
         json.dumps(value, allow_nan=False, indent=2, sort_keys=True) + "\n"
     ).encode("utf-8")
+    descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary = Path(name)
+    try:
+        os.fchmod(descriptor, mode)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(raw)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        directory = os.open(path.parent, os.O_RDONLY | _DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _atomic_write_bytes(path: Path, raw: bytes, *, mode: int = 0o600) -> None:
+    _ensure_directory(path.parent, mode=0o700)
     descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     temporary = Path(name)
     try:
@@ -272,6 +374,81 @@ def verify_historical_baseline(
     return len(files)
 
 
+def verify_receipt_transport_history(repo_root: Path, baseline_path: Path) -> int:
+    baseline = _read_json_regular(baseline_path)
+    files = baseline.get("files")
+    if (
+        set(baseline)
+        != {
+            "baseline_schema_version",
+            "captured_at",
+            "file_count",
+            "files",
+            "historical_probe_id",
+            "historical_status",
+        }
+        or baseline.get("baseline_schema_version") != 1
+        or baseline.get("historical_probe_id")
+        != "5dd641ca9e4b4ccba1035fff4d695409"
+        or baseline.get("file_count") != 7
+        or not isinstance(files, list)
+        or len(files) != 7
+    ):
+        raise ValueError("receipt_transport_history_invalid")
+    expected: set[str] = set()
+    for item in files:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"path", "sha256"}
+            or not isinstance(item.get("path"), str)
+            or not isinstance(item.get("sha256"), str)
+            or len(item["sha256"]) != 64
+        ):
+            raise ValueError("receipt_transport_history_invalid")
+        relative = Path(item["path"])
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError("receipt_transport_history_invalid")
+        expected.add(relative.as_posix())
+        candidate = repo_root / relative
+        _assert_no_symlink_components(candidate)
+        if not candidate.is_file() or candidate.is_symlink():
+            raise ValueError("receipt_transport_history_mutated")
+        if _sha256(candidate) != item["sha256"]:
+            raise ValueError("receipt_transport_history_mutated")
+    history_root = repo_root / "reports/phase2_provider_ark/tls_connectivity_probe"
+    expected_directories = {history_root}
+    for relative_path in expected:
+        candidate = repo_root / relative_path
+        try:
+            candidate.relative_to(history_root)
+        except ValueError as error:
+            raise ValueError("receipt_transport_history_invalid") from error
+        expected_directories.update(
+            parent
+            for parent in candidate.parents
+            if parent == history_root or history_root in parent.parents
+        )
+    actual_files: set[str] = set()
+    actual_directories: set[Path] = {history_root}
+    for directory, dirnames, filenames in os.walk(history_root, followlinks=False):
+        directory_path = Path(directory)
+        for name in dirnames:
+            child = directory_path / name
+            metadata = os.lstat(child)
+            if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+                raise ValueError("receipt_transport_history_invalid")
+            actual_directories.add(child)
+        for name in filenames:
+            child = directory_path / name
+            metadata = os.lstat(child)
+            if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+                raise ValueError("receipt_transport_history_invalid")
+            actual_files.add(child.relative_to(repo_root).as_posix())
+    if actual_files != expected or actual_directories != expected_directories:
+        raise ValueError("receipt_transport_history_set_changed")
+    return len(files)
+
+
 def create_execution_ledger(
     path: Path,
     *,
@@ -323,6 +500,7 @@ def build_probe_container_command(
     network_name: str,
     output_dir: Path,
     probe_source: Path,
+    probe_id_file: Path,
 ) -> list[str]:
     if len(probe_id) != 32 or any(character not in "0123456789abcdef" for character in probe_id):
         raise ValueError("probe_id_invalid")
@@ -353,12 +531,250 @@ def build_probe_container_command(
         "--mount",
         f"type=bind,src={probe_source},dst=/probe/probe.py,readonly",
         "--mount",
+        f"type=bind,src={probe_id_file},dst=/run/tickflow/probe-id,readonly",
+        "--mount",
         f"type=bind,src={output_dir},dst=/output",
         "--entrypoint",
         "/usr/bin/python3",
         PROXY_IMAGE_ID,
         "/probe/probe.py",
     ]
+
+
+def _read_regular_bytes(path: Path) -> bytes:
+    _assert_no_symlink_components(path)
+    descriptor = os.open(path, os.O_RDONLY | _NOFOLLOW)
+    try:
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+            or metadata.st_size > MAXIMUM_JSON_BYTES
+        ):
+            raise ValueError("receipt_file_invalid")
+        raw = os.read(descriptor, MAXIMUM_JSON_BYTES + 1)
+    finally:
+        os.close(descriptor)
+    return raw
+
+
+def read_receipt_bundle(
+    output_dir: Path,
+    probe_id: str,
+    probe_module: ModuleType,
+    *,
+    expected_publisher: tuple[int, int] | None = None,
+    expected_host_directory_owner: tuple[int, int] | None = None,
+    expected_host_file_owner: tuple[int, int] | None = None,
+) -> dict[str, Any]:
+    try:
+        canonical = canonicalize_runtime_directory(output_dir)
+        directory_metadata = os.lstat(canonical)
+        if stat.S_IMODE(directory_metadata.st_mode) != 0o700:
+            raise ReceiptTransportError("RECEIPT_VALIDATION_FAILED")
+        if expected_host_directory_owner is not None and (
+            directory_metadata.st_uid,
+            directory_metadata.st_gid,
+        ) != expected_host_directory_owner:
+            raise ReceiptTransportError("RECEIPT_VALIDATION_FAILED")
+        names = {path.name for path in canonical.iterdir()}
+        if names != {CHILD_RECEIPT_NAME, READY_MARKER_NAME}:
+            raise ReceiptTransportError("RECEIPT_OPEN_FAILED")
+        receipt_path = canonical / CHILD_RECEIPT_NAME
+        marker_path = canonical / READY_MARKER_NAME
+        receipt_metadata = os.lstat(receipt_path)
+        marker_metadata = os.lstat(marker_path)
+        if (
+            (receipt_metadata.st_uid, receipt_metadata.st_gid)
+            != (marker_metadata.st_uid, marker_metadata.st_gid)
+            or (
+                expected_host_file_owner is not None
+                and (receipt_metadata.st_uid, receipt_metadata.st_gid)
+                != expected_host_file_owner
+            )
+        ):
+            raise ReceiptTransportError("RECEIPT_VALIDATION_FAILED")
+        receipt_bytes = _read_regular_bytes(receipt_path)
+        marker_bytes = _read_regular_bytes(marker_path)
+        receipt = json.loads(receipt_bytes)
+        marker = json.loads(marker_bytes)
+    except ReceiptTransportError:
+        raise
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        raise ReceiptTransportError("RECEIPT_VALIDATION_FAILED") from error
+    marker_fields = {
+        "publication_schema_version",
+        "publication_complete",
+        "probe_id",
+        "receipt_sha256",
+        "publisher_uid",
+        "publisher_gid",
+        "directory_uid",
+        "directory_gid",
+        "directory_mode",
+    }
+    if (
+        not isinstance(marker, dict)
+        or set(marker) != marker_fields
+        or marker.get("publication_schema_version") != 1
+        or marker.get("publication_complete") is not True
+        or marker.get("probe_id") != probe_id
+        or marker.get("receipt_sha256") != hashlib.sha256(receipt_bytes).hexdigest()
+        or type(marker.get("publisher_uid")) is not int
+        or type(marker.get("publisher_gid")) is not int
+        or type(marker.get("directory_uid")) is not int
+        or type(marker.get("directory_gid")) is not int
+        or marker.get("directory_mode") != "0700"
+    ):
+        raise ReceiptTransportError("RECEIPT_VALIDATION_FAILED")
+    if expected_publisher is not None and (
+        (marker["publisher_uid"], marker["publisher_gid"]) != expected_publisher
+        or (marker["directory_uid"], marker["directory_gid"])
+        != expected_publisher
+    ):
+        raise ReceiptTransportError("RECEIPT_VALIDATION_FAILED")
+    try:
+        validated = probe_module.validate_probe_receipt(
+            receipt,
+            require_cleanup=False,
+        )
+    except ValueError as error:
+        raise ReceiptTransportError("RECEIPT_VALIDATION_FAILED") from error
+    if validated.get("probe_id") != probe_id:
+        raise ReceiptTransportError("RECEIPT_VALIDATION_FAILED")
+    return {
+        "receipt": validated,
+        "receipt_bytes": receipt_bytes,
+        "marker": marker,
+        "marker_bytes": marker_bytes,
+        "host_metadata": {
+            "directory_uid": directory_metadata.st_uid,
+            "directory_gid": directory_metadata.st_gid,
+            "directory_mode": f"{stat.S_IMODE(directory_metadata.st_mode):04o}",
+            "receipt_uid": receipt_metadata.st_uid,
+            "receipt_gid": receipt_metadata.st_gid,
+            "receipt_mode": f"{stat.S_IMODE(receipt_metadata.st_mode):04o}",
+            "marker_uid": marker_metadata.st_uid,
+            "marker_gid": marker_metadata.st_gid,
+            "marker_mode": f"{stat.S_IMODE(marker_metadata.st_mode):04o}",
+        },
+    }
+
+
+def _transport_category_from_stderr(stderr: str) -> str | None:
+    try:
+        value = json.loads(stderr.strip())
+    except (json.JSONDecodeError, UnicodeError):
+        return None
+    if (
+        isinstance(value, dict)
+        and set(value) == {"category", "receipt_transport_schema_version"}
+        and value.get("receipt_transport_schema_version") == 1
+        and value.get("category") in TRANSPORT_ERROR_CATEGORIES
+    ):
+        return str(value["category"])
+    return None
+
+
+def process_container_result(
+    *,
+    result: subprocess.CompletedProcess[str],
+    output_dir: Path,
+    probe_id: str,
+    probe_module: ModuleType,
+    expected_publisher: tuple[int, int] | None = None,
+    expected_host_directory_owner: tuple[int, int] | None = None,
+    expected_host_file_owner: tuple[int, int] | None = None,
+) -> dict[str, Any]:
+    child_category = _transport_category_from_stderr(result.stderr)
+    if child_category is not None:
+        raise ReceiptTransportError(
+            child_category if result.returncode != 0 else "RECEIPT_VALIDATION_FAILED"
+        )
+    try:
+        bundle = read_receipt_bundle(
+            output_dir,
+            probe_id,
+            probe_module,
+            expected_publisher=expected_publisher,
+            expected_host_directory_owner=expected_host_directory_owner,
+            expected_host_file_owner=expected_host_file_owner,
+        )
+    except ReceiptTransportError as error:
+        raise ReceiptTransportError(error.category) from error
+    expected_exit = 0 if bundle["receipt"]["terminal_status"] == "PROBE_PASSED" else 2
+    if result.returncode != expected_exit:
+        raise ReceiptTransportError("RECEIPT_VALIDATION_FAILED")
+    return bundle
+
+
+def archive_child_bundle(
+    receipt_dir: Path,
+    bundle: Mapping[str, Any],
+    lifecycle: HostLifecycleRecorder,
+) -> None:
+    _ensure_directory(receipt_dir, mode=0o700)
+    _atomic_write_bytes(
+        receipt_dir / "child-receipt.json",
+        bytes(bundle["receipt_bytes"]),
+    )
+    _atomic_write_bytes(
+        receipt_dir / READY_MARKER_NAME,
+        bytes(bundle["marker_bytes"]),
+    )
+    lifecycle.record("receipt_archive_completed")
+
+
+def archive_transport_error(
+    receipt_dir: Path,
+    *,
+    probe_id: str,
+    category: str,
+    container_exit_code: int | None,
+    lifecycle: HostLifecycleRecorder,
+) -> None:
+    _ensure_directory(receipt_dir, mode=0o700)
+    _atomic_write_json(
+        receipt_dir / "transport-error.json",
+        {
+            "transport_error_schema_version": 1,
+            "probe_id": probe_id,
+            "category": category,
+            "container_exit_code": container_exit_code,
+            "provider_attempt_count": 0,
+            "ai_call_count": 0,
+            "secret_content_read": False,
+            "authorization_constructed": False,
+            "http_request_sent": False,
+        },
+    )
+    lifecycle.record(
+        "receipt_archive_completed",
+        category="TRANSPORT_ERROR_PERSISTED",
+    )
+
+
+def transport_evidence(
+    *,
+    probe_id: str,
+    container_exit_code: int | None,
+    transport_error_category: str | None,
+    lifecycle: HostLifecycleRecorder,
+    temporary_residue_count: int | None,
+) -> dict[str, Any]:
+    return {
+        "transport_evidence_schema_version": 1,
+        "probe_id": probe_id,
+        "container_exit_code": container_exit_code,
+        "transport_error_category": transport_error_category,
+        "host_lifecycle": lifecycle.values(),
+        "temporary_residue_count": temporary_residue_count,
+        "provider_attempt_count": 0,
+        "ai_call_count": 0,
+        "secret_content_read": False,
+        "authorization_constructed": False,
+        "http_request_sent": False,
+    }
 
 
 def finalize_probe_receipt(
@@ -517,6 +933,35 @@ def _cleanup(container_name: str, network_name: str) -> tuple[int, int]:
     return container_residue, network_residue
 
 
+def cleanup_runtime_after_archive_gate(
+    *,
+    container_name: str,
+    network_name: str,
+    temporary_root: Path | None,
+    dispatched: bool,
+    archive_completed: bool,
+) -> tuple[int, int, int, bool]:
+    if dispatched and not archive_completed:
+        try:
+            container_residue = int(_container_exists(container_name))
+        except (OSError, ProbeRunnerError, subprocess.SubprocessError):
+            container_residue = 1
+        try:
+            network_residue = int(_network_exists(network_name))
+        except (OSError, ProbeRunnerError, subprocess.SubprocessError):
+            network_residue = 1
+        temporary_residue = int(
+            temporary_root is not None and temporary_root.exists()
+        )
+        return container_residue, network_residue, temporary_residue, False
+
+    container_residue, network_residue = _cleanup(container_name, network_name)
+    if temporary_root is not None:
+        shutil.rmtree(temporary_root, ignore_errors=True)
+    temporary_residue = int(temporary_root is not None and temporary_root.exists())
+    return container_residue, network_residue, temporary_residue, True
+
+
 def _update_terminal_ledger(
     path: Path,
     *,
@@ -568,17 +1013,31 @@ def run_live_probe() -> dict[str, Any]:
     )
 
     temporary_root: Path | None = None
-    child_receipt: dict[str, Any] | None = None
+    bundle: dict[str, Any] | None = None
     dispatched = False
     container_residue = 0
     network_residue = 0
+    temporary_residue = 0
+    transport_error_category: str | None = None
+    container_exit_code: int | None = None
     final_result: dict[str, Any] | None = None
+    lifecycle = HostLifecycleRecorder(
+        wall_clock=_wall_time,
+        monotonic_ns=time.monotonic_ns,
+    )
+    receipt_dir = OUTPUT_ROOT / probe_id
     try:
-        temporary_root = Path(tempfile.mkdtemp(prefix="phase2-ark-tls-probe-"))
+        temporary_root = canonicalize_runtime_directory(
+            Path(tempfile.mkdtemp(prefix="phase2-ark-tls-probe-"))
+        )
         output_dir = temporary_root / "output"
-        output_dir.mkdir(mode=0o777)
-        output_dir.chmod(0o777)
-        _write_probe_id(output_dir / "probe-id", probe_id)
+        output_dir.mkdir(mode=0o700)
+        output_dir.chmod(0o700)
+        output_metadata = os.lstat(output_dir)
+        host_directory_owner = (output_metadata.st_uid, output_metadata.st_gid)
+        probe_id_file = temporary_root / "probe-id"
+        _write_probe_id(probe_id_file, probe_id)
+        output_dir = canonicalize_runtime_directory(output_dir)
         try:
             network = _run(
                 ["docker", "network", "create", network_name],
@@ -592,6 +1051,7 @@ def run_live_probe() -> dict[str, Any]:
                     network_name=network_name,
                     output_dir=output_dir,
                     probe_source=PROBE_SOURCE,
+                    probe_id_file=probe_id_file,
                 ),
                 timeout=15,
             )
@@ -599,49 +1059,137 @@ def run_live_probe() -> dict[str, Any]:
             mark_probe_dispatched(LEDGER_PATH, wall_time=_wall_time())
             dispatched = True
             try:
-                _run(
+                start_result = _run(
                     ["docker", "start", "--attach", container_name],
                     timeout=205,
                 )
-                child_path = output_dir / CHILD_RECEIPT_NAME
-                if child_path.is_file() and not child_path.is_symlink():
-                    child_receipt = _read_json_regular(child_path)
-                    probe_module.validate_probe_receipt(
-                        child_receipt,
-                        require_cleanup=False,
-                    )
+                container_exit_code = start_result.returncode
+                lifecycle.record("container_wait_completed")
+                bundle = process_container_result(
+                    result=start_result,
+                    output_dir=output_dir,
+                    probe_id=probe_id,
+                    probe_module=probe_module,
+                    expected_publisher=(65532, 65532),
+                    expected_host_directory_owner=host_directory_owner,
+                    expected_host_file_owner=host_directory_owner,
+                )
+                lifecycle.record("receipt_validated")
+                archive_child_bundle(receipt_dir, bundle, lifecycle)
             except (
                 OSError,
                 ValueError,
                 ProbeRunnerError,
+                ReceiptTransportError,
                 subprocess.SubprocessError,
-            ):
-                child_receipt = _empty_process_receipt(probe_id, probe_module)
+            ) as error:
+                if not lifecycle.values()["container_wait_completed"]["occurred"]:
+                    lifecycle.record(
+                        "container_wait_completed",
+                        category="PROCESS_ERROR",
+                    )
+                transport_error_category = (
+                    error.category
+                    if isinstance(error, ReceiptTransportError)
+                    else "RECEIPT_OPEN_FAILED"
+                )
+                if bundle is not None:
+                    raise
+                archive_transport_error(
+                    receipt_dir,
+                    probe_id=probe_id,
+                    category=transport_error_category,
+                    container_exit_code=container_exit_code,
+                    lifecycle=lifecycle,
+                )
         finally:
-            container_residue, network_residue = _cleanup(
-                container_name,
-                network_name,
+            if lifecycle.values()["receipt_archive_completed"]["occurred"]:
+                try:
+                    _atomic_write_json(
+                        receipt_dir / "transport-evidence-precleanup.json",
+                        transport_evidence(
+                            probe_id=probe_id,
+                            container_exit_code=container_exit_code,
+                            transport_error_category=transport_error_category,
+                            lifecycle=lifecycle,
+                            temporary_residue_count=None,
+                        ),
+                    )
+                except (OSError, ValueError):
+                    transport_error_category = (
+                        transport_error_category or "RECEIPT_WRITE_FAILED"
+                    )
+                lifecycle.record("cleanup_started")
+            (
+                container_residue,
+                network_residue,
+                temporary_residue,
+                cleanup_performed,
+            ) = cleanup_runtime_after_archive_gate(
+                container_name=container_name,
+                network_name=network_name,
+                temporary_root=temporary_root,
+                dispatched=dispatched,
+                archive_completed=lifecycle.values()["receipt_archive_completed"][
+                    "occurred"
+                ],
             )
+            if (
+                cleanup_performed
+                and lifecycle.values()["cleanup_started"]["occurred"]
+            ):
+                lifecycle.record(
+                    "cleanup_completed",
+                    category=(
+                        "PASSED"
+                        if not (
+                            container_residue
+                            or network_residue
+                            or temporary_residue
+                        )
+                        else "RESIDUE_DETECTED"
+                    ),
+                )
 
         if not dispatched:
             raise ProbeRunnerError("probe_not_dispatched")
-        child_receipt = child_receipt or _empty_process_receipt(probe_id, probe_module)
+        child_receipt = (
+            dict(bundle["receipt"])
+            if bundle is not None
+            else _empty_process_receipt(probe_id, probe_module)
+        )
         final_receipt = finalize_probe_receipt(
             child_receipt,
             wall_time=_wall_time(),
             monotonic_ns=time.monotonic_ns(),
             probe_module=probe_module,
-            cleanup_succeeded=not (container_residue or network_residue),
+            cleanup_succeeded=not (
+                container_residue or network_residue or temporary_residue
+            ),
         )
         final_status = (
             "PHASE2B_ARK_TLS_PROBE_UNKNOWN"
-            if container_residue or network_residue
+            if (
+                transport_error_category
+                or container_residue
+                or network_residue
+                or temporary_residue
+            )
             else final_status_for_category(final_receipt["tls_error_category"])
         )
-        receipt_dir = OUTPUT_ROOT / probe_id
         _ensure_directory(receipt_dir, mode=0o700)
         receipt_path = receipt_dir / "receipt.json"
         _atomic_write_json(receipt_path, final_receipt)
+        _atomic_write_json(
+            receipt_dir / "transport-evidence.json",
+            transport_evidence(
+                probe_id=probe_id,
+                container_exit_code=container_exit_code,
+                transport_error_category=transport_error_category,
+                lifecycle=lifecycle,
+                temporary_residue_count=temporary_residue,
+            ),
+        )
         _update_terminal_ledger(
             LEDGER_PATH,
             final_status=final_status,
@@ -657,11 +1205,18 @@ def run_live_probe() -> dict[str, Any]:
             "retry_count": 0,
             "container_residue_count": container_residue,
             "network_residue_count": network_residue,
-            "temporary_residue_count": 0,
+            "temporary_residue_count": temporary_residue,
+            "transport_error_category": transport_error_category,
             "receipt_path": receipt_path.relative_to(REPO_ROOT).as_posix(),
         }
     finally:
-        if temporary_root is not None:
+        if (
+            temporary_root is not None
+            and (
+                not dispatched
+                or lifecycle.values()["receipt_archive_completed"]["occurred"]
+            )
+        ):
             shutil.rmtree(temporary_root, ignore_errors=True)
 
     if final_result is None:

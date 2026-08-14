@@ -1,0 +1,11 @@
+{
+  "directory_gid": 65532,
+  "directory_mode": "0700",
+  "directory_uid": 65532,
+  "probe_id": "d9d4056442eb4e459a4e9a5bf5a37b50",
+  "publication_complete": true,
+  "publication_schema_version": 1,
+  "publisher_gid": 65532,
+  "publisher_uid": 65532,
+  "receipt_sha256": "7d49d18fbcabb092431cf5e27aff589d44c641899c35137f7c27aa4da358bab4"
+}

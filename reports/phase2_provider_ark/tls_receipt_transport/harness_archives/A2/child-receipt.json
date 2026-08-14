@@ -1,0 +1,95 @@
+{
+  "ai_call_count": 0,
+  "authorization_constructed": false,
+  "business_body_sent": false,
+  "certificate_not_after": null,
+  "certificate_not_before": null,
+  "cipher_name": "LOCAL_ONLY",
+  "events": {
+    "certificate_verified": {
+      "category": "PASSED",
+      "monotonic_ns": 8,
+      "occurred": true,
+      "wall_time": "2026-08-14T00:00:00Z"
+    },
+    "cleanup_completed": {
+      "category": "NOT_REACHED",
+      "monotonic_ns": null,
+      "occurred": false,
+      "wall_time": null
+    },
+    "dns_completed": {
+      "category": "PASSED",
+      "monotonic_ns": 3,
+      "occurred": true,
+      "wall_time": "2026-08-14T00:00:00Z"
+    },
+    "dns_started": {
+      "category": "PASSED",
+      "monotonic_ns": 2,
+      "occurred": true,
+      "wall_time": "2026-08-14T00:00:00Z"
+    },
+    "hostname_verified": {
+      "category": "PASSED",
+      "monotonic_ns": 9,
+      "occurred": true,
+      "wall_time": "2026-08-14T00:00:00Z"
+    },
+    "probe_closed": {
+      "category": "PASSED",
+      "monotonic_ns": 10,
+      "occurred": true,
+      "wall_time": "2026-08-14T00:00:00Z"
+    },
+    "probe_started": {
+      "category": "PASSED",
+      "monotonic_ns": 1,
+      "occurred": true,
+      "wall_time": "2026-08-14T00:00:00Z"
+    },
+    "tcp_connect_completed": {
+      "category": "PASSED",
+      "monotonic_ns": 5,
+      "occurred": true,
+      "wall_time": "2026-08-14T00:00:00Z"
+    },
+    "tcp_connect_started": {
+      "category": "PASSED",
+      "monotonic_ns": 4,
+      "occurred": true,
+      "wall_time": "2026-08-14T00:00:00Z"
+    },
+    "tls_handshake_completed": {
+      "category": "PASSED",
+      "monotonic_ns": 7,
+      "occurred": true,
+      "wall_time": "2026-08-14T00:00:00Z"
+    },
+    "tls_handshake_started": {
+      "category": "PASSED",
+      "monotonic_ns": 6,
+      "occurred": true,
+      "wall_time": "2026-08-14T00:00:00Z"
+    }
+  },
+  "http_request_sent": false,
+  "probe_attempt_count": 1,
+  "probe_id": "32982ff27e6c441b9d718e810515f151",
+  "probe_receipt_schema_version": 1,
+  "provider_attempt_count": 0,
+  "retry_count": 0,
+  "san_contains_hostname": true,
+  "secret_content_read": false,
+  "target": {
+    "host": "ark.cn-beijing.volces.com",
+    "hostname_verification_target": "ark.cn-beijing.volces.com",
+    "port": 443,
+    "sni": "ark.cn-beijing.volces.com"
+  },
+  "terminal_status": "PROBE_PASSED",
+  "tls_error_category": "NONE",
+  "tls_version": "LOCAL_ONLY",
+  "verify_code": null,
+  "verify_message": null
+}

@@ -1,0 +1,107 @@
+{
+  "verification_schema_version": 1,
+  "generated_at": "2026-08-14T13:36:26Z",
+  "final_status": "PHASE2B_ARK_TLS_PROBE_RECEIPT_CHANNEL_READY",
+  "historical_probe": {
+    "probe_id": "5dd641ca9e4b4ccba1035fff4d695409",
+    "phase_status": "PHASE2B_ARK_TLS_PROBE_UNKNOWN",
+    "terminal_status": "PROCESS_ERROR",
+    "attempt_status": "CONSUMED",
+    "preservation_status": "PRESERVED",
+    "retry_count": 0,
+    "file_count": 7,
+    "evidence": "UNCHANGED"
+  },
+  "root_cause": {
+    "category": "HOST_CANONICAL_PATH_VALIDATION_REJECTED_MACOS_SYSTEM_ALIAS",
+    "detail": "The child durably published its receipt and exited zero, but the host rejected tempfile paths under the trusted macOS /var to /private/var system alias before opening the host-visible file.",
+    "container_receipt_path": "/output/child-receipt.json",
+    "container_ready_marker_path": "/output/receipt.ready",
+    "host_receipt_path": "<canonical-system-temp>/output/child-receipt.json",
+    "mount_destination": "/output",
+    "mount_type": "directory_bind",
+    "same_storage_object": true,
+    "write_before_exit": true,
+    "fsync_before_exit": true,
+    "host_read_before_cleanup": true
+  },
+  "mount_contract": {
+    "network_mode": "none",
+    "container_user": "65532:65532",
+    "output_directory_mode": "0700",
+    "receipt_mode": "0600",
+    "ready_marker_mode": "0600",
+    "host_directory_owner": "501:20",
+    "host_receipt_owner": "501:20",
+    "container_publisher_owner": "65532:65532",
+    "container_directory_owner": "65532:65532",
+    "receipt_writable": true,
+    "other_writable_bind_mounts": 0,
+    "symlink_status": "REJECTED",
+    "atomic_rename_same_filesystem": true
+  },
+  "publication_contract": {
+    "receipt_fsync": "PASSED",
+    "receipt_atomic_rename": "PASSED",
+    "receipt_parent_fsync": "PASSED",
+    "marker_fsync": "PASSED",
+    "marker_atomic_rename": "PASSED",
+    "marker_parent_fsync": "PASSED",
+    "exit_zero_implies_durable_receipt_bundle": true,
+    "exact_failure_categories": "PASSED"
+  },
+  "host_lifecycle": {
+    "archive_before_cleanup": "PASSED",
+    "precleanup_evidence_durable": true,
+    "dispatched_archive_failure_preserves_runtime": true,
+    "container_inspect_failure_fails_closed": true,
+    "historical_extra_file_directory_or_symlink_rejected": true
+  },
+  "local_harness": {
+    "status": "PASSED",
+    "scenario_count": 9,
+    "happy_path_runs": 3,
+    "happy_path_all_exit_zero": true,
+    "fault_injection_all_fail_closed": true,
+    "permission_fault_mechanism": "READ_ONLY_BIND_MOUNT",
+    "archive_file_count": 30,
+    "source_bindings": "MATCHED"
+  },
+  "verification": {
+    "focused_tests_passed": 75,
+    "compileall": "PASSED",
+    "ruff_f821": "PASSED",
+    "git_diff_check": "PASSED",
+    "independent_review": "NO ACTIONABLE FINDINGS",
+    "supplementary_backend_full": {
+      "acceptance_gate": false,
+      "passed": 2627,
+      "failed": 14,
+      "failure_cause": "PRE_EXISTING_UNTRACKED_93CF_HISTORY_AND_8E42_ORPHAN_SCOPE",
+      "historical_files_modified": false
+    }
+  },
+  "prohibited_operations": {
+    "ark_dns": 0,
+    "ark_tcp": 0,
+    "ark_tls": 0,
+    "http_requests": 0,
+    "provider_attempts": 0,
+    "ai_calls": 0,
+    "secret_content_reads": 0,
+    "authorization_headers_constructed": 0
+  },
+  "residue": {
+    "docker_api_verified": true,
+    "container_count": 0,
+    "network_count": 0,
+    "temporary_directory_count": 0
+  },
+  "source_sha256": {
+    "backend/scripts/run_phase2_ark_tls_connectivity_probe.py": "8d5353ef71031b14b2b0407ed759d5437956fb300a8d438c13f2aa87238e6a7a",
+    "backend/scripts/run_phase2_ark_receipt_transport_harness.py": "93060f6c5362da0f4ecb66447b56db6e0724891a8ab53e68a82be6c65fe873c7",
+    "docker/phase2-ark-tls-connectivity-probe/probe.py": "28a7be51701c2d829a88ac4385c6b0ab83599a65840b902420fccaef00671e83",
+    "docker/phase2-ark-tls-connectivity-probe/receipt_transport_fixture.py": "cea386e7db8654bcab5662f918fa554078c91987086bab940a5646896dac647d"
+  },
+  "next_action": "REQUEST_NEW_TLS_PROBE_APPROVAL"
+}

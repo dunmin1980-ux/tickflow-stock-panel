@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import socket
 import ssl
 import stat
+import sys
 import tempfile
 import time
 from collections.abc import Callable, Mapping
@@ -15,12 +17,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
-
 TARGET_HOST = "ark.cn-beijing.volces.com"
 TARGET_PORT = 443
 CA_FILE = "/etc/ssl/certs/ca-certificates.crt"
 OUTPUT_PATH = Path("/output/child-receipt.json")
-PROBE_ID_PATH = Path("/output/probe-id")
+READY_PATH = Path("/output/receipt.ready")
+PROBE_ID_PATH = Path("/run/tickflow/probe-id")
 PROBE_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 VERIFY_MESSAGE_MAXIMUM = 200
 RETRY_COUNT = 0
@@ -76,6 +78,12 @@ class ErrorClassification(NamedTuple):
     category: str
     verify_code: int | None = None
     verify_message: str | None = None
+
+
+class ReceiptPublicationError(RuntimeError):
+    def __init__(self, category: str) -> None:
+        super().__init__(category)
+        self.category = category
 
 
 class ProbeEventRecorder:
@@ -438,33 +446,105 @@ def validate_probe_receipt(
     return dict(value)
 
 
-def _atomic_write_json(path: Path, value: Mapping[str, Any]) -> None:
+def _durable_publish_json(path: Path, value: Mapping[str, Any]) -> str:
     parent = path.parent
-    metadata = os.lstat(parent)
-    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
-        raise ValueError("probe_output_invalid")
+    try:
+        metadata = os.lstat(parent)
+        if (
+            stat.S_ISLNK(metadata.st_mode)
+            or not stat.S_ISDIR(metadata.st_mode)
+            or stat.S_IMODE(metadata.st_mode) != 0o700
+            or os.path.lexists(path)
+        ):
+            raise OSError("publication target invalid")
+    except OSError as error:
+        raise ReceiptPublicationError("RECEIPT_OPEN_FAILED") from error
     raw = (
         json.dumps(value, allow_nan=False, indent=2, sort_keys=True) + "\n"
     ).encode("utf-8")
-    descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=parent)
+    try:
+        descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=parent)
+    except OSError as error:
+        raise ReceiptPublicationError("RECEIPT_OPEN_FAILED") from error
     temporary = Path(name)
     try:
-        os.fchmod(descriptor, 0o600)
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(raw)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-        directory = os.open(parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
         try:
-            os.fsync(directory)
-        finally:
-            os.close(directory)
+            os.fchmod(descriptor, 0o600)
+        except OSError as error:
+            raise ReceiptPublicationError("RECEIPT_OPEN_FAILED") from error
+        offset = 0
+        try:
+            while offset < len(raw):
+                written = os.write(descriptor, raw[offset:])
+                if written <= 0:
+                    raise OSError("short receipt write")
+                offset += written
+        except OSError as error:
+            raise ReceiptPublicationError("RECEIPT_WRITE_FAILED") from error
+        try:
+            os.fsync(descriptor)
+        except OSError as error:
+            raise ReceiptPublicationError("RECEIPT_FSYNC_FAILED") from error
+        os.close(descriptor)
+        descriptor = -1
+        try:
+            os.replace(temporary, path)
+        except OSError as error:
+            raise ReceiptPublicationError("RECEIPT_RENAME_FAILED") from error
+        try:
+            directory = os.open(
+                parent,
+                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+            )
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+        except OSError as error:
+            raise ReceiptPublicationError("RECEIPT_PARENT_FSYNC_FAILED") from error
     finally:
+        if descriptor >= 0:
+            os.close(descriptor)
         try:
             temporary.unlink()
         except FileNotFoundError:
             pass
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _atomic_write_json(path: Path, value: Mapping[str, Any]) -> None:
+    _durable_publish_json(path, value)
+
+
+def publish_receipt_bundle(
+    receipt: Mapping[str, Any],
+    *,
+    output_dir: Path = OUTPUT_PATH.parent,
+) -> dict[str, Any]:
+    try:
+        validated = validate_probe_receipt(receipt, require_cleanup=False)
+    except ValueError as error:
+        raise ReceiptPublicationError("RECEIPT_VALIDATION_FAILED") from error
+    receipt_path = output_dir / OUTPUT_PATH.name
+    ready_path = output_dir / READY_PATH.name
+    receipt_sha256 = _durable_publish_json(receipt_path, validated)
+    try:
+        metadata = os.lstat(output_dir)
+    except OSError as error:
+        raise ReceiptPublicationError("RECEIPT_OPEN_FAILED") from error
+    marker = {
+        "publication_schema_version": 1,
+        "publication_complete": True,
+        "probe_id": validated["probe_id"],
+        "receipt_sha256": receipt_sha256,
+        "publisher_uid": os.getuid(),
+        "publisher_gid": os.getgid(),
+        "directory_uid": metadata.st_uid,
+        "directory_gid": metadata.st_gid,
+        "directory_mode": f"{stat.S_IMODE(metadata.st_mode):04o}",
+    }
+    _durable_publish_json(ready_path, marker)
+    return marker
 
 
 def _read_probe_id(path: Path = PROBE_ID_PATH) -> str:
@@ -488,7 +568,20 @@ def _read_probe_id(path: Path = PROBE_ID_PATH) -> str:
 def main() -> int:
     probe_id = _read_probe_id()
     receipt = execute_probe(probe_id)
-    _atomic_write_json(OUTPUT_PATH, receipt)
+    try:
+        publish_receipt_bundle(receipt)
+    except ReceiptPublicationError as error:
+        sys.stderr.write(
+            json.dumps(
+                {
+                    "receipt_transport_schema_version": 1,
+                    "category": error.category,
+                },
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        return 70
     return 0 if receipt["terminal_status"] == "PROBE_PASSED" else 2
 
 

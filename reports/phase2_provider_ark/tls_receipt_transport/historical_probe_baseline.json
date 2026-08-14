@@ -1,0 +1,37 @@
+{
+  "baseline_schema_version": 1,
+  "captured_at": "2026-08-14T08:14:31Z",
+  "file_count": 7,
+  "files": [
+    {
+      "path": "reports/phase2_provider_ark/tls_connectivity_probe/5dd641ca9e4b4ccba1035fff4d695409/receipt.json",
+      "sha256": "40ec3ecdb78259074ab62c9b4220a56e0353cb0525229187a15fef40bf851cc3"
+    },
+    {
+      "path": "reports/phase2_provider_ark/tls_connectivity_probe/closeout.md",
+      "sha256": "604ea94c01075c3bfad3c6ace58d703ae291a2c04b56ff82dd6606a62dba5c9a"
+    },
+    {
+      "path": "reports/phase2_provider_ark/tls_connectivity_probe/execution-ledger.json",
+      "sha256": "e6c8df423a64ab85565cccae4d88762542575cbaaa6ce87ca82b4c67f965c030"
+    },
+    {
+      "path": "reports/phase2_provider_ark/tls_connectivity_probe/historical_baseline.json",
+      "sha256": "2587411a8d99dfe6fb283bada0c7168f0dca7fa7ce233065f5a6278ec30cb6ab"
+    },
+    {
+      "path": "reports/phase2_provider_ark/tls_connectivity_probe/mock_e2e.json",
+      "sha256": "2eacf04a1a9035797a8e1e3597fbd5ef8ab3c75e0d0b2f654626e461b57a4933"
+    },
+    {
+      "path": "reports/phase2_provider_ark/tls_connectivity_probe/postflight.json",
+      "sha256": "58ae3b3d68fa6ba3f48de15c0aec912a195ab750d23cb5b8cf9a5f59d115c9a0"
+    },
+    {
+      "path": "reports/phase2_provider_ark/tls_connectivity_probe/preflight.json",
+      "sha256": "863620a5f43f3890caab0f75c43eaad9763ed22fdd49ab2c9adaf4ca93037b12"
+    }
+  ],
+  "historical_probe_id": "5dd641ca9e4b4ccba1035fff4d695409",
+  "historical_status": "PHASE2B_ARK_TLS_PROBE_UNKNOWN / PROCESS_ERROR / CONSUMED / PRESERVED"
+}

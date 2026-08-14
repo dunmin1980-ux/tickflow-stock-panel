@@ -1,0 +1,47 @@
+{
+  "ai_call_count": 0,
+  "archive_schema_version": 1,
+  "authorization_constructed_count": 0,
+  "container_exit_code": 70,
+  "fixture_mode": "rename_fail",
+  "host_lifecycle": {
+    "cleanup_completed": {
+      "category": "NOT_REACHED",
+      "monotonic_ns": null,
+      "occurred": false,
+      "wall_time": null
+    },
+    "cleanup_started": {
+      "category": "NOT_REACHED",
+      "monotonic_ns": null,
+      "occurred": false,
+      "wall_time": null
+    },
+    "container_wait_completed": {
+      "category": "PASSED",
+      "monotonic_ns": 1405661013711,
+      "occurred": true,
+      "wall_time": "2026-08-14T13:41:33.814275Z"
+    },
+    "receipt_archive_completed": {
+      "category": "TRANSPORT_ERROR_PERSISTED",
+      "monotonic_ns": 1405663865111,
+      "occurred": true,
+      "wall_time": "2026-08-14T13:41:33.817207Z"
+    },
+    "receipt_validated": {
+      "category": "NOT_REACHED",
+      "monotonic_ns": null,
+      "occurred": false,
+      "wall_time": null
+    }
+  },
+  "host_metadata": null,
+  "http_request_sent_count": 0,
+  "network_mode": "none",
+  "probe_id": "5e3e43b4b6c941efa8185a0cb1e219eb",
+  "provider_attempt_count": 0,
+  "real_public_network_success_count": 0,
+  "secret_content_read_count": 0,
+  "transport_error_category": "RECEIPT_RENAME_FAILED"
+}
