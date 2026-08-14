@@ -1,0 +1,18 @@
+{
+  "ai_call_count": 0,
+  "completed_at": "2026-08-14T06:17:21.962193Z",
+  "dispatch_started_at": "2026-08-14T06:17:17.711537Z",
+  "final_status": "PHASE2B_ARK_TLS_PROBE_UNKNOWN",
+  "prepared_at": "2026-08-14T06:17:17.320212Z",
+  "probe_attempt_count": 1,
+  "probe_id": "5dd641ca9e4b4ccba1035fff4d695409",
+  "probe_ledger_schema_version": 1,
+  "probe_source_sha256": "7f45b3de8bbc7ef049d2a56fba198eb9b3aa77f520b577789b5aecadf2e6b7fd",
+  "provider_attempt_count": 0,
+  "proxy_image_id": "sha256:a8a01a003f7afc385b4e24fd2960bcdfd3eaac40c394f39aa6249fd7b2f0f79b",
+  "receipt_sha256": "40ec3ecdb78259074ab62c9b4220a56e0353cb0525229187a15fef40bf851cc3",
+  "retry_count": 0,
+  "state": "COMPLETED",
+  "target_host": "ark.cn-beijing.volces.com",
+  "target_port": 443
+}

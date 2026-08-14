@@ -1,0 +1,95 @@
+{
+  "ai_call_count": 0,
+  "authorization_constructed": false,
+  "business_body_sent": false,
+  "certificate_not_after": null,
+  "certificate_not_before": null,
+  "cipher_name": null,
+  "events": {
+    "certificate_verified": {
+      "category": "NOT_REACHED",
+      "monotonic_ns": null,
+      "occurred": false,
+      "wall_time": null
+    },
+    "cleanup_completed": {
+      "category": "PASSED",
+      "monotonic_ns": 10524091339107,
+      "occurred": true,
+      "wall_time": "2026-08-14T06:17:21.958724Z"
+    },
+    "dns_completed": {
+      "category": "NOT_REACHED",
+      "monotonic_ns": null,
+      "occurred": false,
+      "wall_time": null
+    },
+    "dns_started": {
+      "category": "NOT_REACHED",
+      "monotonic_ns": null,
+      "occurred": false,
+      "wall_time": null
+    },
+    "hostname_verified": {
+      "category": "NOT_REACHED",
+      "monotonic_ns": null,
+      "occurred": false,
+      "wall_time": null
+    },
+    "probe_closed": {
+      "category": "NOT_REACHED",
+      "monotonic_ns": null,
+      "occurred": false,
+      "wall_time": null
+    },
+    "probe_started": {
+      "category": "NOT_REACHED",
+      "monotonic_ns": null,
+      "occurred": false,
+      "wall_time": null
+    },
+    "tcp_connect_completed": {
+      "category": "NOT_REACHED",
+      "monotonic_ns": null,
+      "occurred": false,
+      "wall_time": null
+    },
+    "tcp_connect_started": {
+      "category": "NOT_REACHED",
+      "monotonic_ns": null,
+      "occurred": false,
+      "wall_time": null
+    },
+    "tls_handshake_completed": {
+      "category": "NOT_REACHED",
+      "monotonic_ns": null,
+      "occurred": false,
+      "wall_time": null
+    },
+    "tls_handshake_started": {
+      "category": "NOT_REACHED",
+      "monotonic_ns": null,
+      "occurred": false,
+      "wall_time": null
+    }
+  },
+  "http_request_sent": false,
+  "probe_attempt_count": 1,
+  "probe_id": "5dd641ca9e4b4ccba1035fff4d695409",
+  "probe_receipt_schema_version": 1,
+  "provider_attempt_count": 0,
+  "retry_count": 0,
+  "san_contains_hostname": null,
+  "secret_content_read": false,
+  "target": {
+    "host": "ark.cn-beijing.volces.com",
+    "hostname_verification_target": "ark.cn-beijing.volces.com",
+    "port": 443,
+    "sni": "ark.cn-beijing.volces.com"
+  },
+  "terminal_status": "PROCESS_ERROR",
+  "tls_error_category": "PROCESS_ERROR",
+  "tls_version": null,
+  "verify_code": null,
+  "verify_message": null
+}

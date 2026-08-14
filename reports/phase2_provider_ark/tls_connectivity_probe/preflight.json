@@ -1,0 +1,46 @@
+{
+  "ai_call_count": 0,
+  "compileall": "PASSED",
+  "container_residue_count": 0,
+  "docker_internal_mock": {
+    "real_public_network_success_count": 0,
+    "scenario_count": 6,
+    "status": "PASSED"
+  },
+  "git_head": "62cba9252ae7feed5a7254d54c5b8213aa9136db",
+  "historical_evidence": {
+    "file_count": 20,
+    "hashes": "UNCHANGED",
+    "set_membership": "UNCHANGED"
+  },
+  "http_request_authorized": false,
+  "http_request_shape_scan": "PASSED",
+  "independent_review": "NO ACTIONABLE FINDINGS",
+  "network_residue_count": 0,
+  "preflight_completed_at": "2026-08-14T06:16:36Z",
+  "preflight_schema_version": 1,
+  "probe_contract": {
+    "authorization_constructed": false,
+    "ca_file": "/etc/ssl/certs/ca-certificates.crt",
+    "check_hostname": true,
+    "fixed_host": "ark.cn-beijing.volces.com",
+    "fixed_port": 443,
+    "maximum_probe_attempts": 1,
+    "retry_count": 0,
+    "secret_content_read": false,
+    "tls_minimum": "TLSv1.2",
+    "verify_mode": "CERT_REQUIRED"
+  },
+  "probe_execution_ledger_present": false,
+  "probe_source_sha256": "7f45b3de8bbc7ef049d2a56fba198eb9b3aa77f520b577789b5aecadf2e6b7fd",
+  "provider_attempt_count": 0,
+  "proxy_image_id": "sha256:a8a01a003f7afc385b4e24fd2960bcdfd3eaac40c394f39aa6249fd7b2f0f79b",
+  "ruff_f821": "PASSED",
+  "runner_source_sha256": "3d4d1097cab4520d2fcde3ca1135212700bf654f521940cbfde67478105d3034",
+  "secret_shape_scan": "PASSED",
+  "temporary_residue_count": 0,
+  "tests": {
+    "passed": 38,
+    "status": "PASSED"
+  }
+}
