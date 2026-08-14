@@ -286,3 +286,15 @@ def test_offline_builder_source_has_no_live_provider_or_tls_probe_path() -> None
         "read_ark_keychain_secret_once",
     )
     assert all(token not in source for token in prohibited)
+
+
+def test_offline_preflight_does_not_claim_ready_before_independent_review() -> None:
+    preflight = json.loads(
+        (
+            REPO_ROOT
+            / "reports/phase2_provider_ark/new_canary_scope/offline_preflight.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert preflight["independent_review"] == "PENDING"
+    assert preflight["status"] == "PENDING_INDEPENDENT_REVIEW"

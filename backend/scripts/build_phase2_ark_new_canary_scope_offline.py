@@ -465,7 +465,7 @@ def generate_scope(source_git_head: str) -> dict[str, Any]:
         raise ValueError("offline_preflight_blocked")
     preflight = {
         "offline_preflight_schema_version": 1,
-        "status": "CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL",
+        "status": "PENDING_INDEPENDENT_REVIEW",
         "source_git_head": source_git_head,
         "approval_candidate_sha256": _sha256(_read_regular(candidate_path)),
         "approval_scope_id": scope["approval_scope_id"],
