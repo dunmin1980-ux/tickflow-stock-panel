@@ -1,0 +1,79 @@
+{
+  "verification_schema_version": 1,
+  "status": "TLS_PROBE_READY_FOR_FINAL_EXECUTION_APPROVAL",
+  "source_git_head": "f33f8279a6c0371cf7b2d45c22d8c07f8e798aa8",
+  "approval_candidate_sha256": "39127cde87030ad234d0c989581fdfafa410600cae6f80d36967feb2058e57f3",
+  "approval_scope_id": "abd999450d007f23cadccd86d22136608c3fbb04b1d92c0078153088781f919c",
+  "candidate_complete": true,
+  "source_bindings_complete": true,
+  "build_provenance": "PASSED",
+  "tls_contract": "PASSED",
+  "ca_trust": "PRESENT",
+  "hostname_verification": "ENABLED",
+  "receipt_channel": "VERIFIED",
+  "receipt_transport_root_cause": "MACOS_VAR_PRIVATE_VAR_CANONICAL_ALIAS",
+  "probe_historical_attempts": 0,
+  "probe_availability": "AVAILABLE",
+  "local_harness": {
+    "status": "PASSED",
+    "scenario_count": 9,
+    "happy_path_runs": 3,
+    "network_mode": "none",
+    "fault_injection_fail_closed": true,
+    "archive_before_cleanup": true,
+    "exit_zero_implies_durable_receipt": true
+  },
+  "focused_tests": {
+    "status": "PASSED",
+    "passed": 100
+  },
+  "backend_full": {
+    "passed": 2670,
+    "failed": 14,
+    "known_historical_scope_fail_closed_count": 14,
+    "receipt_transport_related_failures": 0,
+    "failure_node_ids": [
+      "tests/test_ark_approval_scope.py::test_ark_approval_candidate_is_deterministic_and_not_installed",
+      "tests/test_ark_approval_scope.py::test_ark_scope_evidence_uses_final_candidate_file_hash",
+      "tests/test_ark_approval_scope.py::test_ark_scope_evidence_requires_repository_validation",
+      "tests/test_ark_approval_scope.py::test_ark_scope_evidence_rejects_noncurrent_mock_hash",
+      "tests/test_ark_approval_scope.py::test_ark_scope_rejects_missing_or_invalid_mock_evidence_hash[None]",
+      "tests/test_ark_approval_scope.py::test_ark_scope_rejects_missing_or_invalid_mock_evidence_hash[]",
+      "tests/test_ark_approval_scope.py::test_ark_scope_rejects_missing_or_invalid_mock_evidence_hash[AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA]",
+      "tests/test_ark_approval_scope.py::test_ark_scope_rejects_missing_or_invalid_mock_evidence_hash[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]",
+      "tests/test_ark_approval_scope.py::test_ark_scope_rejects_missing_or_invalid_mock_evidence_hash[zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz]",
+      "tests/test_ark_approval_scope.py::test_historical_ark_candidate_identity_is_resolvable",
+      "tests/test_ark_contract_artifact.py::test_committed_ark_candidate_binds_all_required_hashes",
+      "tests/test_ark_orchestrator_identity.py::test_ark_approval_loader_returns_the_approved_single_snapshot",
+      "tests/test_ark_timeout_contract.py::test_historical_consumed_scope_passes_narrow_response_header_bridge",
+      "tests/test_ark_timeout_contract.py::test_historical_baseline_is_independent_canonical_and_complete"
+    ]
+  },
+  "compileall": "PASSED",
+  "ruff_f821": "PASSED",
+  "git_diff_check": "PASSED",
+  "independent_review": "NO_ACTIONABLE_FINDINGS",
+  "historical_probe": {
+    "probe_id": "5dd641ca9e4b4ccba1035fff4d695409",
+    "terminal_status": "PHASE2B_ARK_TLS_PROBE_UNKNOWN",
+    "process_status": "PROCESS_ERROR",
+    "attempt_status": "CONSUMED",
+    "preservation_status": "PRESERVED",
+    "file_count": 7,
+    "evidence": "UNCHANGED"
+  },
+  "external_activity": {
+    "real_tls_probe_attempts": 0,
+    "provider_attempts": 0,
+    "ai_calls": 0,
+    "authorization_constructed": false,
+    "http_request_sent": false,
+    "secret_content_read": false,
+    "real_public_network_successes": 0
+  },
+  "residue": {
+    "container_count": 0,
+    "network_count": 0,
+    "temporary_count": 0
+  }
+}
