@@ -3,13 +3,13 @@
   "artifact_generation_schema_version": 1,
   "artifact_sha256": {
     "docker/phase2-ark-egress-proxy/responses-contract.json": "5c84050fdb705d04b66b3cfc69f9d6260e364b9486113fae5a5975483539855c",
-    "reports/phase2_provider_ark/approval_candidate.json": "1a7470824523d6df5e4f39291268340bb48c860cce8ff4083a6650290c4f4588",
-    "reports/phase2_provider_ark/approval_scope_preflight.json": "eabdeddcaa01c5fa7dfb033bc81615355b2fce2a3ac4f9447772e452163c16d7",
+    "reports/phase2_provider_ark/approval_candidate.json": "26c09cc183adcd7562e53f72368a27eceff8b56603cb0ce250fe1244466b41ac",
+    "reports/phase2_provider_ark/approval_scope_preflight.json": "bd32863d6fe1aab7a7000408f1ad01c501b3780afd50bf45299f331062e29552",
     "reports/phase2_provider_ark/ark_build_provenance.json": "390fe01c366d8ca78effa44e450dd0d459a240ee9b4f165dd6a1a5804e67bf39",
     "reports/phase2_provider_ark/mock_e2e.json": "fb67c11b1a2ee041f6a6b18cfddf997aea8bf4daff97e7e6c881637ba450de73",
     "reports/phase2_provider_ark/timeout_mock_e2e.json": "047fb70c7dd5e46c4bcb622b24df313b100c626ef935c9255badb7c81911977a"
   },
-  "generation_sha256": "f984550c712ef34bdcd3528e4530675a597a422f3710a91a8d23aad089832e30",
+  "generation_sha256": "250bdb29260b7c12fcec152ce20940751a0c024771d1234cc689d9a134276443",
   "provider_attempt_count": 0,
   "provider_http": "NOT_RUN",
   "status": "READY"

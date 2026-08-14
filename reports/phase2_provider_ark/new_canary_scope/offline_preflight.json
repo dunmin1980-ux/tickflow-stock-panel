@@ -1,6 +1,6 @@
 {
-  "approval_candidate_sha256": "1a7470824523d6df5e4f39291268340bb48c860cce8ff4083a6650290c4f4588",
-  "approval_scope_id": "8eef48948c367e305c528d4cf9c702f4e72b24ef7ca666fbb6ab39401cd9468f",
+  "approval_candidate_sha256": "26c09cc183adcd7562e53f72368a27eceff8b56603cb0ce250fe1244466b41ac",
+  "approval_scope_id": "6f696a3213c32f962c2b7f8571509b499d9d7e978e773edd09aac1543f7f265a",
   "historical_evidence": "UNCHANGED",
   "independent_review": "PENDING",
   "keychain_secret": "PRESENT",
@@ -16,7 +16,7 @@
   "scope_availability": "AVAILABLE",
   "scope_historical_attempts": 0,
   "secret_content_read": false,
-  "source_git_head": "7be75627485ba19e96fd2357147dc20e21514f6a",
+  "source_git_head": "c3182157e0fefc674b18661028da0b46a5c593d5",
   "status": "PENDING_INDEPENDENT_REVIEW",
   "tls_connectivity": "VERIFIED",
   "tls_probe_evidence": "PASSED",

@@ -25,7 +25,7 @@
   },
   "base_image_digest": "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5",
   "can_publish": false,
-  "current_git_head": "7be75627485ba19e96fd2357147dc20e21514f6a",
+  "current_git_head": "c3182157e0fefc674b18661028da0b46a5c593d5",
   "endpoint": "https://ark.cn-beijing.volces.com/api/v3/responses",
   "endpoint_alias": "ark_responses_cn_beijing_v1",
   "exact_model_id": "doubao-seed-2-1-turbo-260628",
@@ -118,7 +118,7 @@
     },
     "scope_builder_source": {
       "path": "backend/scripts/build_phase2_ark_new_canary_scope_offline.py",
-      "sha256": "4e3b83963546c076094e7f3aa760eaf175fbff612f2b5be03bb40983a9b5f5d4"
+      "sha256": "685da7a7ba66af486f5ea6cca5aa4b5e6f31bd5f50c16432c379263404c95e8d"
     },
     "tls_probe_evidence": {
       "path": "reports/phase2_provider_ark/tls_probe_v2/success_evidence_binding.json",
