@@ -1,0 +1,46 @@
+{
+  "archive_completed_before_cleanup_started": true,
+  "container_gid": 65532,
+  "container_receipt_path": "/output/child-receipt.json",
+  "container_uid": 65532,
+  "directory_mode": "0700",
+  "exit_zero_implies_durable_receipt_bundle": true,
+  "host_lifecycle_order": [
+    "start_container",
+    "wait_container",
+    "capture_exit_code",
+    "inspect_receipt_location",
+    "validate_receipt_bundle",
+    "archive_receipt_bundle",
+    "persist_terminal_evidence",
+    "cleanup_runtime"
+  ],
+  "mount": {
+    "destination": "/output",
+    "other_writable_bind_mounts": 0,
+    "read_only": false,
+    "source_kind": "dedicated_empty_temporary_directory",
+    "type": "bind"
+  },
+  "publication_failure_categories": [
+    "RECEIPT_OPEN_FAILED",
+    "RECEIPT_WRITE_FAILED",
+    "RECEIPT_FSYNC_FAILED",
+    "RECEIPT_RENAME_FAILED",
+    "RECEIPT_PARENT_FSYNC_FAILED",
+    "RECEIPT_VALIDATION_FAILED"
+  ],
+  "publication_order": [
+    "write_temp",
+    "flush_temp",
+    "fsync_temp",
+    "atomic_rename_same_directory",
+    "fsync_parent_directory",
+    "publish_ready_marker_durably",
+    "process_exit_zero"
+  ],
+  "ready_marker_mode": "0600",
+  "ready_marker_path": "/output/receipt.ready",
+  "receipt_mode": "0600",
+  "receipt_transport_contract_version": 2
+}

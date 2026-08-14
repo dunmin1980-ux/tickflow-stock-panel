@@ -1,0 +1,49 @@
+{
+  "$id": "https://tickflow.local/schemas/phase2-ark-tls-probe-v2-ready-marker.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "directory_gid": {
+      "const": 65532
+    },
+    "directory_mode": {
+      "const": "0700"
+    },
+    "directory_uid": {
+      "const": 65532
+    },
+    "probe_id": {
+      "pattern": "^[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "publication_complete": {
+      "const": true
+    },
+    "publication_schema_version": {
+      "const": 1
+    },
+    "publisher_gid": {
+      "const": 65532
+    },
+    "publisher_uid": {
+      "const": 65532
+    },
+    "receipt_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "directory_gid",
+    "directory_mode",
+    "directory_uid",
+    "probe_id",
+    "publication_complete",
+    "publication_schema_version",
+    "publisher_gid",
+    "publisher_uid",
+    "receipt_sha256"
+  ],
+  "title": "TickFlow Ark TLS Probe v2 ready marker",
+  "type": "object"
+}

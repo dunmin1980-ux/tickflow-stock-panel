@@ -1,0 +1,22 @@
+{
+  "contract_version": 1,
+  "non_regular_files_allowed": false,
+  "path_escape_allowed": false,
+  "resolution_order": [
+    "resolve_trusted_system_temp_root",
+    "assert_controlled_path_is_within_canonical_root",
+    "reject_controlled_path_symlinks",
+    "reject_non_regular_files",
+    "reject_unexpected_output_names"
+  ],
+  "trusted_system_aliases": [
+    {
+      "canonical": "/private/var",
+      "logical": "/var",
+      "platform": "darwin"
+    }
+  ],
+  "unexpected_output_files_allowed": false,
+  "unexpected_parent_allowed": false,
+  "user_symlinks_allowed": false
+}

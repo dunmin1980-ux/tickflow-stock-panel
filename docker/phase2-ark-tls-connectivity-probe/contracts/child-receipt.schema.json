@@ -1,0 +1,247 @@
+{
+  "$defs": {
+    "event": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "monotonic_ns": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "occurred": {
+          "type": "boolean"
+        },
+        "wall_time": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "category",
+        "monotonic_ns",
+        "occurred",
+        "wall_time"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://tickflow.local/schemas/phase2-ark-tls-probe-v2-child-receipt.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "ai_call_count": {
+      "const": 0
+    },
+    "authorization_constructed": {
+      "const": false
+    },
+    "business_body_sent": {
+      "const": false
+    },
+    "certificate_not_after": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "certificate_not_before": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "cipher_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "events": {
+      "additionalProperties": false,
+      "properties": {
+        "certificate_verified": {
+          "$ref": "#/$defs/event"
+        },
+        "cleanup_completed": {
+          "$ref": "#/$defs/event"
+        },
+        "dns_completed": {
+          "$ref": "#/$defs/event"
+        },
+        "dns_started": {
+          "$ref": "#/$defs/event"
+        },
+        "hostname_verified": {
+          "$ref": "#/$defs/event"
+        },
+        "probe_closed": {
+          "$ref": "#/$defs/event"
+        },
+        "probe_started": {
+          "$ref": "#/$defs/event"
+        },
+        "tcp_connect_completed": {
+          "$ref": "#/$defs/event"
+        },
+        "tcp_connect_started": {
+          "$ref": "#/$defs/event"
+        },
+        "tls_handshake_completed": {
+          "$ref": "#/$defs/event"
+        },
+        "tls_handshake_started": {
+          "$ref": "#/$defs/event"
+        }
+      },
+      "required": [
+        "probe_started",
+        "dns_started",
+        "dns_completed",
+        "tcp_connect_started",
+        "tcp_connect_completed",
+        "tls_handshake_started",
+        "tls_handshake_completed",
+        "certificate_verified",
+        "hostname_verified",
+        "probe_closed",
+        "cleanup_completed"
+      ],
+      "type": "object"
+    },
+    "http_request_sent": {
+      "const": false
+    },
+    "probe_attempt_count": {
+      "const": 1
+    },
+    "probe_id": {
+      "pattern": "^[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "probe_receipt_schema_version": {
+      "const": 1
+    },
+    "provider_attempt_count": {
+      "const": 0
+    },
+    "retry_count": {
+      "const": 0
+    },
+    "san_contains_hostname": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "secret_content_read": {
+      "const": false
+    },
+    "target": {
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "const": "ark.cn-beijing.volces.com"
+        },
+        "hostname_verification_target": {
+          "const": "ark.cn-beijing.volces.com"
+        },
+        "port": {
+          "const": 443
+        },
+        "sni": {
+          "const": "ark.cn-beijing.volces.com"
+        }
+      },
+      "required": [
+        "host",
+        "hostname_verification_target",
+        "port",
+        "sni"
+      ],
+      "type": "object"
+    },
+    "terminal_status": {
+      "enum": [
+        "PROBE_PASSED",
+        "DNS_RESOLUTION_FAILED",
+        "TCP_CONNECT_FAILED",
+        "TCP_CONNECT_TIMEOUT",
+        "TLS_HANDSHAKE_TIMEOUT",
+        "TLS_CERT_VERIFY_FAILED",
+        "TLS_HOSTNAME_VERIFY_FAILED",
+        "TLS_PROTOCOL_FAILED",
+        "TLS_CONNECTION_RESET",
+        "TLS_EOF",
+        "TLS_OTHER_SSL_ERROR",
+        "PROCESS_ERROR"
+      ]
+    },
+    "tls_error_category": {
+      "enum": [
+        "NONE",
+        "DNS_RESOLUTION_FAILED",
+        "TCP_CONNECT_FAILED",
+        "TCP_CONNECT_TIMEOUT",
+        "TLS_HANDSHAKE_TIMEOUT",
+        "TLS_CERT_VERIFY_FAILED",
+        "TLS_HOSTNAME_VERIFY_FAILED",
+        "TLS_PROTOCOL_FAILED",
+        "TLS_CONNECTION_RESET",
+        "TLS_EOF",
+        "TLS_OTHER_SSL_ERROR",
+        "PROCESS_ERROR"
+      ]
+    },
+    "tls_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "verify_code": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "verify_message": {
+      "maxLength": 200,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "ai_call_count",
+    "authorization_constructed",
+    "business_body_sent",
+    "certificate_not_after",
+    "certificate_not_before",
+    "cipher_name",
+    "events",
+    "http_request_sent",
+    "probe_attempt_count",
+    "probe_id",
+    "probe_receipt_schema_version",
+    "provider_attempt_count",
+    "retry_count",
+    "san_contains_hostname",
+    "secret_content_read",
+    "target",
+    "terminal_status",
+    "tls_error_category",
+    "tls_version",
+    "verify_code",
+    "verify_message"
+  ],
+  "title": "TickFlow Ark TLS Probe v2 child receipt",
+  "type": "object"
+}

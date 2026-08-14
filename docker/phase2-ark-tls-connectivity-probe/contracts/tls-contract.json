@@ -1,0 +1,60 @@
+{
+  "allowed_operations": [
+    "dns_resolution",
+    "tcp_connect",
+    "tls_handshake",
+    "certificate_verification",
+    "hostname_verification",
+    "clean_tls_close"
+  ],
+  "ca_source": "/etc/ssl/certs/ca-certificates.crt",
+  "check_hostname": true,
+  "event_order": [
+    "probe_started",
+    "dns_started",
+    "dns_completed",
+    "tcp_connect_started",
+    "tcp_connect_completed",
+    "tls_handshake_started",
+    "tls_handshake_completed",
+    "certificate_verified",
+    "hostname_verified",
+    "probe_closed",
+    "cleanup_completed"
+  ],
+  "failure_categories": [
+    "DNS_RESOLUTION_FAILED",
+    "TCP_CONNECT_FAILED",
+    "TCP_CONNECT_TIMEOUT",
+    "TLS_HANDSHAKE_TIMEOUT",
+    "TLS_CERT_VERIFY_FAILED",
+    "TLS_HOSTNAME_VERIFY_FAILED",
+    "TLS_PROTOCOL_FAILED",
+    "TLS_CONNECTION_RESET",
+    "TLS_EOF",
+    "TLS_OTHER_SSL_ERROR",
+    "PROCESS_ERROR"
+  ],
+  "forbidden_operations": [
+    "http_get",
+    "http_head",
+    "http_post",
+    "ark_responses_api",
+    "authorization",
+    "api_key_read",
+    "prompt",
+    "facts",
+    "projection",
+    "claims"
+  ],
+  "hostname_verification_target": "ark.cn-beijing.volces.com",
+  "maximum_probe_attempts": 1,
+  "retry_count": 0,
+  "sni_hostname": "ark.cn-beijing.volces.com",
+  "target_host": "ark.cn-beijing.volces.com",
+  "target_port": 443,
+  "tls_contract_version": 2,
+  "tls_maximum": "MAXIMUM_SUPPORTED",
+  "tls_minimum": "TLSv1_2",
+  "verify_mode": "CERT_REQUIRED"
+}
