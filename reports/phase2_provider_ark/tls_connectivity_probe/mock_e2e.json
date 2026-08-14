@@ -1,0 +1,64 @@
+{
+  "ai_call_count": 0,
+  "container_residue_count": 0,
+  "mock_e2e_schema_version": 1,
+  "network_residue_count": 0,
+  "probe_source_sha256": "7f45b3de8bbc7ef049d2a56fba198eb9b3aa77f520b577789b5aecadf2e6b7fd",
+  "provider_attempt_count": 0,
+  "proxy_image_id": "sha256:a8a01a003f7afc385b4e24fd2960bcdfd3eaac40c394f39aa6249fd7b2f0f79b",
+  "real_public_network_success_count": 0,
+  "retry_count": 0,
+  "scenario_count": 6,
+  "scenarios": [
+    {
+      "name": "trusted_ca_correct_hostname",
+      "network_internal": true,
+      "probe_attempt_count": 1,
+      "retry_count": 0,
+      "terminal_status": "PROBE_PASSED",
+      "tls_error_category": "NONE"
+    },
+    {
+      "name": "unknown_ca",
+      "network_internal": true,
+      "probe_attempt_count": 1,
+      "retry_count": 0,
+      "terminal_status": "TLS_CERT_VERIFY_FAILED",
+      "tls_error_category": "TLS_CERT_VERIFY_FAILED"
+    },
+    {
+      "name": "hostname_mismatch",
+      "network_internal": true,
+      "probe_attempt_count": 1,
+      "retry_count": 0,
+      "terminal_status": "TLS_HOSTNAME_VERIFY_FAILED",
+      "tls_error_category": "TLS_HOSTNAME_VERIFY_FAILED"
+    },
+    {
+      "name": "connection_refused",
+      "network_internal": true,
+      "probe_attempt_count": 1,
+      "retry_count": 0,
+      "terminal_status": "TCP_CONNECT_FAILED",
+      "tls_error_category": "TCP_CONNECT_FAILED"
+    },
+    {
+      "name": "missing_dns_alias",
+      "network_internal": true,
+      "probe_attempt_count": 1,
+      "retry_count": 0,
+      "terminal_status": "DNS_RESOLUTION_FAILED",
+      "tls_error_category": "DNS_RESOLUTION_FAILED"
+    },
+    {
+      "name": "handshake_timeout",
+      "network_internal": true,
+      "probe_attempt_count": 1,
+      "retry_count": 0,
+      "terminal_status": "TLS_HANDSHAKE_TIMEOUT",
+      "tls_error_category": "TLS_HANDSHAKE_TIMEOUT"
+    }
+  ],
+  "status": "PASSED",
+  "temporary_residue_count": 0
+}

@@ -1,0 +1,109 @@
+{
+  "files": [
+    {
+      "path": "reports/phase2_provider_ark/live_canary/evidence/2f17745f58534063bdd7eda1eb0d16f1.json",
+      "path_kind": "repo",
+      "sha256": "35f957462c493331fe89c39f43420b3699a52346df4b8d3f6ff5beeebab1466e"
+    },
+    {
+      "path": "reports/phase2_provider_ark/live_canary/evidence/93cf0ea84804444ebc9745fa34c4bb82.json",
+      "path_kind": "repo",
+      "sha256": "47f97ed89896ba768361f3c7ebe26a75706de0fcbcddfbc70df1838c1d92155a"
+    },
+    {
+      "path": "reports/phase2_provider_ark/live_canary/receipts/2f17745f58534063bdd7eda1eb0d16f1/archive-status.json",
+      "path_kind": "repo",
+      "sha256": "a540da4a95be4081225750dffa93c643cafee09c613ec90f21e23f649ae29f2e"
+    },
+    {
+      "path": "reports/phase2_provider_ark/live_canary/receipts/2f17745f58534063bdd7eda1eb0d16f1/child-metadata.json",
+      "path_kind": "repo",
+      "sha256": "e598dff711ff759e1fdd84576ce55af30b897891bd8225771077a0fab0e7f2db"
+    },
+    {
+      "path": "reports/phase2_provider_ark/live_canary/receipts/2f17745f58534063bdd7eda1eb0d16f1/proxy-receipt.json",
+      "path_kind": "repo",
+      "sha256": "46c05c526067bed736262354bd492e809ca0c8294d7523376d806f050e8be9e4"
+    },
+    {
+      "path": "reports/phase2_provider_ark/live_canary/receipts/2f17745f58534063bdd7eda1eb0d16f1/relay-receipt.json",
+      "path_kind": "repo",
+      "sha256": "e64a6de0dfa81e51e6ff50ea11fa516db6e20dbdce0f7d3ceb4c3e717579e9d9"
+    },
+    {
+      "path": "reports/phase2_provider_ark/live_canary/receipts/93cf0ea84804444ebc9745fa34c4bb82/archive-status.json",
+      "path_kind": "repo",
+      "sha256": "1a237c68b24547f0cb02cafdf7fb14a37ad064babe4e96aff5c073917a6ffe73"
+    },
+    {
+      "path": "reports/phase2_provider_ark/live_canary/receipts/93cf0ea84804444ebc9745fa34c4bb82/child-metadata.json",
+      "path_kind": "repo",
+      "sha256": "519eb604e537c35d3fe969d8809581303b0a16b5ea59ad447f29015d3296ece7"
+    },
+    {
+      "path": "reports/phase2_provider_ark/live_canary/receipts/93cf0ea84804444ebc9745fa34c4bb82/proxy-receipt.json",
+      "path_kind": "repo",
+      "sha256": "c34e6a98f93f8f388ba0fff6d4ae285ab3ed4306a380ae18c646beb8a679b2af"
+    },
+    {
+      "path": "reports/phase2_provider_ark/live_canary/receipts/93cf0ea84804444ebc9745fa34c4bb82/relay-receipt.json",
+      "path_kind": "repo",
+      "sha256": "edf1d57029fdfaf5028c1a38e14e00865ae141d3849e8f5073bbc2904c611050"
+    },
+    {
+      "path": "reports/phase2_provider_ark/live_canary/rejected/2f17745f58534063bdd7eda1eb0d16f1.json",
+      "path_kind": "repo",
+      "sha256": "31aedcefc27797eebccbc18ad9665738559aa31484fe46f2ec511508305e2853"
+    },
+    {
+      "path": "reports/phase2_provider_ark/live_canary/rejected/93cf0ea84804444ebc9745fa34c4bb82.json",
+      "path_kind": "repo",
+      "sha256": "6281fd88cc03036572c0cc7fd8beee4ed62c3bbdb06438ebd66bf5d96c001edb"
+    },
+    {
+      "path": "reports/phase2_provider_canary/attempts/898079e765f188ba48b2de143ff5fce81e1191ec7bfc6cb773352b2bed90982d/2f17745f58534063bdd7eda1eb0d16f1/ledger.json",
+      "path_kind": "repo",
+      "sha256": "5eeba9e7068c9225a1963883f7b814b87fe6198c53202502595a177f671bc8ed"
+    },
+    {
+      "path": "reports/phase2_provider_canary/attempts/8e42a251cfa4e5b4cbdc95b3aceca9d59152ce574e65f5ba2300a0009df8a019/93cf0ea84804444ebc9745fa34c4bb82/ledger.json",
+      "path_kind": "repo",
+      "sha256": "be95684cdfb3baba1cca15ad53dffd85b4eb7004fde606b9461cce54b106b87e"
+    },
+    {
+      "path": "reports/phase2_provider_canary/attempts/b9fef659680b81c7ed9a0a1e00e31970bc575cb1b2db21b4ae974c59357f7444/9728fc1f156c4568a98cea9c05ec9fa7/ledger.json",
+      "path_kind": "repo",
+      "sha256": "bfe53986f409aed4bac368a370fc59b9141caa6eb06d28f141744dfb06559dae"
+    },
+    {
+      "path": "reports/phase2_provider_ark/approval_candidate.json",
+      "path_kind": "repo",
+      "sha256": "75263d87a2ae6c368ce6c2ce4d65dfbc20b29f4c5bf38e827b2da07290dda2a1"
+    },
+    {
+      "path": "reports/phase2_provider_ark/ark_build_provenance.json",
+      "path_kind": "repo",
+      "sha256": "390fe01c366d8ca78effa44e450dd0d459a240ee9b4f165dd6a1a5804e67bf39"
+    },
+    {
+      "path": "reports/phase2_provider_ark/artifact_generation.json",
+      "path_kind": "repo",
+      "sha256": "01239091c691b72e96d2f40ba81c6f1fe896f941529fa0bac2b930dd4c61f544"
+    },
+    {
+      "path": "reports/phase2_provider_ark/timeout_contract_history_baseline.json",
+      "path_kind": "repo",
+      "sha256": "704a4e4a3341e0c04943468ed02b6ea7c4757bec0794b5946eb5097405698853"
+    },
+    {
+      "path": "runtime-approval.json",
+      "path_kind": "approval",
+      "sha256": "d8edfb2c5afba448d47fe5e478f7e8283ef8fe5c711b19456a22699d42a89972"
+    }
+  ],
+  "frozen_roots": [
+    "reports/phase2_provider_ark/live_canary",
+    "reports/phase2_provider_canary/attempts"
+  ],
+  "historical_baseline_schema_version": 1
+}
