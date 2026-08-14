@@ -172,6 +172,11 @@ Implement the exact sequence for the receipt and marker: temporary open, write, 
 
 In `main()`, catch only `ReceiptPublicationError`, emit one bounded JSON category to stderr, and return nonzero. Exit 0 occurs only after `publish_receipt_bundle()` returns.
 
+Move the fixed probe ID path from `/output/probe-id` to
+`/run/tickflow/probe-id`. The host mounts that one file read-only, leaving
+`/output` empty before publication and making the post-run whitelist exactly
+`child-receipt.json` plus `receipt.ready`.
+
 - [ ] **Step 4: Verify GREEN and child compatibility**
 
 Run the new publication tests and existing `test_phase2_ark_tls_connectivity_probe.py`. Expected: all pass.

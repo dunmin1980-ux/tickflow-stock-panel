@@ -39,6 +39,7 @@ The container paths are fixed:
 
 - receipt: `/output/child-receipt.json`;
 - readiness marker: `/output/receipt.ready`;
+- probe ID: `/run/tickflow/probe-id`, mounted as one read-only file;
 - source: one empty, one-shot host directory mounted read/write at `/output`.
 
 The host creates the temporary root, immediately canonicalizes it with
@@ -50,8 +51,9 @@ valid.
 
 The host output directory is mode `0700`. Docker Desktop presents that bind
 mount inside the container as owned by the configured process user
-`65532:65532`; a local no-network check proved it remains writable. No other
-writable bind mount is allowed.
+`65532:65532`; a local no-network check proved it remains writable. The output
+directory is empty before container start and contains only the receipt and
+marker after publication. No other writable bind mount is allowed.
 
 ## Child publication contract
 
