@@ -416,6 +416,7 @@ def test_committed_ark_candidate_binds_all_required_hashes() -> None:
         REPO_ROOT,
         proxy_image_id=observed["proxy_image_id"],
         relay_image_id=observed["relay_image_id"],
+        current_git_head=observed["current_git_head"],
     )
     required = {
         "ark_responses_contract_sha256",

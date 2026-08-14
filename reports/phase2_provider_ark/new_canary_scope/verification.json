@@ -1,0 +1,62 @@
+{
+  "approval_candidate_sha256": "26c09cc183adcd7562e53f72368a27eceff8b56603cb0ce250fe1244466b41ac",
+  "approval_scope_id": "6f696a3213c32f962c2b7f8571509b499d9d7e978e773edd09aac1543f7f265a",
+  "artifact_generation": "PASSED",
+  "backend_full": {
+    "baseline_comparison": "IDENTICAL_PRE_EXISTING_FAILURE_SET",
+    "failed": 13,
+    "failure_scope": [
+      "tests/test_gold_comparison_runs.py",
+      "tests/test_gold_shadow_store.py"
+    ],
+    "passed": 2679,
+    "regression_status": "NO_ARK_REGRESSION",
+    "warnings": 13
+  },
+  "candidate_publication_head_before_final_evidence": "4329d28b89018cc66fd3a14e22c0e941a935cd87",
+  "build_provenance": "PASSED",
+  "candidate_self_verification": "PASSED",
+  "candidate_source_git_head": "c3182157e0fefc674b18661028da0b46a5c593d5",
+  "complete_artifact_hashes": "PASSED",
+  "complete_source_bindings": "PASSED",
+  "external_activity": {
+    "provider_http": "NOT_RUN",
+    "real_ai_calls": 0,
+    "real_ark_provider_attempts": 0,
+    "tls_probe_reexecuted": false
+  },
+  "focused_tests": {
+    "failed": 0,
+    "passed": 257
+  },
+  "historical_evidence": "UNCHANGED",
+  "independent_review": "NO_ACTIONABLE_FINDINGS",
+  "keychain_secret": "PRESENT",
+  "local_fork_remote_at_review": "MATCHED",
+  "offline_preflight_status": "PENDING_INDEPENDENT_REVIEW",
+  "residue": {
+    "container_count": 0,
+    "network_count": 0,
+    "temporary_count": 0
+  },
+  "scope_attempt_availability": "AVAILABLE",
+  "scope_attempt_directory": "ABSENT",
+  "scope_historical_attempts": 0,
+  "secret_content_read": false,
+  "static_checks": {
+    "compileall": "PASSED",
+    "git_diff_check": "PASSED",
+    "ruff_f821": "PASSED"
+  },
+  "status": "CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL",
+  "tls_connectivity": "VERIFIED",
+  "tls_probe": {
+    "evidence": "PASSED",
+    "probe_id": "d73e91f766854ff7a64c0e725939eb64",
+    "receipt_sha256": "ef1310f780687e494965d399c1c02d7d7666abeb7a018310ab7b5a4d9abaa6e3",
+    "scope_id": "abd999450d007f23cadccd86d22136608c3fbb04b1d92c0078153088781f919c",
+    "scope_status": "CONSUMED_PRESERVED_NON_REUSABLE"
+  },
+  "verification_schema_version": 1,
+  "worktree_at_review": "CLEAN"
+}
