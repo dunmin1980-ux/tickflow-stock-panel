@@ -107,6 +107,9 @@ reports/phase1_observation/.*.backup-*
 reports/phase1_observation/**/*.partial
 reports/phase1_observation/**/*.staging
 
+# ===== Phase 2 Ark TLS Probe local attempt evidence =====
+reports/phase2_provider_ark/tls_probe_v2/attempts/
+
 # ===== 打包产物 (本地构建的安装包,不入库) =====
 backend/TickFlowStockPanel-win-x64.zip
 backend/TickFlowStockPanel-macos.zip

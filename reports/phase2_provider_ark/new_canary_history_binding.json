@@ -1,0 +1,61 @@
+{
+  "historical_evidence": "UNCHANGED",
+  "historical_evidence_binding_schema_version": 1,
+  "historical_objects": {
+    "2f17745f58534063bdd7eda1eb0d16f1": {
+      "files": {
+        "reports/phase2_provider_ark/live_canary/evidence/2f17745f58534063bdd7eda1eb0d16f1.json": "35f957462c493331fe89c39f43420b3699a52346df4b8d3f6ff5beeebab1466e",
+        "reports/phase2_provider_ark/live_canary/receipts/2f17745f58534063bdd7eda1eb0d16f1/archive-status.json": "a540da4a95be4081225750dffa93c643cafee09c613ec90f21e23f649ae29f2e",
+        "reports/phase2_provider_ark/live_canary/receipts/2f17745f58534063bdd7eda1eb0d16f1/child-metadata.json": "e598dff711ff759e1fdd84576ce55af30b897891bd8225771077a0fab0e7f2db",
+        "reports/phase2_provider_ark/live_canary/receipts/2f17745f58534063bdd7eda1eb0d16f1/proxy-receipt.json": "46c05c526067bed736262354bd492e809ca0c8294d7523376d806f050e8be9e4",
+        "reports/phase2_provider_ark/live_canary/receipts/2f17745f58534063bdd7eda1eb0d16f1/relay-receipt.json": "e64a6de0dfa81e51e6ff50ea11fa516db6e20dbdce0f7d3ceb4c3e717579e9d9",
+        "reports/phase2_provider_ark/live_canary/rejected/2f17745f58534063bdd7eda1eb0d16f1.json": "31aedcefc27797eebccbc18ad9665738559aa31484fe46f2ec511508305e2853",
+        "reports/phase2_provider_canary/attempts/898079e765f188ba48b2de143ff5fce81e1191ec7bfc6cb773352b2bed90982d/2f17745f58534063bdd7eda1eb0d16f1/ledger.json": "5eeba9e7068c9225a1963883f7b814b87fe6198c53202502595a177f671bc8ed"
+      },
+      "preservation_status": "PRESERVED",
+      "reuse_status": "NON_REUSABLE",
+      "terminal_status": "FAILED_AFTER_DISPATCH"
+    },
+    "5dd641ca9e4b4ccba1035fff4d695409": {
+      "files": {
+        "reports/phase2_provider_ark/tls_connectivity_probe/5dd641ca9e4b4ccba1035fff4d695409/receipt.json": "40ec3ecdb78259074ab62c9b4220a56e0353cb0525229187a15fef40bf851cc3",
+        "reports/phase2_provider_ark/tls_connectivity_probe/closeout.md": "604ea94c01075c3bfad3c6ace58d703ae291a2c04b56ff82dd6606a62dba5c9a",
+        "reports/phase2_provider_ark/tls_connectivity_probe/execution-ledger.json": "e6c8df423a64ab85565cccae4d88762542575cbaaa6ce87ca82b4c67f965c030",
+        "reports/phase2_provider_ark/tls_connectivity_probe/historical_baseline.json": "2587411a8d99dfe6fb283bada0c7168f0dca7fa7ce233065f5a6278ec30cb6ab",
+        "reports/phase2_provider_ark/tls_connectivity_probe/mock_e2e.json": "2eacf04a1a9035797a8e1e3597fbd5ef8ab3c75e0d0b2f654626e461b57a4933",
+        "reports/phase2_provider_ark/tls_connectivity_probe/postflight.json": "58ae3b3d68fa6ba3f48de15c0aec912a195ab750d23cb5b8cf9a5f59d115c9a0",
+        "reports/phase2_provider_ark/tls_connectivity_probe/preflight.json": "863620a5f43f3890caab0f75c43eaad9763ed22fdd49ab2c9adaf4ca93037b12"
+      },
+      "preservation_status": "PRESERVED",
+      "reuse_status": "NON_REUSABLE",
+      "terminal_status": "PROCESS_ERROR_CONSUMED"
+    },
+    "93cf0ea84804444ebc9745fa34c4bb82": {
+      "files": {
+        "reports/phase2_provider_ark/live_canary/evidence/93cf0ea84804444ebc9745fa34c4bb82.json": "47f97ed89896ba768361f3c7ebe26a75706de0fcbcddfbc70df1838c1d92155a",
+        "reports/phase2_provider_ark/live_canary/receipts/93cf0ea84804444ebc9745fa34c4bb82/archive-status.json": "1a237c68b24547f0cb02cafdf7fb14a37ad064babe4e96aff5c073917a6ffe73",
+        "reports/phase2_provider_ark/live_canary/receipts/93cf0ea84804444ebc9745fa34c4bb82/child-metadata.json": "519eb604e537c35d3fe969d8809581303b0a16b5ea59ad447f29015d3296ece7",
+        "reports/phase2_provider_ark/live_canary/receipts/93cf0ea84804444ebc9745fa34c4bb82/proxy-receipt.json": "c34e6a98f93f8f388ba0fff6d4ae285ab3ed4306a380ae18c646beb8a679b2af",
+        "reports/phase2_provider_ark/live_canary/receipts/93cf0ea84804444ebc9745fa34c4bb82/relay-receipt.json": "edf1d57029fdfaf5028c1a38e14e00865ae141d3849e8f5073bbc2904c611050",
+        "reports/phase2_provider_ark/live_canary/rejected/93cf0ea84804444ebc9745fa34c4bb82.json": "6281fd88cc03036572c0cc7fd8beee4ed62c3bbdb06438ebd66bf5d96c001edb",
+        "reports/phase2_provider_canary/attempts/8e42a251cfa4e5b4cbdc95b3aceca9d59152ce574e65f5ba2300a0009df8a019/93cf0ea84804444ebc9745fa34c4bb82/ledger.json": "be95684cdfb3baba1cca15ad53dffd85b4eb7004fde606b9461cce54b106b87e"
+      },
+      "preservation_status": "PRESERVED",
+      "reuse_status": "NON_REUSABLE",
+      "terminal_status": "RELAY_PROTOCOL_REJECTED_AFTER_DISPATCH"
+    },
+    "d73e91f766854ff7a64c0e725939eb64": {
+      "files": {
+        "reports/phase2_provider_ark/tls_probe_v2/attempts/abd999450d007f23cadccd86d22136608c3fbb04b1d92c0078153088781f919c/d73e91f766854ff7a64c0e725939eb64/evidence/child-receipt.json": "4ebd8ca0ead28bd1f30cb31d3b366531a80f0716f56a7091b4b402dbb244d4e5",
+        "reports/phase2_provider_ark/tls_probe_v2/attempts/abd999450d007f23cadccd86d22136608c3fbb04b1d92c0078153088781f919c/d73e91f766854ff7a64c0e725939eb64/evidence/receipt.json": "ef1310f780687e494965d399c1c02d7d7666abeb7a018310ab7b5a4d9abaa6e3",
+        "reports/phase2_provider_ark/tls_probe_v2/attempts/abd999450d007f23cadccd86d22136608c3fbb04b1d92c0078153088781f919c/d73e91f766854ff7a64c0e725939eb64/evidence/receipt.ready": "e85dae4e2b344767cbc5b6efb68b0b367a9c1fd24f137d402579d6aa315cf6fe",
+        "reports/phase2_provider_ark/tls_probe_v2/attempts/abd999450d007f23cadccd86d22136608c3fbb04b1d92c0078153088781f919c/d73e91f766854ff7a64c0e725939eb64/evidence/transport-evidence-precleanup.json": "c193ecd0f80260f18acffb0c83d6666d3e5e701d36cb0c996b95674ada50592f",
+        "reports/phase2_provider_ark/tls_probe_v2/attempts/abd999450d007f23cadccd86d22136608c3fbb04b1d92c0078153088781f919c/d73e91f766854ff7a64c0e725939eb64/evidence/transport-evidence.json": "e35708e3c8d4da0cff64983be4171272218cd60dbc5a5117d3e0d853d4122053",
+        "reports/phase2_provider_ark/tls_probe_v2/attempts/abd999450d007f23cadccd86d22136608c3fbb04b1d92c0078153088781f919c/d73e91f766854ff7a64c0e725939eb64/ledger.json": "26ee75b657506b58f47c48e8be20126d7b50e7c8d09536c9b01625739cdd1099"
+      },
+      "preservation_status": "PRESERVED",
+      "reuse_status": "NON_REUSABLE",
+      "terminal_status": "PROBE_PASSED_CONSUMED"
+    }
+  }
+}

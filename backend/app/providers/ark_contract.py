@@ -8,6 +8,8 @@ import json
 import os
 import re
 import stat
+import subprocess
+import tempfile
 from collections.abc import Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -61,6 +63,17 @@ _LAYER_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
 _BASE_IMAGE_DIGEST = "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5"
 _BUILD_PROVENANCE_PATH = Path("reports/phase2_provider_ark/ark_build_provenance.json")
 _ARTIFACT_GENERATION_PATH = Path("reports/phase2_provider_ark/artifact_generation.json")
+_ARK_TLS_PROBE_BINDING_PATH = Path(
+    "reports/phase2_provider_ark/tls_probe_v2/success_evidence_binding.json"
+)
+_ARK_HISTORY_EVIDENCE_BINDING_PATH = Path(
+    "reports/phase2_provider_ark/new_canary_history_binding.json"
+)
+_ARK_INHERITED_ARTIFACT_GENERATION_PATH = Path(
+    "reports/phase2_provider_ark/superseded/"
+    "01239091c691b72e96d2f40ba81c6f1fe896f941529fa0bac2b930dd4c61f544-"
+    "artifact-generation.json"
+)
 _ARTIFACT_GENERATION_FILES = (
     "docker/phase2-ark-egress-proxy/responses-contract.json",
     "reports/phase2_provider_ark/approval_candidate.json",
@@ -75,10 +88,35 @@ _ARK_SOURCE_PATHS = {
     "relay_dockerfile_sha256": "docker/phase2-ark-canary-relay/Dockerfile",
     "relay_source_sha256": "docker/phase2-ark-canary-relay/relay.py",
 }
+_ARK_COMPLETE_SOURCE_PATHS = {
+    "facts": "reports/phase2_facts/000403SZ_facts.json",
+    "ark_adapter_source": "backend/app/providers/ark_provider.py",
+    "ark_launcher_source": "backend/scripts/run_phase2_ark_single_symbol_canary.py",
+    "ark_proxy_policy_source": "backend/app/providers/ark_proxy_policy.py",
+    "orchestrator_source": "backend/app/services/phase2_canary_orchestrator.py",
+    "runtime_contract": "backend/app/services/phase2_ark_timeout_contract.json",
+    "readiness_contract": "docker/phase2-ark-egress-proxy/readiness-contract.json",
+    "responses_contract": "docker/phase2-ark-egress-proxy/responses-contract.json",
+    "claims_schema_source": "backend/app/schemas/phase2_claims.py",
+    "projection_builder_source": "backend/app/services/phase2_ai_worker_protocol.py",
+    "build_provenance": "reports/phase2_provider_ark/ark_build_provenance.json",
+    "artifact_generation": _ARK_INHERITED_ARTIFACT_GENERATION_PATH.as_posix(),
+    "tls_probe_evidence": _ARK_TLS_PROBE_BINDING_PATH.as_posix(),
+    "historical_evidence": _ARK_HISTORY_EVIDENCE_BINDING_PATH.as_posix(),
+    "approval_builder_source": "backend/scripts/build_phase2_ark_contract.py",
+    "scope_builder_source": (
+        "backend/scripts/build_phase2_ark_new_canary_scope_offline.py"
+    ),
+    "proxy_dockerfile": "docker/phase2-ark-egress-proxy/Dockerfile",
+    "proxy_source": "docker/phase2-ark-egress-proxy/proxy.py",
+    "relay_dockerfile": "docker/phase2-ark-canary-relay/Dockerfile",
+    "relay_source": "docker/phase2-ark-canary-relay/relay.py",
+}
 _ARK_CANDIDATE_SOURCE_FILES = tuple(
     dict.fromkeys(
         (
             *_ARK_SOURCE_PATHS.values(),
+            *_ARK_COMPLETE_SOURCE_PATHS.values(),
             "backend/app/providers/ark_provider.py",
             "backend/app/services/phase2_canary_orchestrator.py",
             "backend/app/services/phase2_ark_timeout_contract.json",
@@ -387,6 +425,161 @@ def _ark_source_bindings(root: Path) -> dict[str, str]:
         "base_image_digest": _BASE_IMAGE_DIGEST,
         **{field: _sha256(snapshots[relative]) for field, relative in _ARK_SOURCE_PATHS.items()},
     }
+
+
+def _complete_ark_source_bindings(root: Path) -> dict[str, dict[str, str]]:
+    current = _ACTIVE_ARK_SOURCE_SNAPSHOT.get()
+    snapshots = (
+        current[1]
+        if current is not None and current[0] == root.resolve(strict=True)
+        else _read_repo_regular_files(root, tuple(_ARK_COMPLETE_SOURCE_PATHS.values()))
+    )
+    return {
+        name: {"path": relative, "sha256": _sha256(snapshots[relative])}
+        for name, relative in _ARK_COMPLETE_SOURCE_PATHS.items()
+    }
+
+
+def load_ark_tls_probe_evidence_binding(
+    repo_root: Path,
+) -> tuple[dict[str, Any], bytes]:
+    root = repo_root.resolve(strict=True)
+    try:
+        raw = _snapshot_bytes(root, _ARK_TLS_PROBE_BINDING_PATH.as_posix())
+        value = json.loads(raw)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise ValueError("ark_tls_probe_evidence_invalid") from exc
+    expected_fields = {
+        "ai_call_count",
+        "approval_scope_id",
+        "authorization_constructed",
+        "cipher_name",
+        "evidence_files",
+        "historical_evidence",
+        "http_request_sent",
+        "probe_attempt_count",
+        "probe_id",
+        "provider_attempt_count",
+        "receipt_sha256",
+        "retry_count",
+        "reuse_status",
+        "secret_content_read",
+        "terminal_status",
+        "tls_probe_evidence_binding_schema_version",
+        "tls_version",
+    }
+    evidence_files = value.get("evidence_files") if isinstance(value, Mapping) else None
+    if (
+        raw != canonical_json_bytes(value)
+        or not isinstance(value, Mapping)
+        or set(value) != expected_fields
+        or not _exact_int(value.get("tls_probe_evidence_binding_schema_version"), 1)
+        or value.get("probe_id") != "d73e91f766854ff7a64c0e725939eb64"
+        or value.get("approval_scope_id")
+        != "abd999450d007f23cadccd86d22136608c3fbb04b1d92c0078153088781f919c"
+        or value.get("terminal_status") != "PROBE_PASSED"
+        or value.get("reuse_status") != "CONSUMED_PRESERVED_NON_REUSABLE"
+        or value.get("receipt_sha256")
+        != "ef1310f780687e494965d399c1c02d7d7666abeb7a018310ab7b5a4d9abaa6e3"
+        or value.get("tls_version") != "TLSv1.3"
+        or value.get("cipher_name") != "TLS_AES_256_GCM_SHA384"
+        or not _exact_int(value.get("probe_attempt_count"), 1)
+        or not _exact_int(value.get("retry_count"), 0)
+        or not _exact_int(value.get("provider_attempt_count"), 0)
+        or not _exact_int(value.get("ai_call_count"), 0)
+        or value.get("secret_content_read") is not False
+        or value.get("authorization_constructed") is not False
+        or value.get("http_request_sent") is not False
+        or value.get("historical_evidence") != "UNCHANGED"
+        or not isinstance(evidence_files, Mapping)
+        or len(evidence_files) != 6
+        or any(
+            not isinstance(path, str)
+            or not isinstance(digest, str)
+            or _HEX_64.fullmatch(digest) is None
+            for path, digest in evidence_files.items()
+        )
+    ):
+        raise ValueError("ark_tls_probe_evidence_invalid")
+    return dict(value), raw
+
+
+def load_ark_history_evidence_binding(
+    repo_root: Path,
+) -> tuple[dict[str, Any], bytes]:
+    root = repo_root.resolve(strict=True)
+    try:
+        raw = _snapshot_bytes(root, _ARK_HISTORY_EVIDENCE_BINDING_PATH.as_posix())
+        value = json.loads(raw)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise ValueError("ark_history_evidence_binding_invalid") from exc
+    objects = value.get("historical_objects") if isinstance(value, Mapping) else None
+    expected_ids = {
+        "2f17745f58534063bdd7eda1eb0d16f1",
+        "93cf0ea84804444ebc9745fa34c4bb82",
+        "5dd641ca9e4b4ccba1035fff4d695409",
+        "d73e91f766854ff7a64c0e725939eb64",
+    }
+    if (
+        raw != canonical_json_bytes(value)
+        or not isinstance(value, Mapping)
+        or set(value)
+        != {
+            "historical_evidence",
+            "historical_evidence_binding_schema_version",
+            "historical_objects",
+        }
+        or not _exact_int(value.get("historical_evidence_binding_schema_version"), 1)
+        or value.get("historical_evidence") != "UNCHANGED"
+        or not isinstance(objects, Mapping)
+        or set(objects) != expected_ids
+        or any(
+            not isinstance(item, Mapping)
+            or item.get("preservation_status") != "PRESERVED"
+            or item.get("reuse_status") != "NON_REUSABLE"
+            or not isinstance(item.get("files"), Mapping)
+            or not item["files"]
+            or any(
+                not isinstance(path, str)
+                or not isinstance(digest, str)
+                or _HEX_64.fullmatch(digest) is None
+                for path, digest in item["files"].items()
+            )
+            for item in objects.values()
+        )
+    ):
+        raise ValueError("ark_history_evidence_binding_invalid")
+    return dict(value), raw
+
+
+def _current_git_head(repo_root: Path) -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    value = result.stdout.strip()
+    if result.returncode != 0 or re.fullmatch(r"[0-9a-f]{40}", value) is None:
+        raise ValueError("ark_source_git_head_invalid")
+    return value
+
+
+def _validate_candidate_source_git_head(repo_root: Path, source_git_head: str) -> None:
+    if re.fullmatch(r"[0-9a-f]{40}", source_git_head) is None:
+        raise ValueError("ark_source_git_head_invalid")
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", source_git_head, "HEAD"],
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if result.returncode != 0:
+        raise ValueError("ark_source_git_head_invalid")
 
 
 def _expected_ark_image_labels(root: Path) -> tuple[dict[str, str], dict[str, str]]:
@@ -941,6 +1134,36 @@ def validate_ark_mock_e2e_evidence(repo_root: Path, value: Any) -> None:
         raise ValueError("ark_mock_e2e_invalid")
 
 
+def validate_ark_mock_e2e_historical_evidence(value: Any) -> None:
+    """Validate preserved Mock evidence without claiming current-source coverage."""
+    runs = value.get("runs") if isinstance(value, Mapping) else None
+    if (
+        not isinstance(value, Mapping)
+        or value.get("ark_mock_e2e_schema_version") != 1
+        or value.get("status") != "PASSED"
+        or value.get("provider_id") != ARK_PROVIDER_ID
+        or value.get("exact_model_id") != ARK_EXACT_MODEL_ID
+        or value.get("endpoint_alias") != ARK_ENDPOINT_ALIAS
+        or value.get("retry_count") != 0
+        or value.get("real_provider_attempt_count") != 0
+        or value.get("real_ai_call_count") != 0
+        or value.get("real_public_network_success_count") != 0
+        or value.get("container_residue_count") != 0
+        or value.get("network_residue_count") != 0
+        or value.get("temporary_residue_count") != 0
+        or value.get("can_publish") is not False
+        or not isinstance(runs, list)
+        or len(runs) != 3
+        or any(
+            not isinstance(run, Mapping)
+            or run.get("passed") is not True
+            or run.get("retry_count") != 0
+            for run in runs
+        )
+    ):
+        raise ValueError("ark_mock_e2e_historical_invalid")
+
+
 def ark_mock_request_id(index: int) -> str:
     if index not in (1, 2, 3):
         raise ValueError("ark_mock_run_index_invalid")
@@ -1126,8 +1349,11 @@ def build_ark_approval_candidate(
     *,
     proxy_image_id: str,
     relay_image_id: str,
+    current_git_head: str | None = None,
 ) -> dict[str, Any]:
     root = repo_root.resolve(strict=True)
+    source_git_head = current_git_head or _current_git_head(root)
+    _validate_candidate_source_git_head(root, source_git_head)
     facts_raw = _snapshot_bytes(
         root,
         "reports/phase2_facts/000403SZ_facts.json",
@@ -1150,7 +1376,6 @@ def build_ark_approval_candidate(
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError("ark_timeout_mock_evidence_invalid") from exc
     validate_ark_timeout_mock_evidence(timeout_mock)
-    validate_ark_history_baseline(root)
     provenance, provenance_raw = load_ark_build_provenance(root)
     if (
         proxy_image_id != provenance["proxy_image_id"]
@@ -1167,11 +1392,14 @@ def build_ark_approval_candidate(
         )
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError("ark_mock_e2e_invalid") from exc
-    validate_ark_mock_e2e_evidence(root, mock_e2e)
+    validate_ark_mock_e2e_historical_evidence(mock_e2e)
     history_baseline_path = (
         root / "reports/phase2_provider_ark/timeout_contract_history_baseline.json"
     )
     _, runtime_sha256 = _runtime_contract_identity(root)
+    tls_probe, tls_probe_raw = load_ark_tls_probe_evidence_binding(root)
+    _, history_evidence_raw = load_ark_history_evidence_binding(root)
+    source_bindings = _complete_ark_source_bindings(root)
     hashes = {
         "ark_responses_contract_sha256": _sha256(contract_raw),
         "ark_proxy_policy_sha256": ark_proxy_policy_sha256(),
@@ -1193,10 +1421,17 @@ def build_ark_approval_candidate(
         "timeout_mock_e2e_sha256": _file_sha256(timeout_mock_path),
         "mock_e2e_sha256": _file_sha256(mock_path),
         "build_provenance_sha256": _sha256(provenance_raw),
+        "artifact_generation_sha256": source_bindings["artifact_generation"][
+            "sha256"
+        ],
+        "tls_probe_receipt_sha256": tls_probe["receipt_sha256"],
+        "tls_probe_evidence_sha256": _sha256(tls_probe_raw),
+        "historical_evidence_binding_sha256": _sha256(history_evidence_raw),
     }
     candidate_without_hash: dict[str, Any] = {
-        "ark_approval_candidate_schema_version": 1,
-        "status": "PHASE2B_ARK_TIMEOUT_CONTRACT_READY_FOR_REAPPROVAL",
+        "ark_approval_candidate_schema_version": 2,
+        "status": "CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL",
+        "current_git_head": source_git_head,
         "provider_id": ARK_PROVIDER_ID,
         "exact_model_id": ARK_EXACT_MODEL_ID,
         "endpoint_alias": ARK_ENDPOINT_ALIAS,
@@ -1205,9 +1440,19 @@ def build_ark_approval_candidate(
         "symbol": "000403.SZ",
         "trade_date": "2026-07-31",
         "artifact_hashes": hashes,
-        "source_bindings": _ark_source_bindings(root),
+        "source_bindings": source_bindings,
+        "base_image_digest": _BASE_IMAGE_DIGEST,
         "proxy_image_id": proxy_image_id,
         "relay_image_id": relay_image_id,
+        "tls_probe": {
+            "probe_id": tls_probe["probe_id"],
+            "scope_id": tls_probe["approval_scope_id"],
+            "result": "PASSED",
+            "receipt_sha256": tls_probe["receipt_sha256"],
+            "attempt_status": "CONSUMED",
+            "preservation_status": "PRESERVED",
+            "reuse_status": "NON_REUSABLE",
+        },
         "artifact_generation_required": True,
         "approval_installed": False,
         "provider_http": "NOT_RUN",
@@ -1253,7 +1498,10 @@ def build_ark_approval_scope_evidence(
         mock_value = json.loads(mock_raw)
         if _sha256(mock_raw) != mock_e2e_sha256:
             raise ValueError("ark_mock_e2e_sha256_mismatch")
-        validate_ark_mock_e2e_evidence(root, mock_value)
+        if candidate_value.get("ark_approval_candidate_schema_version") == 2:
+            validate_ark_mock_e2e_historical_evidence(mock_value)
+        else:
+            validate_ark_mock_e2e_evidence(root, mock_value)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError("ark_mock_e2e_sha256_mismatch") from exc
     candidate_sha256 = _sha256(candidate_bytes)
@@ -1267,24 +1515,40 @@ def build_ark_approval_scope_evidence(
     attempts_root = root / "reports/phase2_provider_canary/attempts"
     legacy_state_root = Path.home() / "Library/Application Support/TickFlowPhase2Canary/runtime-v1"
     historical_root = root / "reports/phase2_provider_canary/live_canary"
-    candidate_roots = (
-        root / "reports/phase2_provider_canary/superseded",
-        root / "reports/phase2_provider_canary",
-        root / "reports/phase2_provider_ark",
-    )
-    preflight = ApprovalScopedLedgerNamespace(
-        repo_root=root,
-        attempts_root=attempts_root,
-        legacy_state_root=legacy_state_root,
-        historical_evidence_root=historical_root,
-        candidate_roots=candidate_roots,
-        additional_historical_evidence_roots=(root / "reports/phase2_provider_ark/live_canary",),
-    ).preflight(scope)
+    with tempfile.TemporaryDirectory(
+        prefix=".tickflow-ark-candidate-",
+        dir=root / "reports/phase2_provider_ark",
+    ) as temporary:
+        ephemeral_candidate_root = Path(temporary)
+        ephemeral_candidate_root.chmod(0o700)
+        ephemeral_candidate = ephemeral_candidate_root / f"{candidate_sha256}.json"
+        ephemeral_candidate.write_bytes(candidate_bytes)
+        ephemeral_candidate.chmod(0o600)
+        candidate_roots = (
+            ephemeral_candidate_root,
+            root / "reports/phase2_provider_canary/superseded",
+            root / "reports/phase2_provider_canary",
+            root / "reports/phase2_provider_ark",
+        )
+        preflight = ApprovalScopedLedgerNamespace(
+            repo_root=root,
+            attempts_root=attempts_root,
+            legacy_state_root=legacy_state_root,
+            historical_evidence_root=historical_root,
+            candidate_roots=candidate_roots,
+            additional_historical_evidence_roots=(
+                root / "reports/phase2_provider_ark/live_canary",
+            ),
+        ).preflight(scope)
     if preflight.status != "READY":
         raise ValueError("ark_approval_scope_preflight_blocked")
     historical_attempts = preflight.current_scope_provider_attempts
     attempt_availability = preflight.current_scope_attempt_availability
     global_request_id_count = len(preflight.global_request_ids)
+    approval_scope_id = compute_approval_scope_id(scope)
+    attempt_directory = attempts_root / approval_scope_id
+    if attempt_directory.exists() or attempt_directory.is_symlink():
+        raise ValueError("ark_approval_scope_preflight_blocked")
     value = {
         "ark_approval_scope_schema_version": 1,
         "approval_candidate_sha256": candidate_sha256,
@@ -1293,12 +1557,19 @@ def build_ark_approval_scope_evidence(
         "endpoint_alias": ARK_ENDPOINT_ALIAS,
         "symbol": "000403.SZ",
         "ledger_namespace_version": 1,
-        "approval_scope_id": compute_approval_scope_id(scope),
+        "approval_scope_id": approval_scope_id,
         "historical_attempts": historical_attempts,
         "attempt_availability": attempt_availability,
+        "attempt_directory": "ABSENT",
         "global_request_id_count": global_request_id_count,
         "ledger_preflight_status": "READY",
         "approval_installed": False,
+        "current_git_head": candidate_value["current_git_head"],
+        "tls_probe_id": candidate_value["tls_probe"]["probe_id"],
+        "tls_probe_scope_id": candidate_value["tls_probe"]["scope_id"],
+        "tls_probe_result": candidate_value["tls_probe"]["result"],
+        "retry_count": 0,
+        "maximum_provider_attempts": 1,
     }
     value["mock_e2e_sha256"] = mock_e2e_sha256
     return value
@@ -1331,12 +1602,16 @@ def validate_ark_approval_candidate(
 ) -> None:
     if not isinstance(value, Mapping):
         raise ValueError("ark_approval_candidate_invalid")
+    source_git_head = value.get("current_git_head")
+    if not isinstance(source_git_head, str):
+        raise ValueError("ark_approval_candidate_invalid")
     try:
         with ark_source_snapshot(repo_root):
             expected = build_ark_approval_candidate(
                 repo_root,
                 proxy_image_id=str(value.get("proxy_image_id")),
                 relay_image_id=str(value.get("relay_image_id")),
+                current_git_head=source_git_head,
             )
     except ValueError as exc:
         raise ValueError("ark_approval_candidate_invalid") from exc
@@ -1495,11 +1770,13 @@ def build_ark_approval_candidate_bytes(
     *,
     proxy_image_id: str,
     relay_image_id: str,
+    current_git_head: str | None = None,
 ) -> bytes:
     return canonical_json_bytes(
         build_ark_approval_candidate(
             repo_root,
             proxy_image_id=proxy_image_id,
             relay_image_id=relay_image_id,
+            current_git_head=current_git_head,
         )
     )

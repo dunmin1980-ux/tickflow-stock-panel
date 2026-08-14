@@ -1,0 +1,26 @@
+{
+  "ai_call_count": 0,
+  "approval_scope_id": "abd999450d007f23cadccd86d22136608c3fbb04b1d92c0078153088781f919c",
+  "authorization_constructed": false,
+  "cipher_name": "TLS_AES_256_GCM_SHA384",
+  "evidence_files": {
+    "evidence/child-receipt.json": "4ebd8ca0ead28bd1f30cb31d3b366531a80f0716f56a7091b4b402dbb244d4e5",
+    "evidence/receipt.json": "ef1310f780687e494965d399c1c02d7d7666abeb7a018310ab7b5a4d9abaa6e3",
+    "evidence/receipt.ready": "e85dae4e2b344767cbc5b6efb68b0b367a9c1fd24f137d402579d6aa315cf6fe",
+    "evidence/transport-evidence-precleanup.json": "c193ecd0f80260f18acffb0c83d6666d3e5e701d36cb0c996b95674ada50592f",
+    "evidence/transport-evidence.json": "e35708e3c8d4da0cff64983be4171272218cd60dbc5a5117d3e0d853d4122053",
+    "ledger.json": "26ee75b657506b58f47c48e8be20126d7b50e7c8d09536c9b01625739cdd1099"
+  },
+  "historical_evidence": "UNCHANGED",
+  "http_request_sent": false,
+  "probe_attempt_count": 1,
+  "probe_id": "d73e91f766854ff7a64c0e725939eb64",
+  "provider_attempt_count": 0,
+  "receipt_sha256": "ef1310f780687e494965d399c1c02d7d7666abeb7a018310ab7b5a4d9abaa6e3",
+  "retry_count": 0,
+  "reuse_status": "CONSUMED_PRESERVED_NON_REUSABLE",
+  "secret_content_read": false,
+  "terminal_status": "PROBE_PASSED",
+  "tls_probe_evidence_binding_schema_version": 1,
+  "tls_version": "TLSv1.3"
+}

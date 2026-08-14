@@ -101,7 +101,7 @@ def test_ark_scope_evidence_uses_final_candidate_file_hash() -> None:
     assert evidence["attempt_availability"] == "AVAILABLE"
     assert evidence["approval_installed"] is False
     assert evidence["ledger_preflight_status"] == "READY"
-    assert evidence["global_request_id_count"] == 4
+    assert evidence["global_request_id_count"] == 5
     assert (
         evidence["mock_e2e_sha256"]
         == hashlib.sha256(

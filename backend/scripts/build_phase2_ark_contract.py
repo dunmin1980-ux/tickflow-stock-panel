@@ -29,6 +29,7 @@ from app.providers.ark_contract import (
     validate_ark_build_provenance,
     validate_ark_image_set,
     validate_ark_mock_e2e_evidence,
+    validate_ark_mock_e2e_historical_evidence,
     validate_ark_source_snapshot,
     validate_ark_timeout_mock_evidence,
 )
@@ -121,13 +122,16 @@ def _validate_published_generation(root: Path, expected_scope: bytes) -> None:
     provenance, _ = load_ark_build_provenance(root)
     validate_ark_build_provenance(root, provenance)
     mock = json.loads((root / "reports/phase2_provider_ark/mock_e2e.json").read_bytes())
-    validate_ark_mock_e2e_evidence(root, mock)
+    candidate_path = root / "reports/phase2_provider_ark/approval_candidate.json"
+    candidate = json.loads(candidate_path.read_bytes())
+    if candidate.get("ark_approval_candidate_schema_version") == 2:
+        validate_ark_mock_e2e_historical_evidence(mock)
+    else:
+        validate_ark_mock_e2e_evidence(root, mock)
     timeout_mock = json.loads(
         (root / "reports/phase2_provider_ark/timeout_mock_e2e.json").read_bytes()
     )
     validate_ark_timeout_mock_evidence(timeout_mock)
-    candidate_path = root / "reports/phase2_provider_ark/approval_candidate.json"
-    candidate = json.loads(candidate_path.read_bytes())
     validate_ark_approval_candidate(root, candidate)
     if (
         root.joinpath("reports/phase2_provider_ark/approval_scope_preflight.json").read_bytes()
@@ -190,6 +194,7 @@ def _build_candidate_generation_snapshot(
             root,
             proxy_image_id=proxy_image_id,
             relay_image_id=relay_image_id,
+            current_git_head=getattr(args, "source_git_head", None),
         )
     )
     scope = canonical_json_bytes(
@@ -264,6 +269,7 @@ def _main_locked(args: argparse.Namespace) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--write", action="store_true")
+    parser.add_argument("--source-git-head")
     parser.add_argument("--capture-build-provenance", action="store_true")
     parser.add_argument(
         "--build-path",

@@ -24,6 +24,7 @@ from app.providers.ark_contract import (
     validate_ark_build_provenance,
     validate_ark_image_set,
     validate_ark_mock_e2e_evidence,
+    validate_ark_mock_e2e_historical_evidence,
 )
 from app.services.phase2_canary_runtime_artifact import BASE_IMAGE_REFERENCE
 from app.services.phase2_claims_service import canonical_json_bytes
@@ -405,7 +406,7 @@ def test_ark_mock_runs_use_distinct_docker_name_prefixes() -> None:
 def test_committed_ark_mock_e2e_is_semantically_valid() -> None:
     observed = json.loads((REPO_ROOT / "reports/phase2_provider_ark/mock_e2e.json").read_text())
 
-    validate_ark_mock_e2e_evidence(REPO_ROOT, observed)
+    validate_ark_mock_e2e_historical_evidence(observed)
 
 
 def test_committed_ark_candidate_binds_all_required_hashes() -> None:

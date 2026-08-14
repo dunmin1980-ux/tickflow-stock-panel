@@ -73,6 +73,7 @@ from app.services.phase2_provider_relay_protocol import build_relay_request
 
 _HEX_32 = re.compile(r"^[0-9a-f]{32}$")
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")
+_HEX_40 = re.compile(r"^[0-9a-f]{40}$")
 _IMAGE_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
 _NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 _DIRECTORY = getattr(os, "O_DIRECTORY", 0)
@@ -271,6 +272,12 @@ _PINNED_LEGACY_RECEIPT_BUNDLES = {
         "proxy-receipt.json": ("46c05c526067bed736262354bd492e809ca0c8294d7523376d806f050e8be9e4"),
         "relay-receipt.json": ("e64a6de0dfa81e51e6ff50ea11fa516db6e20dbdce0f7d3ceb4c3e717579e9d9"),
     },
+    "93cf0ea84804444ebc9745fa34c4bb82": {
+        "archive-status.json": ("1a237c68b24547f0cb02cafdf7fb14a37ad064babe4e96aff5c073917a6ffe73"),
+        "child-metadata.json": ("519eb604e537c35d3fe969d8809581303b0a16b5ea59ad447f29015d3296ece7"),
+        "proxy-receipt.json": ("c34e6a98f93f8f388ba0fff6d4ae285ab3ed4306a380ae18c646beb8a679b2af"),
+        "relay-receipt.json": ("edf1d57029fdfaf5028c1a38e14e00865ae141d3849e8f5073bbc2904c611050"),
+    },
 }
 
 
@@ -294,9 +301,13 @@ def _is_pinned_ark_response_header_bridge(
     proxy_receipt: Mapping[str, Any] | None,
     relay_receipt: Mapping[str, Any] | None,
 ) -> bool:
-    """Accept one immutable pre-fix Ark 502/None receipt mismatch only."""
+    """Accept only pinned pre-fix Ark 502/None receipt mismatches."""
+    expected_terminal = {
+        "2f17745f58534063bdd7eda1eb0d16f1": "RESPONSE_HEADERS_NOT_RECEIVED",
+        "93cf0ea84804444ebc9745fa34c4bb82": "TLS_FAILED",
+    }.get(request_id)
     if (
-        request_id != "2f17745f58534063bdd7eda1eb0d16f1"
+        expected_terminal is None
         or provider_id != "volcengine_ark"
         or not pinned_receipt_bundle
         or proxy_receipt is None
@@ -306,8 +317,8 @@ def _is_pinned_ark_response_header_bridge(
     proxy_headers = proxy_receipt.get("response_headers_received")
     relay_response = relay_receipt.get("response_received")
     return (
-        proxy_receipt.get("response_category") == "RESPONSE_HEADERS_NOT_RECEIVED"
-        and proxy_receipt.get("terminal_status") == "RESPONSE_HEADERS_NOT_RECEIVED"
+        proxy_receipt.get("response_category") == expected_terminal
+        and proxy_receipt.get("terminal_status") == expected_terminal
         and proxy_receipt.get("provider_http_status") is None
         and isinstance(proxy_headers, Mapping)
         and proxy_headers.get("occurred") is False
@@ -1689,6 +1700,145 @@ class _DiscoveredLedger:
     scoped: bool
 
 
+def _ark_v2_candidate_identity_valid(value: dict[str, Any]) -> bool:
+    artifact_hashes = value.get("artifact_hashes")
+    source_bindings = value.get("source_bindings")
+    tls_probe = value.get("tls_probe")
+    required_hashes = {
+        "ark_adapter_source_sha256",
+        "ark_launcher_source_sha256",
+        "ark_proxy_policy_sha256",
+        "ark_responses_contract_sha256",
+        "artifact_generation_sha256",
+        "build_provenance_sha256",
+        "facts_sha256",
+        "historical_evidence_binding_sha256",
+        "history_baseline_sha256",
+        "mock_e2e_sha256",
+        "orchestrator_source_sha256",
+        "projection_sha256",
+        "readiness_contract_sha256",
+        "runtime_contract_sha256",
+        "timeout_mock_e2e_sha256",
+        "tls_probe_evidence_sha256",
+        "tls_probe_receipt_sha256",
+        "typed_claims_schema_sha256",
+    }
+    required_bindings = {
+        "approval_builder_source",
+        "ark_adapter_source",
+        "ark_launcher_source",
+        "ark_proxy_policy_source",
+        "artifact_generation",
+        "build_provenance",
+        "claims_schema_source",
+        "facts",
+        "historical_evidence",
+        "orchestrator_source",
+        "projection_builder_source",
+        "proxy_dockerfile",
+        "proxy_source",
+        "readiness_contract",
+        "relay_dockerfile",
+        "relay_source",
+        "responses_contract",
+        "runtime_contract",
+        "scope_builder_source",
+        "tls_probe_evidence",
+    }
+    expected_fields = {
+        "ai_call_count",
+        "approval_installed",
+        "ark_approval_candidate_schema_version",
+        "artifact_generation_required",
+        "artifact_hashes",
+        "base_image_digest",
+        "can_publish",
+        "current_git_head",
+        "endpoint",
+        "endpoint_alias",
+        "exact_model_id",
+        "keychain_service",
+        "maximum_provider_attempts",
+        "old_deepseek_model",
+        "openai_provider",
+        "provider_attempt_count",
+        "provider_http",
+        "provider_id",
+        "proxy_image_id",
+        "relay_image_id",
+        "retry_count",
+        "source_bindings",
+        "status",
+        "symbol",
+        "tls_probe",
+        "trade_date",
+    }
+    return (
+        set(value) == expected_fields
+        and value.get("ark_approval_candidate_schema_version") == 2
+        and value.get("status") == "CANARY_READY_FOR_FINAL_EXECUTION_APPROVAL"
+        and isinstance(value.get("current_git_head"), str)
+        and _HEX_40.fullmatch(value["current_git_head"]) is not None
+        and value.get("provider_id") == "volcengine_ark"
+        and value.get("exact_model_id") == "doubao-seed-2-1-turbo-260628"
+        and value.get("endpoint_alias") == "ark_responses_cn_beijing_v1"
+        and value.get("endpoint") == "https://ark.cn-beijing.volces.com/api/v3/responses"
+        and value.get("keychain_service") == "tickflow-phase2-canary-volcengine-ark"
+        and value.get("symbol") == "000403.SZ"
+        and value.get("trade_date") == "2026-07-31"
+        and value.get("base_image_digest")
+        == "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5"
+        and value.get("approval_installed") is False
+        and value.get("artifact_generation_required") is True
+        and value.get("provider_http") == "NOT_RUN"
+        and value.get("provider_attempt_count") == 0
+        and value.get("ai_call_count") == 0
+        and value.get("retry_count") == 0
+        and value.get("maximum_provider_attempts") == 1
+        and value.get("can_publish") is False
+        and value.get("openai_provider") == "FROZEN"
+        and value.get("old_deepseek_model")
+        == "PHASE2B_ARK_STRUCTURED_OUTPUT_BLOCKED_PRESERVED"
+        and isinstance(value.get("proxy_image_id"), str)
+        and _IMAGE_ID.fullmatch(value["proxy_image_id"]) is not None
+        and isinstance(value.get("relay_image_id"), str)
+        and _IMAGE_ID.fullmatch(value["relay_image_id"]) is not None
+        and isinstance(artifact_hashes, dict)
+        and set(artifact_hashes) == required_hashes
+        and all(
+            isinstance(digest, str) and _HEX_64.fullmatch(digest) is not None
+            for digest in artifact_hashes.values()
+        )
+        and isinstance(source_bindings, dict)
+        and set(source_bindings) == required_bindings
+        and all(
+            isinstance(binding, dict)
+            and set(binding) == {"path", "sha256"}
+            and isinstance(binding.get("path"), str)
+            and bool(binding["path"])
+            and isinstance(binding.get("sha256"), str)
+            and _HEX_64.fullmatch(binding["sha256"]) is not None
+            for binding in source_bindings.values()
+        )
+        and isinstance(tls_probe, dict)
+        and tls_probe
+        == {
+            "probe_id": "d73e91f766854ff7a64c0e725939eb64",
+            "scope_id": (
+                "abd999450d007f23cadccd86d22136608c3fbb04b1d92c0078153088781f919c"
+            ),
+            "result": "PASSED",
+            "receipt_sha256": (
+                "ef1310f780687e494965d399c1c02d7d7666abeb7a018310ab7b5a4d9abaa6e3"
+            ),
+            "attempt_status": "CONSUMED",
+            "preservation_status": "PRESERVED",
+            "reuse_status": "NON_REUSABLE",
+        }
+    )
+
+
 class ApprovalScopedLedgerNamespace:
     """Read-only preflight across legacy and approval-scoped attempts."""
 
@@ -1814,6 +1964,18 @@ class ApprovalScopedLedgerNamespace:
                 value = _strict_json_bytes(raw, "historical_candidate_invalid")
             except OrchestratorError as exc:
                 raise OrchestratorError("historical_candidate_invalid") from exc
+            if value.get("ark_approval_candidate_schema_version") == 2:
+                if raw != canonical_json_bytes(value) or not _ark_v2_candidate_identity_valid(
+                    value
+                ):
+                    raise OrchestratorError("historical_candidate_invalid")
+                return ApprovalScopeIdentity(
+                    approval_candidate_sha256=candidate_sha256,
+                    symbol=value["symbol"],
+                    provider_id=value["provider_id"],
+                    exact_model_id=value["exact_model_id"],
+                    endpoint_alias=value["endpoint_alias"],
+                )
             if value.get("ark_approval_candidate_schema_version") == 1:
                 artifact_hashes = value.get("artifact_hashes")
                 expected_fields = {
