@@ -515,24 +515,45 @@ def validate_pre_start_proxy_attachments(
 def validate_post_start_proxy_attachments(
     inspect_payload: Any,
     names: Mapping[str, str],
+    network_inspect: Mapping[str, Mapping[str, Any]],
 ) -> None:
     try:
         networks = _proxy_networks(inspect_payload)
+        container_id = inspect_payload[0]["Id"]
+        container_name = inspect_payload[0]["Name"].removeprefix("/")
     except ValueError as error:
         raise ValueError("proxy_post_start_attachment_invalid") from error
+    except (IndexError, KeyError, TypeError, AttributeError) as error:
+        raise ValueError("proxy_post_start_attachment_invalid") from error
     expected = {names["relay_network"], names["egress_network"]}
-    if set(networks) != expected:
-        raise ValueError("proxy_post_start_attachment_invalid")
-    if any(
-        not isinstance(networks[name], dict)
-        or any(
-            not isinstance(networks[name].get(field), str)
-            or not networks[name][field]
-            for field in ("NetworkID", "EndpointID")
-        )
-        for name in expected
+    if (
+        set(networks) != expected
+        or set(network_inspect) != expected
+        or not isinstance(container_id, str)
+        or not container_id
+        or container_name != names["proxy"]
     ):
         raise ValueError("proxy_post_start_attachment_invalid")
+    for name in expected:
+        attachment = networks[name]
+        metadata = network_inspect[name]
+        if not isinstance(attachment, dict) or not isinstance(metadata, dict):
+            raise ValueError("proxy_post_start_attachment_invalid")
+        network_id = attachment.get("NetworkID")
+        endpoint_id = attachment.get("EndpointID")
+        containers = metadata.get("Containers")
+        membership = containers.get(container_id) if isinstance(containers, dict) else None
+        if (
+            not isinstance(network_id, str)
+            or not network_id
+            or network_id != metadata.get("Id")
+            or not isinstance(endpoint_id, str)
+            or not endpoint_id
+            or not isinstance(membership, dict)
+            or membership.get("EndpointID") != endpoint_id
+            or membership.get("Name") != names["proxy"]
+        ):
+            raise ValueError("proxy_post_start_attachment_invalid")
 
 
 def validate_production_networks(
@@ -1078,18 +1099,18 @@ def run_live_probe(
         raise ValueError("runtime_approval_invalid")
     attempts_root.mkdir(parents=True, exist_ok=True, mode=0o700)
     probe_id = probe_id_factory()
+    names = runtime_names(probe_id)
     reservation = reserve_scope(
         attempts_root=attempts_root,
         scope_id=identity["approval_scope_id"],
         probe_id=probe_id,
     )
     output_dir = reservation["attempt_directory"] / "runtime-output"
-    output_dir.mkdir(mode=0o733)
-    names = runtime_names(probe_id)
     dispatch_started = False
     result_payload: dict[str, Any] | None = None
     pending_error: BaseException | None = None
     try:
+        output_dir.mkdir(mode=0o733)
         for command in network_create_commands(names, mock_mode=False):
             run_once(command, run=run, timeout=30.0)
         run_once(
@@ -1123,7 +1144,13 @@ def run_live_probe(
             run=run,
             timeout=15.0,
         )
-        validate_post_start_proxy_attachments(json.loads(inspected.stdout), names)
+        post_start_networks = _network_metadata(names, run=run)
+        validate_production_networks(post_start_networks, names)
+        validate_post_start_proxy_attachments(
+            json.loads(inspected.stdout),
+            names,
+            post_start_networks,
+        )
         mark_dispatch_started(reservation["ledger_path"], started_at=now())
         dispatch_started = True
         publish_dispatch_gate(

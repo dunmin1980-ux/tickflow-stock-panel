@@ -485,11 +485,17 @@ def test_launcher_proxy_command_has_no_secret_or_business_input(
 
 def test_dispatch_gate_requires_regular_file_with_exact_probe_id(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     gate = _load_module(DISPATCH_GATE_PATH, "phase2_proxy_tls_dispatch_gate")
     probe_id = "a" * 32
     gate_path = tmp_path / "dispatch.ready"
     gate_path.write_text(probe_id + "\n", encoding="ascii")
+    monkeypatch.setattr(
+        Path,
+        "read_bytes",
+        lambda _path: (_ for _ in ()).throw(AssertionError("path_reread_forbidden")),
+    )
     gate.validate_dispatch_gate(gate_path, probe_id=probe_id)
 
     gate_path.write_text("b" * 32 + "\n", encoding="ascii")
@@ -510,6 +516,8 @@ def _proxy_attachment_payload(
 ) -> list[dict[str, Any]]:
     return [
         {
+            "Id": "proxy-container-id",
+            "Name": "/" + names["proxy"],
             "NetworkSettings": {
                 "Networks": {
                     names["relay_network"]: {
@@ -524,6 +532,29 @@ def _proxy_attachment_payload(
             }
         }
     ]
+
+
+def _post_start_network_metadata(
+    names: Mapping[str, str],
+    *,
+    network_id: str = "network-id",
+    endpoint_id: str = "endpoint-id",
+    container_id: str = "proxy-container-id",
+) -> dict[str, dict[str, Any]]:
+    return {
+        name: {
+            "Containers": {
+                container_id: {
+                    "EndpointID": endpoint_id,
+                    "Name": names["proxy"],
+                }
+            },
+            "Driver": "bridge",
+            "Id": network_id,
+            "Internal": name == names["relay_network"],
+        }
+        for name in (names["relay_network"], names["egress_network"])
+    }
 
 
 def test_pre_start_attachment_accepts_docker_desktop_empty_endpoint_metadata() -> None:
@@ -560,7 +591,11 @@ def test_post_start_attachment_accepts_exact_populated_endpoints() -> None:
         endpoint_id="endpoint-id",
     )
 
-    launcher.validate_post_start_proxy_attachments(payload, names)
+    launcher.validate_post_start_proxy_attachments(
+        payload,
+        names,
+        _post_start_network_metadata(names),
+    )
 
 
 @pytest.mark.parametrize(
@@ -593,7 +628,49 @@ def test_post_start_attachment_rejects_empty_ids_and_extra_networks(
         }
 
     with pytest.raises(ValueError, match="proxy_post_start_attachment_invalid"):
-        launcher.validate_post_start_proxy_attachments(payload, names)
+        launcher.validate_post_start_proxy_attachments(
+            payload,
+            names,
+            _post_start_network_metadata(
+                names,
+                network_id=network_id or "network-id",
+                endpoint_id=endpoint_id or "endpoint-id",
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["network_id", "endpoint_id", "container_membership", "container_name"],
+)
+def test_post_start_attachment_requires_exact_network_membership(
+    mutation: str,
+) -> None:
+    launcher = _load_module(
+        LAUNCHER_PATH,
+        f"phase2_proxy_tls_probe_post_identity_{mutation}",
+    )
+    names = launcher.runtime_names("3" * 32)
+    payload = _proxy_attachment_payload(
+        names,
+        network_id="network-id",
+        endpoint_id="endpoint-id",
+    )
+    metadata = _post_start_network_metadata(names)
+    relay = metadata[names["relay_network"]]
+    if mutation == "network_id":
+        relay["Id"] = "different-network-id"
+    elif mutation == "endpoint_id":
+        relay["Containers"]["proxy-container-id"]["EndpointID"] = (
+            "different-endpoint-id"
+        )
+    elif mutation == "container_membership":
+        relay["Containers"] = {}
+    else:
+        relay["Containers"]["proxy-container-id"]["Name"] = "different-container"
+
+    with pytest.raises(ValueError, match="proxy_post_start_attachment_invalid"):
+        launcher.validate_post_start_proxy_attachments(payload, names, metadata)
 
 
 def test_launcher_never_auto_retries_failed_docker_command() -> None:
@@ -1193,6 +1270,60 @@ def test_pre_dispatch_failure_rolls_back_without_consuming_scope(
     ] == 0
 
 
+def test_runtime_output_creation_failure_rolls_back_scope_reservation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    launcher = _load_module(
+        LAUNCHER_PATH,
+        "phase2_proxy_tls_probe_output_creation_rollback",
+    )
+    scope_id = "4" * 64
+    probe_id = "5" * 32
+    attempts_root = tmp_path / "attempts"
+    real_mkdir = Path.mkdir
+
+    def fail_runtime_output(path: Path, *args: Any, **kwargs: Any) -> None:
+        if path.name == "runtime-output":
+            raise OSError("runtime_output_creation_failed")
+        real_mkdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", fail_runtime_output)
+    monkeypatch.setattr(
+        launcher,
+        "load_execution_identity",
+        lambda **_kwargs: {
+            "approval_scope_id": scope_id,
+            "proxy_image_id": "sha256:" + "a" * 64,
+        },
+    )
+    monkeypatch.setattr(
+        launcher,
+        "_cleanup_runtime",
+        lambda _names, run: {
+            "cleanup_errors": [],
+            "container_residue": [],
+            "network_residue": [],
+            "status": "PASSED",
+        },
+    )
+
+    with pytest.raises(OSError, match="runtime_output_creation_failed"):
+        launcher.run_live_probe(
+            candidate_path=tmp_path / "candidate.json",
+            scope_path=tmp_path / "scope.json",
+            approval_path=tmp_path / "approval.json",
+            attempts_root=attempts_root,
+            runner_path=RUNNER_PATH,
+            run=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                AssertionError("docker_must_not_run")
+            ),
+            probe_id_factory=lambda: probe_id,
+        )
+
+    assert not (attempts_root / scope_id).exists()
+
+
 def _live_probe_fake_docker(
     *,
     launcher: ModuleType,
@@ -1219,10 +1350,48 @@ def _live_probe_fake_docker(
             payload = pre_start_payload if inspect_count == 1 else post_start_payload
             return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
         if command == ["docker", "network", "inspect", names["relay_network"]]:
-            payload = [{"Driver": "bridge", "Internal": True}]
+            attachment = post_start_payload[0]["NetworkSettings"]["Networks"][
+                names["relay_network"]
+            ]
+            payload = [
+                {
+                    "Containers": (
+                        {
+                            "proxy-container-id": {
+                                "EndpointID": attachment["EndpointID"],
+                                "Name": names["proxy"],
+                            }
+                        }
+                        if inspect_count > 1
+                        else {}
+                    ),
+                    "Driver": "bridge",
+                    "Id": attachment["NetworkID"],
+                    "Internal": True,
+                }
+            ]
             return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
         if command == ["docker", "network", "inspect", names["egress_network"]]:
-            payload = [{"Driver": "bridge", "Internal": False}]
+            attachment = post_start_payload[0]["NetworkSettings"]["Networks"][
+                names["egress_network"]
+            ]
+            payload = [
+                {
+                    "Containers": (
+                        {
+                            "proxy-container-id": {
+                                "EndpointID": attachment["EndpointID"],
+                                "Name": names["proxy"],
+                            }
+                        }
+                        if inspect_count > 1
+                        else {}
+                    ),
+                    "Driver": "bridge",
+                    "Id": attachment["NetworkID"],
+                    "Internal": False,
+                }
+            ]
             return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
         if command == ["docker", "container", "wait", names["proxy"]]:
             launcher.atomic_write_json(receipt_path, _valid_probe_receipt(probe_id))
@@ -1956,6 +2125,13 @@ def test_prepare_and_verify_artifacts_are_deterministic_and_zero_activity(
         REPO_ROOT / "reports/phase2_provider_ark/proxy_tls_probe/mock_e2e.json"
     )
     mock["proxy_image_id"] = image_id
+    mock["dispatch_gate_e2e"] = "PASSED"
+    mock["mock_durable_dispatch_marks"] = 10
+    for case, result in mock["results"].items():
+        if case not in {"egress_network_missing", "wrong_network_attachment"}:
+            result["dispatch_gate_published"] = True
+            result["mock_dispatch_attempt_count"] = 1
+            result["post_start_attachment_validation"] = "PASSED"
     mock["results"]["egress_network_missing"] = {
         "case": "egress_network_missing",
         "egress_network_absent": True,
@@ -2306,7 +2482,10 @@ def test_mock_harness_uses_built_image_runner_and_no_sensitive_mount() -> None:
     source = HARNESS_PATH.read_text(encoding="utf-8")
     assert "build_provenance.json" in source
     assert "phase2-ark-proxy-tls-probe/probe.py" not in source
-    assert '"/probe/probe.py"' in source
+    assert '"/probe/dispatch_gate.py"' in source
+    assert "publish_dispatch_gate(" in source
+    assert "validate_post_start_proxy_attachments(" in source
+    assert '"docker", "container", "wait"' in source
     assert "/run/phase2/provider-auth" not in source
     assert "/input/request.json" not in source
     assert "perform_provider_request" not in source
@@ -2353,8 +2532,11 @@ def test_mock_case_artifacts_finalize_into_one_zero_activity_report(
             result.update(
                 ai_call_count=0,
                 authorization_constructed=False,
+                dispatch_gate_published=True,
                 double_network_topology="VERIFIED",
                 http_request_sent=False,
+                mock_dispatch_attempt_count=1,
+                post_start_attachment_validation="PASSED",
                 provider_attempt_count=0,
                 real_public_network_success_count=0,
                 secret_content_read=False,
@@ -2369,6 +2551,8 @@ def test_mock_case_artifacts_finalize_into_one_zero_activity_report(
     )
     assert report["status"] == "PRODUCTION_PROXY_TLS_PROBE_MOCK_PASSED"
     assert report["happy_path_runs"] == 3
+    assert report["dispatch_gate_e2e"] == "PASSED"
+    assert report["mock_durable_dispatch_marks"] == 10
     assert report["provider_attempt_count"] == 0
     assert report["ai_call_count"] == 0
     assert not case_root.exists()

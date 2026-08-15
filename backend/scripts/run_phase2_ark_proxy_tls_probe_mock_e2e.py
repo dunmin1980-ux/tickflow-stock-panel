@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import uuid
@@ -16,6 +18,19 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+BACKEND_ROOT = REPO_ROOT / "backend"
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
+from scripts.run_phase2_ark_proxy_tls_probe import (  # noqa: E402
+    mark_dispatch_started,
+    publish_dispatch_gate,
+    reserve_scope,
+    rollback_reservation_before_dispatch,
+    validate_post_start_proxy_attachments,
+    validate_pre_start_proxy_attachments,
+)
+
 OUTPUT_PATH = REPO_ROOT / "reports/phase2_provider_ark/proxy_tls_probe/mock_e2e.json"
 CASE_ROOT = OUTPUT_PATH.parent / ".mock-cases.staging"
 PROVENANCE_PATH = (
@@ -358,7 +373,9 @@ def _create_proxy(
         "--mount",
         _mount(output_dir, "/output", readonly=False),
         image_id,
-        "/probe/probe.py",
+        "/probe/dispatch_gate.py",
+        "--gate",
+        "/output/dispatch.ready",
         "--probe-id",
         probe_id,
     ]
@@ -391,6 +408,7 @@ def _connect_and_validate(names: Mapping[str, str]) -> None:
         network_inspect=_network_metadata(names),
         container_inspect=inspected,
     )
+    validate_pre_start_proxy_attachments(inspected, names)
 
 
 def _cleanup(names: Mapping[str, str]) -> None:
@@ -416,6 +434,8 @@ def _case(
     _create_networks(names)
     probe_id = uuid.uuid4().hex
     output_dir = root / f"output-{case_name}-{suffix}"
+    reservation: dict[str, Any] | None = None
+    dispatch_started = False
     try:
         if mode is not None:
             _start_server(
@@ -491,21 +511,63 @@ def _case(
                 "wrong_network_attachment_verified": True,
             }
         _connect_and_validate(names)
+        mock_scope_id = hashlib.sha256(
+            f"mock:{case_name}:{suffix}".encode("ascii")
+        ).hexdigest()
+        reservation = reserve_scope(
+            attempts_root=root / ".mock-attempts",
+            scope_id=mock_scope_id,
+            probe_id=probe_id,
+        )
+        _run(["docker", "container", "start", names["proxy"]])
+        post_start_inspect = json.loads(
+            _run(["docker", "container", "inspect", names["proxy"]]).stdout
+        )
+        post_start_networks = _network_metadata(names)
+        validate_mock_topology(
+            names=names,
+            network_inspect=post_start_networks,
+            container_inspect=post_start_inspect,
+        )
+        validate_post_start_proxy_attachments(
+            post_start_inspect,
+            names,
+            post_start_networks,
+        )
+        ledger = mark_dispatch_started(
+            reservation["ledger_path"],
+            started_at="2026-08-15T00:00:00Z",
+        )
+        dispatch_started = True
+        publish_dispatch_gate(output_dir / "dispatch.ready", probe_id=probe_id)
         completed = _run(
-            ["docker", "start", "--attach", names["proxy"]],
+            ["docker", "container", "wait", names["proxy"]],
             check=False,
             timeout=PROBE_CONTAINER_TIMEOUT_SECONDS,
         )
+        try:
+            container_exit_code = int(completed.stdout.strip())
+        except ValueError as error:
+            raise RuntimeError("probe_container_exit_invalid") from error
         receipt_path = output_dir / "receipt.json"
         if not receipt_path.is_file():
             raise RuntimeError("probe_receipt_missing")
         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
         receipt["case"] = case_name
-        receipt["container_exit_code"] = completed.returncode
+        receipt["container_exit_code"] = container_exit_code
+        receipt["dispatch_gate_published"] = True
         receipt["double_network_topology"] = "VERIFIED"
+        receipt["mock_dispatch_attempt_count"] = ledger["probe_attempt_count"]
+        receipt["post_start_attachment_validation"] = "PASSED"
         return receipt
     finally:
         _cleanup(names)
+        if reservation is not None and not dispatch_started:
+            rollback_reservation_before_dispatch(
+                attempts_root=root / ".mock-attempts",
+                scope_id=reservation["scope_id"],
+                reservation=reservation,
+            )
 
 
 def _residue_counts() -> dict[str, int]:
@@ -564,6 +626,9 @@ def validate_case_result(
         or result.get("http_request_sent") is not False
         or result.get("real_public_network_success_count") != 0
         or result.get("double_network_topology") != "VERIFIED"
+        or result.get("dispatch_gate_published") is not True
+        or result.get("mock_dispatch_attempt_count") != 1
+        or result.get("post_start_attachment_validation") != "PASSED"
     ):
         raise ValueError("mock_result_invalid")
 
@@ -581,11 +646,13 @@ def build_mock_report(
         "ai_call_count": 0,
         "authorization_constructed": False,
         "double_network_topology": "VERIFIED",
+        "dispatch_gate_e2e": "PASSED",
         "happy_path_runs": 3,
         "happy_path_status": "PASSED",
         "http_request_sent": False,
         "mock_e2e_schema_version": 1,
         "mock_networks_internal": True,
+        "mock_durable_dispatch_marks": len(EXPECTED_CASES) - 2,
         "production_topology_mock": "PASSED",
         "provider_attempt_count": 0,
         "proxy_image_id": image_id,

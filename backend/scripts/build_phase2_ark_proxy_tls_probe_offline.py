@@ -1125,12 +1125,14 @@ def _validate_mock_evidence(
     expected_fields = {
         "ai_call_count",
         "authorization_constructed",
+        "dispatch_gate_e2e",
         "double_network_topology",
         "happy_path_runs",
         "happy_path_status",
         "http_request_sent",
         "mock_e2e_schema_version",
         "mock_networks_internal",
+        "mock_durable_dispatch_marks",
         "production_topology_mock",
         "provider_attempt_count",
         "proxy_image_id",
@@ -1148,7 +1150,9 @@ def _validate_mock_evidence(
         and mock.get("proxy_image_id") == proxy_image_id
         and mock.get("production_topology_mock") == "PASSED"
         and mock.get("double_network_topology") == "VERIFIED"
+        and mock.get("dispatch_gate_e2e") == "PASSED"
         and mock.get("mock_networks_internal") is True
+        and mock.get("mock_durable_dispatch_marks") == len(_MOCK_EXPECTED_CASES) - 2
         and mock.get("happy_path_status") == "PASSED"
         and mock.get("happy_path_runs") == 3
         and mock.get("provider_attempt_count") == 0
@@ -1186,13 +1190,24 @@ def _validate_mock_evidence(
         if (
             result.get("terminal_status") != expected_status
             or result.get("double_network_topology") != "VERIFIED"
+            or result.get("dispatch_gate_published") is not True
+            or result.get("mock_dispatch_attempt_count") != 1
+            or result.get("post_start_attachment_validation") != "PASSED"
             or type(result.get("container_exit_code")) is not int
         ):
             raise ValueError("mock_e2e_invalid")
         receipt = {
             key: value
             for key, value in result.items()
-            if key not in {"case", "container_exit_code", "double_network_topology"}
+            if key
+            not in {
+                "case",
+                "container_exit_code",
+                "dispatch_gate_published",
+                "double_network_topology",
+                "mock_dispatch_attempt_count",
+                "post_start_attachment_validation",
+            }
         }
         try:
             validate_probe_receipt(

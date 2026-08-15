@@ -14,16 +14,20 @@ OUTPUT = "/output/receipt.json"
 
 
 def validate_dispatch_gate(path: Path, *, probe_id: str) -> None:
+    expected = (probe_id + "\n").encode("ascii")
+    flags = os.O_RDONLY | os.O_NOFOLLOW
     try:
-        metadata = path.lstat()
-        raw = path.read_bytes()
+        descriptor = os.open(path, flags)
     except OSError as error:
         raise ValueError("dispatch_gate_invalid") from error
-    if (
-        path.is_symlink()
-        or not stat.S_ISREG(metadata.st_mode)
-        or raw != (probe_id + "\n").encode("ascii")
-    ):
+    try:
+        metadata = os.fstat(descriptor)
+        raw = os.read(descriptor, len(expected) + 1)
+    except OSError as error:
+        raise ValueError("dispatch_gate_invalid") from error
+    finally:
+        os.close(descriptor)
+    if not stat.S_ISREG(metadata.st_mode) or raw != expected:
         raise ValueError("dispatch_gate_invalid")
 
 
