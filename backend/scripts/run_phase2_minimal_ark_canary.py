@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -15,6 +16,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
+from app.services.phase2_claims_service import canonical_json_bytes
 from app.services.phase2_minimal_ark_approval import (
     MinimalArkApprovalError,
     load_minimal_artifact,
@@ -29,6 +31,21 @@ from app.services.phase2_minimal_ark_canary import (
 )
 
 _REQUEST_ID = re.compile(r"^[0-9a-f]{32}$")
+_BRANCH = "codex/tickflow-phase2-ai-review"
+
+
+def _git(repo_root: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if result.returncode != 0:
+        raise MinimalArkApprovalError("runtime_git_state_invalid")
+    return result.stdout.strip()
 
 
 @contextmanager
@@ -63,17 +80,27 @@ def _preflight(
     )
     candidate = load_minimal_artifact(candidate_path)
     scope = load_minimal_artifact(scope_path)
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repo_root,
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=10,
+    current_head = _git(repo_root, "rev-parse", "HEAD")
+    remote_head = _git(repo_root, "rev-parse", f"fork/{_BRANCH}")
+    worktree_status = _git(
+        repo_root,
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
     )
-    current_head = result.stdout.strip()
-    if result.returncode != 0 or current_head != candidate.get("source_git_head"):
+    if (
+        current_head != candidate.get("source_git_head")
+        or remote_head != current_head
+        or worktree_status
+    ):
         raise MinimalArkApprovalError("runtime_git_head_mismatch")
+    if (
+        hashlib.sha256(canonical_json_bytes(candidate)).hexdigest()
+        != approval["approval_candidate_sha256"]
+        or hashlib.sha256(canonical_json_bytes(scope)).hexdigest()
+        != approval["approval_scope_sha256"]
+    ):
+        raise MinimalArkApprovalError("runtime_artifact_hash_mismatch")
     artifacts = candidate.get("artifact_hashes", {})
     errors = validate_minimal_candidate(
         candidate,

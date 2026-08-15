@@ -810,7 +810,18 @@ def execute_minimal_ark_canary(
         )
 
     candidate = provider_result.claims_candidate.model_dump(mode="json")
-    evidence = validate_isolated_candidate(repo_root, candidate, inputs.projection)
+    try:
+        evidence = validate_isolated_candidate(repo_root, candidate, inputs.projection)
+    except Exception:
+        return _finalize_result(
+            ledger_path,
+            terminal_state="INTERNAL_ERROR",
+            provider_http_status=response.status_code,
+            candidate_validation_state="VALID",
+            claims_validation_state="BLOCKED",
+            renderer_validation_state="BLOCKED",
+            clock=clock,
+        )
     if evidence.claims_status != "CLAIMS_VALID":
         return _finalize_result(
             ledger_path,

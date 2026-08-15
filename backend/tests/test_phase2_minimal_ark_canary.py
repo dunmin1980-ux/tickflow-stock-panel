@@ -467,3 +467,31 @@ def test_renderer_failure_rejects_entire_candidate(
     assert result.candidate_validation_state == "VALID"
     assert result.claims_validation_state == "VALID"
     assert result.renderer_validation_state == "REJECTED"
+
+
+def test_unexpected_host_validation_failure_is_terminal_and_not_retried(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    def fail_closed(*_args, **_kwargs):
+        raise RuntimeError("offline validator failure")
+
+    monkeypatch.setattr(
+        "app.services.phase2_minimal_ark_canary.validate_isolated_candidate",
+        fail_closed,
+    )
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, json=_envelope())
+
+    result = _run_with_handler(tmp_path, httpx.MockTransport(handler))
+    ledger = json.loads(result.ledger_path.read_text(encoding="utf-8"))
+
+    assert result.status == "INTERNAL_ERROR"
+    assert result.attempt_count == 1
+    assert calls == 1
+    assert ledger["terminal_state"] == "INTERNAL_ERROR"
