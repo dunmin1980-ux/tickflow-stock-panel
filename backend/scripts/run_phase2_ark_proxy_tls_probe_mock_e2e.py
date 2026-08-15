@@ -514,8 +514,10 @@ def _case(
         mock_scope_id = hashlib.sha256(
             f"mock:{case_name}:{suffix}".encode("ascii")
         ).hexdigest()
+        mock_attempts_root = root / ".mock-attempts"
+        mock_attempts_root.mkdir(exist_ok=True, mode=0o700)
         reservation = reserve_scope(
-            attempts_root=root / ".mock-attempts",
+            attempts_root=mock_attempts_root,
             scope_id=mock_scope_id,
             probe_id=probe_id,
         )
@@ -564,7 +566,7 @@ def _case(
         _cleanup(names)
         if reservation is not None and not dispatch_started:
             rollback_reservation_before_dispatch(
-                attempts_root=root / ".mock-attempts",
+                attempts_root=mock_attempts_root,
                 scope_id=reservation["scope_id"],
                 reservation=reservation,
             )
