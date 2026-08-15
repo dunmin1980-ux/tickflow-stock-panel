@@ -140,11 +140,14 @@ def execute_probe(
             verify_message=getattr(error, "verify_message", None),
             errno=getattr(error, "errno", None),
         )
-        if category.startswith("TLS_"):
+        if category == "DNS_RESOLUTION_FAILED":
+            receipt["stages"]["dns_completed"] = False
+            receipt["failure_phase"] = "dns"
+        elif category.startswith("TLS_"):
             receipt["stages"]["tcp_connected"] = True
-        receipt["failure_phase"] = (
-            "tls_handshake" if category.startswith("TLS_") else "tcp"
-        )
+            receipt["failure_phase"] = "tls_handshake"
+        else:
+            receipt["failure_phase"] = "tcp"
     if connection is not None:
         try:
             tls_socket = connection.sock

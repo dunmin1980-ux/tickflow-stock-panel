@@ -365,6 +365,52 @@ def test_runner_propagates_precise_tls_failure_without_activity() -> None:
     assert receipt["http_request_sent"] is False
 
 
+def test_runner_maps_connect_time_dns_failure_to_valid_dns_receipt() -> None:
+    runner = _load_module(RUNNER_PATH, "phase2_proxy_tls_probe_second_dns_failure")
+    launcher = _load_module(
+        LAUNCHER_PATH,
+        "phase2_proxy_tls_probe_second_dns_failure_validator",
+    )
+
+    class ProxyError(RuntimeError):
+        def __init__(self) -> None:
+            self.category = "DNS_RESOLUTION_FAILED"
+            self.exception_class = "gaierror"
+            self.verify_code = None
+            self.verify_message = None
+            self.errno = -2
+
+    class ProxyModule:
+        @staticmethod
+        def create_tls_context() -> object:
+            return object()
+
+        @staticmethod
+        def connect_verified_tls(*_args: Any) -> None:
+            raise ProxyError()
+
+    ProxyModule.ProxyError = ProxyError
+
+    receipt = runner.execute_probe(
+        "d" * 32,
+        proxy_module=ProxyModule,
+        resolver=lambda *_args, **_kwargs: [
+            (2, 1, 6, "", ("127.0.0.1", 443))
+        ],
+        now=lambda: "2026-08-15T12:00:00Z",
+    )
+
+    assert receipt["terminal_status"] == "DNS_RESOLUTION_FAILED"
+    assert receipt["failure_phase"] == "dns"
+    assert receipt["stages"]["dns_completed"] is False
+    assert receipt["stages"]["tcp_connected"] is False
+    launcher.validate_probe_receipt(
+        receipt,
+        probe_id="d" * 32,
+        container_exit_code=2,
+    )
+
+
 def test_runner_source_has_no_secret_or_http_call_path() -> None:
     source = RUNNER_PATH.read_text(encoding="utf-8")
     assert "create_tls_context" in source
