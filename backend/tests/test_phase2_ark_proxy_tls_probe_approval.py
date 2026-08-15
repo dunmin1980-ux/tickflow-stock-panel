@@ -1604,6 +1604,16 @@ def test_mock_harness_uses_built_image_runner_and_no_sensitive_mount() -> None:
     assert "--internal" in source
 
 
+def test_mock_host_timeout_exceeds_tls_and_server_hold_budget() -> None:
+    harness = _load_module(HARNESS_PATH, "phase2_proxy_tls_probe_mock_timeout")
+    assert harness.PROBE_CONTAINER_TIMEOUT_SECONDS == 30.0
+    assert harness.REFUSED_DNS_HOLD_SECONDS == 15.0
+    assert harness.PROBE_CONTAINER_TIMEOUT_SECONDS > max(
+        12.0,
+        harness.REFUSED_DNS_HOLD_SECONDS,
+    )
+
+
 def test_mock_server_supports_dns_success_with_refused_port() -> None:
     source = MOCK_SERVER_PATH.read_text(encoding="utf-8")
     assert '"refused"' in source

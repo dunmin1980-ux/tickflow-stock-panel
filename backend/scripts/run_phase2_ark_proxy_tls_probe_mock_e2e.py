@@ -37,6 +37,8 @@ EXPECTED_CASES = {
     "egress_network_missing": "TOPOLOGY_BLOCKED",
     "wrong_network_attachment": "TOPOLOGY_BLOCKED",
 }
+PROBE_CONTAINER_TIMEOUT_SECONDS = 30.0
+REFUSED_DNS_HOLD_SECONDS = 15.0
 
 
 def runtime_names(suffix: str) -> dict[str, str]:
@@ -316,7 +318,7 @@ def _start_server(
     if mode == "timeout":
         command.extend(["--hold", "12"])
     elif mode == "refused":
-        command.extend(["--hold", "5"])
+        command.extend(["--hold", str(REFUSED_DNS_HOLD_SECONDS)])
     if key is not None and certificate is not None:
         command.extend(["--key", "/mock/server.key", "--cert", "/mock/server.crt"])
     _run(command)
@@ -472,7 +474,7 @@ def _case(
         completed = _run(
             ["docker", "start", "--attach", names["proxy"]],
             check=False,
-            timeout=15.0,
+            timeout=PROBE_CONTAINER_TIMEOUT_SECONDS,
         )
         receipt_path = output_dir / "receipt.json"
         if not receipt_path.is_file():
