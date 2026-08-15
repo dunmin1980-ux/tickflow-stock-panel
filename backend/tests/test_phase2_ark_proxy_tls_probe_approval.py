@@ -1122,3 +1122,49 @@ def test_mock_server_supports_dns_success_with_refused_port() -> None:
     source = MOCK_SERVER_PATH.read_text(encoding="utf-8")
     assert '"refused"' in source
     assert "if args.mode == \"refused\"" in source
+
+
+def test_mock_case_artifacts_finalize_into_one_zero_activity_report(
+    tmp_path: Path,
+) -> None:
+    harness = _load_module(HARNESS_PATH, "phase2_proxy_tls_probe_harness_chunked")
+    image_id = "sha256:" + "a" * 64
+    case_root = tmp_path / ".mock-cases.staging"
+    case_root.mkdir()
+    for case, terminal_status in harness.EXPECTED_CASES.items():
+        result: dict[str, Any] = {
+            "case": case,
+            "terminal_status": terminal_status,
+        }
+        if terminal_status != "TOPOLOGY_BLOCKED":
+            result.update(
+                ai_call_count=0,
+                authorization_constructed=False,
+                double_network_topology="VERIFIED",
+                http_request_sent=False,
+                provider_attempt_count=0,
+                real_public_network_success_count=0,
+                secret_content_read=False,
+            )
+        harness._write_json(case_root / f"{case}.json", result)
+    output = tmp_path / "mock_e2e.json"
+    report = harness.finalize_case_results(
+        case_root=case_root,
+        output_path=output,
+        image_id=image_id,
+        residue={"container_count": 0, "network_count": 0},
+    )
+    assert report["status"] == "PRODUCTION_PROXY_TLS_PROBE_MOCK_PASSED"
+    assert report["happy_path_runs"] == 3
+    assert report["provider_attempt_count"] == 0
+    assert report["ai_call_count"] == 0
+    assert not case_root.exists()
+    assert json.loads(output.read_text(encoding="utf-8")) == report
+
+
+def test_mock_cli_supports_one_case_per_process_and_offline_finalize() -> None:
+    source = HARNESS_PATH.read_text(encoding="utf-8")
+    assert 'parser.add_argument("--case"' in source
+    assert 'parser.add_argument("--finalize"' in source
+    assert "run_case_harness(" in source
+    assert "finalize_case_results(" in source
