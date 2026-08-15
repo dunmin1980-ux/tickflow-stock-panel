@@ -29,6 +29,19 @@
         "null"
       ]
     },
+    "failure_phase": {
+      "enum": [
+        "dns",
+        "tcp",
+        "tls_handshake",
+        "tls_close",
+        null
+      ],
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "hostname_verification_target": {
       "const": "ark.cn-beijing.volces.com"
     },
@@ -46,7 +59,7 @@
       "const": 0
     },
     "receipt_schema_version": {
-      "const": 1
+      "const": 2
     },
     "secret_content_read": {
       "const": false
@@ -135,6 +148,7 @@
     "completed_at",
     "errno",
     "exception_class",
+    "failure_phase",
     "hostname_verification_target",
     "http_request_sent",
     "probe_id",

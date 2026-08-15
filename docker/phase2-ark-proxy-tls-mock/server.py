@@ -67,8 +67,11 @@ def main() -> int:
             tls_connection.settimeout(args.hold)
             with suppress(TimeoutError, ssl.SSLError):
                 tls_connection.recv(1)
+            connection = tls_connection.unwrap()
+            tls_connection = None
         finally:
-            tls_connection.close()
+            if tls_connection is not None:
+                tls_connection.close()
     finally:
         if connection is not None:
             connection.close()

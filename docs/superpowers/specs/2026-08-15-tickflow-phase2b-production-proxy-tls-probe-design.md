@@ -34,13 +34,15 @@ The image is rebuilt with Docker `--network=none --pull=false --no-cache` from a
 
 ### Container Probe Runner
 
-`docker/phase2-ark-proxy-tls-probe/probe.py` imports `/proxy/proxy.py` from the rebuilt production image and calls its `create_tls_context()` and `connect_verified_tls()` functions. It performs a separate DNS resolution for stage evidence, then opens the verified TLS connection, records negotiated TLS metadata, closes it, and atomically publishes a bounded receipt.
+`docker/phase2-ark-proxy-tls-probe/probe.py` imports `/proxy/proxy.py` from the rebuilt production image and calls its `create_tls_context()` and `connect_verified_tls()` functions. It performs a separate DNS resolution for stage evidence, then opens the verified TLS connection, records negotiated TLS metadata, completes a bounded TLS `unwrap()` exchange so `clean_tls_close=true` means an orderly `close_notify`, and atomically publishes a bounded receipt. A failed TLS shutdown is a typed `tls_close` failure and can never be rendered as `PROBE_PASSED`.
 
 The runner never calls `read_auth_file()` or `perform_provider_request()`. It has no Secret mount and no request, projection, Prompt, Facts, Claims, or output-generation inputs.
 
 ### Host Launcher
 
-`backend/scripts/run_phase2_ark_proxy_tls_probe.py` owns the one-shot lifecycle. A future live run requires an exact local approval file matching the Candidate and Scope. Before any network dispatch it acquires an exclusive lock, verifies the approval, confirms the Scope has no historical attempts, creates a durable ledger, builds the two-network topology, and verifies the Proxy container's attachments.
+`backend/scripts/run_phase2_ark_proxy_tls_probe.py` owns the one-shot lifecycle. A future live run requires an exact local approval file matching the Candidate and Scope. Before any network dispatch it acquires an exclusive lock, verifies the approval, recomputes the approved Git Head and every Candidate source binding, confirms the Scope has no historical attempts, creates a durable ledger, builds the two-network topology, and verifies the Proxy container's attachments. The receipt validator correlates terminal status with stage booleans, timestamps, diagnostics, and the container exit code.
+
+Cleanup attempts every named resource, independently verifies that the container and both networks are absent, and persists the result in the ledger. A cleanup verification failure overrides an otherwise successful Probe result.
 
 The launcher creates:
 

@@ -170,6 +170,8 @@ def test_readiness_and_receipt_contracts_are_closed_and_zero_activity(
     assert properties["authorization_constructed"] == {"const": False}
     assert properties["http_request_sent"] == {"const": False}
     assert properties["real_public_network_success_count"] == {"const": 0}
+    assert properties["receipt_schema_version"] == {"const": 2}
+    assert properties["failure_phase"]["type"] == ["string", "null"]
     assert "TLS_FAILED" not in properties["terminal_status"]["enum"]
 
 
@@ -177,9 +179,24 @@ def test_runner_uses_only_production_tls_connect_and_closes() -> None:
     runner = _load_module(RUNNER_PATH, "phase2_proxy_tls_probe_runner_test")
     calls: list[str] = []
 
-    class Connection:
+    class RawSocket:
         def close(self) -> None:
-            calls.append("close")
+            calls.append("raw_close")
+
+    class TlsSocket:
+        def settimeout(self, timeout: float) -> None:
+            assert timeout == 10
+            calls.append("settimeout")
+
+        def unwrap(self) -> RawSocket:
+            calls.append("unwrap")
+            return RawSocket()
+
+    class Connection:
+        sock: TlsSocket | None = TlsSocket()
+
+        def close(self) -> None:
+            calls.append("connection_close")
 
     class ProxyError(RuntimeError):
         pass
@@ -222,14 +239,88 @@ def test_runner_uses_only_production_tls_connect_and_closes() -> None:
         now=lambda: "2026-08-15T12:00:00Z",
     )
 
-    assert calls == ["create_tls_context", "connect_verified_tls", "close"]
+    assert calls == [
+        "create_tls_context",
+        "connect_verified_tls",
+        "settimeout",
+        "unwrap",
+        "raw_close",
+        "connection_close",
+    ]
     assert receipt["terminal_status"] == "PROBE_PASSED"
+    assert receipt["failure_phase"] is None
     assert all(receipt["stages"].values())
     assert receipt["provider_attempt_count"] == 0
     assert receipt["ai_call_count"] == 0
     assert receipt["secret_content_read"] is False
     assert receipt["authorization_constructed"] is False
     assert receipt["http_request_sent"] is False
+
+
+def test_runner_rejects_failed_orderly_tls_shutdown() -> None:
+    runner = _load_module(RUNNER_PATH, "phase2_proxy_tls_probe_close_failure")
+
+    class Classification:
+        category = "TLS_EOF"
+        exception_class = "SSLEOFError"
+        verify_code = None
+        verify_message = None
+        errno = None
+
+    class TlsSocket:
+        def settimeout(self, _timeout: float) -> None:
+            pass
+
+        def unwrap(self) -> None:
+            raise EOFError("missing close notify")
+
+    class Connection:
+        sock: TlsSocket | None = TlsSocket()
+
+        def close(self) -> None:
+            self.sock = None
+
+    class ProxyError(RuntimeError):
+        pass
+
+    class ProxyModule:
+        @staticmethod
+        def create_tls_context() -> object:
+            return object()
+
+        @staticmethod
+        def connect_verified_tls(*_args: Any) -> tuple[Connection, dict[str, str]]:
+            return Connection(), {
+                "tls_version": "TLSv1.3",
+                "cipher_name": "TLS_AES_256_GCM_SHA384",
+                "sni_hostname": "ark.cn-beijing.volces.com",
+                "hostname_verification_target": "ark.cn-beijing.volces.com",
+            }
+
+        @staticmethod
+        def classify_tls_error(_error: BaseException, *, phase: str) -> Classification:
+            assert phase == "tls"
+            return Classification()
+
+    ProxyModule.ProxyError = ProxyError
+
+    receipt = runner.execute_probe(
+        "c" * 32,
+        proxy_module=ProxyModule,
+        resolver=lambda *_args, **_kwargs: [(2, 1, 6, "", ("127.0.0.1", 443))],
+        now=lambda: "2026-08-15T12:00:00Z",
+    )
+
+    assert receipt["terminal_status"] == "TLS_EOF"
+    assert receipt["failure_phase"] == "tls_close"
+    assert receipt["stages"] == {
+        "certificate_verified": True,
+        "clean_tls_close": False,
+        "dns_completed": True,
+        "hostname_verified": True,
+        "tcp_connected": True,
+        "tls_completed": True,
+    }
 
 
 def test_runner_propagates_precise_tls_failure_without_activity() -> None:
@@ -266,6 +357,7 @@ def test_runner_propagates_precise_tls_failure_without_activity() -> None:
     )
 
     assert receipt["terminal_status"] == "TLS_CERT_VERIFY_FAILED"
+    assert receipt["failure_phase"] == "tls_handshake"
     assert receipt["exception_class"] == "SSLCertVerificationError"
     assert receipt["verify_code"] == 20
     assert receipt["provider_attempt_count"] == 0
@@ -399,21 +491,21 @@ def test_production_network_validator_requires_internal_relay_and_public_egress(
         launcher.validate_production_networks(valid, names)
 
 
-def test_launcher_receipt_validator_rejects_any_external_activity() -> None:
-    launcher = _load_module(LAUNCHER_PATH, "phase2_proxy_tls_probe_receipt")
-    receipt = {
+def _valid_probe_receipt(probe_id: str = "f" * 32) -> dict[str, Any]:
+    return {
         "ai_call_count": 0,
         "authorization_constructed": False,
         "cipher_name": "TLS_AES_256_GCM_SHA384",
         "completed_at": "2026-08-15T12:00:01Z",
         "errno": None,
         "exception_class": None,
+        "failure_phase": None,
         "hostname_verification_target": "ark.cn-beijing.volces.com",
         "http_request_sent": False,
-        "probe_id": "f" * 32,
+        "probe_id": probe_id,
         "provider_attempt_count": 0,
         "real_public_network_success_count": 0,
-        "receipt_schema_version": 1,
+        "receipt_schema_version": 2,
         "secret_content_read": False,
         "sni_hostname": "ark.cn-beijing.volces.com",
         "stages": {
@@ -432,10 +524,110 @@ def test_launcher_receipt_validator_rejects_any_external_activity() -> None:
         "verify_code": None,
         "verify_message": None,
     }
-    launcher.validate_probe_receipt(receipt, probe_id="f" * 32)
+
+
+def test_launcher_receipt_validator_rejects_any_external_activity() -> None:
+    launcher = _load_module(LAUNCHER_PATH, "phase2_proxy_tls_probe_receipt")
+    receipt = _valid_probe_receipt()
+    launcher.validate_probe_receipt(receipt, probe_id="f" * 32, container_exit_code=0)
     receipt["provider_attempt_count"] = 1
     with pytest.raises(ValueError, match="probe_receipt_invalid"):
-        launcher.validate_probe_receipt(receipt, probe_id="f" * 32)
+        launcher.validate_probe_receipt(
+            receipt,
+            probe_id="f" * 32,
+            container_exit_code=0,
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "exit_code"),
+    [
+        ({"completed_at": "2026-08-15T11:59:59Z"}, 0),
+        ({"exception_class": 7}, 0),
+        ({"verify_code": True}, 0),
+        ({"failure_phase": "tls_handshake"}, 0),
+        ({"terminal_status": "PROBE_PASSED"}, 2),
+    ],
+)
+def test_receipt_validator_rejects_bad_types_timestamps_and_exit_mismatch(
+    mutation: dict[str, Any],
+    exit_code: int,
+) -> None:
+    launcher = _load_module(LAUNCHER_PATH, "phase2_proxy_tls_probe_receipt_types")
+    receipt = _valid_probe_receipt()
+    receipt.update(mutation)
+    with pytest.raises(ValueError, match="probe_receipt_invalid"):
+        launcher.validate_probe_receipt(
+            receipt,
+            probe_id="f" * 32,
+            container_exit_code=exit_code,
+        )
+
+
+def test_receipt_validator_enforces_failure_stage_semantics() -> None:
+    launcher = _load_module(LAUNCHER_PATH, "phase2_proxy_tls_probe_receipt_stages")
+    receipt = _valid_probe_receipt()
+    receipt.update(
+        terminal_status="DNS_RESOLUTION_FAILED",
+        failure_phase="dns",
+        exception_class="gaierror",
+        tls_version=None,
+        cipher_name=None,
+    )
+    receipt["stages"] = dict.fromkeys(receipt["stages"], False)
+    launcher.validate_probe_receipt(receipt, probe_id="f" * 32, container_exit_code=2)
+    receipt["stages"]["tcp_connected"] = True
+    with pytest.raises(ValueError, match="probe_receipt_invalid"):
+        launcher.validate_probe_receipt(
+            receipt,
+            probe_id="f" * 32,
+            container_exit_code=2,
+        )
+
+
+def test_runtime_bindings_reject_head_and_source_drift(tmp_path: Path) -> None:
+    launcher = _load_module(LAUNCHER_PATH, "phase2_proxy_tls_probe_bindings")
+    launcher_source = tmp_path / "launcher.py"
+    runner_source = tmp_path / "probe.py"
+    launcher_source.write_text("launcher-v1\n", encoding="utf-8")
+    runner_source.write_text("runner-v1\n", encoding="utf-8")
+    candidate = {
+        "current_git_head": "1" * 40,
+        "source_bindings": {
+            "host_launcher_source": {
+                "path": "launcher.py",
+                "sha256": launcher.sha256_bytes(launcher_source.read_bytes()),
+            },
+            "container_runner_source": {
+                "path": "probe.py",
+                "sha256": launcher.sha256_bytes(runner_source.read_bytes()),
+            },
+        },
+    }
+    launcher.validate_runtime_source_bindings(
+        candidate,
+        repo_root=tmp_path,
+        runner_path=runner_source,
+        launcher_path=launcher_source,
+        git_head_loader=lambda _root: "1" * 40,
+    )
+    runner_source.write_text("runner-v2\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="runtime_source_binding_invalid"):
+        launcher.validate_runtime_source_bindings(
+            candidate,
+            repo_root=tmp_path,
+            runner_path=runner_source,
+            launcher_path=launcher_source,
+            git_head_loader=lambda _root: "1" * 40,
+        )
+    with pytest.raises(ValueError, match="runtime_source_binding_invalid"):
+        launcher.validate_runtime_source_bindings(
+            candidate,
+            repo_root=tmp_path,
+            runner_path=runner_source,
+            launcher_path=launcher_source,
+            git_head_loader=lambda _root: "2" * 40,
+        )
 
 
 def test_execution_identity_requires_exact_candidate_scope_and_local_approval(
@@ -451,6 +643,7 @@ def test_execution_identity_requires_exact_candidate_scope_and_local_approval(
         "target_port": 443,
         "retry_count": 0,
         "maximum_probe_attempts": 1,
+        "source_bindings": {},
     }
     candidate_path = tmp_path / "approval_candidate.json"
     candidate_raw = launcher.canonical_json_bytes(candidate)
@@ -483,6 +676,7 @@ def test_execution_identity_requires_exact_candidate_scope_and_local_approval(
         candidate_path=candidate_path,
         scope_path=scope_path,
         approval_path=approval_path,
+        verify_runtime_bindings=lambda _candidate: None,
     )
     assert identity["approval_candidate_sha256"] == candidate_sha
     assert identity["approval_scope_id"] == scope["approval_scope_id"]
@@ -495,7 +689,58 @@ def test_execution_identity_requires_exact_candidate_scope_and_local_approval(
             candidate_path=candidate_path,
             scope_path=scope_path,
             approval_path=approval_path,
+            verify_runtime_bindings=lambda _candidate: None,
         )
+
+
+def test_cleanup_attempts_all_resources_and_requires_verified_absence() -> None:
+    launcher = _load_module(LAUNCHER_PATH, "phase2_proxy_tls_probe_cleanup")
+    names = launcher.runtime_names("9" * 32)
+    calls: list[list[str]] = []
+
+    def run(command: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        if command[:4] == ["docker", "container", "rm", "--force"]:
+            return subprocess.CompletedProcess(command, 1, "", "remove failed")
+        if command[:3] == ["docker", "container", "ls"]:
+            return subprocess.CompletedProcess(command, 0, names["proxy"] + "\n", "")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    result = launcher._cleanup_runtime(names, run=run)
+    assert result["status"] == "FAILED"
+    assert result["container_residue"] == [names["proxy"]]
+    assert [command[2] for command in calls[:3]] == ["rm", "rm", "rm"]
+
+
+def test_cleanup_state_is_persisted_and_failure_rejects_terminal_success(
+    tmp_path: Path,
+) -> None:
+    launcher = _load_module(LAUNCHER_PATH, "phase2_proxy_tls_probe_cleanup_ledger")
+    reservation = launcher.reserve_scope(
+        attempts_root=tmp_path,
+        scope_id="a" * 64,
+        probe_id="b" * 32,
+    )
+    launcher.mark_dispatch_started(
+        reservation["ledger_path"],
+        started_at="2026-08-15T12:00:00Z",
+    )
+    launcher._mark_terminal(
+        reservation["ledger_path"],
+        receipt=_valid_probe_receipt("b" * 32),
+    )
+    result = launcher._mark_cleanup(
+        reservation["ledger_path"],
+        cleanup={
+            "cleanup_errors": ["remove_nonzero"],
+            "status": "FAILED",
+            "container_residue": ["leftover"],
+            "network_residue": [],
+        },
+    )
+    assert result["state"] == "TERMINAL_CLEANUP_FAILED"
+    assert result["cleanup_status"] == "FAILED"
+    assert result["cleanup_errors"] == ["remove_nonzero"]
 
 
 def test_scope_reservation_and_dispatch_ledger_are_one_shot(tmp_path: Path) -> None:

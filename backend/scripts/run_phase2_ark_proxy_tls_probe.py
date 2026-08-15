@@ -109,11 +109,92 @@ def read_canonical_json(path: Path, *, mode: int | None = None) -> dict[str, Any
     return value
 
 
+def _git_head(repo_root: Path) -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_root,
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=15.0,
+    )
+    head = result.stdout.strip()
+    if result.returncode != 0 or len(head) != 40 or any(
+        character not in "0123456789abcdef" for character in head
+    ):
+        raise ValueError("runtime_source_binding_invalid")
+    return head
+
+
+def _bound_source_path(repo_root: Path, relative_value: Any) -> Path:
+    if not isinstance(relative_value, str):
+        raise ValueError("runtime_source_binding_invalid")
+    relative = Path(relative_value)
+    if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+        raise ValueError("runtime_source_binding_invalid")
+    current = repo_root
+    try:
+        for part in relative.parts:
+            current = current / part
+            metadata = current.lstat()
+            if stat.S_ISLNK(metadata.st_mode):
+                raise ValueError("runtime_source_binding_invalid")
+    except OSError as error:
+        raise ValueError("runtime_source_binding_invalid") from error
+    if not stat.S_ISREG(current.lstat().st_mode):
+        raise ValueError("runtime_source_binding_invalid")
+    try:
+        current.resolve(strict=True).relative_to(repo_root.resolve(strict=True))
+    except (OSError, ValueError) as error:
+        raise ValueError("runtime_source_binding_invalid") from error
+    return current
+
+
+def validate_runtime_source_bindings(
+    candidate: Mapping[str, Any],
+    *,
+    repo_root: Path,
+    runner_path: Path,
+    launcher_path: Path,
+    git_head_loader: Callable[[Path], str] = _git_head,
+) -> None:
+    bindings = candidate.get("source_bindings")
+    if (
+        not isinstance(bindings, dict)
+        or set(("host_launcher_source", "container_runner_source"))
+        - set(bindings)
+        or git_head_loader(repo_root) != candidate.get("current_git_head")
+    ):
+        raise ValueError("runtime_source_binding_invalid")
+    resolved: dict[str, Path] = {}
+    for name, binding in bindings.items():
+        if not isinstance(name, str) or not isinstance(binding, dict):
+            raise ValueError("runtime_source_binding_invalid")
+        path = _bound_source_path(repo_root, binding.get("path"))
+        expected_sha = binding.get("sha256")
+        if (
+            not isinstance(expected_sha, str)
+            or len(expected_sha) != 64
+            or sha256_bytes(path.read_bytes()) != expected_sha
+        ):
+            raise ValueError("runtime_source_binding_invalid")
+        resolved[name] = path.resolve(strict=True)
+    if (
+        resolved["container_runner_source"] != runner_path.resolve(strict=True)
+        or resolved["host_launcher_source"] != launcher_path.resolve(strict=True)
+    ):
+        raise ValueError("runtime_source_binding_invalid")
+
+
 def load_execution_identity(
     *,
     candidate_path: Path,
     scope_path: Path,
     approval_path: Path,
+    repo_root: Path = REPO_ROOT,
+    runner_path: Path = RUNNER_PATH,
+    launcher_path: Path = Path(__file__),
+    verify_runtime_bindings: Callable[[Mapping[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     candidate_raw = _read_regular_bytes(candidate_path)
     try:
@@ -122,6 +203,15 @@ def load_execution_identity(
         raise ValueError("runtime_approval_invalid") from error
     if not isinstance(candidate, dict) or candidate_raw != canonical_json_bytes(candidate):
         raise ValueError("runtime_approval_invalid")
+    if verify_runtime_bindings is None:
+        validate_runtime_source_bindings(
+            candidate,
+            repo_root=repo_root,
+            runner_path=runner_path,
+            launcher_path=launcher_path,
+        )
+    else:
+        verify_runtime_bindings(candidate)
     candidate_sha = sha256_bytes(candidate_raw)
     scope = read_canonical_json(scope_path)
     approval = read_canonical_json(approval_path, mode=0o600)
@@ -408,6 +498,7 @@ _RECEIPT_FIELDS = {
     "completed_at",
     "errno",
     "exception_class",
+    "failure_phase",
     "hostname_verification_target",
     "http_request_sent",
     "probe_id",
@@ -447,11 +538,40 @@ _STAGE_FIELDS = {
 }
 
 
-def validate_probe_receipt(receipt: Mapping[str, Any], *, probe_id: str) -> None:
+def _utc_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.endswith("Z"):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.removesuffix("Z") + "+00:00")
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else None
+
+
+def _optional_string(value: Any, *, maximum: int) -> bool:
+    return value is None or (
+        isinstance(value, str) and 0 < len(value) <= maximum and "\x00" not in value
+    )
+
+
+def _optional_integer(value: Any) -> bool:
+    return value is None or type(value) is int
+
+
+def validate_probe_receipt(
+    receipt: Mapping[str, Any],
+    *,
+    probe_id: str,
+    container_exit_code: int,
+) -> None:
     stages = receipt.get("stages")
+    started_at = _utc_timestamp(receipt.get("started_at"))
+    completed_at = _utc_timestamp(receipt.get("completed_at"))
+    terminal_status = receipt.get("terminal_status")
+    failure_phase = receipt.get("failure_phase")
     valid = (
         set(receipt) == _RECEIPT_FIELDS
-        and receipt.get("receipt_schema_version") == 1
+        and receipt.get("receipt_schema_version") == 2
         and receipt.get("probe_id") == probe_id
         and receipt.get("target_host") == TARGET_HOST
         and receipt.get("target_port") == TARGET_PORT
@@ -467,11 +587,70 @@ def validate_probe_receipt(receipt: Mapping[str, Any], *, probe_id: str) -> None
         and isinstance(stages, dict)
         and set(stages) == _STAGE_FIELDS
         and all(isinstance(value, bool) for value in stages.values())
-        and isinstance(receipt.get("started_at"), str)
-        and isinstance(receipt.get("completed_at"), str)
+        and started_at is not None
+        and completed_at is not None
+        and completed_at >= started_at
+        and _optional_string(receipt.get("exception_class"), maximum=128)
+        and _optional_string(receipt.get("verify_message"), maximum=512)
+        and _optional_integer(receipt.get("verify_code"))
+        and _optional_integer(receipt.get("errno"))
+        and _optional_string(receipt.get("tls_version"), maximum=64)
+        and _optional_string(receipt.get("cipher_name"), maximum=128)
     )
-    if receipt.get("terminal_status") == "PROBE_PASSED":
-        valid = valid and all(stages.values())
+    if terminal_status == "PROBE_PASSED":
+        valid = (
+            valid
+            and container_exit_code == 0
+            and failure_phase is None
+            and all(stages.values())
+            and isinstance(receipt.get("tls_version"), str)
+            and isinstance(receipt.get("cipher_name"), str)
+            and receipt.get("exception_class") is None
+            and receipt.get("verify_code") is None
+            and receipt.get("verify_message") is None
+            and receipt.get("errno") is None
+        )
+    else:
+        expected_stages: dict[str, bool] | None = None
+        if terminal_status == "DNS_RESOLUTION_FAILED" and failure_phase == "dns":
+            expected_stages = dict.fromkeys(_STAGE_FIELDS, False)
+        elif terminal_status == "PROVIDER_CONNECT_FAILED" and failure_phase == "tcp":
+            expected_stages = dict.fromkeys(_STAGE_FIELDS, False)
+            expected_stages["dns_completed"] = True
+        elif terminal_status in _TERMINAL_STATUSES - {
+            "PROBE_PASSED",
+            "DNS_RESOLUTION_FAILED",
+            "PROVIDER_CONNECT_FAILED",
+        }:
+            expected_stages = dict.fromkeys(_STAGE_FIELDS, False)
+            expected_stages["dns_completed"] = True
+            expected_stages["tcp_connected"] = True
+            if failure_phase == "tls_close":
+                expected_stages.update(
+                    tls_completed=True,
+                    certificate_verified=True,
+                    hostname_verified=True,
+                )
+                valid = (
+                    valid
+                    and isinstance(receipt.get("tls_version"), str)
+                    and isinstance(receipt.get("cipher_name"), str)
+                )
+            elif failure_phase != "tls_handshake":
+                expected_stages = None
+        if failure_phase in {"dns", "tcp", "tls_handshake"}:
+            valid = (
+                valid
+                and receipt.get("tls_version") is None
+                and receipt.get("cipher_name") is None
+            )
+        valid = (
+            valid
+            and container_exit_code == 2
+            and expected_stages is not None
+            and stages == expected_stages
+            and isinstance(receipt.get("exception_class"), str)
+        )
     if not valid:
         raise ValueError("probe_receipt_invalid")
 
@@ -529,19 +708,80 @@ def _cleanup_runtime(
     names: Mapping[str, str],
     *,
     run: Callable[..., subprocess.CompletedProcess[str]],
-) -> None:
+) -> dict[str, Any]:
+    cleanup_errors: list[str] = []
     for command in (
         ["docker", "container", "rm", "--force", names["proxy"]],
         ["docker", "network", "rm", names["egress_network"]],
         ["docker", "network", "rm", names["relay_network"]],
     ):
-        run(
-            command,
-            capture_output=True,
-            check=False,
-            text=True,
-            timeout=15.0,
+        try:
+            result = run(
+                command,
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=15.0,
+            )
+            if result.returncode != 0:
+                cleanup_errors.append("remove_nonzero")
+        except (OSError, subprocess.TimeoutExpired):
+            cleanup_errors.append("remove_exception")
+
+    verification_commands = {
+        "container": [
+            "docker",
+            "container",
+            "ls",
+            "--all",
+            "--filter",
+            f"name=^/{names['proxy']}$",
+            "--format",
+            "{{.Names}}",
+        ],
+        "network": [
+            "docker",
+            "network",
+            "ls",
+            "--filter",
+            f"name=^{names['relay_network']}$",
+            "--filter",
+            f"name=^{names['egress_network']}$",
+            "--format",
+            "{{.Name}}",
+        ],
+    }
+    residues: dict[str, list[str]] = {"container": [], "network": []}
+    for role, command in verification_commands.items():
+        try:
+            result = run(
+                command,
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=15.0,
+            )
+            if result.returncode != 0:
+                cleanup_errors.append(f"{role}_verification_nonzero")
+            else:
+                residues[role] = [
+                    line for line in result.stdout.splitlines() if line.strip()
+                ]
+        except (OSError, subprocess.TimeoutExpired):
+            cleanup_errors.append(f"{role}_verification_exception")
+    status_value = (
+        "PASSED"
+        if not residues["container"] and not residues["network"] and not any(
+            "verification" in error for error in cleanup_errors
         )
+        else "FAILED"
+    )
+    return {
+        "cleanup_errors": cleanup_errors,
+        "container_residue": residues["container"],
+        "network_residue": residues["network"],
+        "status": status_value,
+    }
 
 
 def _mark_terminal(
@@ -557,8 +797,40 @@ def _mark_terminal(
         raise ValueError("probe_ledger_state_invalid")
     ledger.update(
         completed_at=receipt["completed_at"],
-        state="TERMINAL",
+        state="TERMINAL_AWAITING_CLEANUP",
         terminal_status=receipt["terminal_status"],
+    )
+    atomic_write_json(ledger_path, ledger)
+    return ledger
+
+
+def _mark_cleanup(
+    ledger_path: Path,
+    *,
+    cleanup: Mapping[str, Any],
+) -> dict[str, Any]:
+    ledger = read_canonical_json(ledger_path, mode=0o600)
+    state = ledger.get("state")
+    cleanup_status = cleanup.get("status")
+    if (
+        state not in {"NETWORK_DISPATCH_STARTED", "TERMINAL_AWAITING_CLEANUP"}
+        or cleanup_status not in {"PASSED", "FAILED"}
+        or not isinstance(cleanup.get("container_residue"), list)
+        or not isinstance(cleanup.get("network_residue"), list)
+        or not isinstance(cleanup.get("cleanup_errors", []), list)
+    ):
+        raise ValueError("probe_cleanup_state_invalid")
+    terminal = state == "TERMINAL_AWAITING_CLEANUP"
+    if cleanup_status == "FAILED":
+        next_state = "TERMINAL_CLEANUP_FAILED" if terminal else "POST_DISPATCH_CLEANUP_FAILED"
+    else:
+        next_state = "TERMINAL" if terminal else "POST_DISPATCH_ERROR_CLEANUP_PASSED"
+    ledger.update(
+        cleanup_status=cleanup_status,
+        cleanup_errors=cleanup.get("cleanup_errors", []),
+        container_residue=cleanup["container_residue"],
+        network_residue=cleanup["network_residue"],
+        state=next_state,
     )
     atomic_write_json(ledger_path, ledger)
     return ledger
@@ -579,6 +851,7 @@ def run_live_probe(
         candidate_path=candidate_path,
         scope_path=scope_path,
         approval_path=approval_path,
+        runner_path=runner_path,
     )
     image_id = identity.get("proxy_image_id")
     if not isinstance(image_id, str) or not image_id.startswith("sha256:"):
@@ -594,6 +867,8 @@ def run_live_probe(
     output_dir.mkdir(mode=0o733)
     names = runtime_names(probe_id)
     dispatch_started = False
+    result_payload: dict[str, Any] | None = None
+    pending_error: BaseException | None = None
     try:
         for command in network_create_commands(names, mock_mode=False):
             run_once(command, run=run, timeout=30.0)
@@ -621,7 +896,7 @@ def run_live_probe(
         )
         mark_dispatch_started(reservation["ledger_path"], started_at=now())
         dispatch_started = True
-        run(
+        container_result = run(
             ["docker", "start", "--attach", names["proxy"]],
             capture_output=True,
             check=False,
@@ -629,9 +904,13 @@ def run_live_probe(
             timeout=210.0,
         )
         receipt = read_canonical_json(output_dir / "receipt.json", mode=0o600)
-        validate_probe_receipt(receipt, probe_id=probe_id)
+        validate_probe_receipt(
+            receipt,
+            probe_id=probe_id,
+            container_exit_code=container_result.returncode,
+        )
         _mark_terminal(reservation["ledger_path"], receipt=receipt)
-        return {
+        result_payload = {
             "ai_call_count": 0,
             "approval_scope_id": identity["approval_scope_id"],
             "probe_attempt_count": 1,
@@ -640,16 +919,28 @@ def run_live_probe(
             "retry_count": 0,
             "terminal_status": receipt["terminal_status"],
         }
-    except BaseException:
+    except BaseException as error:
+        pending_error = error
         if not dispatch_started:
             rollback_reservation_before_dispatch(
                 attempts_root=attempts_root,
                 scope_id=identity["approval_scope_id"],
                 reservation=reservation,
             )
-        raise
     finally:
-        _cleanup_runtime(names, run=run)
+        cleanup = _cleanup_runtime(names, run=run)
+        if dispatch_started:
+            try:
+                _mark_cleanup(reservation["ledger_path"], cleanup=cleanup)
+            except BaseException as error:
+                pending_error = pending_error or error
+        if cleanup["status"] != "PASSED":
+            raise RuntimeError("probe_cleanup_failed") from pending_error
+    if pending_error is not None:
+        raise pending_error
+    if result_payload is None:
+        raise RuntimeError("probe_result_missing")
+    return result_payload
 
 
 def main() -> int:

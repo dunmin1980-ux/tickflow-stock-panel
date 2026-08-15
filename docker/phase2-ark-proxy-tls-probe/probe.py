@@ -57,12 +57,13 @@ def _base_receipt(probe_id: str, started_at: str) -> dict[str, Any]:
         "completed_at": started_at,
         "errno": None,
         "exception_class": None,
+        "failure_phase": None,
         "hostname_verification_target": TARGET_HOST,
         "http_request_sent": False,
         "probe_id": probe_id,
         "provider_attempt_count": 0,
         "real_public_network_success_count": 0,
-        "receipt_schema_version": 1,
+        "receipt_schema_version": 2,
         "secret_content_read": False,
         "sni_hostname": TARGET_HOST,
         "stages": {
@@ -101,6 +102,7 @@ def execute_probe(
         receipt["stages"]["dns_completed"] = True
     except OSError as error:
         receipt["exception_class"] = type(error).__name__
+        receipt["failure_phase"] = "dns"
         receipt["errno"] = getattr(error, "errno", None)
         receipt["completed_at"] = now()
         return receipt
@@ -122,7 +124,6 @@ def execute_probe(
             hostname_verification_target=metadata.get(
                 "hostname_verification_target"
             ),
-            terminal_status="PROBE_PASSED",
         )
         receipt["stages"].update(
             tcp_connected=True,
@@ -141,10 +142,32 @@ def execute_probe(
         )
         if category.startswith("TLS_"):
             receipt["stages"]["tcp_connected"] = True
-    finally:
-        if connection is not None:
-            connection.close()
+        receipt["failure_phase"] = (
+            "tls_handshake" if category.startswith("TLS_") else "tcp"
+        )
+    if connection is not None:
+        try:
+            tls_socket = connection.sock
+            if tls_socket is None or not hasattr(tls_socket, "unwrap"):
+                raise RuntimeError("tls_socket_missing")
+            tls_socket.settimeout(CONNECT_TIMEOUT_SECONDS)
+            raw_socket = tls_socket.unwrap()
+            connection.sock = None
+            raw_socket.close()
             receipt["stages"]["clean_tls_close"] = True
+            receipt["terminal_status"] = "PROBE_PASSED"
+        except Exception as error:
+            classification = proxy.classify_tls_error(error, phase="tls")
+            receipt.update(
+                terminal_status=classification.category,
+                exception_class=classification.exception_class,
+                failure_phase="tls_close",
+                verify_code=classification.verify_code,
+                verify_message=classification.verify_message,
+                errno=classification.errno,
+            )
+        finally:
+            connection.close()
     receipt["completed_at"] = now()
     return receipt
 
