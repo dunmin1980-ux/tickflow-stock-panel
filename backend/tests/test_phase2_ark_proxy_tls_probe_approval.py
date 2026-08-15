@@ -1688,8 +1688,11 @@ def test_mock_harness_uses_built_image_runner_and_no_sensitive_mount() -> None:
 
 def test_mock_host_timeout_exceeds_tls_and_server_hold_budget() -> None:
     harness = _load_module(HARNESS_PATH, "phase2_proxy_tls_probe_mock_timeout")
-    assert harness.PROBE_CONTAINER_TIMEOUT_SECONDS == 30.0
+    assert harness.DOCKER_COMMAND_TIMEOUT_SECONDS == 60.0
+    assert harness.MOCK_SERVER_READY_TIMEOUT_SECONDS == 15.0
+    assert harness.PROBE_CONTAINER_TIMEOUT_SECONDS == 60.0
     assert harness.REFUSED_DNS_HOLD_SECONDS == 15.0
+    assert harness.PROBE_CONTAINER_TIMEOUT_SECONDS > harness.REFUSED_DNS_HOLD_SECONDS
     assert harness.PROBE_CONTAINER_TIMEOUT_SECONDS > max(
         12.0,
         harness.REFUSED_DNS_HOLD_SECONDS,

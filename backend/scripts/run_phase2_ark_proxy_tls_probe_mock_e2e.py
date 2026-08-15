@@ -37,7 +37,9 @@ EXPECTED_CASES = {
     "egress_network_missing": "TOPOLOGY_BLOCKED",
     "wrong_network_attachment": "TOPOLOGY_BLOCKED",
 }
-PROBE_CONTAINER_TIMEOUT_SECONDS = 30.0
+DOCKER_COMMAND_TIMEOUT_SECONDS = 60.0
+MOCK_SERVER_READY_TIMEOUT_SECONDS = 15.0
+PROBE_CONTAINER_TIMEOUT_SECONDS = 60.0
 REFUSED_DNS_HOLD_SECONDS = 15.0
 
 
@@ -116,7 +118,7 @@ def topology_status(
 def _run(
     command: Sequence[str],
     *,
-    timeout: float = 30.0,
+    timeout: float = DOCKER_COMMAND_TIMEOUT_SECONDS,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -259,7 +261,7 @@ def _load_image_id() -> str:
 
 
 def _wait_ready(container: str) -> None:
-    deadline = time.monotonic() + 5.0
+    deadline = time.monotonic() + MOCK_SERVER_READY_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         result = _run(["docker", "logs", container], check=False, timeout=5.0)
         if "READY" in result.stdout:
