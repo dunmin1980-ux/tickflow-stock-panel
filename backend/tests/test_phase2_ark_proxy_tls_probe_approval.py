@@ -788,12 +788,15 @@ def test_execution_identity_requires_exact_candidate_scope_and_local_approval(
     candidate_path.write_bytes(candidate_raw)
     candidate_sha = launcher.sha256_bytes(candidate_raw)
     scope = {
+        "ai_canary_scope_shared": False,
         "approval_scope_schema_version": 1,
         "approval_candidate_sha256": candidate_sha,
         "approval_scope_id": launcher.scope_id_for_candidate(candidate_sha),
         "attempt_availability": "AVAILABLE",
+        "generic_tls_probe_scope_shared": False,
         "historical_attempts": 0,
         "maximum_probe_attempts": 1,
+        "openai_scope_shared": False,
         "provider_scope_shared": False,
         "retry_count": 0,
         "scope_type": "production_proxy_path_tls_only_probe",
@@ -820,6 +823,34 @@ def test_execution_identity_requires_exact_candidate_scope_and_local_approval(
     assert identity["approval_scope_id"] == scope["approval_scope_id"]
     assert identity["historical_attempts"] == 0
     assert identity["attempt_availability"] == "AVAILABLE"
+
+    for field in (
+        "ai_canary_scope_shared",
+        "generic_tls_probe_scope_shared",
+        "openai_scope_shared",
+        "provider_scope_shared",
+    ):
+        mutated = {**scope, field: True}
+        scope_path.write_bytes(launcher.canonical_json_bytes(mutated))
+        with pytest.raises(ValueError, match="runtime_approval_invalid"):
+            launcher.load_execution_identity(
+                candidate_path=candidate_path,
+                scope_path=scope_path,
+                approval_path=approval_path,
+                verify_runtime_bindings=lambda _candidate: None,
+            )
+
+    scope_path.write_bytes(
+        launcher.canonical_json_bytes({**scope, "unexpected_scope_field": False})
+    )
+    with pytest.raises(ValueError, match="runtime_approval_invalid"):
+        launcher.load_execution_identity(
+            candidate_path=candidate_path,
+            scope_path=scope_path,
+            approval_path=approval_path,
+            verify_runtime_bindings=lambda _candidate: None,
+        )
+    scope_path.write_bytes(launcher.canonical_json_bytes(scope))
 
     approval_path.chmod(0o644)
     with pytest.raises(ValueError, match="runtime_approval_invalid"):

@@ -56,6 +56,7 @@ _PROTOCOL_MARKERS = (
     "WRONG_VERSION_NUMBER",
 )
 _DIAGNOSTIC_TERMINALS = {
+    "DNS_RESOLUTION_FAILED",
     "PROVIDER_CONNECT_FAILED",
     "TLS_CERT_VERIFY_FAILED",
     "TLS_HOSTNAME_VERIFY_FAILED",
@@ -304,6 +305,7 @@ _LOCAL_STATUS = {
     "RESPONSE_SCHEMA_BLOCKED": 502,
     "MODEL_IDENTITY_BLOCKED": 502,
     "OUTPUT_EXTRACTION_BLOCKED": 502,
+    "DNS_RESOLUTION_FAILED": 502,
     "PROVIDER_CONNECT_FAILED": 502,
     "TLS_FAILED": 502,
     "TLS_CERT_VERIFY_FAILED": 502,
@@ -401,6 +403,12 @@ def classify_tls_error(
             verify_code,
             verify_message,
             error_number,
+        )
+    if isinstance(error, socket.gaierror):
+        return TlsErrorClassification(
+            "DNS_RESOLUTION_FAILED",
+            exception_class,
+            errno=error_number,
         )
     if isinstance(error, (TimeoutError, socket.timeout)):
         return TlsErrorClassification(

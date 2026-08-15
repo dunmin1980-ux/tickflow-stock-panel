@@ -66,6 +66,23 @@ def scope_id_for_candidate(candidate_sha256: str) -> str:
     )
 
 
+def expected_scope(candidate_sha256: str) -> dict[str, Any]:
+    return {
+        "ai_canary_scope_shared": False,
+        "approval_candidate_sha256": candidate_sha256,
+        "approval_scope_id": scope_id_for_candidate(candidate_sha256),
+        "approval_scope_schema_version": 1,
+        "attempt_availability": "AVAILABLE",
+        "generic_tls_probe_scope_shared": False,
+        "historical_attempts": 0,
+        "maximum_probe_attempts": 1,
+        "openai_scope_shared": False,
+        "provider_scope_shared": False,
+        "retry_count": 0,
+        "scope_type": SCOPE_TYPE,
+    }
+
+
 def atomic_write_json(path: Path, value: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     descriptor, name = tempfile.mkstemp(
@@ -224,14 +241,7 @@ def load_execution_identity(
         or candidate.get("target_port") != TARGET_PORT
         or candidate.get("retry_count") != 0
         or candidate.get("maximum_probe_attempts") != 1
-        or scope.get("scope_type") != SCOPE_TYPE
-        or scope.get("approval_candidate_sha256") != candidate_sha
-        or scope.get("approval_scope_id") != scope_id
-        or scope.get("historical_attempts") != 0
-        or scope.get("attempt_availability") != "AVAILABLE"
-        or scope.get("retry_count") != 0
-        or scope.get("maximum_probe_attempts") != 1
-        or scope.get("provider_scope_shared") is not False
+        or scope != expected_scope(candidate_sha)
         or approval
         != {
             "approval_candidate_sha256": candidate_sha,

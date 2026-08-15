@@ -3,6 +3,7 @@ from __future__ import annotations
 import errno
 import importlib.util
 import json
+import socket
 import ssl
 import subprocess
 import sys
@@ -126,6 +127,16 @@ def test_connection_reset_classification_uses_the_measured_connect_phase(
     )
 
 
+def test_dns_failure_classification_overrides_the_measured_connect_phase(
+    ark_proxy: ModuleType,
+) -> None:
+    failure = socket.gaierror(socket.EAI_NONAME, "name not known")
+
+    assert ark_proxy.classify_tls_error(failure, phase="tcp").category == (
+        "DNS_RESOLUTION_FAILED"
+    )
+
+
 class _Socket:
     def version(self) -> str:
         return "TLSv1.3"
@@ -147,6 +158,29 @@ class _Connection:
 
     def close(self) -> None:
         self.closed = True
+
+
+def test_connect_verified_tls_classifies_second_dns_failure(
+    ark_proxy: ModuleType,
+) -> None:
+    connection = _Connection(
+        connect_error=socket.gaierror(socket.EAI_NONAME, "name not known")
+    )
+    connection.connect_phase = "tcp"
+
+    with pytest.raises(ark_proxy.ProxyError) as caught:
+        ark_proxy.connect_verified_tls(
+            "ark.internal.test",
+            443,
+            10.0,
+            ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT),
+            connection_factory=lambda *_args: connection,
+        )
+
+    assert caught.value.category == "DNS_RESOLUTION_FAILED"
+    assert caught.value.exception_class == "gaierror"
+    assert caught.value.errno == socket.EAI_NONAME
+    assert connection.closed is True
 
 
 def test_connect_verified_tls_returns_transport_metadata_without_http(
