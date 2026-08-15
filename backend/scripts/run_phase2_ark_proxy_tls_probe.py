@@ -554,6 +554,9 @@ _DNS_DIAGNOSTICS: dict[str, frozenset[int | None]] = {
 }
 _PROVIDER_CONNECT_DIAGNOSTICS: dict[str, frozenset[int | None]] = {
     "ConnectionRefusedError": frozenset({111}),
+    "ConnectionResetError": frozenset({104}),
+    "ConnectionAbortedError": frozenset({103}),
+    "BrokenPipeError": frozenset({32}),
     "TimeoutError": frozenset({None, 110}),
     "PermissionError": frozenset({1, 13}),
     "InterruptedError": frozenset({4}),

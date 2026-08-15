@@ -687,6 +687,7 @@ def test_receipt_validator_rejects_contradictory_dns_and_tcp_diagnostics(
         ("DNS_RESOLUTION_FAILED", "dns", "gaierror", -2),
         ("DNS_RESOLUTION_FAILED", "dns", "OSError", None),
         ("PROVIDER_CONNECT_FAILED", "tcp", "ConnectionRefusedError", 111),
+        ("PROVIDER_CONNECT_FAILED", "tcp", "ConnectionResetError", 104),
         ("PROVIDER_CONNECT_FAILED", "tcp", "TimeoutError", None),
         ("PROVIDER_CONNECT_FAILED", "tcp", "OSError", 101),
         ("PROVIDER_CONNECT_FAILED", "tcp", "MissingConnectedSocket", None),
@@ -1339,6 +1340,88 @@ def test_build_provenance_records_offline_rebuild_and_runtime_identity() -> None
     assert provenance["image_identity"]["image_id"] == "sha256:" + "4" * 64
 
 
+def _current_probe_build_provenance(builder: ModuleType) -> dict[str, Any]:
+    path = REPO_ROOT / "reports/phase2_provider_ark/proxy_tls_probe/build_provenance.json"
+    provenance = _read_json(path)
+    context_hashes = {
+        destination: builder.source_binding(REPO_ROOT, source)["sha256"]
+        for destination, source in builder.PROBE_IMAGE_CONTEXT_SOURCES.items()
+    }
+    build_arguments = builder.build_arguments_for_context(
+        context_hashes,
+        proxy_policy_sha256=provenance["build_arguments"]["PROXY_POLICY_SHA256"],
+    )
+    provenance["context_hashes"] = context_hashes
+    provenance["build_arguments"] = build_arguments
+    provenance["image_identity"]["labels"] = builder.expected_image_labels(build_arguments)
+    return provenance
+
+
+def test_build_provenance_validator_rejects_context_and_label_tampering() -> None:
+    builder = _load_module(
+        BUILDER_PATH,
+        "phase2_proxy_tls_probe_builder_provenance_tamper",
+    )
+    provenance = _current_probe_build_provenance(builder)
+    current_head = provenance["source_git_head"]
+
+    tampered_context = json.loads(json.dumps(provenance))
+    tampered_context["context_hashes"]["proxy.py"] = "f" * 64
+    with pytest.raises(ValueError, match="build_provenance_invalid"):
+        builder._validate_build_provenance(
+            tampered_context,
+            current_head=current_head,
+        )
+
+    tampered_labels = json.loads(json.dumps(provenance))
+    tampered_labels["image_identity"]["labels"] = {}
+    with pytest.raises(ValueError, match="build_provenance_invalid"):
+        builder._validate_build_provenance(
+            tampered_labels,
+            current_head=current_head,
+        )
+
+
+def test_build_provenance_validator_reinspects_local_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    builder = _load_module(
+        BUILDER_PATH,
+        "phase2_proxy_tls_probe_builder_provenance_reinspect",
+    )
+    provenance = _current_probe_build_provenance(builder)
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        builder,
+        "inspect_local_base",
+        lambda **_kwargs: calls.append("base") or {"Id": builder.BASE_IMAGE_DIGEST},
+    )
+    monkeypatch.setattr(
+        builder,
+        "inspect_built_image",
+        lambda **_kwargs: calls.append("image") or provenance["image_identity"],
+    )
+    monkeypatch.setattr(
+        builder,
+        "inspect_runtime_identity",
+        lambda *_args, **_kwargs: calls.append("runtime")
+        or provenance["runtime_identity"],
+    )
+    monkeypatch.setattr(
+        builder,
+        "extract_ca_identity",
+        lambda *_args, **_kwargs: calls.append("ca")
+        or provenance["ca_bundle_identity"],
+    )
+
+    builder._validate_build_provenance(
+        provenance,
+        current_head=provenance["source_git_head"],
+    )
+    assert calls == ["base", "image", "runtime", "ca"]
+
+
 def test_base_image_inspection_requires_exact_local_digest() -> None:
     builder = _load_module(BUILDER_PATH, "phase2_proxy_tls_probe_builder_base")
     payload = [
@@ -1412,6 +1495,11 @@ def test_prepare_and_verify_artifacts_are_deterministic_and_zero_activity(
     output.mkdir()
     head = "1" * 40
     image_id = "sha256:" + "2" * 64
+    monkeypatch.setattr(
+        builder,
+        "_validate_build_provenance",
+        lambda _value, *, current_head, repo_root=REPO_ROOT: (image_id, "3" * 64),
+    )
     build_provenance = {
         "ai_call_count": 0,
         "build_network": "none",
@@ -1424,21 +1512,19 @@ def test_prepare_and_verify_artifacts_are_deterministic_and_zero_activity(
         "source_git_head": head,
         "ca_bundle_identity": {"sha256": "3" * 64},
     }
-    mock = {
-        "ai_call_count": 0,
-        "authorization_constructed": False,
-        "double_network_topology": "VERIFIED",
-        "happy_path_runs": 3,
-        "happy_path_status": "PASSED",
-        "http_request_sent": False,
-        "mock_networks_internal": True,
-        "production_topology_mock": "PASSED",
-        "provider_attempt_count": 0,
-        "proxy_image_id": image_id,
-        "real_public_network_success_count": 0,
-        "residue": {"container_count": 0, "network_count": 0},
-        "secret_content_read": False,
-        "status": "PRODUCTION_PROXY_TLS_PROBE_MOCK_PASSED",
+    mock = _read_json(
+        REPO_ROOT / "reports/phase2_provider_ark/proxy_tls_probe/mock_e2e.json"
+    )
+    mock["proxy_image_id"] = image_id
+    mock["results"]["egress_network_missing"] = {
+        "case": "egress_network_missing",
+        "egress_network_absent": True,
+        "terminal_status": "TOPOLOGY_BLOCKED",
+    }
+    mock["results"]["wrong_network_attachment"] = {
+        "case": "wrong_network_attachment",
+        "terminal_status": "TOPOLOGY_BLOCKED",
+        "wrong_network_attachment_verified": True,
     }
     baseline = {
         "failed": 57,
@@ -1525,6 +1611,11 @@ def test_prepare_artifacts_rejects_failed_mock_or_existing_scope_attempt(
     output.mkdir()
     head = "1" * 40
     image_id = "sha256:" + "2" * 64
+    monkeypatch.setattr(
+        builder,
+        "_validate_build_provenance",
+        lambda _value, *, current_head, repo_root=REPO_ROOT: (image_id, "3" * 64),
+    )
     builder.atomic_write_json(
         output / "build_provenance.json",
         {
@@ -1579,6 +1670,20 @@ def test_prepare_artifacts_rejects_failed_mock_or_existing_scope_attempt(
             current_head=head,
             historical_evidence={"checked_file_count": 13, "status": "UNCHANGED"},
         )
+
+
+def test_mock_evidence_validator_requires_complete_case_receipts() -> None:
+    builder = _load_module(
+        BUILDER_PATH,
+        "phase2_proxy_tls_probe_builder_mock_receipts",
+    )
+    path = REPO_ROOT / "reports/phase2_provider_ark/proxy_tls_probe/mock_e2e.json"
+    mock = _read_json(path)
+    image_id = mock["proxy_image_id"]
+    mock.pop("results")
+
+    with pytest.raises(ValueError, match="mock_e2e_invalid"):
+        builder._validate_mock_evidence(mock, proxy_image_id=image_id)
 
 
 def test_builder_script_entrypoint_runs_after_all_function_definitions() -> None:
@@ -1656,6 +1761,71 @@ def test_mock_harness_requires_exact_proxy_double_attachment() -> None:
     )
 
 
+def test_missing_egress_case_removes_and_verifies_network_absence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    harness = _load_module(
+        HARNESS_PATH,
+        "phase2_proxy_tls_probe_harness_missing_egress",
+    )
+    names = harness.runtime_names("c" * 12)
+    commands: list[list[str]] = []
+    removed = False
+
+    monkeypatch.setattr(harness.uuid, "uuid4", lambda: type("U", (), {"hex": "c" * 32})())
+    monkeypatch.setattr(harness, "_create_networks", lambda _names: None)
+    monkeypatch.setattr(harness, "_create_proxy", lambda **_kwargs: None)
+    monkeypatch.setattr(harness, "_cleanup", lambda _names: None)
+    monkeypatch.setattr(
+        harness,
+        "_network_metadata",
+        lambda _names: {
+            names["relay_network"]: {"Driver": "bridge", "Internal": True},
+            names["egress_network"]: {"Driver": "bridge", "Internal": True},
+        },
+    )
+
+    def fake_run(command: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[str]:
+        nonlocal removed
+        commands.append(command)
+        if command == ["docker", "network", "rm", names["egress_network"]]:
+            removed = True
+            return subprocess.CompletedProcess(command, 0, names["egress_network"], "")
+        if command == ["docker", "network", "inspect", names["egress_network"]]:
+            return subprocess.CompletedProcess(command, 1 if removed else 0, "", "")
+        if command == ["docker", "container", "inspect", names["proxy"]]:
+            payload = [
+                {
+                    "NetworkSettings": {
+                        "Networks": {names["relay_network"]: {"NetworkID": "relay"}}
+                    }
+                }
+            ]
+            return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
+        raise AssertionError(command)
+
+    monkeypatch.setattr(harness, "_run", fake_run)
+    result = harness._case(
+        case_name="egress_network_missing",
+        image_id="sha256:" + "a" * 64,
+        root=tmp_path,
+        ca_bundle=tmp_path / "ca.pem",
+        mode=None,
+        key=None,
+        certificate=None,
+        topology="missing",
+    )
+
+    assert ["docker", "network", "rm", names["egress_network"]] in commands
+    assert ["docker", "network", "inspect", names["egress_network"]] in commands
+    assert result == {
+        "case": "egress_network_missing",
+        "egress_network_absent": True,
+        "terminal_status": "TOPOLOGY_BLOCKED",
+    }
+
+
 def test_mock_harness_defines_required_cases_and_three_happy_paths() -> None:
     harness = _load_module(HARNESS_PATH, "phase2_proxy_tls_probe_harness_cases")
     assert harness.EXPECTED_CASES == {
@@ -1717,7 +1887,11 @@ def test_mock_case_artifacts_finalize_into_one_zero_activity_report(
             "case": case,
             "terminal_status": terminal_status,
         }
-        if terminal_status != "TOPOLOGY_BLOCKED":
+        if case == "egress_network_missing":
+            result["egress_network_absent"] = True
+        elif case == "wrong_network_attachment":
+            result["wrong_network_attachment_verified"] = True
+        else:
             result.update(
                 ai_call_count=0,
                 authorization_constructed=False,

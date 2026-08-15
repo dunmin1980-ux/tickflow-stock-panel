@@ -433,15 +433,29 @@ def _case(
             probe_id=probe_id,
         )
         if topology == "missing":
+            removed = _run(
+                ["docker", "network", "rm", names["egress_network"]],
+                check=False,
+            )
+            absent = _run(
+                ["docker", "network", "inspect", names["egress_network"]],
+                check=False,
+            )
+            if removed.returncode != 0 or absent.returncode == 0:
+                raise RuntimeError("mock_egress_network_absence_unverified")
             inspected = json.loads(
                 _run(["docker", "container", "inspect", names["proxy"]]).stdout
             )
             status = topology_status(
                 names=names,
-                network_inspect=_network_metadata(names),
+                network_inspect={},
                 container_inspect=inspected,
             )
-            return {"case": case_name, "terminal_status": status}
+            return {
+                "case": case_name,
+                "egress_network_absent": True,
+                "terminal_status": status,
+            }
         if topology == "wrong":
             _run(
                 [
@@ -471,7 +485,11 @@ def _case(
                 network_inspect=_network_metadata(names),
                 container_inspect=inspected,
             )
-            return {"case": case_name, "terminal_status": status}
+            return {
+                "case": case_name,
+                "terminal_status": status,
+                "wrong_network_attachment_verified": True,
+            }
         _connect_and_validate(names)
         completed = _run(
             ["docker", "start", "--attach", names["proxy"]],
@@ -522,7 +540,23 @@ def validate_case_result(
 ) -> None:
     if result.get("case") != case or result.get("terminal_status") != expected:
         raise ValueError("mock_result_invalid")
-    if expected != "TOPOLOGY_BLOCKED" and (
+    if case == "egress_network_missing":
+        if dict(result) != {
+            "case": case,
+            "egress_network_absent": True,
+            "terminal_status": "TOPOLOGY_BLOCKED",
+        }:
+            raise ValueError("mock_result_invalid")
+        return
+    if case == "wrong_network_attachment":
+        if dict(result) != {
+            "case": case,
+            "terminal_status": "TOPOLOGY_BLOCKED",
+            "wrong_network_attachment_verified": True,
+        }:
+            raise ValueError("mock_result_invalid")
+        return
+    if (
         result.get("provider_attempt_count") != 0
         or result.get("ai_call_count") != 0
         or result.get("secret_content_read") is not False

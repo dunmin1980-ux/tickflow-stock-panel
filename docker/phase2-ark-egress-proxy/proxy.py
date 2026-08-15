@@ -414,7 +414,7 @@ def classify_tls_error(
         )
     if isinstance(error, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
         return TlsErrorClassification(
-            "TLS_CONNECTION_RESET",
+            "PROVIDER_CONNECT_FAILED" if phase == "tcp" else "TLS_CONNECTION_RESET",
             exception_class,
             errno=error_number,
         )

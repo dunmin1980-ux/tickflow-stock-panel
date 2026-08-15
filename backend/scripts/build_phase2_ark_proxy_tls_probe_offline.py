@@ -45,6 +45,37 @@ HISTORICAL_BASELINE_PATH = (
 )
 _HEX_40 = re.compile(r"^[0-9a-f]{40}$")
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")
+_BUILD_PROVENANCE_FIELDS = {
+    "ai_call_count",
+    "base_image_digest",
+    "build_arguments",
+    "build_network",
+    "build_provenance_schema_version",
+    "ca_bundle_identity",
+    "context_hashes",
+    "image_identity",
+    "no_cache",
+    "provider_attempt_count",
+    "pull",
+    "real_public_network_success_count",
+    "runtime_identity",
+    "secret_content_read",
+    "source_git_head",
+}
+_MOCK_EXPECTED_CASES = {
+    "happy_path_1": "PROBE_PASSED",
+    "happy_path_2": "PROBE_PASSED",
+    "happy_path_3": "PROBE_PASSED",
+    "relay_internal_plus_egress": "PROBE_PASSED",
+    "unknown_ca": "TLS_CERT_VERIFY_FAILED",
+    "hostname_mismatch": "TLS_HOSTNAME_VERIFY_FAILED",
+    "connection_reset": "TLS_CONNECTION_RESET",
+    "handshake_timeout": "TLS_HANDSHAKE_TIMEOUT",
+    "protocol_incompatibility": "TLS_PROTOCOL_FAILED",
+    "connection_refused": "PROVIDER_CONNECT_FAILED",
+    "egress_network_missing": "TOPOLOGY_BLOCKED",
+    "wrong_network_attachment": "TOPOLOGY_BLOCKED",
+}
 
 SOURCE_BINDING_PATHS = {
     "builder_source": "backend/scripts/build_phase2_ark_proxy_tls_probe_offline.py",
@@ -449,9 +480,10 @@ def _require_success(
 def inspect_built_image(
     *,
     expected_labels: Mapping[str, str],
+    reference: str = IMAGE_TAG,
     run: Any = _run_local,
 ) -> dict[str, Any]:
-    result = run(["docker", "image", "inspect", IMAGE_TAG], timeout=30.0)
+    result = run(["docker", "image", "inspect", reference], timeout=30.0)
     _require_success(result, "proxy_image_inspect_failed")
     try:
         payload = json.loads(result.stdout)
@@ -994,20 +1026,40 @@ def _validate_build_provenance(
     provenance: Mapping[str, Any],
     *,
     current_head: str,
+    repo_root: Path = REPO_ROOT,
 ) -> tuple[str, str]:
     try:
         image_id = provenance["image_identity"]["image_id"]
         ca_sha = provenance["ca_bundle_identity"]["sha256"]
     except (KeyError, TypeError) as error:
         raise ValueError("build_provenance_invalid") from error
+    from app.providers.ark_contract import ark_proxy_policy_sha256
+
+    expected_context_hashes = {
+        destination: source_binding(repo_root, source)["sha256"]
+        for destination, source in PROBE_IMAGE_CONTEXT_SOURCES.items()
+    }
+    expected_build_arguments = build_arguments_for_context(
+        expected_context_hashes,
+        proxy_policy_sha256=ark_proxy_policy_sha256(),
+    )
+    expected_labels = expected_image_labels(expected_build_arguments)
     valid = (
-        provenance.get("source_git_head") == current_head
+        set(provenance) == _BUILD_PROVENANCE_FIELDS
+        and provenance.get("build_provenance_schema_version") == 1
+        and provenance.get("source_git_head") == current_head
+        and provenance.get("base_image_digest") == BASE_IMAGE_DIGEST
+        and provenance.get("context_hashes") == expected_context_hashes
+        and provenance.get("build_arguments") == expected_build_arguments
         and provenance.get("build_network") == "none"
         and provenance.get("pull") is False
         and provenance.get("no_cache") is True
+        and type(provenance.get("provider_attempt_count")) is int
         and provenance.get("provider_attempt_count") == 0
+        and type(provenance.get("ai_call_count")) is int
         and provenance.get("ai_call_count") == 0
         and provenance.get("secret_content_read") is False
+        and type(provenance.get("real_public_network_success_count")) is int
         and provenance.get("real_public_network_success_count") == 0
         and isinstance(image_id, str)
         and image_id.startswith("sha256:")
@@ -1017,6 +1069,22 @@ def _validate_build_provenance(
     )
     if not valid:
         raise ValueError("build_provenance_invalid")
+    try:
+        inspect_local_base(run=_run_local)
+        inspected_image = inspect_built_image(
+            expected_labels=expected_labels,
+            reference=image_id,
+        )
+        inspected_runtime = inspect_runtime_identity(image_id)
+        inspected_ca = extract_ca_identity(image_id)
+    except (OSError, RuntimeError, ValueError) as error:
+        raise ValueError("build_provenance_invalid") from error
+    if (
+        provenance.get("image_identity") != inspected_image
+        or provenance.get("runtime_identity") != inspected_runtime
+        or provenance.get("ca_bundle_identity") != inspected_ca
+    ):
+        raise ValueError("build_provenance_invalid")
     return image_id, ca_sha
 
 
@@ -1025,9 +1093,32 @@ def _validate_mock_evidence(
     *,
     proxy_image_id: str,
 ) -> None:
+    from scripts.run_phase2_ark_proxy_tls_probe import validate_probe_receipt
+
     expected_residue = {"container_count": 0, "network_count": 0}
+    expected_fields = {
+        "ai_call_count",
+        "authorization_constructed",
+        "double_network_topology",
+        "happy_path_runs",
+        "happy_path_status",
+        "http_request_sent",
+        "mock_e2e_schema_version",
+        "mock_networks_internal",
+        "production_topology_mock",
+        "provider_attempt_count",
+        "proxy_image_id",
+        "real_public_network_success_count",
+        "residue",
+        "results",
+        "secret_content_read",
+        "status",
+    }
+    results = mock.get("results")
     valid = (
-        mock.get("status") == "PRODUCTION_PROXY_TLS_PROBE_MOCK_PASSED"
+        set(mock) == expected_fields
+        and mock.get("mock_e2e_schema_version") == 1
+        and mock.get("status") == "PRODUCTION_PROXY_TLS_PROBE_MOCK_PASSED"
         and mock.get("proxy_image_id") == proxy_image_id
         and mock.get("production_topology_mock") == "PASSED"
         and mock.get("double_network_topology") == "VERIFIED"
@@ -1041,9 +1132,50 @@ def _validate_mock_evidence(
         and mock.get("http_request_sent") is False
         and mock.get("real_public_network_success_count") == 0
         and mock.get("residue") == expected_residue
+        and isinstance(results, Mapping)
+        and set(results) == set(_MOCK_EXPECTED_CASES)
     )
     if not valid:
         raise ValueError("mock_e2e_invalid")
+    for case, expected_status in _MOCK_EXPECTED_CASES.items():
+        result = results[case]
+        if not isinstance(result, Mapping) or result.get("case") != case:
+            raise ValueError("mock_e2e_invalid")
+        if case == "egress_network_missing":
+            if dict(result) != {
+                "case": case,
+                "egress_network_absent": True,
+                "terminal_status": "TOPOLOGY_BLOCKED",
+            }:
+                raise ValueError("mock_e2e_invalid")
+            continue
+        if case == "wrong_network_attachment":
+            if dict(result) != {
+                "case": case,
+                "terminal_status": "TOPOLOGY_BLOCKED",
+                "wrong_network_attachment_verified": True,
+            }:
+                raise ValueError("mock_e2e_invalid")
+            continue
+        if (
+            result.get("terminal_status") != expected_status
+            or result.get("double_network_topology") != "VERIFIED"
+            or type(result.get("container_exit_code")) is not int
+        ):
+            raise ValueError("mock_e2e_invalid")
+        receipt = {
+            key: value
+            for key, value in result.items()
+            if key not in {"case", "container_exit_code", "double_network_topology"}
+        }
+        try:
+            validate_probe_receipt(
+                receipt,
+                probe_id=receipt.get("probe_id"),
+                container_exit_code=result["container_exit_code"],
+            )
+        except (TypeError, ValueError) as error:
+            raise ValueError("mock_e2e_invalid") from error
 
 
 def _validate_backend_failure_baseline(baseline: Mapping[str, Any]) -> None:
@@ -1168,6 +1300,7 @@ def prepare_artifacts(
     image_id, ca_sha = _validate_build_provenance(
         provenance,
         current_head=current_head,
+        repo_root=repo_root,
     )
     _validate_mock_evidence(mock, proxy_image_id=image_id)
     _validate_backend_failure_baseline(baseline)
@@ -1249,6 +1382,7 @@ def verify_artifacts(
     image_id, ca_sha = _validate_build_provenance(
         provenance,
         current_head=current_head,
+        repo_root=repo_root,
     )
     _validate_mock_evidence(mock, proxy_image_id=image_id)
     _validate_backend_failure_baseline(baseline)

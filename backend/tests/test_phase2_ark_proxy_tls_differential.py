@@ -113,6 +113,19 @@ def test_timeout_classification_uses_the_measured_connect_phase(
     )
 
 
+def test_connection_reset_classification_uses_the_measured_connect_phase(
+    ark_proxy: ModuleType,
+) -> None:
+    reset = ConnectionResetError(errno.ECONNRESET, "reset")
+
+    assert ark_proxy.classify_tls_error(reset, phase="tcp").category == (
+        "PROVIDER_CONNECT_FAILED"
+    )
+    assert ark_proxy.classify_tls_error(reset, phase="tls").category == (
+        "TLS_CONNECTION_RESET"
+    )
+
+
 class _Socket:
     def version(self) -> str:
         return "TLSv1.3"
