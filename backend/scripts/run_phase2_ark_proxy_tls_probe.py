@@ -526,7 +526,14 @@ _TERMINAL_STATUSES = {
     "TLS_CONNECTION_RESET",
     "TLS_EOF",
     "TLS_OTHER_SSL_ERROR",
+    "TLS_CLOSE_FAILED",
     "PROVIDER_CONNECT_FAILED",
+}
+_TLS_HANDSHAKE_FAILURES = _TERMINAL_STATUSES - {
+    "PROBE_PASSED",
+    "DNS_RESOLUTION_FAILED",
+    "PROVIDER_CONNECT_FAILED",
+    "TLS_CLOSE_FAILED",
 }
 _STAGE_FIELDS = {
     "certificate_verified",
@@ -617,27 +624,24 @@ def validate_probe_receipt(
         elif terminal_status == "PROVIDER_CONNECT_FAILED" and failure_phase == "tcp":
             expected_stages = dict.fromkeys(_STAGE_FIELDS, False)
             expected_stages["dns_completed"] = True
-        elif terminal_status in _TERMINAL_STATUSES - {
-            "PROBE_PASSED",
-            "DNS_RESOLUTION_FAILED",
-            "PROVIDER_CONNECT_FAILED",
-        }:
+        elif terminal_status == "TLS_CLOSE_FAILED" and failure_phase == "tls_close":
             expected_stages = dict.fromkeys(_STAGE_FIELDS, False)
             expected_stages["dns_completed"] = True
             expected_stages["tcp_connected"] = True
-            if failure_phase == "tls_close":
-                expected_stages.update(
-                    tls_completed=True,
-                    certificate_verified=True,
-                    hostname_verified=True,
-                )
-                valid = (
-                    valid
-                    and isinstance(receipt.get("tls_version"), str)
-                    and isinstance(receipt.get("cipher_name"), str)
-                )
-            elif failure_phase != "tls_handshake":
-                expected_stages = None
+            expected_stages.update(
+                tls_completed=True,
+                certificate_verified=True,
+                hostname_verified=True,
+            )
+            valid = (
+                valid
+                and isinstance(receipt.get("tls_version"), str)
+                and isinstance(receipt.get("cipher_name"), str)
+            )
+        elif terminal_status in _TLS_HANDSHAKE_FAILURES and failure_phase == "tls_handshake":
+            expected_stages = dict.fromkeys(_STAGE_FIELDS, False)
+            expected_stages["dns_completed"] = True
+            expected_stages["tcp_connected"] = True
         if failure_phase in {"dns", "tcp", "tls_handshake"}:
             valid = (
                 valid
@@ -813,15 +817,25 @@ def _mark_cleanup(
     state = ledger.get("state")
     cleanup_status = cleanup.get("status")
     if (
-        state not in {"NETWORK_DISPATCH_STARTED", "TERMINAL_AWAITING_CLEANUP"}
+        state
+        not in {
+            "RESERVED_BEFORE_NETWORK",
+            "NETWORK_DISPATCH_STARTED",
+            "TERMINAL_AWAITING_CLEANUP",
+        }
         or cleanup_status not in {"PASSED", "FAILED"}
         or not isinstance(cleanup.get("container_residue"), list)
         or not isinstance(cleanup.get("network_residue"), list)
         or not isinstance(cleanup.get("cleanup_errors", []), list)
     ):
         raise ValueError("probe_cleanup_state_invalid")
+    pre_dispatch = state == "RESERVED_BEFORE_NETWORK"
     terminal = state == "TERMINAL_AWAITING_CLEANUP"
-    if cleanup_status == "FAILED":
+    if pre_dispatch and cleanup_status != "FAILED":
+        raise ValueError("probe_cleanup_state_invalid")
+    if pre_dispatch:
+        next_state = "PRE_DISPATCH_CLEANUP_FAILED"
+    elif cleanup_status == "FAILED":
         next_state = "TERMINAL_CLEANUP_FAILED" if terminal else "POST_DISPATCH_CLEANUP_FAILED"
     else:
         next_state = "TERMINAL" if terminal else "POST_DISPATCH_ERROR_CLEANUP_PASSED"
@@ -921,15 +935,23 @@ def run_live_probe(
         }
     except BaseException as error:
         pending_error = error
-        if not dispatch_started:
-            rollback_reservation_before_dispatch(
-                attempts_root=attempts_root,
-                scope_id=identity["approval_scope_id"],
-                reservation=reservation,
-            )
     finally:
         cleanup = _cleanup_runtime(names, run=run)
         if dispatch_started:
+            try:
+                _mark_cleanup(reservation["ledger_path"], cleanup=cleanup)
+            except BaseException as error:
+                pending_error = pending_error or error
+        elif cleanup["status"] == "PASSED":
+            try:
+                rollback_reservation_before_dispatch(
+                    attempts_root=attempts_root,
+                    scope_id=identity["approval_scope_id"],
+                    reservation=reservation,
+                )
+            except BaseException as error:
+                pending_error = pending_error or error
+        else:
             try:
                 _mark_cleanup(reservation["ledger_path"], cleanup=cleanup)
             except BaseException as error:
@@ -952,7 +974,7 @@ def main() -> int:
     with exclusive_lock(LOCK_PATH):
         result = run_live_probe()
     print(json.dumps(result, sort_keys=True))
-    return 0
+    return 0 if result.get("terminal_status") == "PROBE_PASSED" else 2
 
 
 if __name__ == "__main__":

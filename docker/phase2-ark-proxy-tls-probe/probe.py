@@ -159,7 +159,7 @@ def execute_probe(
         except Exception as error:
             classification = proxy.classify_tls_error(error, phase="tls")
             receipt.update(
-                terminal_status=classification.category,
+                terminal_status="TLS_CLOSE_FAILED",
                 exception_class=classification.exception_class,
                 failure_phase="tls_close",
                 verify_code=classification.verify_code,

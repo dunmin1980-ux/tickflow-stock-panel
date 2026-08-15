@@ -119,6 +119,7 @@
         "TLS_CONNECTION_RESET",
         "TLS_EOF",
         "TLS_OTHER_SSL_ERROR",
+        "TLS_CLOSE_FAILED",
         "PROVIDER_CONNECT_FAILED"
       ]
     },

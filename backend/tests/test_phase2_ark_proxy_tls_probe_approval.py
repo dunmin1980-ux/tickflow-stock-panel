@@ -172,6 +172,7 @@ def test_readiness_and_receipt_contracts_are_closed_and_zero_activity(
     assert properties["real_public_network_success_count"] == {"const": 0}
     assert properties["receipt_schema_version"] == {"const": 2}
     assert properties["failure_phase"]["type"] == ["string", "null"]
+    assert "TLS_CLOSE_FAILED" in properties["terminal_status"]["enum"]
     assert "TLS_FAILED" not in properties["terminal_status"]["enum"]
 
 
@@ -261,7 +262,7 @@ def test_runner_rejects_failed_orderly_tls_shutdown() -> None:
     runner = _load_module(RUNNER_PATH, "phase2_proxy_tls_probe_close_failure")
 
     class Classification:
-        category = "TLS_EOF"
+        category = "TLS_CERT_VERIFY_FAILED"
         exception_class = "SSLEOFError"
         verify_code = None
         verify_message = None
@@ -311,7 +312,7 @@ def test_runner_rejects_failed_orderly_tls_shutdown() -> None:
         now=lambda: "2026-08-15T12:00:00Z",
     )
 
-    assert receipt["terminal_status"] == "TLS_EOF"
+    assert receipt["terminal_status"] == "TLS_CLOSE_FAILED"
     assert receipt["failure_phase"] == "tls_close"
     assert receipt["stages"] == {
         "certificate_verified": True,
@@ -584,6 +585,26 @@ def test_receipt_validator_enforces_failure_stage_semantics() -> None:
             container_exit_code=2,
         )
 
+    close_failure = _valid_probe_receipt()
+    close_failure.update(
+        terminal_status="TLS_CLOSE_FAILED",
+        failure_phase="tls_close",
+        exception_class="SSLEOFError",
+    )
+    close_failure["stages"]["clean_tls_close"] = False
+    launcher.validate_probe_receipt(
+        close_failure,
+        probe_id="f" * 32,
+        container_exit_code=2,
+    )
+    close_failure["terminal_status"] = "TLS_CERT_VERIFY_FAILED"
+    with pytest.raises(ValueError, match="probe_receipt_invalid"):
+        launcher.validate_probe_receipt(
+            close_failure,
+            probe_id="f" * 32,
+            container_exit_code=2,
+        )
+
 
 def test_runtime_bindings_reject_head_and_source_drift(tmp_path: Path) -> None:
     launcher = _load_module(LAUNCHER_PATH, "phase2_proxy_tls_probe_bindings")
@@ -741,6 +762,50 @@ def test_cleanup_state_is_persisted_and_failure_rejects_terminal_success(
     assert result["state"] == "TERMINAL_CLEANUP_FAILED"
     assert result["cleanup_status"] == "FAILED"
     assert result["cleanup_errors"] == ["remove_nonzero"]
+
+
+def test_pre_dispatch_cleanup_failure_preserves_zero_attempt_ledger(
+    tmp_path: Path,
+) -> None:
+    launcher = _load_module(LAUNCHER_PATH, "phase2_proxy_tls_probe_predispatch_cleanup")
+    reservation = launcher.reserve_scope(
+        attempts_root=tmp_path,
+        scope_id="c" * 64,
+        probe_id="d" * 32,
+    )
+    result = launcher._mark_cleanup(
+        reservation["ledger_path"],
+        cleanup={
+            "cleanup_errors": ["network_verification_nonzero"],
+            "status": "FAILED",
+            "container_residue": [],
+            "network_residue": ["leftover-network"],
+        },
+    )
+    assert result["state"] == "PRE_DISPATCH_CLEANUP_FAILED"
+    assert result["probe_attempt_count"] == 0
+    assert reservation["ledger_path"].is_file()
+
+
+@pytest.mark.parametrize(
+    ("terminal_status", "expected_exit"),
+    [("PROBE_PASSED", 0), ("TLS_CERT_VERIFY_FAILED", 2)],
+)
+def test_launcher_main_exit_code_matches_probe_result(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    terminal_status: str,
+    expected_exit: int,
+) -> None:
+    launcher = _load_module(LAUNCHER_PATH, f"phase2_proxy_tls_probe_main_{expected_exit}")
+    monkeypatch.setattr(launcher, "LOCK_PATH", tmp_path / "runtime.lock")
+    monkeypatch.setattr(
+        launcher,
+        "run_live_probe",
+        lambda: {"terminal_status": terminal_status},
+    )
+    monkeypatch.setattr(sys, "argv", ["launcher", "--live"])
+    assert launcher.main() == expected_exit
 
 
 def test_scope_reservation_and_dispatch_ledger_are_one_shot(tmp_path: Path) -> None:
