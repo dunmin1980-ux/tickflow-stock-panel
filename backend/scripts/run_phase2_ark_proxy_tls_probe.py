@@ -106,6 +106,31 @@ def atomic_write_json(path: Path, value: Mapping[str, Any]) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def publish_dispatch_gate(path: Path, *, probe_id: str) -> None:
+    if len(probe_id) != 32 or any(
+        character not in "0123456789abcdef" for character in probe_id
+    ):
+        raise ValueError("probe_id_invalid")
+    descriptor, name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".staging", dir=path.parent
+    )
+    temporary = Path(name)
+    try:
+        os.fchmod(descriptor, 0o644)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write((probe_id + "\n").encode("ascii"))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def _read_regular_bytes(path: Path, *, mode: int | None = None) -> bytes:
     metadata = path.lstat()
     if path.is_symlink() or not stat.S_ISREG(metadata.st_mode):
@@ -442,11 +467,11 @@ def proxy_create_command(
         "--mount",
         _mount(output_dir, "/output", readonly=False),
         image_id,
-        "/probe/probe.py",
+        "/probe/dispatch_gate.py",
+        "--gate",
+        "/output/dispatch.ready",
         "--probe-id",
         probe_id,
-        "--output",
-        "/output/receipt.json",
     ]
 
 
@@ -460,24 +485,54 @@ def network_connect_command(names: Mapping[str, str]) -> list[str]:
     ]
 
 
-def validate_proxy_attachments(
+def _proxy_networks(
     inspect_payload: Any,
-    names: Mapping[str, str],
-) -> None:
+) -> dict[str, Any]:
     try:
         networks = inspect_payload[0]["NetworkSettings"]["Networks"]
     except (IndexError, KeyError, TypeError) as error:
         raise ValueError("proxy_network_attachment_invalid") from error
-    expected = {names["relay_network"], names["egress_network"]}
-    if not isinstance(networks, dict) or set(networks) != expected:
+    if not isinstance(networks, dict):
         raise ValueError("proxy_network_attachment_invalid")
+    return networks
+
+
+def validate_pre_start_proxy_attachments(
+    inspect_payload: Any,
+    names: Mapping[str, str],
+) -> None:
+    try:
+        networks = _proxy_networks(inspect_payload)
+    except ValueError as error:
+        raise ValueError("proxy_pre_start_attachment_invalid") from error
+    expected = {names["relay_network"], names["egress_network"]}
+    if set(networks) != expected or any(
+        not isinstance(networks[name], dict) for name in expected
+    ):
+        raise ValueError("proxy_pre_start_attachment_invalid")
+
+
+def validate_post_start_proxy_attachments(
+    inspect_payload: Any,
+    names: Mapping[str, str],
+) -> None:
+    try:
+        networks = _proxy_networks(inspect_payload)
+    except ValueError as error:
+        raise ValueError("proxy_post_start_attachment_invalid") from error
+    expected = {names["relay_network"], names["egress_network"]}
+    if set(networks) != expected:
+        raise ValueError("proxy_post_start_attachment_invalid")
     if any(
         not isinstance(networks[name], dict)
-        or not isinstance(networks[name].get("NetworkID"), str)
-        or not networks[name]["NetworkID"]
+        or any(
+            not isinstance(networks[name].get(field), str)
+            or not networks[name][field]
+            for field in ("NetworkID", "EndpointID")
+        )
         for name in expected
     ):
-        raise ValueError("proxy_network_attachment_invalid")
+        raise ValueError("proxy_post_start_attachment_invalid")
 
 
 def validate_production_networks(
@@ -799,7 +854,26 @@ def inspect_proxy_attachments(names: Mapping[str, str]) -> None:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError as error:
         raise ValueError("proxy_network_attachment_invalid") from error
-    validate_proxy_attachments(payload, names)
+    validate_post_start_proxy_attachments(payload, names)
+
+
+def wait_for_container_exit(
+    names: Mapping[str, str],
+    *,
+    run: Callable[..., subprocess.CompletedProcess[str]],
+) -> int:
+    result = run_once(
+        ["docker", "container", "wait", names["proxy"]],
+        run=run,
+        timeout=210.0,
+    )
+    value = result.stdout.strip()
+    if not value.isdigit():
+        raise ValueError("proxy_container_exit_invalid")
+    exit_code = int(value)
+    if not 0 <= exit_code <= 255:
+        raise ValueError("proxy_container_exit_invalid")
+    return exit_code
 
 
 def _network_metadata(
@@ -1034,25 +1108,34 @@ def run_live_probe(
             run=run,
             timeout=15.0,
         )
-        validate_proxy_attachments(json.loads(inspected.stdout), names)
+        validate_pre_start_proxy_attachments(json.loads(inspected.stdout), names)
         validate_production_networks(
             _network_metadata(names, run=run),
             names,
         )
+        run_once(
+            ["docker", "container", "start", names["proxy"]],
+            run=run,
+            timeout=30.0,
+        )
+        inspected = run_once(
+            ["docker", "container", "inspect", names["proxy"]],
+            run=run,
+            timeout=15.0,
+        )
+        validate_post_start_proxy_attachments(json.loads(inspected.stdout), names)
         mark_dispatch_started(reservation["ledger_path"], started_at=now())
         dispatch_started = True
-        container_result = run(
-            ["docker", "start", "--attach", names["proxy"]],
-            capture_output=True,
-            check=False,
-            text=True,
-            timeout=210.0,
+        publish_dispatch_gate(
+            output_dir / "dispatch.ready",
+            probe_id=probe_id,
         )
+        container_exit_code = wait_for_container_exit(names, run=run)
         receipt = read_canonical_json(output_dir / "receipt.json", mode=0o600)
         validate_probe_receipt(
             receipt,
             probe_id=probe_id,
-            container_exit_code=container_result.returncode,
+            container_exit_code=container_exit_code,
         )
         _mark_terminal(reservation["ledger_path"], receipt=receipt)
         result_payload = {

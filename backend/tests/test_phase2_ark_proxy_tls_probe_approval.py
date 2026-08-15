@@ -6,6 +6,7 @@ import json
 import stat
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -26,12 +27,19 @@ CONTRACT_PATHS = {
     "receipt": CONTRACT_ROOT / "receipt.schema.json",
 }
 RUNNER_PATH = REPO_ROOT / "docker/phase2-ark-proxy-tls-probe/probe.py"
+DISPATCH_GATE_PATH = (
+    REPO_ROOT / "docker/phase2-ark-proxy-tls-probe/dispatch_gate.py"
+)
 LAUNCHER_PATH = REPO_ROOT / "backend/scripts/run_phase2_ark_proxy_tls_probe.py"
 BUILDER_PATH = (
     REPO_ROOT / "backend/scripts/build_phase2_ark_proxy_tls_probe_offline.py"
 )
 HARNESS_PATH = (
     REPO_ROOT / "backend/scripts/run_phase2_ark_proxy_tls_probe_mock_e2e.py"
+)
+ATTACHMENT_HARNESS_PATH = (
+    REPO_ROOT
+    / "backend/scripts/run_phase2_ark_proxy_network_attachment_harness.py"
 )
 MOCK_SERVER_PATH = REPO_ROOT / "docker/phase2-ark-proxy-tls-mock/server.py"
 
@@ -470,26 +478,122 @@ def test_launcher_proxy_command_has_no_secret_or_business_input(
     assert "--entrypoint /usr/bin/python3" in flattened
     assert str(RUNNER_PATH) not in flattened
     assert "src=" + str(RUNNER_PATH) not in flattened
-    assert "/probe/probe.py" in command
+    assert "/probe/dispatch_gate.py" in command
+    assert "/probe/probe.py" not in command
+    assert "/output/dispatch.ready" in command
 
 
-def test_launcher_attachment_verifier_requires_exact_two_networks() -> None:
-    launcher = _load_module(LAUNCHER_PATH, "phase2_proxy_tls_probe_network_test")
-    names = launcher.runtime_names("e" * 32)
-    valid = [
+def test_dispatch_gate_requires_regular_file_with_exact_probe_id(
+    tmp_path: Path,
+) -> None:
+    gate = _load_module(DISPATCH_GATE_PATH, "phase2_proxy_tls_dispatch_gate")
+    probe_id = "a" * 32
+    gate_path = tmp_path / "dispatch.ready"
+    gate_path.write_text(probe_id + "\n", encoding="ascii")
+    gate.validate_dispatch_gate(gate_path, probe_id=probe_id)
+
+    gate_path.write_text("b" * 32 + "\n", encoding="ascii")
+    with pytest.raises(ValueError, match="dispatch_gate_invalid"):
+        gate.validate_dispatch_gate(gate_path, probe_id=probe_id)
+
+    gate_path.unlink()
+    gate_path.symlink_to(tmp_path / "missing")
+    with pytest.raises(ValueError, match="dispatch_gate_invalid"):
+        gate.validate_dispatch_gate(gate_path, probe_id=probe_id)
+
+
+def _proxy_attachment_payload(
+    names: Mapping[str, str],
+    *,
+    network_id: str = "",
+    endpoint_id: str = "",
+) -> list[dict[str, Any]]:
+    return [
         {
             "NetworkSettings": {
                 "Networks": {
-                    names["relay_network"]: {"NetworkID": "relay-id"},
-                    names["egress_network"]: {"NetworkID": "egress-id"},
+                    names["relay_network"]: {
+                        "EndpointID": endpoint_id,
+                        "NetworkID": network_id,
+                    },
+                    names["egress_network"]: {
+                        "EndpointID": endpoint_id,
+                        "NetworkID": network_id,
+                    },
                 }
             }
         }
     ]
-    launcher.validate_proxy_attachments(valid, names)
-    valid[0]["NetworkSettings"]["Networks"].pop(names["egress_network"])
-    with pytest.raises(ValueError, match="proxy_network_attachment_invalid"):
-        launcher.validate_proxy_attachments(valid, names)
+
+
+def test_pre_start_attachment_accepts_docker_desktop_empty_endpoint_metadata() -> None:
+    launcher = _load_module(LAUNCHER_PATH, "phase2_proxy_tls_probe_pre_start")
+    names = launcher.runtime_names("e" * 32)
+    payload = _proxy_attachment_payload(names)
+
+    launcher.validate_pre_start_proxy_attachments(payload, names)
+
+
+@pytest.mark.parametrize("mutation", ["missing", "unexpected"])
+def test_pre_start_attachment_requires_exact_approved_network_names(
+    mutation: str,
+) -> None:
+    launcher = _load_module(LAUNCHER_PATH, f"phase2_proxy_tls_probe_pre_{mutation}")
+    names = launcher.runtime_names("f" * 32)
+    payload = _proxy_attachment_payload(names)
+    networks = payload[0]["NetworkSettings"]["Networks"]
+    if mutation == "missing":
+        networks.pop(names["egress_network"])
+    else:
+        networks["unexpected-network"] = {"EndpointID": "", "NetworkID": ""}
+
+    with pytest.raises(ValueError, match="proxy_pre_start_attachment_invalid"):
+        launcher.validate_pre_start_proxy_attachments(payload, names)
+
+
+def test_post_start_attachment_accepts_exact_populated_endpoints() -> None:
+    launcher = _load_module(LAUNCHER_PATH, "phase2_proxy_tls_probe_post_start")
+    names = launcher.runtime_names("1" * 32)
+    payload = _proxy_attachment_payload(
+        names,
+        network_id="network-id",
+        endpoint_id="endpoint-id",
+    )
+
+    launcher.validate_post_start_proxy_attachments(payload, names)
+
+
+@pytest.mark.parametrize(
+    ("network_id", "endpoint_id", "extra_network"),
+    [
+        ("", "endpoint-id", False),
+        ("network-id", "", False),
+        ("network-id", "endpoint-id", True),
+    ],
+)
+def test_post_start_attachment_rejects_empty_ids_and_extra_networks(
+    network_id: str,
+    endpoint_id: str,
+    extra_network: bool,
+) -> None:
+    launcher = _load_module(
+        LAUNCHER_PATH,
+        f"phase2_proxy_tls_probe_post_{network_id}_{endpoint_id}_{extra_network}",
+    )
+    names = launcher.runtime_names("2" * 32)
+    payload = _proxy_attachment_payload(
+        names,
+        network_id=network_id,
+        endpoint_id=endpoint_id,
+    )
+    if extra_network:
+        payload[0]["NetworkSettings"]["Networks"]["unexpected-network"] = {
+            "EndpointID": "extra-endpoint",
+            "NetworkID": "extra-network",
+        }
+
+    with pytest.raises(ValueError, match="proxy_post_start_attachment_invalid"):
+        launcher.validate_post_start_proxy_attachments(payload, names)
 
 
 def test_launcher_never_auto_retries_failed_docker_command() -> None:
@@ -1089,6 +1193,174 @@ def test_pre_dispatch_failure_rolls_back_without_consuming_scope(
     ] == 0
 
 
+def _live_probe_fake_docker(
+    *,
+    launcher: ModuleType,
+    names: Mapping[str, str],
+    post_start_payload: list[dict[str, Any]],
+    receipt_path: Path,
+    probe_id: str,
+) -> tuple[
+    Any,
+    list[list[str]],
+]:
+    calls: list[list[str]] = []
+    inspect_count = 0
+    pre_start_payload = _proxy_attachment_payload(names)
+
+    def run(
+        command: list[str],
+        **_: Any,
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal inspect_count
+        calls.append(command)
+        if command == ["docker", "container", "inspect", names["proxy"]]:
+            inspect_count += 1
+            payload = pre_start_payload if inspect_count == 1 else post_start_payload
+            return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
+        if command == ["docker", "network", "inspect", names["relay_network"]]:
+            payload = [{"Driver": "bridge", "Internal": True}]
+            return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
+        if command == ["docker", "network", "inspect", names["egress_network"]]:
+            payload = [{"Driver": "bridge", "Internal": False}]
+            return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
+        if command == ["docker", "container", "wait", names["proxy"]]:
+            launcher.atomic_write_json(receipt_path, _valid_probe_receipt(probe_id))
+            return subprocess.CompletedProcess(command, 0, "0\n", "")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    return run, calls
+
+
+def test_post_start_attachment_failure_rolls_back_before_attempt_consumption(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    launcher = _load_module(LAUNCHER_PATH, "phase2_proxy_tls_probe_post_failure")
+    scope_id = "8" * 64
+    probe_id = "9" * 32
+    names = launcher.runtime_names(probe_id)
+    attempts_root = tmp_path / "attempts"
+    receipt_path = attempts_root / scope_id / probe_id / "runtime-output/receipt.json"
+    post_start_payload = _proxy_attachment_payload(
+        names,
+        network_id="network-id",
+        endpoint_id="",
+    )
+    run, calls = _live_probe_fake_docker(
+        launcher=launcher,
+        names=names,
+        post_start_payload=post_start_payload,
+        receipt_path=receipt_path,
+        probe_id=probe_id,
+    )
+    monkeypatch.setattr(
+        launcher,
+        "load_execution_identity",
+        lambda **_kwargs: {
+            "approval_scope_id": scope_id,
+            "proxy_image_id": "sha256:" + "a" * 64,
+        },
+    )
+    monkeypatch.setattr(
+        launcher,
+        "_cleanup_runtime",
+        lambda _names, run: {
+            "cleanup_errors": [],
+            "container_residue": [],
+            "network_residue": [],
+            "status": "PASSED",
+        },
+    )
+
+    with pytest.raises(ValueError, match="proxy_post_start_attachment_invalid"):
+        launcher.run_live_probe(
+            candidate_path=tmp_path / "candidate.json",
+            scope_path=tmp_path / "scope.json",
+            approval_path=tmp_path / "approval.json",
+            attempts_root=attempts_root,
+            runner_path=RUNNER_PATH,
+            run=run,
+            probe_id_factory=lambda: probe_id,
+        )
+
+    assert ["docker", "container", "start", names["proxy"]] in calls
+    assert ["docker", "container", "wait", names["proxy"]] not in calls
+    assert list(attempts_root.iterdir()) == []
+
+
+def test_post_start_validation_precedes_durable_dispatch_and_gate_release(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    launcher = _load_module(LAUNCHER_PATH, "phase2_proxy_tls_probe_post_success")
+    scope_id = "a" * 64
+    probe_id = "b" * 32
+    names = launcher.runtime_names(probe_id)
+    attempts_root = tmp_path / "attempts"
+    attempt_dir = attempts_root / scope_id / probe_id
+    receipt_path = attempt_dir / "runtime-output/receipt.json"
+    post_start_payload = _proxy_attachment_payload(
+        names,
+        network_id="network-id",
+        endpoint_id="endpoint-id",
+    )
+    run, calls = _live_probe_fake_docker(
+        launcher=launcher,
+        names=names,
+        post_start_payload=post_start_payload,
+        receipt_path=receipt_path,
+        probe_id=probe_id,
+    )
+    monkeypatch.setattr(
+        launcher,
+        "load_execution_identity",
+        lambda **_kwargs: {
+            "approval_scope_id": scope_id,
+            "proxy_image_id": "sha256:" + "a" * 64,
+        },
+    )
+    monkeypatch.setattr(
+        launcher,
+        "_cleanup_runtime",
+        lambda _names, run: {
+            "cleanup_errors": [],
+            "container_residue": [],
+            "network_residue": [],
+            "status": "PASSED",
+        },
+    )
+
+    result = launcher.run_live_probe(
+        candidate_path=tmp_path / "candidate.json",
+        scope_path=tmp_path / "scope.json",
+        approval_path=tmp_path / "approval.json",
+        attempts_root=attempts_root,
+        runner_path=RUNNER_PATH,
+        run=run,
+        probe_id_factory=lambda: probe_id,
+        now=lambda: "2026-08-15T12:00:00Z",
+    )
+
+    assert result["probe_attempt_count"] == 1
+    assert result["terminal_status"] == "PROBE_PASSED"
+    ledger = launcher.read_canonical_json(attempt_dir / "ledger.json", mode=0o600)
+    assert ledger["state"] == "TERMINAL"
+    assert ledger["probe_attempt_count"] == 1
+    assert (attempt_dir / "runtime-output/dispatch.ready").read_text(
+        encoding="ascii"
+    ) == probe_id + "\n"
+    start_index = calls.index(["docker", "container", "start", names["proxy"]])
+    inspect_indices = [
+        index
+        for index, command in enumerate(calls)
+        if command == ["docker", "container", "inspect", names["proxy"]]
+    ]
+    wait_index = calls.index(["docker", "container", "wait", names["proxy"]])
+    assert len(inspect_indices) == 2
+    assert start_index < inspect_indices[1] < wait_index
+
+
 def test_exclusive_lock_rejects_concurrent_entry(tmp_path: Path) -> None:
     launcher = _load_module(LAUNCHER_PATH, "phase2_proxy_tls_probe_lock")
     lock = tmp_path / "runtime.lock"
@@ -1135,6 +1407,89 @@ def test_offline_image_build_command_is_networkless_pull_free_and_uncached(
     assert command.count("--build-arg") == 2
     assert "A=1" in command
     assert "B=2" in command
+
+
+def test_builder_binds_dispatch_gate_and_attachment_harness() -> None:
+    builder = _load_module(BUILDER_PATH, "phase2_proxy_tls_probe_builder_bindings")
+    assert builder.PROBE_IMAGE_CONTEXT_SOURCES["dispatch_gate.py"] == (
+        "docker/phase2-ark-proxy-tls-probe/dispatch_gate.py"
+    )
+    assert builder.SOURCE_BINDING_PATHS["dispatch_gate_source"] == (
+        "docker/phase2-ark-proxy-tls-probe/dispatch_gate.py"
+    )
+    assert builder.SOURCE_BINDING_PATHS["network_attachment_harness_source"] == (
+        "backend/scripts/run_phase2_ark_proxy_network_attachment_harness.py"
+    )
+    assert builder.SOURCE_BINDING_PATHS["network_attachment_harness_evidence"] == (
+        "reports/phase2_provider_ark/proxy_tls_probe/"
+        "network_attachment_harness.json"
+    )
+
+    context_hashes = {
+        destination: hashlib.sha256(destination.encode("ascii")).hexdigest()
+        for destination in builder.PROBE_IMAGE_CONTEXT_SOURCES
+    }
+    arguments = builder.build_arguments_for_context(
+        context_hashes,
+        proxy_policy_sha256="1" * 64,
+    )
+    assert arguments["DISPATCH_GATE_SHA256"] == context_hashes["dispatch_gate.py"]
+    labels = builder.expected_image_labels(arguments)
+    assert labels["org.tickflow.phase2.dispatch-gate-sha256"] == context_hashes[
+        "dispatch_gate.py"
+    ]
+
+
+def _valid_attachment_harness_report() -> dict[str, Any]:
+    return {
+        "ai_call_count": 0,
+        "attachment_contract_sha256": "1" * 64,
+        "authorization_constructed": False,
+        "container_residue": 0,
+        "happy_path_runs": 3,
+        "historical_attempts": 0,
+        "http_request_sent": False,
+        "network_residue": 0,
+        "network_attachment_harness_schema_version": 1,
+        "post_start_validation": "PASSED",
+        "pre_start_empty_endpoint_metadata_observed": True,
+        "pre_start_validation": "PASSED",
+        "probe_attempt_count": 0,
+        "provider_attempt_count": 0,
+        "proxy_image_id": "sha256:" + "2" * 64,
+        "real_public_network_success_count": 0,
+        "results": [
+            {
+                "post_start_validation": "PASSED",
+                "pre_start_empty_endpoint_metadata": True,
+                "pre_start_validation": "PASSED",
+                "probe_attempt_count": 0,
+                "run": index,
+            }
+            for index in range(1, 4)
+        ],
+        "secret_content_read": False,
+        "status": "PROXY_NETWORK_ATTACHMENT_HARNESS_PASSED",
+        "temporary_residue": 0,
+    }
+
+
+def test_attachment_harness_report_requires_three_zero_attempt_clean_runs() -> None:
+    harness = _load_module(
+        ATTACHMENT_HARNESS_PATH,
+        "phase2_proxy_network_attachment_harness",
+    )
+    report = _valid_attachment_harness_report()
+    harness.validate_report(report)
+
+    report["results"][1]["probe_attempt_count"] = 1
+    with pytest.raises(ValueError, match="attachment_harness_report_invalid"):
+        harness.validate_report(report)
+
+    report = _valid_attachment_harness_report()
+    report["network_residue"] = 1
+    with pytest.raises(ValueError, match="attachment_harness_report_invalid"):
+        harness.validate_report(report)
 
 
 def test_backend_failure_baseline_uses_exact_junit_node_ids(tmp_path: Path) -> None:
@@ -1264,6 +1619,9 @@ def test_candidate_binds_complete_proxy_topology_and_historical_identity(
         "probe_contract_version",
         "proxy_source_sha256",
         "orchestrator_source_sha256",
+        "host_launcher_source_sha256",
+        "dispatch_gate_source_sha256",
+        "network_attachment_harness_evidence_sha256",
         "proxy_dockerfile_sha256",
         "proxy_image_id",
         "base_image_digest",
@@ -1320,6 +1678,7 @@ def test_build_arguments_bind_exact_proxy_context(
     builder = _load_module(BUILDER_PATH, "phase2_proxy_tls_probe_builder_args")
     files = {
         "Dockerfile": b"FROM fixed\n",
+        "dispatch_gate.py": b"print('gate')\n",
         "probe.py": b"print('probe')\n",
         "proxy.py": b"print('proxy')\n",
         "responses-contract.json": b"{}\n",
@@ -1337,6 +1696,9 @@ def test_build_arguments_bind_exact_proxy_context(
     )
     assert arguments == {
         "BASE_IMAGE_DIGEST": builder.BASE_IMAGE_DIGEST,
+        "DISPATCH_GATE_SHA256": hashlib.sha256(
+            files["dispatch_gate.py"]
+        ).hexdigest(),
         "PROXY_DOCKERFILE_SHA256": hashlib.sha256(files["Dockerfile"]).hexdigest(),
         "PROBE_RUNNER_SHA256": hashlib.sha256(files["probe.py"]).hexdigest(),
         "PROXY_POLICY_SHA256": "f" * 64,
@@ -1357,6 +1719,7 @@ def test_image_identity_requires_exact_build_labels() -> None:
     builder = _load_module(BUILDER_PATH, "phase2_proxy_tls_probe_builder_image")
     arguments = {
         "BASE_IMAGE_DIGEST": builder.BASE_IMAGE_DIGEST,
+        "DISPATCH_GATE_SHA256": "8" * 64,
         "PROXY_DOCKERFILE_SHA256": "1" * 64,
         "PROBE_RUNNER_SHA256": "2" * 64,
         "PROXY_POLICY_SHA256": "3" * 64,
@@ -1609,9 +1972,17 @@ def test_prepare_and_verify_artifacts_are_deterministic_and_zero_activity(
         "failure_set_sha256": "4" * 64,
         "passed": 2656,
     }
+    attachment_harness = {
+        **_valid_attachment_harness_report(),
+        "attachment_contract_sha256": builder.sha256_file(
+            CONTRACT_PATHS["attachment"]
+        ),
+        "proxy_image_id": image_id,
+    }
     for name, value in (
         ("build_provenance.json", build_provenance),
         ("mock_e2e.json", mock),
+        ("network_attachment_harness.json", attachment_harness),
         ("backend_failure_baseline.json", baseline),
     ):
         builder.atomic_write_json(output / name, value)
@@ -1736,6 +2107,16 @@ def test_prepare_artifacts_rejects_failed_mock_or_existing_scope_attempt(
         output / "mock_e2e.json",
         {
             "status": "FAILED",
+            "proxy_image_id": image_id,
+        },
+    )
+    builder.atomic_write_json(
+        output / "network_attachment_harness.json",
+        {
+            **_valid_attachment_harness_report(),
+            "attachment_contract_sha256": builder.sha256_file(
+                CONTRACT_PATHS["attachment"]
+            ),
             "proxy_image_id": image_id,
         },
     )

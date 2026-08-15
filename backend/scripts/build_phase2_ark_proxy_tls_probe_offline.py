@@ -81,7 +81,14 @@ SOURCE_BINDING_PATHS = {
     "builder_source": "backend/scripts/build_phase2_ark_proxy_tls_probe_offline.py",
     "host_launcher_source": "backend/scripts/run_phase2_ark_proxy_tls_probe.py",
     "container_runner_source": "docker/phase2-ark-proxy-tls-probe/probe.py",
-    "proxy_image_dockerfile": "docker/phase2-ark-proxy-tls-probe/Dockerfile",
+    "dispatch_gate_source": "docker/phase2-ark-proxy-tls-probe/dispatch_gate.py",
+    "proxy_image_dockerfile": (
+        "docker/phase2-ark-proxy-tls-probe/"
+        "Dockerfile.network-attachment-v2"
+    ),
+    "network_attachment_harness_source": (
+        "backend/scripts/run_phase2_ark_proxy_network_attachment_harness.py"
+    ),
     "mock_harness_source": (
         "backend/scripts/run_phase2_ark_proxy_tls_probe_mock_e2e.py"
     ),
@@ -126,6 +133,10 @@ SOURCE_BINDING_PATHS = {
     "mock_e2e_evidence": (
         "reports/phase2_provider_ark/proxy_tls_probe/mock_e2e.json"
     ),
+    "network_attachment_harness_evidence": (
+        "reports/phase2_provider_ark/proxy_tls_probe/"
+        "network_attachment_harness.json"
+    ),
     "backend_failure_baseline": (
         "reports/phase2_provider_ark/proxy_tls_probe/backend_failure_baseline.json"
     ),
@@ -140,7 +151,11 @@ SOURCE_BINDING_PATHS = {
 REQUIRED_SOURCE_BINDING_KEYS = tuple(SOURCE_BINDING_PATHS)
 
 PROBE_IMAGE_CONTEXT_SOURCES = {
-    "Dockerfile": "docker/phase2-ark-proxy-tls-probe/Dockerfile",
+    "Dockerfile": (
+        "docker/phase2-ark-proxy-tls-probe/"
+        "Dockerfile.network-attachment-v2"
+    ),
+    "dispatch_gate.py": "docker/phase2-ark-proxy-tls-probe/dispatch_gate.py",
     "probe.py": "docker/phase2-ark-proxy-tls-probe/probe.py",
     "proxy.py": "docker/phase2-ark-egress-proxy/proxy.py",
     "readiness-contract.json": (
@@ -219,6 +234,7 @@ def build_arguments_for_context(
 ) -> dict[str, str]:
     required = {
         "Dockerfile",
+        "dispatch_gate.py",
         "probe.py",
         "proxy.py",
         "readiness-contract.json",
@@ -229,6 +245,7 @@ def build_arguments_for_context(
         raise ValueError("proxy_build_context_invalid")
     return {
         "BASE_IMAGE_DIGEST": BASE_IMAGE_DIGEST,
+        "DISPATCH_GATE_SHA256": hashes["dispatch_gate.py"],
         "PROBE_RUNNER_SHA256": hashes["probe.py"],
         "PROXY_DOCKERFILE_SHA256": hashes["Dockerfile"],
         "PROXY_POLICY_SHA256": proxy_policy_sha256,
@@ -242,6 +259,7 @@ def build_arguments_for_context(
 def expected_image_labels(build_arguments: Mapping[str, str]) -> dict[str, str]:
     required = {
         "BASE_IMAGE_DIGEST",
+        "DISPATCH_GATE_SHA256",
         "PROBE_RUNNER_SHA256",
         "PROXY_DOCKERFILE_SHA256",
         "PROXY_POLICY_SHA256",
@@ -255,6 +273,9 @@ def expected_image_labels(build_arguments: Mapping[str, str]) -> dict[str, str]:
     return {
         "org.tickflow.phase2.base-image-digest": build_arguments[
             "BASE_IMAGE_DIGEST"
+        ],
+        "org.tickflow.phase2.dispatch-gate-sha256": build_arguments[
+            "DISPATCH_GATE_SHA256"
         ],
         "org.tickflow.phase2.provider-id": "volcengine_ark",
         "org.tickflow.phase2.probe-runner-sha256": build_arguments[
@@ -918,9 +939,11 @@ def build_candidate(
             "sha256"
         ],
         "egress_policy_sha256": bindings["egress_policy"]["sha256"],
+        "dispatch_gate_source_sha256": bindings["dispatch_gate_source"]["sha256"],
         "historical_tls_probe_sha256": bindings[
             "historical_tls_probe_evidence"
         ]["sha256"],
+        "host_launcher_source_sha256": bindings["host_launcher_source"]["sha256"],
         "hostname_verification_target": TARGET_HOST,
         "internal_network_contract_sha256": bindings[
             "internal_network_contract"
@@ -929,6 +952,9 @@ def build_candidate(
             "local_proxy_parity_evidence"
         ]["sha256"],
         "maximum_probe_attempts": 1,
+        "network_attachment_harness_evidence_sha256": bindings[
+            "network_attachment_harness_evidence"
+        ]["sha256"],
         "orchestrator_source_sha256": bindings["orchestrator_source"]["sha256"],
         "probe_contract_version": 1,
         "production_proxy_dockerfile_sha256": bindings["proxy_dockerfile"][
@@ -1178,6 +1204,29 @@ def _validate_mock_evidence(
             raise ValueError("mock_e2e_invalid") from error
 
 
+def _validate_attachment_harness_evidence(
+    report: Mapping[str, Any],
+    *,
+    proxy_image_id: str,
+    repo_root: Path,
+) -> None:
+    from scripts.run_phase2_ark_proxy_network_attachment_harness import (
+        validate_report,
+    )
+
+    try:
+        validate_report(report, proxy_image_id=proxy_image_id)
+    except ValueError as error:
+        raise ValueError("attachment_harness_evidence_invalid") from error
+    expected_contract_sha = sha256_file(
+        repo_root
+        / "docker/phase2-ark-proxy-tls-probe/contracts/"
+        "proxy-network-attachment-contract.json"
+    )
+    if report.get("attachment_contract_sha256") != expected_contract_sha:
+        raise ValueError("attachment_harness_evidence_invalid")
+
+
 def _validate_backend_failure_baseline(baseline: Mapping[str, Any]) -> None:
     if (
         baseline.get("passed") != 2656
@@ -1227,6 +1276,7 @@ def _preflight_artifact(
     candidate_sha256: str,
     scope_id: str,
     build_provenance_sha256: str,
+    network_attachment_harness_sha256: str,
     mock_e2e_sha256: str,
     backend_failure_set_sha256: str,
     historical_evidence: Mapping[str, Any],
@@ -1256,7 +1306,8 @@ def _preflight_artifact(
         "external_activity": _external_activity(),
         "historical_evidence": dict(historical_evidence),
         "mock_e2e_sha256": mock_e2e_sha256,
-        "preparation_preflight_schema_version": 1,
+        "network_attachment_harness_sha256": network_attachment_harness_sha256,
+        "preparation_preflight_schema_version": 2,
         "status": "PROXY_TLS_PROBE_PREPARATION_PASSED",
     }
 
@@ -1291,10 +1342,12 @@ def prepare_artifacts(
         raise ValueError("current_git_head_invalid")
     provenance_path = output_root / "build_provenance.json"
     mock_path = output_root / "mock_e2e.json"
+    attachment_harness_path = output_root / "network_attachment_harness.json"
     baseline_path = output_root / "backend_failure_baseline.json"
     postcheck_path = output_root / "backend_failure_postcheck.json"
     provenance = read_canonical_json(provenance_path)
     mock = read_canonical_json(mock_path)
+    attachment_harness = read_canonical_json(attachment_harness_path)
     baseline = read_canonical_json(baseline_path)
     postcheck = read_canonical_json(postcheck_path)
     image_id, ca_sha = _validate_build_provenance(
@@ -1303,6 +1356,11 @@ def prepare_artifacts(
         repo_root=repo_root,
     )
     _validate_mock_evidence(mock, proxy_image_id=image_id)
+    _validate_attachment_harness_evidence(
+        attachment_harness,
+        proxy_image_id=image_id,
+        repo_root=repo_root,
+    )
     _validate_backend_failure_baseline(baseline)
     _validate_backend_failure_postcheck(
         postcheck,
@@ -1327,6 +1385,7 @@ def prepare_artifacts(
         candidate_sha256=candidate_sha,
         scope_id=scope["approval_scope_id"],
         build_provenance_sha256=sha256_file(provenance_path),
+        network_attachment_harness_sha256=sha256_file(attachment_harness_path),
         mock_e2e_sha256=sha256_file(mock_path),
         backend_failure_set_sha256=baseline["failure_set_sha256"],
         historical_evidence=historical_evidence,
@@ -1345,6 +1404,9 @@ def prepare_artifacts(
         "backend_failure_postcheck.json": sha256_file(postcheck_path),
         "build_provenance.json": sha256_file(provenance_path),
         "mock_e2e.json": sha256_file(mock_path),
+        "network_attachment_harness.json": sha256_file(
+            attachment_harness_path
+        ),
         "preparation_preflight.json": sha256_file(preflight_path),
     }
     generated = _artifact_generation(
@@ -1368,6 +1430,7 @@ def verify_artifacts(
 ) -> dict[str, Any]:
     provenance_path = output_root / "build_provenance.json"
     mock_path = output_root / "mock_e2e.json"
+    attachment_harness_path = output_root / "network_attachment_harness.json"
     baseline_path = output_root / "backend_failure_baseline.json"
     postcheck_path = output_root / "backend_failure_postcheck.json"
     candidate_path = output_root / "approval_candidate.json"
@@ -1377,6 +1440,7 @@ def verify_artifacts(
 
     provenance = read_canonical_json(provenance_path)
     mock = read_canonical_json(mock_path)
+    attachment_harness = read_canonical_json(attachment_harness_path)
     baseline = read_canonical_json(baseline_path)
     postcheck = read_canonical_json(postcheck_path)
     image_id, ca_sha = _validate_build_provenance(
@@ -1385,6 +1449,11 @@ def verify_artifacts(
         repo_root=repo_root,
     )
     _validate_mock_evidence(mock, proxy_image_id=image_id)
+    _validate_attachment_harness_evidence(
+        attachment_harness,
+        proxy_image_id=image_id,
+        repo_root=repo_root,
+    )
     _validate_backend_failure_baseline(baseline)
     _validate_backend_failure_postcheck(
         postcheck,
@@ -1411,6 +1480,7 @@ def verify_artifacts(
         candidate_sha256=candidate_sha,
         scope_id=expected_scope["approval_scope_id"],
         build_provenance_sha256=sha256_file(provenance_path),
+        network_attachment_harness_sha256=sha256_file(attachment_harness_path),
         mock_e2e_sha256=sha256_file(mock_path),
         backend_failure_set_sha256=baseline["failure_set_sha256"],
         historical_evidence=historical_evidence,
@@ -1424,6 +1494,9 @@ def verify_artifacts(
         "backend_failure_postcheck.json": sha256_file(postcheck_path),
         "build_provenance.json": sha256_file(provenance_path),
         "mock_e2e.json": sha256_file(mock_path),
+        "network_attachment_harness.json": sha256_file(
+            attachment_harness_path
+        ),
         "preparation_preflight.json": sha256_file(preflight_path),
     }
     expected_generation = _artifact_generation(
@@ -1446,6 +1519,7 @@ def verify_artifacts(
         "happy_path_x3": "PASSED",
         "historical_evidence": dict(historical_evidence),
         "known_backend_failure_set": "UNCHANGED",
+        "network_attachment_harness": "PASSED",
         "production_topology_mock": "PASSED",
         "scope": "AVAILABLE",
         "scope_historical_attempts": 0,

@@ -1,8 +1,19 @@
 {
-  "attachment_contract_schema_version": 1,
+  "attachment_contract_schema_version": 2,
   "connect_before_start_role": "provider_egress",
   "create_attached_role": "relay_internal",
   "host_network_allowed": false,
+  "post_start": {
+    "endpoint_id_required": true,
+    "exact_network_names_required": true,
+    "network_id_required": true,
+    "required_before_network_probe_started": true
+  },
+  "pre_start": {
+    "empty_endpoint_id_allowed": true,
+    "empty_network_id_allowed": true,
+    "exact_network_names_required": true
+  },
   "required_network_count": 2,
   "unexpected_network_allowed": false
 }
