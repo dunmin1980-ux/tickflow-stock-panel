@@ -407,7 +407,6 @@ def proxy_create_command(
     *,
     names: Mapping[str, str],
     image_id: str,
-    runner_path: Path,
     output_dir: Path,
     probe_id: str,
 ) -> list[str]:
@@ -430,8 +429,6 @@ def proxy_create_command(
         "PYTHONDONTWRITEBYTECODE=1",
         "--entrypoint",
         "/usr/bin/python3",
-        "--mount",
-        _mount(runner_path, "/probe/probe.py", readonly=True),
         "--mount",
         _mount(output_dir, "/output", readonly=False),
         image_id,
@@ -534,6 +531,19 @@ _TLS_HANDSHAKE_FAILURES = _TERMINAL_STATUSES - {
     "DNS_RESOLUTION_FAILED",
     "PROVIDER_CONNECT_FAILED",
     "TLS_CLOSE_FAILED",
+}
+_TLS_EXCEPTION_CLASSES = {
+    "TLS_CERT_VERIFY_FAILED": {"SSLCertVerificationError"},
+    "TLS_HOSTNAME_VERIFY_FAILED": {"SSLCertVerificationError"},
+    "TLS_PROTOCOL_FAILED": {"SSLError"},
+    "TLS_HANDSHAKE_TIMEOUT": {"TimeoutError"},
+    "TLS_CONNECTION_RESET": {
+        "BrokenPipeError",
+        "ConnectionAbortedError",
+        "ConnectionResetError",
+    },
+    "TLS_EOF": {"SSLEOFError", "SSLZeroReturnError"},
+    "TLS_OTHER_SSL_ERROR": {"SSLError"},
 }
 _STAGE_FIELDS = {
     "certificate_verified",
@@ -648,6 +658,37 @@ def validate_probe_receipt(
                 and receipt.get("tls_version") is None
                 and receipt.get("cipher_name") is None
             )
+        if terminal_status in {
+            "TLS_CERT_VERIFY_FAILED",
+            "TLS_HOSTNAME_VERIFY_FAILED",
+        }:
+            valid = (
+                valid
+                and receipt.get("exception_class")
+                in _TLS_EXCEPTION_CLASSES[terminal_status]
+                and type(receipt.get("verify_code")) is int
+                and isinstance(receipt.get("verify_message"), str)
+            )
+        elif terminal_status in _TLS_HANDSHAKE_FAILURES:
+            valid = (
+                valid
+                and receipt.get("exception_class")
+                in _TLS_EXCEPTION_CLASSES[terminal_status]
+                and receipt.get("verify_code") is None
+                and receipt.get("verify_message") is None
+            )
+        elif terminal_status == "TLS_CLOSE_FAILED":
+            valid = (
+                valid
+                and receipt.get("verify_code") is None
+                and receipt.get("verify_message") is None
+            )
+        elif terminal_status in {"DNS_RESOLUTION_FAILED", "PROVIDER_CONNECT_FAILED"}:
+            valid = (
+                valid
+                and receipt.get("verify_code") is None
+                and receipt.get("verify_message") is None
+            )
         valid = (
             valid
             and container_exit_code == 2
@@ -713,50 +754,70 @@ def _cleanup_runtime(
     *,
     run: Callable[..., subprocess.CompletedProcess[str]],
 ) -> dict[str, Any]:
-    cleanup_errors: list[str] = []
-    for command in (
-        ["docker", "container", "rm", "--force", names["proxy"]],
-        ["docker", "network", "rm", names["egress_network"]],
-        ["docker", "network", "rm", names["relay_network"]],
-    ):
-        try:
-            result = run(
-                command,
-                capture_output=True,
-                check=False,
-                text=True,
-                timeout=15.0,
-            )
-            if result.returncode != 0:
-                cleanup_errors.append("remove_nonzero")
-        except (OSError, subprocess.TimeoutExpired):
-            cleanup_errors.append("remove_exception")
+    def snapshot() -> tuple[dict[str, list[str]], list[str]]:
+        commands = {
+            "container": [
+                "docker",
+                "container",
+                "ls",
+                "--all",
+                "--filter",
+                f"name=^/{names['proxy']}$",
+                "--format",
+                "{{.Names}}",
+            ],
+            "network": [
+                "docker",
+                "network",
+                "ls",
+                "--filter",
+                f"name=^{names['relay_network']}$",
+                "--filter",
+                f"name=^{names['egress_network']}$",
+                "--format",
+                "{{.Name}}",
+            ],
+        }
+        values = {"container": [], "network": []}
+        errors: list[str] = []
+        for role, command in commands.items():
+            try:
+                result = run(
+                    command,
+                    capture_output=True,
+                    check=False,
+                    text=True,
+                    timeout=15.0,
+                )
+                if result.returncode != 0:
+                    errors.append(f"{role}_verification_nonzero")
+                else:
+                    values[role] = [
+                        line for line in result.stdout.splitlines() if line.strip()
+                    ]
+            except (OSError, subprocess.TimeoutExpired):
+                errors.append(f"{role}_verification_exception")
+        return values, errors
 
-    verification_commands = {
-        "container": [
-            "docker",
-            "container",
-            "ls",
-            "--all",
-            "--filter",
-            f"name=^/{names['proxy']}$",
-            "--format",
-            "{{.Names}}",
-        ],
-        "network": [
-            "docker",
-            "network",
-            "ls",
-            "--filter",
-            f"name=^{names['relay_network']}$",
-            "--filter",
-            f"name=^{names['egress_network']}$",
-            "--format",
-            "{{.Name}}",
-        ],
-    }
-    residues: dict[str, list[str]] = {"container": [], "network": []}
-    for role, command in verification_commands.items():
+    before, cleanup_errors = snapshot()
+    removal_commands: list[tuple[str, list[str]]] = []
+    if names["proxy"] in before["container"] or any(
+        error.startswith("container_verification") for error in cleanup_errors
+    ):
+        removal_commands.append(
+            (
+                "container",
+                ["docker", "container", "rm", "--force", names["proxy"]],
+            )
+        )
+    for role in ("egress_network", "relay_network"):
+        if names[role] in before["network"] or any(
+            error.startswith("network_verification") for error in cleanup_errors
+        ):
+            removal_commands.append(
+                (role, ["docker", "network", "rm", names[role]])
+            )
+    for role, command in removal_commands:
         try:
             result = run(
                 command,
@@ -766,18 +827,17 @@ def _cleanup_runtime(
                 timeout=15.0,
             )
             if result.returncode != 0:
-                cleanup_errors.append(f"{role}_verification_nonzero")
-            else:
-                residues[role] = [
-                    line for line in result.stdout.splitlines() if line.strip()
-                ]
+                cleanup_errors.append(f"{role}_remove_nonzero")
         except (OSError, subprocess.TimeoutExpired):
-            cleanup_errors.append(f"{role}_verification_exception")
+            cleanup_errors.append(f"{role}_remove_exception")
+
+    residues, verification_errors = snapshot()
+    cleanup_errors.extend(verification_errors)
     status_value = (
         "PASSED"
-        if not residues["container"] and not residues["network"] and not any(
-            "verification" in error for error in cleanup_errors
-        )
+        if not residues["container"]
+        and not residues["network"]
+        and not cleanup_errors
         else "FAILED"
     )
     return {
@@ -890,7 +950,6 @@ def run_live_probe(
             proxy_create_command(
                 names=names,
                 image_id=image_id,
-                runner_path=runner_path,
                 output_dir=output_dir,
                 probe_id=probe_id,
             ),

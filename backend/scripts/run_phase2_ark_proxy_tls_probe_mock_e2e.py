@@ -21,7 +21,6 @@ CASE_ROOT = OUTPUT_PATH.parent / ".mock-cases.staging"
 PROVENANCE_PATH = (
     REPO_ROOT / "reports/phase2_provider_ark/proxy_tls_probe/build_provenance.json"
 )
-RUNNER_PATH = REPO_ROOT / "docker/phase2-ark-proxy-tls-probe/probe.py"
 SERVER_PATH = REPO_ROOT / "docker/phase2-ark-proxy-tls-mock/server.py"
 TARGET_HOST = "ark.cn-beijing.volces.com"
 EXPECTED_CASES = {
@@ -350,8 +349,6 @@ def _create_proxy(
         "65532:65532",
         "--entrypoint",
         "/usr/bin/python3",
-        "--mount",
-        _mount(RUNNER_PATH, "/probe/probe.py"),
         "--mount",
         _mount(ca_bundle, "/etc/ssl/certs/ca-certificates.crt"),
         "--mount",

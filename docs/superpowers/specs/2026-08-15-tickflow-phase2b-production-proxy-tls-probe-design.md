@@ -34,7 +34,7 @@ The image is rebuilt with Docker `--network=none --pull=false --no-cache` from a
 
 ### Container Probe Runner
 
-`docker/phase2-ark-proxy-tls-probe/probe.py` imports `/proxy/proxy.py` from the rebuilt production image and calls its `create_tls_context()` and `connect_verified_tls()` functions. It performs a separate DNS resolution for stage evidence, then opens the verified TLS connection, records negotiated TLS metadata, completes a bounded TLS `unwrap()` exchange so `clean_tls_close=true` means an orderly `close_notify`, and atomically publishes a bounded receipt. A failed TLS shutdown is always `TLS_CLOSE_FAILED` with `failure_phase=tls_close` and can never be rendered as `PROBE_PASSED`.
+`docker/phase2-ark-proxy-tls-probe/probe.py` is copied into the immutable TLS Probe image together with the production `/proxy/proxy.py`; the live launcher never bind-mounts executable source. The runner calls the production `create_tls_context()` and `connect_verified_tls()` functions, records DNS and negotiated TLS evidence, completes a bounded TLS `unwrap()` exchange so `clean_tls_close=true` means an orderly `close_notify`, and atomically publishes a bounded receipt. A failed TLS shutdown is always `TLS_CLOSE_FAILED` with `failure_phase=tls_close` and can never be rendered as `PROBE_PASSED`.
 
 The runner never calls `read_auth_file()` or `perform_provider_request()`. It has no Secret mount and no request, projection, Prompt, Facts, Claims, or output-generation inputs.
 

@@ -411,7 +411,6 @@ def test_launcher_proxy_command_has_no_secret_or_business_input(
     command = launcher.proxy_create_command(
         names=names,
         image_id="sha256:" + "1" * 64,
-        runner_path=RUNNER_PATH,
         output_dir=tmp_path,
         probe_id="d" * 32,
     )
@@ -423,6 +422,9 @@ def test_launcher_proxy_command_has_no_secret_or_business_input(
     assert "/input/projection.json" not in flattened
     assert "Authorization" not in flattened
     assert "--entrypoint /usr/bin/python3" in flattened
+    assert str(RUNNER_PATH) not in flattened
+    assert "src=" + str(RUNNER_PATH) not in flattened
+    assert "/probe/probe.py" in command
 
 
 def test_launcher_attachment_verifier_requires_exact_two_networks() -> None:
@@ -585,6 +587,38 @@ def test_receipt_validator_enforces_failure_stage_semantics() -> None:
             container_exit_code=2,
         )
 
+    certificate_failure = _valid_probe_receipt()
+    certificate_failure.update(
+        terminal_status="TLS_CERT_VERIFY_FAILED",
+        failure_phase="tls_handshake",
+        exception_class="SSLCertVerificationError",
+        verify_code=20,
+        verify_message="unable to get local issuer certificate",
+        tls_version=None,
+        cipher_name=None,
+    )
+    certificate_failure["stages"] = dict.fromkeys(
+        certificate_failure["stages"], False
+    )
+    certificate_failure["stages"].update(dns_completed=True, tcp_connected=True)
+    launcher.validate_probe_receipt(
+        certificate_failure,
+        probe_id="f" * 32,
+        container_exit_code=2,
+    )
+    certificate_failure.update(
+        exception_class="ConnectionResetError",
+        verify_code=None,
+        verify_message=None,
+        errno=104,
+    )
+    with pytest.raises(ValueError, match="probe_receipt_invalid"):
+        launcher.validate_probe_receipt(
+            certificate_failure,
+            probe_id="f" * 32,
+            container_exit_code=2,
+        )
+
     close_failure = _valid_probe_receipt()
     close_failure.update(
         terminal_status="TLS_CLOSE_FAILED",
@@ -721,16 +755,43 @@ def test_cleanup_attempts_all_resources_and_requires_verified_absence() -> None:
 
     def run(command: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
         calls.append(command)
-        if command[:4] == ["docker", "container", "rm", "--force"]:
-            return subprocess.CompletedProcess(command, 1, "", "remove failed")
         if command[:3] == ["docker", "container", "ls"]:
             return subprocess.CompletedProcess(command, 0, names["proxy"] + "\n", "")
+        if command[:3] == ["docker", "network", "ls"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                names["egress_network"] + "\n" + names["relay_network"] + "\n",
+                "",
+            )
+        if command[:4] == ["docker", "container", "rm", "--force"]:
+            return subprocess.CompletedProcess(command, 1, "", "remove failed")
         return subprocess.CompletedProcess(command, 0, "", "")
 
     result = launcher._cleanup_runtime(names, run=run)
     assert result["status"] == "FAILED"
     assert result["container_residue"] == [names["proxy"]]
-    assert [command[2] for command in calls[:3]] == ["rm", "rm", "rm"]
+    assert any(command[:4] == ["docker", "container", "rm", "--force"] for command in calls)
+    assert result["cleanup_errors"] == ["container_remove_nonzero"]
+
+
+def test_cleanup_of_absent_resources_is_success_without_remove_commands() -> None:
+    launcher = _load_module(LAUNCHER_PATH, "phase2_proxy_tls_probe_cleanup_absent")
+    names = launcher.runtime_names("8" * 32)
+    calls: list[list[str]] = []
+
+    def run(command: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    result = launcher._cleanup_runtime(names, run=run)
+    assert result == {
+        "cleanup_errors": [],
+        "container_residue": [],
+        "network_residue": [],
+        "status": "PASSED",
+    }
+    assert not any("rm" in command for command in calls)
 
 
 def test_cleanup_state_is_persisted_and_failure_rejects_terminal_success(
@@ -1099,6 +1160,7 @@ def test_build_arguments_bind_exact_proxy_context(
     builder = _load_module(BUILDER_PATH, "phase2_proxy_tls_probe_builder_args")
     files = {
         "Dockerfile": b"FROM fixed\n",
+        "probe.py": b"print('probe')\n",
         "proxy.py": b"print('proxy')\n",
         "responses-contract.json": b"{}\n",
         "runtime-contract.json": b"{\"runtime\":1}\n",
@@ -1116,6 +1178,7 @@ def test_build_arguments_bind_exact_proxy_context(
     assert arguments == {
         "BASE_IMAGE_DIGEST": builder.BASE_IMAGE_DIGEST,
         "PROXY_DOCKERFILE_SHA256": hashlib.sha256(files["Dockerfile"]).hexdigest(),
+        "PROBE_RUNNER_SHA256": hashlib.sha256(files["probe.py"]).hexdigest(),
         "PROXY_POLICY_SHA256": "f" * 64,
         "PROXY_SOURCE_SHA256": hashlib.sha256(files["proxy.py"]).hexdigest(),
         "READINESS_CONTRACT_SHA256": hashlib.sha256(
@@ -1135,11 +1198,12 @@ def test_image_identity_requires_exact_build_labels() -> None:
     arguments = {
         "BASE_IMAGE_DIGEST": builder.BASE_IMAGE_DIGEST,
         "PROXY_DOCKERFILE_SHA256": "1" * 64,
-        "PROXY_POLICY_SHA256": "2" * 64,
-        "PROXY_SOURCE_SHA256": "3" * 64,
-        "READINESS_CONTRACT_SHA256": "4" * 64,
-        "RESPONSES_CONTRACT_SHA256": "5" * 64,
-        "RUNTIME_CONTRACT_SHA256": "6" * 64,
+        "PROBE_RUNNER_SHA256": "2" * 64,
+        "PROXY_POLICY_SHA256": "3" * 64,
+        "PROXY_SOURCE_SHA256": "4" * 64,
+        "READINESS_CONTRACT_SHA256": "5" * 64,
+        "RESPONSES_CONTRACT_SHA256": "6" * 64,
+        "RUNTIME_CONTRACT_SHA256": "7" * 64,
     }
     labels = builder.expected_image_labels(arguments)
     payload = [
@@ -1232,6 +1296,13 @@ def test_readonly_context_copy_rejects_symlink_and_preserves_hashes(
     (bad / "link.py").symlink_to(bad / "source.py")
     with pytest.raises(ValueError, match="proxy_build_context_invalid"):
         builder.copy_readonly_context(bad, tmp_path / "bad-target")
+
+
+def test_probe_image_dockerfile_packages_runner_without_runtime_bind_mount() -> None:
+    dockerfile = REPO_ROOT / "docker/phase2-ark-proxy-tls-probe/Dockerfile"
+    source = dockerfile.read_text(encoding="utf-8")
+    assert "COPY --chown=65532:65532 probe.py /probe/probe.py" in source
+    assert 'ENTRYPOINT ["/usr/bin/python3", "/probe/probe.py"]' in source
 
 
 def test_offline_artifact_publication_is_atomic_mode_0600(tmp_path: Path) -> None:
@@ -1524,7 +1595,8 @@ def test_mock_harness_defines_required_cases_and_three_happy_paths() -> None:
 def test_mock_harness_uses_built_image_runner_and_no_sensitive_mount() -> None:
     source = HARNESS_PATH.read_text(encoding="utf-8")
     assert "build_provenance.json" in source
-    assert "phase2-ark-proxy-tls-probe/probe.py" in source
+    assert "phase2-ark-proxy-tls-probe/probe.py" not in source
+    assert '"/probe/probe.py"' in source
     assert "/run/phase2/provider-auth" not in source
     assert "/input/request.json" not in source
     assert "perform_provider_request" not in source

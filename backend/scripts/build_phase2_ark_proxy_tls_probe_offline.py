@@ -50,6 +50,7 @@ SOURCE_BINDING_PATHS = {
     "builder_source": "backend/scripts/build_phase2_ark_proxy_tls_probe_offline.py",
     "host_launcher_source": "backend/scripts/run_phase2_ark_proxy_tls_probe.py",
     "container_runner_source": "docker/phase2-ark-proxy-tls-probe/probe.py",
+    "proxy_image_dockerfile": "docker/phase2-ark-proxy-tls-probe/Dockerfile",
     "mock_harness_source": (
         "backend/scripts/run_phase2_ark_proxy_tls_probe_mock_e2e.py"
     ),
@@ -106,6 +107,19 @@ SOURCE_BINDING_PATHS = {
     ),
 }
 REQUIRED_SOURCE_BINDING_KEYS = tuple(SOURCE_BINDING_PATHS)
+
+PROBE_IMAGE_CONTEXT_SOURCES = {
+    "Dockerfile": "docker/phase2-ark-proxy-tls-probe/Dockerfile",
+    "probe.py": "docker/phase2-ark-proxy-tls-probe/probe.py",
+    "proxy.py": "docker/phase2-ark-egress-proxy/proxy.py",
+    "readiness-contract.json": (
+        "docker/phase2-ark-egress-proxy/readiness-contract.json"
+    ),
+    "responses-contract.json": (
+        "docker/phase2-ark-egress-proxy/responses-contract.json"
+    ),
+    "runtime-contract.json": "docker/phase2-ark-egress-proxy/runtime-contract.json",
+}
 
 
 def canonical_json_bytes(value: Any) -> bytes:
@@ -174,6 +188,7 @@ def build_arguments_for_context(
 ) -> dict[str, str]:
     required = {
         "Dockerfile",
+        "probe.py",
         "proxy.py",
         "readiness-contract.json",
         "responses-contract.json",
@@ -183,6 +198,7 @@ def build_arguments_for_context(
         raise ValueError("proxy_build_context_invalid")
     return {
         "BASE_IMAGE_DIGEST": BASE_IMAGE_DIGEST,
+        "PROBE_RUNNER_SHA256": hashes["probe.py"],
         "PROXY_DOCKERFILE_SHA256": hashes["Dockerfile"],
         "PROXY_POLICY_SHA256": proxy_policy_sha256,
         "PROXY_SOURCE_SHA256": hashes["proxy.py"],
@@ -195,6 +211,7 @@ def build_arguments_for_context(
 def expected_image_labels(build_arguments: Mapping[str, str]) -> dict[str, str]:
     required = {
         "BASE_IMAGE_DIGEST",
+        "PROBE_RUNNER_SHA256",
         "PROXY_DOCKERFILE_SHA256",
         "PROXY_POLICY_SHA256",
         "PROXY_SOURCE_SHA256",
@@ -209,6 +226,9 @@ def expected_image_labels(build_arguments: Mapping[str, str]) -> dict[str, str]:
             "BASE_IMAGE_DIGEST"
         ],
         "org.tickflow.phase2.provider-id": "volcengine_ark",
+        "org.tickflow.phase2.probe-runner-sha256": build_arguments[
+            "PROBE_RUNNER_SHA256"
+        ],
         "org.tickflow.phase2.proxy-dockerfile-sha256": build_arguments[
             "PROXY_DOCKERFILE_SHA256"
         ],
@@ -334,6 +354,35 @@ def copy_readonly_context(source: Path, target: Path) -> dict[str, str]:
     if context_hashes(source) != hashes or context_hashes(target) != hashes:
         raise ValueError("proxy_build_context_changed")
     return hashes
+
+
+def copy_probe_image_context(repo_root: Path, target: Path) -> dict[str, str]:
+    bindings = {
+        destination: source_binding(repo_root, source)
+        for destination, source in PROBE_IMAGE_CONTEXT_SOURCES.items()
+    }
+    target.mkdir(mode=0o700)
+    for destination, binding in bindings.items():
+        target_path = target / destination
+        shutil.copyfile(
+            repo_root / binding["path"],
+            target_path,
+            follow_symlinks=False,
+        )
+        target_path.chmod(0o400)
+    target.chmod(0o500)
+    expected = {
+        destination: binding["sha256"]
+        for destination, binding in bindings.items()
+    }
+    if context_hashes(target) != expected:
+        raise ValueError("proxy_build_context_changed")
+    if any(
+        source_binding(repo_root, source)["sha256"] != expected[destination]
+        for destination, source in PROBE_IMAGE_CONTEXT_SOURCES.items()
+    ):
+        raise ValueError("proxy_build_context_changed")
+    return expected
 
 
 def atomic_write_json(path: Path, value: Mapping[str, Any]) -> None:
@@ -545,14 +594,13 @@ def build_proxy_image(
     inspect_local_base(run=run)
     from app.providers.ark_contract import ark_proxy_policy_sha256
 
-    source_context = repo_root / "docker/phase2-ark-egress-proxy"
     with tempfile.TemporaryDirectory(
         prefix="phase2-proxy-tls-probe-build-"
     ) as name:
         staging_root = Path(name).resolve(strict=True)
         staging_root.chmod(0o700)
         context = staging_root / "proxy"
-        hashes = copy_readonly_context(source_context, context)
+        hashes = copy_probe_image_context(repo_root, context)
         arguments = build_arguments_for_context(
             hashes,
             proxy_policy_sha256=ark_proxy_policy_sha256(),
@@ -571,7 +619,7 @@ def build_proxy_image(
         image_identity = inspect_built_image(expected_labels=labels, run=run)
         runtime_identity = inspect_runtime_identity(image_identity["image_id"], run=run)
         ca_identity = extract_ca_identity(image_identity["image_id"], run=run)
-        if context_hashes(source_context) != hashes or context_hashes(context) != hashes:
+        if context_hashes(context) != hashes:
             raise ValueError("proxy_build_context_changed")
     provenance = build_provenance(
         source_git_head=source_git_head,
@@ -851,7 +899,10 @@ def build_candidate(
         "maximum_probe_attempts": 1,
         "orchestrator_source_sha256": bindings["orchestrator_source"]["sha256"],
         "probe_contract_version": 1,
-        "proxy_dockerfile_sha256": bindings["proxy_dockerfile"]["sha256"],
+        "production_proxy_dockerfile_sha256": bindings["proxy_dockerfile"][
+            "sha256"
+        ],
+        "proxy_dockerfile_sha256": bindings["proxy_image_dockerfile"]["sha256"],
         "proxy_image_id": proxy_image_id,
         "proxy_network_attachment_contract_sha256": bindings[
             "proxy_network_attachment_contract"

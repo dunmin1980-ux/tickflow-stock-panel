@@ -162,8 +162,8 @@ def execute_probe(
                 terminal_status="TLS_CLOSE_FAILED",
                 exception_class=classification.exception_class,
                 failure_phase="tls_close",
-                verify_code=classification.verify_code,
-                verify_message=classification.verify_message,
+                verify_code=None,
+                verify_message=None,
                 errno=classification.errno,
             )
         finally:
