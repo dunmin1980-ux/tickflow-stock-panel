@@ -574,6 +574,7 @@ def test_receipt_validator_enforces_failure_stage_semantics() -> None:
         terminal_status="DNS_RESOLUTION_FAILED",
         failure_phase="dns",
         exception_class="gaierror",
+        errno=-2,
         tls_version=None,
         cipher_name=None,
     )
@@ -638,6 +639,87 @@ def test_receipt_validator_enforces_failure_stage_semantics() -> None:
             probe_id="f" * 32,
             container_exit_code=2,
         )
+
+
+@pytest.mark.parametrize(
+    ("terminal_status", "failure_phase", "exception_class", "error_number"),
+    [
+        ("DNS_RESOLUTION_FAILED", "dns", "ConnectionRefusedError", 111),
+        ("DNS_RESOLUTION_FAILED", "dns", "gaierror", 111),
+        ("PROVIDER_CONNECT_FAILED", "tcp", "ConnectionRefusedError", 104),
+        ("PROVIDER_CONNECT_FAILED", "tcp", "SSLError", None),
+    ],
+)
+def test_receipt_validator_rejects_contradictory_dns_and_tcp_diagnostics(
+    terminal_status: str,
+    failure_phase: str,
+    exception_class: str,
+    error_number: int | None,
+) -> None:
+    launcher = _load_module(
+        LAUNCHER_PATH,
+        "phase2_proxy_tls_probe_receipt_transport_diagnostics",
+    )
+    receipt = _valid_probe_receipt()
+    receipt.update(
+        terminal_status=terminal_status,
+        failure_phase=failure_phase,
+        exception_class=exception_class,
+        errno=error_number,
+        tls_version=None,
+        cipher_name=None,
+    )
+    receipt["stages"] = dict.fromkeys(receipt["stages"], False)
+    if failure_phase == "tcp":
+        receipt["stages"]["dns_completed"] = True
+
+    with pytest.raises(ValueError, match="probe_receipt_invalid"):
+        launcher.validate_probe_receipt(
+            receipt,
+            probe_id="f" * 32,
+            container_exit_code=2,
+        )
+
+
+@pytest.mark.parametrize(
+    ("terminal_status", "failure_phase", "exception_class", "error_number"),
+    [
+        ("DNS_RESOLUTION_FAILED", "dns", "gaierror", -2),
+        ("DNS_RESOLUTION_FAILED", "dns", "OSError", None),
+        ("PROVIDER_CONNECT_FAILED", "tcp", "ConnectionRefusedError", 111),
+        ("PROVIDER_CONNECT_FAILED", "tcp", "TimeoutError", None),
+        ("PROVIDER_CONNECT_FAILED", "tcp", "OSError", 101),
+        ("PROVIDER_CONNECT_FAILED", "tcp", "MissingConnectedSocket", None),
+    ],
+)
+def test_receipt_validator_accepts_bound_dns_and_tcp_diagnostics(
+    terminal_status: str,
+    failure_phase: str,
+    exception_class: str,
+    error_number: int | None,
+) -> None:
+    launcher = _load_module(
+        LAUNCHER_PATH,
+        "phase2_proxy_tls_probe_receipt_valid_transport_diagnostics",
+    )
+    receipt = _valid_probe_receipt()
+    receipt.update(
+        terminal_status=terminal_status,
+        failure_phase=failure_phase,
+        exception_class=exception_class,
+        errno=error_number,
+        tls_version=None,
+        cipher_name=None,
+    )
+    receipt["stages"] = dict.fromkeys(receipt["stages"], False)
+    if failure_phase == "tcp":
+        receipt["stages"]["dns_completed"] = True
+
+    launcher.validate_probe_receipt(
+        receipt,
+        probe_id="f" * 32,
+        container_exit_code=2,
+    )
 
 
 def test_runtime_bindings_reject_head_and_source_drift(tmp_path: Path) -> None:

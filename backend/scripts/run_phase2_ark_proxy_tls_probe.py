@@ -545,6 +545,57 @@ _TLS_EXCEPTION_CLASSES = {
     "TLS_EOF": {"SSLEOFError", "SSLZeroReturnError"},
     "TLS_OTHER_SSL_ERROR": {"SSLError"},
 }
+# Receipts originate in the Linux probe image, so validate its EAI/POSIX codes
+# instead of the macOS host's platform constants.
+_DNS_ERROR_NUMBERS = frozenset(range(-12, 0))
+_DNS_DIAGNOSTICS: dict[str, frozenset[int | None]] = {
+    "gaierror": _DNS_ERROR_NUMBERS,
+    "OSError": frozenset({None}),
+}
+_PROVIDER_CONNECT_DIAGNOSTICS: dict[str, frozenset[int | None]] = {
+    "ConnectionRefusedError": frozenset({111}),
+    "TimeoutError": frozenset({None, 110}),
+    "PermissionError": frozenset({1, 13}),
+    "InterruptedError": frozenset({4}),
+    "gaierror": _DNS_ERROR_NUMBERS,
+    "OSError": frozenset(
+        {
+            12,
+            22,
+            23,
+            24,
+            93,
+            97,
+            98,
+            99,
+            100,
+            101,
+            102,
+            105,
+            106,
+            107,
+            112,
+            113,
+            114,
+            115,
+        }
+    ),
+    "MissingConnectedSocket": frozenset({None}),
+    "HTTPException": frozenset({None}),
+    "NotConnected": frozenset({None}),
+    "InvalidURL": frozenset({None}),
+    "UnknownProtocol": frozenset({None}),
+    "UnknownTransferEncoding": frozenset({None}),
+    "UnimplementedFileMode": frozenset({None}),
+    "IncompleteRead": frozenset({None}),
+    "ImproperConnectionState": frozenset({None}),
+    "CannotSendRequest": frozenset({None}),
+    "CannotSendHeader": frozenset({None}),
+    "ResponseNotReady": frozenset({None}),
+    "BadStatusLine": frozenset({None}),
+    "LineTooLong": frozenset({None}),
+    "RemoteDisconnected": frozenset({None}),
+}
 _STAGE_FIELDS = {
     "certificate_verified",
     "clean_tls_close",
@@ -684,10 +735,18 @@ def validate_probe_receipt(
                 and receipt.get("verify_message") is None
             )
         elif terminal_status in {"DNS_RESOLUTION_FAILED", "PROVIDER_CONNECT_FAILED"}:
+            diagnostics = (
+                _DNS_DIAGNOSTICS
+                if terminal_status == "DNS_RESOLUTION_FAILED"
+                else _PROVIDER_CONNECT_DIAGNOSTICS
+            )
+            allowed_error_numbers = diagnostics.get(receipt.get("exception_class"))
             valid = (
                 valid
                 and receipt.get("verify_code") is None
                 and receipt.get("verify_message") is None
+                and allowed_error_numbers is not None
+                and receipt.get("errno") in allowed_error_numbers
             )
         valid = (
             valid
