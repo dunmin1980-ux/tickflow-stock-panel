@@ -97,6 +97,9 @@ SOURCE_BINDING_PATHS = {
     "backend_failure_baseline": (
         "reports/phase2_provider_ark/proxy_tls_probe/backend_failure_baseline.json"
     ),
+    "backend_failure_postcheck": (
+        "reports/phase2_provider_ark/proxy_tls_probe/backend_failure_postcheck.json"
+    ),
     "historical_evidence_baseline": (
         "reports/phase2_provider_ark/proxy_tls_differential/"
         "historical_baseline.json"
@@ -587,6 +590,7 @@ def main() -> int:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--build-image", action="store_true")
     mode.add_argument("--build-failure-baseline", action="store_true")
+    mode.add_argument("--build-failure-postcheck", action="store_true")
     mode.add_argument("--prepare", action="store_true")
     mode.add_argument("--verify", action="store_true")
     args = parser.parse_args()
@@ -623,6 +627,14 @@ def main() -> int:
                 sort_keys=True,
             )
         )
+    elif args.build_failure_postcheck:
+        postcheck = build_backend_failure_postcheck(
+            OUTPUT_ROOT / "backend_failure_baseline.json",
+            OUTPUT_ROOT / "backend_full_post.xml",
+            source_git_head=head,
+        )
+        atomic_write_json(OUTPUT_ROOT / "backend_failure_postcheck.json", postcheck)
+        print(json.dumps(postcheck, sort_keys=True))
     elif args.prepare:
         generated = prepare_artifacts(
             REPO_ROOT,
@@ -731,6 +743,63 @@ def build_backend_failure_baseline(
         "junit_sha256": sha256_file(junit_path),
         "passed": passed,
         "source_git_head": source_git_head,
+    }
+
+
+def _junit_summary(junit_path: Path) -> tuple[int, list[str]]:
+    try:
+        root = ElementTree.parse(junit_path).getroot()
+    except (ElementTree.ParseError, OSError) as error:
+        raise ValueError("backend_junit_invalid") from error
+    testcases = list(root.iter("testcase"))
+    failed_cases = [
+        case
+        for case in testcases
+        if case.find("failure") is not None or case.find("error") is not None
+    ]
+    passed = sum(
+        case.find("failure") is None
+        and case.find("error") is None
+        and case.find("skipped") is None
+        for case in testcases
+    )
+    try:
+        failed_node_ids = sorted(
+            f"{case.attrib['classname'].replace('.', '/')}.py::{case.attrib['name']}"
+            for case in failed_cases
+        )
+    except KeyError as error:
+        raise ValueError("backend_junit_invalid") from error
+    return passed, failed_node_ids
+
+
+def build_backend_failure_postcheck(
+    baseline_path: Path,
+    junit_path: Path,
+    *,
+    source_git_head: str,
+) -> dict[str, Any]:
+    if _HEX_40.fullmatch(source_git_head) is None:
+        raise ValueError("source_git_head_invalid")
+    baseline = read_canonical_json(baseline_path)
+    passed, failed_node_ids = _junit_summary(junit_path)
+    failure_set_sha = sha256_bytes(canonical_json_bytes(failed_node_ids))
+    if (
+        failed_node_ids != baseline.get("failed_node_ids")
+        or failure_set_sha != baseline.get("failure_set_sha256")
+    ):
+        raise ValueError("backend_failure_set_changed")
+    return {
+        "backend_failure_postcheck_schema_version": 1,
+        "baseline_sha256": sha256_file(baseline_path),
+        "classification_counts": baseline.get("classification_counts"),
+        "failed": len(failed_node_ids),
+        "failed_node_ids": failed_node_ids,
+        "failure_set_sha256": failure_set_sha,
+        "junit_sha256": sha256_file(junit_path),
+        "passed": passed,
+        "source_git_head": source_git_head,
+        "status": "KNOWN_BACKEND_FAILURE_SET_UNCHANGED",
     }
 
 
@@ -936,6 +1005,27 @@ def _validate_backend_failure_baseline(baseline: Mapping[str, Any]) -> None:
         raise ValueError("backend_failure_baseline_invalid")
 
 
+def _validate_backend_failure_postcheck(
+    postcheck: Mapping[str, Any],
+    *,
+    baseline: Mapping[str, Any],
+    baseline_sha256: str,
+    current_head: str,
+) -> None:
+    if (
+        postcheck.get("status") != "KNOWN_BACKEND_FAILURE_SET_UNCHANGED"
+        or postcheck.get("source_git_head") != current_head
+        or postcheck.get("baseline_sha256") != baseline_sha256
+        or postcheck.get("failed") != baseline.get("failed")
+        or postcheck.get("failed_node_ids") != baseline.get("failed_node_ids")
+        or postcheck.get("failure_set_sha256")
+        != baseline.get("failure_set_sha256")
+        or not isinstance(postcheck.get("passed"), int)
+        or postcheck["passed"] < baseline.get("passed", 0)
+    ):
+        raise ValueError("backend_failure_postcheck_invalid")
+
+
 def _external_activity() -> dict[str, Any]:
     return {
         "ai_call_count": 0,
@@ -1019,15 +1109,23 @@ def prepare_artifacts(
     provenance_path = output_root / "build_provenance.json"
     mock_path = output_root / "mock_e2e.json"
     baseline_path = output_root / "backend_failure_baseline.json"
+    postcheck_path = output_root / "backend_failure_postcheck.json"
     provenance = read_canonical_json(provenance_path)
     mock = read_canonical_json(mock_path)
     baseline = read_canonical_json(baseline_path)
+    postcheck = read_canonical_json(postcheck_path)
     image_id, ca_sha = _validate_build_provenance(
         provenance,
         current_head=current_head,
     )
     _validate_mock_evidence(mock, proxy_image_id=image_id)
     _validate_backend_failure_baseline(baseline)
+    _validate_backend_failure_postcheck(
+        postcheck,
+        baseline=baseline,
+        baseline_sha256=sha256_file(baseline_path),
+        current_head=current_head,
+    )
 
     candidate = build_candidate(
         repo_root,
@@ -1060,6 +1158,7 @@ def prepare_artifacts(
         "approval_candidate.json": sha256_bytes(candidate_raw),
         "approval_scope.json": sha256_bytes(scope_raw),
         "backend_failure_baseline.json": sha256_file(baseline_path),
+        "backend_failure_postcheck.json": sha256_file(postcheck_path),
         "build_provenance.json": sha256_file(provenance_path),
         "mock_e2e.json": sha256_file(mock_path),
         "preparation_preflight.json": sha256_file(preflight_path),
@@ -1086,6 +1185,7 @@ def verify_artifacts(
     provenance_path = output_root / "build_provenance.json"
     mock_path = output_root / "mock_e2e.json"
     baseline_path = output_root / "backend_failure_baseline.json"
+    postcheck_path = output_root / "backend_failure_postcheck.json"
     candidate_path = output_root / "approval_candidate.json"
     scope_path = output_root / "approval_scope.json"
     preflight_path = output_root / "preparation_preflight.json"
@@ -1094,12 +1194,19 @@ def verify_artifacts(
     provenance = read_canonical_json(provenance_path)
     mock = read_canonical_json(mock_path)
     baseline = read_canonical_json(baseline_path)
+    postcheck = read_canonical_json(postcheck_path)
     image_id, ca_sha = _validate_build_provenance(
         provenance,
         current_head=current_head,
     )
     _validate_mock_evidence(mock, proxy_image_id=image_id)
     _validate_backend_failure_baseline(baseline)
+    _validate_backend_failure_postcheck(
+        postcheck,
+        baseline=baseline,
+        baseline_sha256=sha256_file(baseline_path),
+        current_head=current_head,
+    )
     expected_candidate = build_candidate(
         repo_root,
         current_git_head=current_head,
@@ -1129,6 +1236,7 @@ def verify_artifacts(
         "approval_candidate.json": sha256_file(candidate_path),
         "approval_scope.json": sha256_file(scope_path),
         "backend_failure_baseline.json": sha256_file(baseline_path),
+        "backend_failure_postcheck.json": sha256_file(postcheck_path),
         "build_provenance.json": sha256_file(provenance_path),
         "mock_e2e.json": sha256_file(mock_path),
         "preparation_preflight.json": sha256_file(preflight_path),

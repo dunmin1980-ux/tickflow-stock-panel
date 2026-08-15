@@ -641,6 +641,75 @@ def test_backend_failure_baseline_uses_exact_junit_node_ids(tmp_path: Path) -> N
     }
 
 
+def test_backend_postcheck_requires_exact_frozen_failure_set(tmp_path: Path) -> None:
+    builder = _load_module(BUILDER_PATH, "phase2_proxy_tls_probe_builder_postcheck")
+    baseline_path = tmp_path / "baseline.json"
+    builder.atomic_write_json(
+        baseline_path,
+        {
+            "classification_counts": {
+                "expected_immutable_identity_fail_closed": 1,
+                "pre_existing_gold_debt": 1,
+                "pre_existing_launcher_debt": 0,
+            },
+            "failed": 2,
+            "failed_node_ids": [
+                "tests/test_ark_contract_artifact.py::test_identity",
+                "tests/test_gold_shadow_store.py::test_store",
+            ],
+            "failure_set_sha256": hashlib.sha256(
+                builder.canonical_json_bytes(
+                    [
+                        "tests/test_ark_contract_artifact.py::test_identity",
+                        "tests/test_gold_shadow_store.py::test_store",
+                    ]
+                )
+            ).hexdigest(),
+            "passed": 1,
+            "source_git_head": "1" * 40,
+        },
+    )
+    post = tmp_path / "post.xml"
+    post.write_text(
+        """<?xml version="1.0" encoding="utf-8"?>
+<testsuites tests="4" failures="2" errors="0" skipped="0">
+  <testsuite name="pytest" tests="4" failures="2" errors="0" skipped="0">
+    <testcase classname="tests.test_gold_shadow_store" name="test_store"><failure>fail</failure></testcase>
+    <testcase classname="tests.test_new" name="test_new_pass" />
+    <testcase classname="tests.test_ark_contract_artifact" name="test_identity"><failure>fail</failure></testcase>
+    <testcase classname="tests.test_ok" name="test_pass" />
+  </testsuite>
+</testsuites>
+""",
+        encoding="utf-8",
+    )
+    result = builder.build_backend_failure_postcheck(
+        baseline_path,
+        post,
+        source_git_head="2" * 40,
+    )
+    assert result["status"] == "KNOWN_BACKEND_FAILURE_SET_UNCHANGED"
+    assert result["passed"] == 2
+    assert result["failed"] == 2
+    assert result["failure_set_sha256"] == builder.read_canonical_json(
+        baseline_path
+    )["failure_set_sha256"]
+
+    post.write_text(
+        post.read_text(encoding="utf-8").replace(
+            'classname="tests.test_new" name="test_new_pass" /',
+            'classname="tests.test_new" name="test_new_pass"><failure>new</failure></testcase',
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="backend_failure_set_changed"):
+        builder.build_backend_failure_postcheck(
+            baseline_path,
+            post,
+            source_git_head="2" * 40,
+        )
+
+
 def test_candidate_binds_complete_proxy_topology_and_historical_identity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -910,6 +979,7 @@ def test_prepare_and_verify_artifacts_are_deterministic_and_zero_activity(
     }
     baseline = {
         "failed": 57,
+        "failed_node_ids": ["tests/test_known.py::test_failure"],
         "failure_set_sha256": "4" * 64,
         "passed": 2656,
     }
@@ -919,6 +989,20 @@ def test_prepare_and_verify_artifacts_are_deterministic_and_zero_activity(
         ("backend_failure_baseline.json", baseline),
     ):
         builder.atomic_write_json(output / name, value)
+    builder.atomic_write_json(
+        output / "backend_failure_postcheck.json",
+        {
+            "baseline_sha256": builder.sha256_file(
+                output / "backend_failure_baseline.json"
+            ),
+            "failed": 57,
+            "failed_node_ids": baseline["failed_node_ids"],
+            "failure_set_sha256": baseline["failure_set_sha256"],
+            "passed": 2696,
+            "source_git_head": head,
+            "status": "KNOWN_BACKEND_FAILURE_SET_UNCHANGED",
+        },
+    )
 
     prepared = builder.prepare_artifacts(
         REPO_ROOT,
@@ -995,7 +1079,27 @@ def test_prepare_artifacts_rejects_failed_mock_or_existing_scope_attempt(
     )
     builder.atomic_write_json(
         output / "backend_failure_baseline.json",
-        {"failed": 57, "failure_set_sha256": "4" * 64, "passed": 2656},
+        {
+            "failed": 57,
+            "failed_node_ids": ["tests/test_known.py::test_failure"],
+            "failure_set_sha256": "4" * 64,
+            "passed": 2656,
+        },
+    )
+    baseline = builder.read_canonical_json(output / "backend_failure_baseline.json")
+    builder.atomic_write_json(
+        output / "backend_failure_postcheck.json",
+        {
+            "baseline_sha256": builder.sha256_file(
+                output / "backend_failure_baseline.json"
+            ),
+            "failed": 57,
+            "failed_node_ids": baseline["failed_node_ids"],
+            "failure_set_sha256": baseline["failure_set_sha256"],
+            "passed": 2696,
+            "source_git_head": head,
+            "status": "KNOWN_BACKEND_FAILURE_SET_UNCHANGED",
+        },
     )
     builder.atomic_write_json(
         output / "mock_e2e.json",
