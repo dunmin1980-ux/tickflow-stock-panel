@@ -1,0 +1,11 @@
+{
+  "cleanup_timeout_seconds": 15,
+  "host_orchestrator_timeout_seconds": 210,
+  "maximum_probe_attempts": 1,
+  "provider_connect_timeout_seconds": 10,
+  "provider_read_timeout_seconds": 180,
+  "provider_total_timeout_seconds": 180,
+  "relay_candidate_wait_timeout_seconds": 195,
+  "retry_count": 0,
+  "runtime_contract_schema_version": 1
+}

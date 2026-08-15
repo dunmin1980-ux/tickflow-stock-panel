@@ -1,0 +1,9 @@
+{
+  "egress_owner": "proxy_container_only",
+  "egress_policy_schema_version": 1,
+  "fixed_target": "ark.cn-beijing.volces.com:443",
+  "host_network_allowed": false,
+  "http_allowed": false,
+  "relay_network_has_public_route": false,
+  "secret_mount_allowed": false
+}

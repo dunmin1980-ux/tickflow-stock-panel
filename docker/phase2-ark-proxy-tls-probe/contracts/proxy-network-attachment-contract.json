@@ -1,0 +1,8 @@
+{
+  "attachment_contract_schema_version": 1,
+  "connect_before_start_role": "provider_egress",
+  "create_attached_role": "relay_internal",
+  "host_network_allowed": false,
+  "required_network_count": 2,
+  "unexpected_network_allowed": false
+}

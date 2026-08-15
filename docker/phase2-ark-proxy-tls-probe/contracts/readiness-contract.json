@@ -1,0 +1,8 @@
+{
+  "approval_installed_during_preparation": false,
+  "approval_required_for_live": true,
+  "readiness_contract_schema_version": 1,
+  "receipt_path": "/output/receipt.json",
+  "scope_availability": "AVAILABLE",
+  "scope_historical_attempts": 0
+}

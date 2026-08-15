@@ -1,0 +1,7 @@
+{
+  "driver": "bridge",
+  "internal": false,
+  "mock_internal_override": true,
+  "network_contract_schema_version": 1,
+  "role": "provider_egress"
+}

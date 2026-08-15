@@ -1,0 +1,94 @@
+{
+  "ai_call_count": 0,
+  "ark_runtime_compatibility": {
+    "focused_passed": 127,
+    "status": "PASSED",
+    "tests": [
+      "test_phase2_ark_proxy_tls_differential.py",
+      "test_ark_timeout_contract.py",
+      "test_ark_proxy_policy.py",
+      "test_phase2_ark_tls_connectivity_probe.py",
+      "test_phase2_ark_tls_probe_mock_e2e.py"
+    ]
+  },
+  "baseline_test_debt": {
+    "clean_head": "ad458daa57425093940480f1a090537e885ba35d",
+    "classifications": {
+      "gold_comparison_and_store": {
+        "failed": 13,
+        "passed": 43,
+        "reason": "The same focused Gold failures reproduce at the clean Head."
+      },
+      "launcher_historical_category_whitelist": {
+        "failed": 3,
+        "passed": 9,
+        "reason": "Committed top-level live_canary closeout files are outside the launcher's historical category whitelist."
+      }
+    },
+    "status": "PRE_EXISTING_CONFIRMED_IN_CLEAN_WORKTREE",
+    "test_files": [
+      "test_ark_orchestrator_identity.py",
+      "test_gold_comparison_runs.py",
+      "test_gold_shadow_store.py"
+    ]
+  },
+  "backend_full": {
+    "failed": 57,
+    "failure_classification": {
+      "expected_ark_identity_fail_closed_after_source_change": 41,
+      "pre_existing_gold_debt": 13,
+      "pre_existing_launcher_debt": 3
+    },
+    "passed": 2656,
+    "status": "FAILED_CLASSIFIED",
+    "warnings": 13
+  },
+  "compileall": "PASSED",
+  "current_approval_identity": {
+    "new_approval_candidate_created": false,
+    "new_live_scope_created": false,
+    "old_proxy_image_source_sha256": "fe479235628c22af20cc31965940f612cf759a6a280c2feb792a3fd2400580e4",
+    "status": "FAIL_CLOSED_SOURCE_IDENTITY_CHANGED",
+    "working_tree_orchestrator_source_sha256": "c94ac29ca20bc2eb590bf465fc576505821b651ef9b7a7a6ac4b5be7181ebd9e",
+    "working_tree_proxy_source_sha256": "5bd5349d899d0d693054d332b66d81e9d64bc3332133903b91e2d05e71c479c7"
+  },
+  "final_status": "PHASE2B_ARK_PROXY_TLS_PATH_DIAGNOSIS_INCOMPLETE",
+  "focused_tests": {
+    "passed": 20,
+    "status": "PASSED"
+  },
+  "git_diff_check": "PASSED",
+  "historical_evidence": {
+    "checked_file_count": 13,
+    "status": "UNCHANGED"
+  },
+  "historical_failed_canary": {
+    "request_id": "d57b276fe9014d35bdae5a92950ca17b",
+    "status": "FAILED_AFTER_DISPATCH_CONSUMED_PRESERVED_NON_REUSABLE"
+  },
+  "historical_successful_probe": {
+    "probe_id": "d73e91f766854ff7a64c0e725939eb64",
+    "status": "PASSED_CONSUMED_PRESERVED_NON_REUSABLE"
+  },
+  "independent_review": "NO_ACTIONABLE_FINDINGS",
+  "local_parity": {
+    "all_networks_internal": true,
+    "case_count": 8,
+    "probe_vs_proxy_same_target": "PASSED",
+    "proxy_path_trusted_tls_mock": "PASSED",
+    "status": "LOCAL_PROXY_TLS_PATH_VALIDATED"
+  },
+  "new_provider_attempts": 0,
+  "next_action": "DESIGN_PROXY_PATH_TLS_PROBE",
+  "precise_ssl_classification": "READY",
+  "provider_http": "NOT_RUN",
+  "real_public_network_success_count": 0,
+  "residue": {
+    "container_count": 0,
+    "network_count": 0,
+    "temporary_count": 0
+  },
+  "root_cause": "NOT_PROVABLE",
+  "ruff_f821": "PASSED",
+  "secret_content_read": false
+}

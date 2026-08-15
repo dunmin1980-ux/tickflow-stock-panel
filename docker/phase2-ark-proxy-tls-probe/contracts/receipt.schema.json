@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "ai_call_count": {
+      "const": 0
+    },
+    "authorization_constructed": {
+      "const": false
+    },
+    "cipher_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "completed_at": {
+      "type": "string"
+    },
+    "errno": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "exception_class": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "hostname_verification_target": {
+      "const": "ark.cn-beijing.volces.com"
+    },
+    "http_request_sent": {
+      "const": false
+    },
+    "probe_id": {
+      "pattern": "^[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "provider_attempt_count": {
+      "const": 0
+    },
+    "real_public_network_success_count": {
+      "const": 0
+    },
+    "receipt_schema_version": {
+      "const": 1
+    },
+    "secret_content_read": {
+      "const": false
+    },
+    "sni_hostname": {
+      "const": "ark.cn-beijing.volces.com"
+    },
+    "stages": {
+      "additionalProperties": false,
+      "properties": {
+        "certificate_verified": {
+          "type": "boolean"
+        },
+        "clean_tls_close": {
+          "type": "boolean"
+        },
+        "dns_completed": {
+          "type": "boolean"
+        },
+        "hostname_verified": {
+          "type": "boolean"
+        },
+        "tcp_connected": {
+          "type": "boolean"
+        },
+        "tls_completed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "certificate_verified",
+        "clean_tls_close",
+        "dns_completed",
+        "hostname_verified",
+        "tcp_connected",
+        "tls_completed"
+      ],
+      "type": "object"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "target_host": {
+      "const": "ark.cn-beijing.volces.com"
+    },
+    "target_port": {
+      "const": 443
+    },
+    "terminal_status": {
+      "enum": [
+        "PROBE_PASSED",
+        "DNS_RESOLUTION_FAILED",
+        "TLS_CERT_VERIFY_FAILED",
+        "TLS_HOSTNAME_VERIFY_FAILED",
+        "TLS_PROTOCOL_FAILED",
+        "TLS_HANDSHAKE_TIMEOUT",
+        "TLS_CONNECTION_RESET",
+        "TLS_EOF",
+        "TLS_OTHER_SSL_ERROR",
+        "PROVIDER_CONNECT_FAILED"
+      ]
+    },
+    "tls_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "verify_code": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "verify_message": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "ai_call_count",
+    "authorization_constructed",
+    "cipher_name",
+    "completed_at",
+    "errno",
+    "exception_class",
+    "hostname_verification_target",
+    "http_request_sent",
+    "probe_id",
+    "provider_attempt_count",
+    "real_public_network_success_count",
+    "receipt_schema_version",
+    "secret_content_read",
+    "sni_hostname",
+    "stages",
+    "started_at",
+    "target_host",
+    "target_port",
+    "terminal_status",
+    "tls_version",
+    "verify_code",
+    "verify_message"
+  ],
+  "type": "object"
+}

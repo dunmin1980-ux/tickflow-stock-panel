@@ -1,0 +1,8 @@
+{
+  "custom_dns_servers": [],
+  "dns_configuration_contract_schema_version": 1,
+  "docker_embedded_dns": true,
+  "hostname": "ark.cn-beijing.volces.com",
+  "hosts_override_allowed": false,
+  "proxy_environment_allowed": false
+}

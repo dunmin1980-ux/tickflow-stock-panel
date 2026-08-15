@@ -1,0 +1,6 @@
+{
+  "driver": "bridge",
+  "internal": true,
+  "network_contract_schema_version": 1,
+  "role": "relay_internal"
+}

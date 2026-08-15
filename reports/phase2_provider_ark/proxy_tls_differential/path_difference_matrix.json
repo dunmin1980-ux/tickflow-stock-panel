@@ -1,0 +1,239 @@
+{
+  "comparison_schema_version": 1,
+  "historical_container_inspect_available": false,
+  "matrix": [
+    {
+      "evidence": "Both historical contracts bind sha256:a8a01a003f7afc385b4e24fd2960bcdfd3eaac40c394f39aa6249fd7b2f0f79b.",
+      "field": "container_image",
+      "proxy": "sha256:a8a01a003f7afc385b4e24fd2960bcdfd3eaac40c394f39aa6249fd7b2f0f79b",
+      "probe": "sha256:a8a01a003f7afc385b4e24fd2960bcdfd3eaac40c394f39aa6249fd7b2f0f79b",
+      "status": "SAME"
+    },
+    {
+      "evidence": "Image label org.tickflow.phase2.base-image-digest.",
+      "field": "base_image",
+      "proxy": "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5",
+      "probe": "sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5",
+      "status": "SAME"
+    },
+    {
+      "evidence": "Offline --network none metadata from the shared image.",
+      "field": "python_version",
+      "proxy": "3.11.2",
+      "probe": "3.11.2",
+      "status": "SAME"
+    },
+    {
+      "evidence": "Offline --network none ssl.OPENSSL_VERSION from the shared image.",
+      "field": "openssl_version",
+      "proxy": "OpenSSL 3.0.19 27 Jan 2026",
+      "probe": "OpenSSL 3.0.19 27 Jan 2026",
+      "status": "SAME"
+    },
+    {
+      "evidence": "Source and offline runtime metadata.",
+      "field": "ca_bundle_path",
+      "proxy": "/etc/ssl/certs/ca-certificates.crt",
+      "probe": "/etc/ssl/certs/ca-certificates.crt",
+      "status": "SAME"
+    },
+    {
+      "evidence": "Historical Probe receipt and offline SHA-256 from the shared image.",
+      "field": "ca_bundle_sha256",
+      "proxy": "a3413a37a8e09cc21b2c11c9ffb23d92d2fc9d1933c9e7617f5c4fba4f72d37d",
+      "probe": "a3413a37a8e09cc21b2c11c9ffb23d92d2fc9d1933c9e7617f5c4fba4f72d37d",
+      "status": "SAME"
+    },
+    {
+      "evidence": "Image User and both launch commands.",
+      "field": "uid_gid",
+      "proxy": "65532:65532",
+      "probe": "65532:65532",
+      "status": "SAME"
+    },
+    {
+      "evidence": "Historical containers were removed; neither launcher supplies --dns, but they use different networks.",
+      "field": "dns_resolver_config",
+      "proxy": "Docker embedded resolver on relay plus egress networks",
+      "probe": "Docker embedded resolver on one probe network",
+      "status": "UNKNOWN"
+    },
+    {
+      "evidence": "Probe runner creates one ordinary bridge; Proxy orchestrator creates an internal relay bridge plus a separate egress bridge.",
+      "field": "docker_network_mode",
+      "proxy": "dual bridge: relay internal plus egress non-internal",
+      "probe": "single non-internal bridge",
+      "status": "DIFFERENT"
+    },
+    {
+      "evidence": "Distinct container launchers and bridge attachment sets.",
+      "field": "network_namespace",
+      "proxy": "dual-attached Proxy namespace",
+      "probe": "single-attached Probe namespace",
+      "status": "DIFFERENT"
+    },
+    {
+      "evidence": "Both paths use an ordinary non-internal bridge for egress, while Proxy also joins an internal Relay bridge. Historical containers and host firewall or allowlist state are unavailable, so the effective egress policy cannot be proven equal or different.",
+      "field": "egress_policy",
+      "proxy": "ordinary egress bridge plus internal Relay bridge",
+      "probe": "ordinary egress bridge",
+      "status": "UNKNOWN"
+    },
+    {
+      "evidence": "Source constants.",
+      "field": "target_hostname",
+      "proxy": "ark.cn-beijing.volces.com",
+      "probe": "ark.cn-beijing.volces.com",
+      "status": "SAME"
+    },
+    {
+      "evidence": "Source constants.",
+      "field": "target_port",
+      "proxy": 443,
+      "probe": 443,
+      "status": "SAME"
+    },
+    {
+      "evidence": "HTTPSConnection uses its host for server_hostname; Probe passes TARGET_HOST to wrap_socket.",
+      "field": "sni_hostname",
+      "proxy": "ark.cn-beijing.volces.com",
+      "probe": "ark.cn-beijing.volces.com",
+      "status": "SAME"
+    },
+    {
+      "evidence": "Both verified contexts check the Ark hostname.",
+      "field": "hostname_verify_target",
+      "proxy": "ark.cn-beijing.volces.com",
+      "probe": "ark.cn-beijing.volces.com",
+      "status": "SAME"
+    },
+    {
+      "evidence": "Both call ssl.create_default_context with the same cafile.",
+      "field": "ssl_context_constructor",
+      "proxy": "ssl.create_default_context(cafile=fixed CA)",
+      "probe": "ssl.create_default_context(cafile=fixed CA)",
+      "status": "SAME"
+    },
+    {
+      "evidence": "No separate load_verify_locations call; create_default_context loads the fixed cafile.",
+      "field": "load_verify_locations",
+      "proxy": "via create_default_context",
+      "probe": "via create_default_context",
+      "status": "SAME"
+    },
+    {
+      "evidence": "Source assignments.",
+      "field": "verify_mode",
+      "proxy": "ssl.CERT_REQUIRED",
+      "probe": "ssl.CERT_REQUIRED",
+      "status": "SAME"
+    },
+    {
+      "evidence": "Source assignments.",
+      "field": "check_hostname",
+      "proxy": true,
+      "probe": true,
+      "status": "SAME"
+    },
+    {
+      "evidence": "Source assignments.",
+      "field": "tls_minimum",
+      "proxy": "TLSv1.2",
+      "probe": "TLSv1.2",
+      "status": "SAME"
+    },
+    {
+      "evidence": "Probe explicitly sets MAXIMUM_SUPPORTED; Proxy leaves the same OpenSSL default effective maximum implicit.",
+      "field": "tls_maximum",
+      "proxy": "implicit library maximum",
+      "probe": "explicit MAXIMUM_SUPPORTED",
+      "status": "DIFFERENT"
+    },
+    {
+      "evidence": "Neither source calls set_ciphers or set_ciphersuites.",
+      "field": "cipher_customization",
+      "proxy": "none",
+      "probe": "none",
+      "status": "SAME"
+    },
+    {
+      "evidence": "Exact source call paths.",
+      "field": "socket_constructor",
+      "proxy": "http.client.HTTPSConnection delegates to socket.create_connection",
+      "probe": "socket.socket from getaddrinfo result",
+      "status": "DIFFERENT"
+    },
+    {
+      "evidence": "Fixed runtime contracts.",
+      "field": "connect_timeout",
+      "proxy": "10 seconds across HTTPSConnection connect",
+      "probe": "10 seconds for raw TCP",
+      "status": "DIFFERENT"
+    },
+    {
+      "evidence": "Fixed runtime contracts.",
+      "field": "tls_timeout",
+      "proxy": "HTTPSConnection connect uses 10-second connect timeout",
+      "probe": "180 seconds after wrap_socket before do_handshake",
+      "status": "DIFFERENT"
+    },
+    {
+      "evidence": "Exact source call paths.",
+      "field": "http_library",
+      "proxy": "http.client.HTTPSConnection",
+      "probe": "NOT_APPLICABLE",
+      "status": "NOT_APPLICABLE"
+    },
+    {
+      "evidence": "Offline image environment has no HTTPS_PROXY, HTTP_PROXY, or NO_PROXY; stdlib HTTPSConnection does not consult them.",
+      "field": "proxy_environment_variables",
+      "proxy": "unset",
+      "probe": "unset",
+      "status": "SAME"
+    },
+    {
+      "evidence": "Offline image environment.",
+      "field": "SSL_CERT_FILE",
+      "proxy": "/etc/ssl/certs/ca-certificates.crt",
+      "probe": "/etc/ssl/certs/ca-certificates.crt",
+      "status": "SAME"
+    },
+    {
+      "evidence": "Offline image environment.",
+      "field": "SSL_CERT_DIR",
+      "proxy": null,
+      "probe": null,
+      "status": "SAME"
+    },
+    {
+      "evidence": "Offline image environment.",
+      "field": "HTTPS_PROXY",
+      "proxy": null,
+      "probe": null,
+      "status": "SAME"
+    },
+    {
+      "evidence": "Offline image environment.",
+      "field": "HTTP_PROXY",
+      "proxy": null,
+      "probe": null,
+      "status": "SAME"
+    },
+    {
+      "evidence": "Offline image environment.",
+      "field": "NO_PROXY",
+      "proxy": null,
+      "probe": null,
+      "status": "SAME"
+    }
+  ],
+  "probe_tls_call_path": "socket.getaddrinfo -> socket.socket -> connect -> SSLContext.wrap_socket(server_hostname=TARGET_HOST, do_handshake_on_connect=False) -> do_handshake",
+  "proxy_tls_call_path": "http.client.HTTPSConnection(host, port, context) -> HTTPSConnection.connect -> socket.create_connection -> SSLContext.wrap_socket(server_hostname=host)",
+  "same_dns_configuration": "UNKNOWN",
+  "same_egress_policy": "UNKNOWN",
+  "same_hostname_verification": "YES",
+  "same_network_topology": "NO",
+  "same_sni": "YES",
+  "same_ssl_context": "NO",
+  "same_tls_implementation": "NO"
+}

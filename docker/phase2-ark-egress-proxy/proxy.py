@@ -9,12 +9,14 @@ import json
 import math
 import os
 import re
+import socket
 import ssl
 import stat
 import tempfile
 import time
 from collections.abc import Callable, Mapping
 from contextlib import suppress
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -37,12 +39,32 @@ RECEIPT_PATH = Path("/output/proxy-receipt.json")
 REQUEST_PATH = Path("/input/request.json")
 READY_PATH = Path("/output/proxy-ready.json")
 AUTH_MAXIMUM_BYTES = 16_384
+VERIFY_MESSAGE_MAXIMUM = 160
 
 _EXPECTED_CONTRACT_SHA256 = (
     "9704745f75d338bd669314b6aa8fcdf4fb4efc0ef6ba4f2487c57c35dd1a8c79"
 )
 _HEX_32 = re.compile(r"^[0-9a-f]{32}$")
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")
+_EXCEPTION_CLASS = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,127}$")
+_SAFE_VERIFY_MESSAGE = re.compile(r"[^A-Za-z0-9 .,:;_()\[\]/=-]+")
+_PROTOCOL_MARKERS = (
+    "ALERT_PROTOCOL_VERSION",
+    "NO_SHARED_CIPHER",
+    "PROTOCOL_VERSION",
+    "UNSUPPORTED_PROTOCOL",
+    "WRONG_VERSION_NUMBER",
+)
+_DIAGNOSTIC_TERMINALS = {
+    "PROVIDER_CONNECT_FAILED",
+    "TLS_CERT_VERIFY_FAILED",
+    "TLS_HOSTNAME_VERIFY_FAILED",
+    "TLS_PROTOCOL_FAILED",
+    "TLS_HANDSHAKE_TIMEOUT",
+    "TLS_CONNECTION_RESET",
+    "TLS_EOF",
+    "TLS_OTHER_SSL_ERROR",
+}
 _JSON_CONTENT_TYPE = re.compile(
     r'^[ \t]*application/json[ \t]*(?:;[ \t]*charset[ \t]*=[ \t]*(?:utf-8|"utf-8")[ \t]*)?$',
     re.IGNORECASE,
@@ -234,6 +256,10 @@ _RECEIPT_FIELDS = {
     "response_size",
     "response_bytes",
     "terminal_status",
+    "exception_class",
+    "verify_code",
+    "verify_message",
+    "errno",
     "process_started",
     "proxy_ready",
     "relay_request_received",
@@ -280,6 +306,13 @@ _LOCAL_STATUS = {
     "OUTPUT_EXTRACTION_BLOCKED": 502,
     "PROVIDER_CONNECT_FAILED": 502,
     "TLS_FAILED": 502,
+    "TLS_CERT_VERIFY_FAILED": 502,
+    "TLS_HOSTNAME_VERIFY_FAILED": 502,
+    "TLS_PROTOCOL_FAILED": 502,
+    "TLS_HANDSHAKE_TIMEOUT": 504,
+    "TLS_CONNECTION_RESET": 502,
+    "TLS_EOF": 502,
+    "TLS_OTHER_SSL_ERROR": 502,
     "REQUEST_WRITE_FAILED": 502,
     "RESPONSE_HEADERS_NOT_RECEIVED": 502,
     "RESPONSE_BODY_INCOMPLETE": 502,
@@ -296,12 +329,114 @@ class ProxyError(Exception):
         provider_http_status: int | None = None,
         provider_attempt_count: int = 0,
         response_size: int | None = None,
+        exception_class: str | None = None,
+        verify_code: int | None = None,
+        verify_message: str | None = None,
+        errno: int | None = None,
     ) -> None:
         self.category = category
         self.provider_http_status = provider_http_status
         self.provider_attempt_count = provider_attempt_count
         self.response_size = response_size
+        self.exception_class = exception_class
+        self.verify_code = verify_code
+        self.verify_message = verify_message
+        self.errno = errno
         super().__init__(category)
+
+
+@dataclass(frozen=True)
+class TlsErrorClassification:
+    """Bounded, credential-free transport failure metadata."""
+
+    category: str
+    exception_class: str
+    verify_code: int | None = None
+    verify_message: str | None = None
+    errno: int | None = None
+
+    def as_dict(self) -> dict[str, str | int | None]:
+        return {
+            "category": self.category,
+            "exception_class": self.exception_class,
+            "verify_code": self.verify_code,
+            "verify_message": self.verify_message,
+            "errno": self.errno,
+        }
+
+
+def _sanitize_verify_message(value: Any) -> str | None:
+    if not isinstance(value, str) or not value:
+        return None
+    sanitized = _SAFE_VERIFY_MESSAGE.sub("?", value).strip()
+    return sanitized[:VERIFY_MESSAGE_MAXIMUM] or None
+
+
+def classify_tls_error(
+    error: BaseException,
+    *,
+    phase: str | None = None,
+) -> TlsErrorClassification:
+    """Classify connect/TLS failures without retaining request or credential data."""
+    exception_class = type(error).__name__[:128]
+    error_number = getattr(error, "errno", None)
+    if isinstance(error_number, bool) or not isinstance(error_number, int):
+        error_number = None
+    if isinstance(error, ssl.SSLCertVerificationError):
+        verify_code = getattr(error, "verify_code", None)
+        if isinstance(verify_code, bool) or not isinstance(verify_code, int):
+            verify_code = None
+        verify_message = _sanitize_verify_message(
+            getattr(error, "verify_message", None)
+        )
+        description = (verify_message or str(error)).lower()
+        category = (
+            "TLS_HOSTNAME_VERIFY_FAILED"
+            if verify_code == 62 or "hostname mismatch" in description
+            else "TLS_CERT_VERIFY_FAILED"
+        )
+        return TlsErrorClassification(
+            category,
+            exception_class,
+            verify_code,
+            verify_message,
+            error_number,
+        )
+    if isinstance(error, (TimeoutError, socket.timeout)):
+        return TlsErrorClassification(
+            (
+                "TLS_HANDSHAKE_TIMEOUT"
+                if phase == "tls"
+                else "PROVIDER_CONNECT_FAILED"
+            ),
+            exception_class,
+            errno=error_number,
+        )
+    if isinstance(error, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
+        return TlsErrorClassification(
+            "TLS_CONNECTION_RESET",
+            exception_class,
+            errno=error_number,
+        )
+    if isinstance(error, (ssl.SSLEOFError, ssl.SSLZeroReturnError)):
+        return TlsErrorClassification(
+            "TLS_EOF",
+            exception_class,
+            errno=error_number,
+        )
+    if isinstance(error, ssl.SSLError):
+        description = f"{getattr(error, 'reason', '')} {error}".upper()
+        category = (
+            "TLS_PROTOCOL_FAILED"
+            if any(marker in description for marker in _PROTOCOL_MARKERS)
+            else "TLS_OTHER_SSL_ERROR"
+        )
+        return TlsErrorClassification(category, exception_class, errno=error_number)
+    return TlsErrorClassification(
+        "PROVIDER_CONNECT_FAILED",
+        exception_class,
+        errno=error_number,
+    )
 
 
 def _wall_timestamp() -> str:
@@ -1114,12 +1249,94 @@ def default_connection_factory(
     timeout: float,
     context: ssl.SSLContext,
 ) -> http.client.HTTPSConnection:
-    return http.client.HTTPSConnection(
+    return PhaseAwareHTTPSConnection(
         host,
         port,
         timeout=timeout,
         context=context,
     )
+
+
+class PhaseAwareHTTPSConnection(http.client.HTTPSConnection):
+    """Expose whether stdlib connect is in TCP establishment or TLS wrapping."""
+
+    connect_phase = "tcp"
+
+    def connect(self) -> None:
+        original_create_connection = self._create_connection
+
+        def tracked_create_connection(*args: Any, **kwargs: Any) -> socket.socket:
+            self.connect_phase = "tcp"
+            connected = original_create_connection(*args, **kwargs)
+            self.connect_phase = "tls"
+            return connected
+
+        self._create_connection = tracked_create_connection
+        try:
+            super().connect()
+        finally:
+            self._create_connection = original_create_connection
+
+
+def connect_verified_tls(
+    host: str,
+    port: int,
+    timeout: float,
+    context: ssl.SSLContext,
+    *,
+    connection_factory: ConnectionFactory = default_connection_factory,
+) -> tuple[http.client.HTTPSConnection, dict[str, str | None]]:
+    """Open the production HTTPS transport without writing an HTTP request."""
+    connection: http.client.HTTPSConnection | None = None
+    try:
+        connection = connection_factory(host, port, timeout, context)
+        connection.connect()
+    except (ssl.SSLError, ssl.CertificateError, TimeoutError, OSError) as exc:
+        if connection is not None:
+            connection.close()
+        classified = classify_tls_error(
+            exc,
+            phase=getattr(connection, "connect_phase", None),
+        )
+        raise ProxyError(
+            classified.category,
+            provider_attempt_count=1,
+            exception_class=classified.exception_class,
+            verify_code=classified.verify_code,
+            verify_message=classified.verify_message,
+            errno=classified.errno,
+        ) from exc
+    except http.client.HTTPException as exc:
+        if connection is not None:
+            connection.close()
+        classified = classify_tls_error(
+            exc,
+            phase=getattr(connection, "connect_phase", None),
+        )
+        raise ProxyError(
+            classified.category,
+            provider_attempt_count=1,
+            exception_class=classified.exception_class,
+            errno=classified.errno,
+        ) from exc
+    if connection is None or connection.sock is None:
+        if connection is not None:
+            connection.close()
+        raise ProxyError(
+            "PROVIDER_CONNECT_FAILED",
+            provider_attempt_count=1,
+            exception_class="MissingConnectedSocket",
+        )
+    version_method = getattr(connection.sock, "version", None)
+    cipher_method = getattr(connection.sock, "cipher", None)
+    tls_version = version_method() if callable(version_method) else None
+    cipher = cipher_method() if callable(cipher_method) else None
+    return connection, {
+        "tls_version": tls_version,
+        "cipher_name": cipher[0] if cipher else None,
+        "sni_hostname": host,
+        "hostname_verification_target": host,
+    }
 
 
 def read_auth_file(path: str = "/run/phase2/provider-auth") -> str:
@@ -1196,21 +1413,13 @@ def perform_provider_request(
     try:
         context = create_tls_context()
         recorder.record("provider_connect_started")
-        try:
-            connection = connection_factory(
-                UPSTREAM_HOST,
-                UPSTREAM_PORT,
-                float(runtime["provider_connect_timeout_seconds"]),
-                context,
-            )
-            connection.connect()
-        except (ssl.SSLError, ssl.CertificateError) as exc:
-            raise ProxyError("TLS_FAILED", provider_attempt_count=1) from exc
-        except (TimeoutError, OSError, http.client.HTTPException) as exc:
-            raise ProxyError(
-                "PROVIDER_CONNECT_FAILED",
-                provider_attempt_count=1,
-            ) from exc
+        connection, _tls_metadata = connect_verified_tls(
+            UPSTREAM_HOST,
+            UPSTREAM_PORT,
+            float(runtime["provider_connect_timeout_seconds"]),
+            context,
+            connection_factory=connection_factory,
+        )
         recorder.record("provider_connect_completed")
         recorder.record("tls_completed")
         if monotonic() >= deadline:
@@ -1343,12 +1552,16 @@ def build_receipt(
     provider_attempt_count: int = 0,
     provider_http_status: int | None = None,
     response_size: int | None = None,
+    exception_class: str | None = None,
+    verify_code: int | None = None,
+    verify_message: str | None = None,
+    errno: int | None = None,
 ) -> dict[str, Any]:
     """Build the only persisted proxy evidence shape."""
     recorder = stage_recorder or ProviderStageRecorder()
     events = recorder.events()
     value = {
-        "receipt_schema_version": 2,
+        "receipt_schema_version": 3,
         "request_id": request_id,
         "component": "proxy",
         "provider_id": "volcengine_ark",
@@ -1366,6 +1579,10 @@ def build_receipt(
         "response_size": response_size,
         "response_bytes": response_size,
         "terminal_status": terminal_status or response_category,
+        "exception_class": exception_class,
+        "verify_code": verify_code,
+        "verify_message": verify_message,
+        "errno": errno,
         **events,
     }
     if (
@@ -1386,6 +1603,45 @@ def build_receipt(
         or (
             response_size is not None
             and not 0 <= response_size <= MAXIMUM_BYTES + 1
+        )
+        or (
+            exception_class is not None
+            and (
+                not isinstance(exception_class, str)
+                or _EXCEPTION_CLASS.fullmatch(exception_class) is None
+            )
+        )
+        or (
+            verify_code is not None
+            and (type(verify_code) is not int or not 0 <= verify_code <= 1_000_000)
+        )
+        or (
+            verify_message is not None
+            and (
+                not isinstance(verify_message, str)
+                or not verify_message
+                or len(verify_message) > VERIFY_MESSAGE_MAXIMUM
+                or _sanitize_verify_message(verify_message) != verify_message
+            )
+        )
+        or (
+            errno is not None
+            and (type(errno) is not int or not -(2**31) <= errno < 2**31)
+        )
+        or (
+            exception_class is None
+            and any(value is not None for value in (verify_code, verify_message, errno))
+        )
+        or (
+            value["terminal_status"] in _DIAGNOSTIC_TERMINALS
+            and exception_class is None
+        )
+        or (
+            value["terminal_status"] not in _DIAGNOSTIC_TERMINALS
+            and any(
+                value is not None
+                for value in (exception_class, verify_code, verify_message, errno)
+            )
         )
         or any(
             not isinstance(value.get(name), Mapping)
@@ -1668,6 +1924,10 @@ def process_local_request(
                 if exc.response_size is not None
                 else response_size
             ),
+            exception_class=exc.exception_class,
+            verify_code=exc.verify_code,
+            verify_message=exc.verify_message,
+            errno=exc.errno,
         )
         write_receipt(receipt, receipt_path)
         return _local_status(exc.category), _error_body(exc.category), receipt

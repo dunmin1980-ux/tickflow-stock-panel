@@ -161,6 +161,25 @@ _ARK_PROXY_RECEIPT_IDENTITY = {
 }
 _OPENAI_PROXY_RECEIPT_IDENTITY: dict[str, str] = {}
 _ARK_PROXY_RECEIPT_FIELDS = _PROXY_RECEIPT_FIELDS | set(_ARK_PROXY_RECEIPT_IDENTITY)
+_ARK_PROXY_DIAGNOSTIC_FIELDS = {
+    "exception_class",
+    "verify_code",
+    "verify_message",
+    "errno",
+}
+_ARK_PROXY_RECEIPT_V3_FIELDS = _ARK_PROXY_RECEIPT_FIELDS | _ARK_PROXY_DIAGNOSTIC_FIELDS
+_ARK_PROXY_DIAGNOSTIC_TERMINALS = {
+    "PROVIDER_CONNECT_FAILED",
+    "TLS_CERT_VERIFY_FAILED",
+    "TLS_HOSTNAME_VERIFY_FAILED",
+    "TLS_PROTOCOL_FAILED",
+    "TLS_HANDSHAKE_TIMEOUT",
+    "TLS_CONNECTION_RESET",
+    "TLS_EOF",
+    "TLS_OTHER_SSL_ERROR",
+}
+_EXCEPTION_CLASS = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,127}$")
+_SAFE_TLS_VERIFY_MESSAGE = re.compile(r"^[A-Za-z0-9 .,:;_()\[\]/=-]{1,160}$")
 _RELAY_RECEIPT_FIELDS = {
     "receipt_schema_version",
     "request_id",
@@ -3879,9 +3898,11 @@ def _validate_stage_receipt(
         )
         or value.get("status") not in {"SUCCEEDED", "REJECTED"}
     )
+    schema_version = value.get("receipt_schema_version")
     observed_fields = set(value)
     fields_valid = observed_fields == fields
     proxy_identity_invalid = False
+    ark_v3 = False
     if component == "proxy":
         expected_identity = (
             dict(expected_proxy_identity) if expected_proxy_identity is not None else None
@@ -3889,23 +3910,93 @@ def _validate_stage_receipt(
         if expected_identity == _OPENAI_PROXY_RECEIPT_IDENTITY:
             fields_valid = observed_fields == _PROXY_RECEIPT_FIELDS
         elif expected_identity == _ARK_PROXY_RECEIPT_IDENTITY:
-            fields_valid = observed_fields == _ARK_PROXY_RECEIPT_FIELDS
+            ark_v3 = schema_version == 3
+            expected_fields = (
+                _ARK_PROXY_RECEIPT_V3_FIELDS
+                if ark_v3
+                else _ARK_PROXY_RECEIPT_FIELDS
+            )
+            fields_valid = observed_fields == expected_fields
             proxy_identity_invalid = not fields_valid or any(
                 value.get(field) != expected
                 for field, expected in _ARK_PROXY_RECEIPT_IDENTITY.items()
             )
         elif expected_identity is not None:
             proxy_identity_invalid = True
-        elif observed_fields == _ARK_PROXY_RECEIPT_FIELDS:
+        elif frozenset(observed_fields) in {
+            frozenset(_ARK_PROXY_RECEIPT_FIELDS),
+            frozenset(_ARK_PROXY_RECEIPT_V3_FIELDS),
+        }:
+            ark_v3 = observed_fields == _ARK_PROXY_RECEIPT_V3_FIELDS
             fields_valid = True
             proxy_identity_invalid = any(
                 value.get(field) != expected
                 for field, expected in _ARK_PROXY_RECEIPT_IDENTITY.items()
             )
+    diagnostic_invalid = False
+    if ark_v3:
+        exception_class = value.get("exception_class")
+        verify_code = value.get("verify_code")
+        verify_message = value.get("verify_message")
+        error_number = value.get("errno")
+        terminal_status = value.get("terminal_status")
+        diagnostic_invalid = (
+            (
+                exception_class is not None
+                and (
+                    not isinstance(exception_class, str)
+                    or _EXCEPTION_CLASS.fullmatch(exception_class) is None
+                )
+            )
+            or (
+                verify_code is not None
+                and (
+                    type(verify_code) is not int
+                    or not 0 <= verify_code <= 1_000_000
+                )
+            )
+            or (
+                verify_message is not None
+                and (
+                    not isinstance(verify_message, str)
+                    or _SAFE_TLS_VERIFY_MESSAGE.fullmatch(verify_message) is None
+                )
+            )
+            or (
+                error_number is not None
+                and (
+                    type(error_number) is not int
+                    or not -(2**31) <= error_number < 2**31
+                )
+            )
+            or (
+                exception_class is None
+                and any(
+                    item is not None
+                    for item in (verify_code, verify_message, error_number)
+                )
+            )
+            or (
+                terminal_status in _ARK_PROXY_DIAGNOSTIC_TERMINALS
+                and exception_class is None
+            )
+            or (
+                terminal_status not in _ARK_PROXY_DIAGNOSTIC_TERMINALS
+                and any(
+                    item is not None
+                    for item in (
+                        exception_class,
+                        verify_code,
+                        verify_message,
+                        error_number,
+                    )
+                )
+            )
+        )
     if (
         not fields_valid
         or type(value.get("receipt_schema_version")) is not int
-        or value.get("receipt_schema_version") != 2
+        or value.get("receipt_schema_version") != (3 if ark_v3 else 2)
         or value.get("request_id") != request_id
         or value.get("component") != component
         or type(value.get("retry_count")) is not int
@@ -3915,6 +4006,7 @@ def _validate_stage_receipt(
         or proxy_contract_invalid
         or relay_contract_invalid
         or proxy_identity_invalid
+        or diagnostic_invalid
     ):
         raise OrchestratorError("RECEIPT_MALFORMED")
     serialized = canonical_json_bytes(value).decode("utf-8")

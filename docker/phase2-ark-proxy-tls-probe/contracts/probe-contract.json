@@ -1,0 +1,32 @@
+{
+  "allowed_operations": [
+    "dns_resolution",
+    "tcp_connect",
+    "tls_handshake",
+    "certificate_verification",
+    "hostname_verification",
+    "clean_tls_close"
+  ],
+  "ca_source": "/etc/ssl/certs/ca-certificates.crt",
+  "check_hostname": true,
+  "forbidden_operations": [
+    "secret_read",
+    "authorization",
+    "http_get",
+    "http_head",
+    "http_post",
+    "ark_responses_api",
+    "provider_request",
+    "ai_call"
+  ],
+  "hostname_verification_target": "ark.cn-beijing.volces.com",
+  "maximum_probe_attempts": 1,
+  "probe_contract_version": 1,
+  "retry_count": 0,
+  "scope_type": "production_proxy_path_tls_only_probe",
+  "sni_hostname": "ark.cn-beijing.volces.com",
+  "target_host": "ark.cn-beijing.volces.com",
+  "target_port": 443,
+  "tls_minimum": "TLSv1_2",
+  "verify_mode": "CERT_REQUIRED"
+}
