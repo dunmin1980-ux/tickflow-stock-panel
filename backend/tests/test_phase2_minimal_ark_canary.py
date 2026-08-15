@@ -11,12 +11,15 @@ from pathlib import Path
 import httpx
 import pytest
 
+from app.services.phase2_claims_service import build_claims_document
+from app.services.phase2_isolation_runtime import CandidateHostEvidence
 from app.services.phase2_minimal_ark_canary import (
     EXPECTED_FACTS_SHA256,
     EXPECTED_PROJECTION_SHA256,
     ArkHostTransport,
     MinimalArkCanaryError,
     build_minimal_execution_inputs,
+    execute_minimal_ark_canary,
     finalize_minimal_attempt,
     load_minimal_request_contract,
     mark_minimal_dispatch,
@@ -26,6 +29,73 @@ from app.services.phase2_minimal_ark_canary import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+SENTINEL_SECRET = "PHASE2_TEST_SECRET_NEVER_PERSIST"
+
+
+def _candidate() -> dict[str, object]:
+    document = build_claims_document(REPO_ROOT, "000403.SZ")
+    return {
+        "candidate_schema_version": 1,
+        "projection_sha256": EXPECTED_PROJECTION_SHA256,
+        "symbol": document.symbol,
+        "name": document.name,
+        "trade_date": document.trade_date,
+        "timezone": document.timezone,
+        "claims": [claim.model_dump(mode="json") for claim in document.claims],
+        "trading_advice": False,
+    }
+
+
+def _envelope(candidate: dict[str, object] | None = None) -> dict[str, object]:
+    return {
+        "id": "ark_mock_response",
+        "object": "response",
+        "status": "completed",
+        "model": "doubao-seed-2-1-turbo-260628",
+        "output": [
+            {
+                "type": "message",
+                "role": "assistant",
+                "status": "completed",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": json.dumps(
+                            candidate if candidate is not None else _candidate(),
+                            ensure_ascii=False,
+                            allow_nan=False,
+                            separators=(",", ":"),
+                            sort_keys=True,
+                        ),
+                    }
+                ],
+            }
+        ],
+        "usage": {"input_tokens": 1, "output_tokens": 1},
+    }
+
+
+def _run_with_handler(
+    tmp_path: Path,
+    handler: httpx.MockTransport,
+):
+    times = iter(
+        (
+            "2026-08-16T00:00:00Z",
+            "2026-08-16T00:00:01Z",
+            "2026-08-16T00:00:02Z",
+        )
+    )
+    return execute_minimal_ark_canary(
+        repo_root=REPO_ROOT,
+        attempts_root=tmp_path / "attempts",
+        scope_id="b" * 64,
+        candidate_sha256="c" * 64,
+        request_id="a" * 32,
+        transport=ArkHostTransport(mock_transport=handler),
+        secret_reader=lambda: SENTINEL_SECRET,
+        clock=lambda: next(times),
+    )
 
 
 def test_execution_inputs_bind_frozen_facts_and_strict_request() -> None:
@@ -254,3 +324,146 @@ def test_host_transport_sends_exact_request_once_without_persisting_secret() -> 
         }
     ]
     assert "PHASE2_TEST_SECRET_NEVER_PERSIST" not in repr(response)
+
+
+def test_execution_pipeline_validates_claims_and_renderer_once(tmp_path: Path) -> None:
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, json=_envelope())
+
+    result = _run_with_handler(tmp_path, httpx.MockTransport(handler))
+    ledger = json.loads(result.ledger_path.read_text(encoding="utf-8"))
+
+    assert result.status == "SUCCEEDED"
+    assert result.candidate_validation_state == "VALID"
+    assert result.claims_validation_state == "VALID"
+    assert result.renderer_validation_state == "VALID"
+    assert result.claim_count == 42
+    assert result.can_publish is False
+    assert calls == 1
+    assert ledger["attempt_count"] == 1
+    assert ledger["terminal_state"] == "SUCCEEDED"
+    assert SENTINEL_SECRET not in result.ledger_path.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("status_code", "content_type", "body", "terminal_state"),
+    (
+        (503, "application/json", b"{}", "HTTP_ERROR"),
+        (307, "application/json", b"{}", "HTTP_ERROR"),
+        (200, "text/plain", b"not-json", "RESPONSE_REJECTED"),
+        (200, "application/json", b"{", "RESPONSE_REJECTED"),
+    ),
+)
+def test_post_dispatch_http_and_envelope_failures_are_consumed_without_retry(
+    tmp_path: Path,
+    status_code: int,
+    content_type: str,
+    body: bytes,
+    terminal_state: str,
+) -> None:
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(
+            status_code,
+            headers={"Content-Type": content_type},
+            content=body,
+        )
+
+    result = _run_with_handler(tmp_path, httpx.MockTransport(handler))
+    ledger = json.loads(result.ledger_path.read_text(encoding="utf-8"))
+
+    assert result.status == terminal_state
+    assert result.can_publish is False
+    assert calls == 1
+    assert ledger["attempt_count"] == 1
+    assert ledger["terminal_state"] == terminal_state
+
+
+def test_timeout_is_terminal_and_not_retried(tmp_path: Path) -> None:
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        raise httpx.ReadTimeout("mock timeout", request=request)
+
+    result = _run_with_handler(tmp_path, httpx.MockTransport(handler))
+
+    assert result.status == "TIMEOUT"
+    assert calls == 1
+    assert result.attempt_count == 1
+
+
+def test_invalid_structured_candidate_is_rejected_whole(tmp_path: Path) -> None:
+    envelope = _envelope()
+    envelope["output"][0]["content"][0]["text"] = "not-json"  # type: ignore[index]
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, json=envelope)
+
+    result = _run_with_handler(tmp_path, httpx.MockTransport(handler))
+
+    assert result.status == "CANDIDATE_REJECTED"
+    assert result.candidate_validation_state == "REJECTED"
+    assert result.claims_validation_state == "NOT_RUN"
+    assert calls == 1
+
+
+def test_invalid_claims_are_rejected_without_repair(tmp_path: Path) -> None:
+    candidate = _candidate()
+    candidate["claims"][0]["provenance"]["fact_refs"] = ["/not/approved"]  # type: ignore[index]
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_envelope(candidate))
+
+    result = _run_with_handler(tmp_path, httpx.MockTransport(handler))
+
+    assert result.status == "CLAIMS_REJECTED"
+    assert result.candidate_validation_state == "VALID"
+    assert result.claims_validation_state == "REJECTED"
+    assert result.claim_count == 0
+
+
+def test_renderer_failure_rejects_entire_candidate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    blocked = CandidateHostEvidence(
+        worker_status="WORKER_CANDIDATE_VALID",
+        claims_status="CLAIMS_VALID",
+        renderer_status="RENDERED_BLOCKED",
+        errors=["rendered_document_not_deterministic"],
+        claim_count=42,
+        facts_pointer_binding_count=42,
+        candidate_sha256="d" * 64,
+        rendered_sha256="",
+        free_text_field_count=0,
+        unsourced_claim_count=0,
+        trading_claim_count=0,
+        raw_qfq_mismatch_count=0,
+        sensitive_hit_count=0,
+    )
+    monkeypatch.setattr(
+        "app.services.phase2_minimal_ark_canary.validate_isolated_candidate",
+        lambda *_args, **_kwargs: blocked,
+    )
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_envelope())
+
+    result = _run_with_handler(tmp_path, httpx.MockTransport(handler))
+
+    assert result.status == "RENDERER_REJECTED"
+    assert result.candidate_validation_state == "VALID"
+    assert result.claims_validation_state == "VALID"
+    assert result.renderer_validation_state == "REJECTED"

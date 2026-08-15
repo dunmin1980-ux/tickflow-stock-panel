@@ -22,12 +22,15 @@ from app.providers.ark_provider import (
     ARK_ENDPOINT_ALIAS,
     ARK_EXACT_MODEL_ID,
     ARK_PROVIDER_ID,
+    ArkProviderContractError,
+    adapt_ark_responses_envelope,
     build_ark_responses_request,
 )
 from app.providers.base import ProviderRequest
 from app.schemas.phase2_claims import WorkerClaimsCandidate
 from app.services.phase2_ai_worker_protocol import build_worker_projection
 from app.services.phase2_claims_service import canonical_json_bytes
+from app.services.phase2_isolation_runtime import validate_isolated_candidate
 
 EXPECTED_FACTS_SHA256 = (
     "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956"
@@ -133,6 +136,21 @@ class MinimalHTTPResponse:
     status_code: int
     content_type: str
     body: bytes
+
+
+@dataclass(frozen=True)
+class MinimalCanaryResult:
+    status: str
+    attempt_count: int
+    provider_http_status: int | None
+    candidate_validation_state: str
+    claims_validation_state: str
+    renderer_validation_state: str
+    claim_count: int
+    claims_candidate_sha256: str
+    rendered_sha256: str
+    can_publish: Literal[False]
+    ledger_path: Path
 
 
 CommandExecutor = Callable[
@@ -590,3 +608,241 @@ class ArkHostTransport:
             raise MinimalArkCanaryError("provider_timeout") from exc
         except httpx.HTTPError as exc:
             raise MinimalArkCanaryError("provider_transport_error") from exc
+
+
+def _strict_envelope(raw: bytes) -> dict[str, Any]:
+    def reject_constant(_value: str) -> None:
+        raise ValueError("non_finite")
+
+    def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError("duplicate_key")
+            value[key] = item
+        return value
+
+    try:
+        value = json.loads(
+            raw,
+            parse_constant=reject_constant,
+            object_pairs_hook=reject_duplicates,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise MinimalArkCanaryError("provider_envelope_invalid") from exc
+    if not isinstance(value, dict):
+        raise MinimalArkCanaryError("provider_envelope_invalid")
+    return value
+
+
+def _result(
+    *,
+    status: str,
+    provider_http_status: int | None,
+    candidate_validation_state: str,
+    claims_validation_state: str,
+    renderer_validation_state: str,
+    claim_count: int,
+    claims_candidate_sha256: str,
+    rendered_sha256: str,
+    ledger_path: Path,
+) -> MinimalCanaryResult:
+    return MinimalCanaryResult(
+        status=status,
+        attempt_count=1,
+        provider_http_status=provider_http_status,
+        candidate_validation_state=candidate_validation_state,
+        claims_validation_state=claims_validation_state,
+        renderer_validation_state=renderer_validation_state,
+        claim_count=claim_count,
+        claims_candidate_sha256=claims_candidate_sha256,
+        rendered_sha256=rendered_sha256,
+        can_publish=False,
+        ledger_path=ledger_path,
+    )
+
+
+def _finalize_result(
+    ledger_path: Path,
+    *,
+    terminal_state: str,
+    provider_http_status: int | None,
+    candidate_validation_state: str,
+    claims_validation_state: str,
+    renderer_validation_state: str,
+    clock: Callable[[], str],
+    claim_count: int = 0,
+    claims_candidate_sha256: str = "",
+    rendered_sha256: str = "",
+) -> MinimalCanaryResult:
+    finalize_minimal_attempt(
+        ledger_path,
+        terminal_state=terminal_state,
+        provider_http_status=provider_http_status,
+        candidate_validation_state=candidate_validation_state,
+        claims_validation_state=claims_validation_state,
+        now=clock(),
+    )
+    return _result(
+        status=terminal_state,
+        provider_http_status=provider_http_status,
+        candidate_validation_state=candidate_validation_state,
+        claims_validation_state=claims_validation_state,
+        renderer_validation_state=renderer_validation_state,
+        claim_count=claim_count,
+        claims_candidate_sha256=claims_candidate_sha256,
+        rendered_sha256=rendered_sha256,
+        ledger_path=ledger_path,
+    )
+
+
+def execute_minimal_ark_canary(
+    *,
+    repo_root: Path,
+    attempts_root: Path,
+    scope_id: str,
+    candidate_sha256: str,
+    request_id: str,
+    transport: ArkHostTransport,
+    secret_reader: Callable[[], str],
+    clock: Callable[[], str],
+) -> MinimalCanaryResult:
+    """Execute one already approved attempt without fallback or retry."""
+    inputs = build_minimal_execution_inputs(repo_root, request_id)
+    ledger_path = reserve_minimal_attempt(
+        attempts_root,
+        scope_id=scope_id,
+        candidate_sha256=candidate_sha256,
+        inputs=inputs,
+        now=clock(),
+    )
+    secret = secret_reader()
+    if not isinstance(secret, str):
+        raise MinimalArkCanaryError("keychain_secret_invalid")
+    mark_minimal_dispatch(ledger_path, now=clock())
+    try:
+        response = transport.send(inputs, secret)
+    except MinimalArkCanaryError as exc:
+        error_code = str(exc)
+        terminal_state = {
+            "provider_timeout": "TIMEOUT",
+            "provider_transport_error": "TRANSPORT_ERROR",
+            "provider_response_too_large": "RESPONSE_REJECTED",
+        }.get(error_code, "INTERNAL_ERROR")
+        return _finalize_result(
+            ledger_path,
+            terminal_state=terminal_state,
+            provider_http_status=None,
+            candidate_validation_state="NOT_RUN",
+            claims_validation_state="NOT_RUN",
+            renderer_validation_state="NOT_RUN",
+            clock=clock,
+        )
+    finally:
+        secret = ""
+
+    if response.status_code != 200:
+        return _finalize_result(
+            ledger_path,
+            terminal_state="HTTP_ERROR",
+            provider_http_status=response.status_code,
+            candidate_validation_state="NOT_RUN",
+            claims_validation_state="NOT_RUN",
+            renderer_validation_state="NOT_RUN",
+            clock=clock,
+        )
+    if not response.content_type.lower().startswith("application/json"):
+        return _finalize_result(
+            ledger_path,
+            terminal_state="RESPONSE_REJECTED",
+            provider_http_status=response.status_code,
+            candidate_validation_state="NOT_RUN",
+            claims_validation_state="NOT_RUN",
+            renderer_validation_state="NOT_RUN",
+            clock=clock,
+        )
+    try:
+        envelope = _strict_envelope(response.body)
+    except MinimalArkCanaryError:
+        return _finalize_result(
+            ledger_path,
+            terminal_state="RESPONSE_REJECTED",
+            provider_http_status=response.status_code,
+            candidate_validation_state="NOT_RUN",
+            claims_validation_state="NOT_RUN",
+            renderer_validation_state="NOT_RUN",
+            clock=clock,
+        )
+    request = _provider_request(
+        request_id=inputs.request_id,
+        projection=inputs.projection,
+        claims_schema=inputs.claims_schema,
+    )
+    try:
+        provider_result = adapt_ark_responses_envelope(
+            request,
+            provider_http_status=response.status_code,
+            content_type=response.content_type,
+            envelope=envelope,
+            stage_metadata={
+                "execution_path": "minimal_ark_host",
+                "retry_count": 0,
+            },
+        )
+    except ArkProviderContractError as exc:
+        error_code = str(exc)
+        terminal_state = (
+            "CANDIDATE_REJECTED"
+            if error_code.startswith("ark_candidate_")
+            or error_code.startswith("ark_structured_output_")
+            else "RESPONSE_REJECTED"
+        )
+        return _finalize_result(
+            ledger_path,
+            terminal_state=terminal_state,
+            provider_http_status=response.status_code,
+            candidate_validation_state=(
+                "REJECTED" if terminal_state == "CANDIDATE_REJECTED" else "NOT_RUN"
+            ),
+            claims_validation_state="NOT_RUN",
+            renderer_validation_state="NOT_RUN",
+            clock=clock,
+        )
+
+    candidate = provider_result.claims_candidate.model_dump(mode="json")
+    evidence = validate_isolated_candidate(repo_root, candidate, inputs.projection)
+    if evidence.claims_status != "CLAIMS_VALID":
+        return _finalize_result(
+            ledger_path,
+            terminal_state="CLAIMS_REJECTED",
+            provider_http_status=response.status_code,
+            candidate_validation_state="VALID",
+            claims_validation_state="REJECTED",
+            renderer_validation_state="NOT_RUN",
+            clock=clock,
+            claims_candidate_sha256=evidence.candidate_sha256,
+        )
+    if evidence.renderer_status != "RENDERED_VALID" or evidence.errors:
+        return _finalize_result(
+            ledger_path,
+            terminal_state="RENDERER_REJECTED",
+            provider_http_status=response.status_code,
+            candidate_validation_state="VALID",
+            claims_validation_state="VALID",
+            renderer_validation_state="REJECTED",
+            clock=clock,
+            claim_count=evidence.claim_count,
+            claims_candidate_sha256=evidence.candidate_sha256,
+        )
+    return _finalize_result(
+        ledger_path,
+        terminal_state="SUCCEEDED",
+        provider_http_status=response.status_code,
+        candidate_validation_state="VALID",
+        claims_validation_state="VALID",
+        renderer_validation_state="VALID",
+        clock=clock,
+        claim_count=evidence.claim_count,
+        claims_candidate_sha256=evidence.candidate_sha256,
+        rendered_sha256=evidence.rendered_sha256,
+    )
