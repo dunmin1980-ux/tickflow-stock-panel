@@ -14,12 +14,16 @@ from app.services.phase2_claims_service import canonical_json_bytes
 from app.services.phase2_minimal_ark_approval import (
     MinimalArkApprovalError,
     build_historical_evidence_manifest,
+    build_historical_request_id_registry,
     build_minimal_candidate,
     build_minimal_scope,
     run_minimal_mock_e2e,
+    validate_historical_request_id_registry,
     validate_installed_approval,
     validate_minimal_candidate,
     validate_minimal_scope,
+    validate_request_id_available,
+    verify_historical_evidence_manifest,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -29,8 +33,9 @@ def _sha(value: object) -> str:
     return hashlib.sha256(canonical_json_bytes(value)).hexdigest()
 
 
-def _candidate_inputs(tmp_path: Path) -> tuple[dict, str, str]:
+def _candidate_inputs(tmp_path: Path) -> tuple[dict, str, str, str]:
     manifest = build_historical_evidence_manifest(REPO_ROOT)
+    request_history = build_historical_request_id_registry(REPO_ROOT, manifest)
     mock = {
         "mock_e2e_version": 1,
         "status": "MOCK_E2E_PASSED",
@@ -39,18 +44,22 @@ def _candidate_inputs(tmp_path: Path) -> tuple[dict, str, str]:
     }
     manifest_sha = _sha(manifest)
     mock_sha = _sha(mock)
+    request_history_sha = _sha(request_history)
     candidate = build_minimal_candidate(
         REPO_ROOT,
         source_git_head="a" * 40,
         historical_evidence_manifest_sha256=manifest_sha,
         mock_e2e_sha256=mock_sha,
+        request_history_registry_sha256=request_history_sha,
     )
-    return candidate, manifest_sha, mock_sha
+    return candidate, manifest_sha, mock_sha, request_history_sha
 
 
 def test_candidate_is_deterministic_minimal_and_fully_bound(tmp_path: Path) -> None:
-    candidate, manifest_sha, mock_sha = _candidate_inputs(tmp_path)
-    repeated, _, _ = _candidate_inputs(tmp_path)
+    candidate, manifest_sha, mock_sha, request_history_sha = _candidate_inputs(
+        tmp_path
+    )
+    repeated, _, _, _ = _candidate_inputs(tmp_path)
 
     assert canonical_json_bytes(candidate) == canonical_json_bytes(repeated)
     assert candidate["provider_id"] == "volcengine_ark"
@@ -79,6 +88,9 @@ def test_candidate_is_deterministic_minimal_and_fully_bound(tmp_path: Path) -> N
         manifest_sha
     )
     assert candidate["artifact_hashes"]["mock_e2e_sha256"] == mock_sha
+    assert candidate["artifact_hashes"]["request_history_registry_sha256"] == (
+        request_history_sha
+    )
     assert set(candidate["source_bindings"]) == {
         "ark_adapter",
         "claims_renderer",
@@ -108,11 +120,14 @@ def test_candidate_is_deterministic_minimal_and_fully_bound(tmp_path: Path) -> N
         expected_git_head="a" * 40,
         historical_evidence_manifest_sha256=manifest_sha,
         mock_e2e_sha256=mock_sha,
+        request_history_registry_sha256=request_history_sha,
     ) == []
 
 
 def test_candidate_mutation_is_rejected(tmp_path: Path) -> None:
-    candidate, manifest_sha, mock_sha = _candidate_inputs(tmp_path)
+    candidate, manifest_sha, mock_sha, request_history_sha = _candidate_inputs(
+        tmp_path
+    )
     candidate["execution_contract"]["retry_count"] = 1
 
     errors = validate_minimal_candidate(
@@ -121,13 +136,14 @@ def test_candidate_mutation_is_rejected(tmp_path: Path) -> None:
         expected_git_head="a" * 40,
         historical_evidence_manifest_sha256=manifest_sha,
         mock_e2e_sha256=mock_sha,
+        request_history_registry_sha256=request_history_sha,
     )
 
     assert "candidate_schema_invalid" in errors
 
 
 def test_new_scope_is_deterministic_available_and_attempt_free(tmp_path: Path) -> None:
-    candidate, _, _ = _candidate_inputs(tmp_path)
+    candidate, _, _, _ = _candidate_inputs(tmp_path)
     candidate_sha = _sha(candidate)
     attempts_root = tmp_path / "attempts"
 
@@ -193,12 +209,63 @@ def test_historical_manifest_is_complete_deterministic_and_regular() -> None:
     assert len(first["files"]) == first["file_count"]
     assert all(item["sha256"] for item in first["files"])
     assert all(not Path(item["path"]).is_absolute() for item in first["files"])
+    assert verify_historical_evidence_manifest(REPO_ROOT, first) == []
+
+
+def test_historical_request_registry_is_deterministic_and_blocks_reuse(
+    tmp_path: Path,
+) -> None:
+    manifest = build_historical_evidence_manifest(REPO_ROOT)
+    first = build_historical_request_id_registry(REPO_ROOT, manifest)
+    second = build_historical_request_id_registry(REPO_ROOT, manifest)
+
+    assert first == second
+    assert first["status"] == "FROZEN_PRESERVED"
+    assert first["request_id_count"] > 20
+    assert "2f17745f58534063bdd7eda1eb0d16f1" in first["request_ids"]
+    assert "93cf0ea84804444ebc9745fa34c4bb82" in first["request_ids"]
+    assert "d57b276fe9014d35bdae5a92950ca17b" in first["request_ids"]
+    assert validate_historical_request_id_registry(
+        REPO_ROOT, first, manifest
+    ) == []
+
+    with pytest.raises(MinimalArkApprovalError, match="request_id_reused"):
+        validate_request_id_available(
+            "2f17745f58534063bdd7eda1eb0d16f1",
+            first,
+            tmp_path / "attempts",
+        )
+
+
+def test_request_registry_blocks_ids_from_any_minimal_scope(tmp_path: Path) -> None:
+    manifest = build_historical_evidence_manifest(REPO_ROOT)
+    registry = build_historical_request_id_registry(REPO_ROOT, manifest)
+    reused = "a" * 32
+    ledger = tmp_path / "attempts" / ("b" * 64) / reused / "ledger.json"
+    ledger.parent.mkdir(parents=True)
+    ledger.write_bytes(
+        canonical_json_bytes(
+            {
+                "request_id": reused,
+                "state": "TERMINAL",
+                "attempt_count": 1,
+            }
+        )
+    )
+    os.chmod(ledger, 0o600)
+
+    with pytest.raises(MinimalArkApprovalError, match="request_id_reused"):
+        validate_request_id_available(reused, registry, tmp_path / "attempts")
+
+    available = hashlib.sha256(b"new-minimal-request-id").hexdigest()[:32]
+    assert available not in registry["request_ids"]
+    validate_request_id_available(available, registry, tmp_path / "attempts")
 
 
 def test_private_approval_validation_never_returns_secret_material(
     tmp_path: Path,
 ) -> None:
-    candidate, _, _ = _candidate_inputs(tmp_path)
+    candidate, _, _, _ = _candidate_inputs(tmp_path)
     candidate_path = tmp_path / "candidate.json"
     candidate_path.write_bytes(canonical_json_bytes(candidate))
     candidate_sha = hashlib.sha256(candidate_path.read_bytes()).hexdigest()
@@ -272,20 +339,16 @@ def test_future_launcher_preflight_does_not_read_secret_or_execute(
         text=True,
     ).stdout.strip()
     manifest = build_historical_evidence_manifest(REPO_ROOT)
+    request_history = build_historical_request_id_registry(REPO_ROOT, manifest)
     manifest_sha = _sha(manifest)
-    mock_sha = _sha(
-        {
-            "mock_e2e_version": 1,
-            "status": "MOCK_E2E_PASSED",
-            "real_provider_attempts": 0,
-            "real_ai_calls": 0,
-        }
-    )
+    mock = run_minimal_mock_e2e(REPO_ROOT, tmp_path / "preflight-mock-runtime")
+    mock_sha = _sha(mock)
     candidate = build_minimal_candidate(
         REPO_ROOT,
         source_git_head=head,
         historical_evidence_manifest_sha256=manifest_sha,
         mock_e2e_sha256=mock_sha,
+        request_history_registry_sha256=_sha(request_history),
     )
     candidate_path = tmp_path / "candidate.json"
     candidate_path.write_bytes(canonical_json_bytes(candidate))
@@ -311,6 +374,12 @@ def test_future_launcher_preflight_does_not_read_secret_or_execute(
         )
     )
     os.chmod(approval_path, 0o600)
+    manifest_path = tmp_path / "historical_evidence_manifest.json"
+    manifest_path.write_bytes(canonical_json_bytes(manifest))
+    mock_path = tmp_path / "mock_e2e.json"
+    mock_path.write_bytes(canonical_json_bytes(mock))
+    request_history_path = tmp_path / "historical_request_ids.json"
+    request_history_path.write_bytes(canonical_json_bytes(request_history))
 
     result = subprocess.run(
         [
@@ -324,6 +393,12 @@ def test_future_launcher_preflight_does_not_read_secret_or_execute(
             str(scope_path),
             "--approval",
             str(approval_path),
+            "--historical-manifest",
+            str(manifest_path),
+            "--mock-e2e",
+            str(mock_path),
+            "--request-history",
+            str(request_history_path),
             "--attempts-root",
             str(attempts_root),
             "--lock",

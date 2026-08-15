@@ -16,6 +16,7 @@ from app.services.phase2_claims_service import canonical_json_bytes
 from app.services.phase2_minimal_ark_approval import (
     MinimalArkApprovalError,
     build_historical_evidence_manifest,
+    build_historical_request_id_registry,
     build_minimal_candidate,
     build_minimal_scope,
     run_minimal_mock_e2e,
@@ -74,16 +75,21 @@ def build_offline_artifacts(
     if _git(repo_root, "status", "--porcelain=v1", "--untracked-files=all"):
         raise MinimalArkApprovalError("worktree_not_clean")
     manifest = build_historical_evidence_manifest(repo_root)
+    request_history = build_historical_request_id_registry(repo_root, manifest)
     mock = run_minimal_mock_e2e(repo_root, output_root / ".mock-runtime")
     if mock["status"] != "MOCK_E2E_PASSED":
         raise MinimalArkApprovalError("mock_e2e_failed")
     manifest_sha = hashlib.sha256(canonical_json_bytes(manifest)).hexdigest()
     mock_sha = hashlib.sha256(canonical_json_bytes(mock)).hexdigest()
+    request_history_sha = hashlib.sha256(
+        canonical_json_bytes(request_history)
+    ).hexdigest()
     candidate = build_minimal_candidate(
         repo_root,
         source_git_head=head,
         historical_evidence_manifest_sha256=manifest_sha,
         mock_e2e_sha256=mock_sha,
+        request_history_registry_sha256=request_history_sha,
     )
     candidate_errors = validate_minimal_candidate(
         candidate,
@@ -91,6 +97,7 @@ def build_offline_artifacts(
         expected_git_head=head,
         historical_evidence_manifest_sha256=manifest_sha,
         mock_e2e_sha256=mock_sha,
+        request_history_registry_sha256=request_history_sha,
     )
     if candidate_errors:
         raise MinimalArkApprovalError("candidate_validation_failed")
@@ -109,6 +116,7 @@ def build_offline_artifacts(
         "approval_scope_id": scope["scope_id"],
         "scope_historical_attempts": 0,
         "scope_availability": "AVAILABLE",
+        "historical_request_id_count": request_history["request_id_count"],
         "mock_e2e": "PASSED",
         "real_ark_provider_attempts": 0,
         "real_ai_calls": 0,
@@ -118,6 +126,7 @@ def build_offline_artifacts(
     }
     for name, value in (
         ("historical_evidence_manifest.json", manifest),
+        ("historical_request_ids.json", request_history),
         ("mock_e2e.json", mock),
         ("approval_candidate.json", candidate),
         ("approval_scope.json", scope),

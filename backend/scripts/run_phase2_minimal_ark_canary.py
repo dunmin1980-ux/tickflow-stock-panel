@@ -20,12 +20,17 @@ from app.services.phase2_claims_service import canonical_json_bytes
 from app.services.phase2_minimal_ark_approval import (
     MinimalArkApprovalError,
     load_minimal_artifact,
+    validate_historical_request_id_registry,
     validate_installed_approval,
     validate_minimal_candidate,
+    validate_minimal_mock_e2e,
     validate_minimal_scope,
+    validate_request_id_available,
+    verify_historical_evidence_manifest,
 )
 from app.services.phase2_minimal_ark_canary import (
     ArkHostTransport,
+    MinimalArkCanaryError,
     execute_minimal_ark_canary,
     read_minimal_ark_keychain_secret_once,
 )
@@ -73,13 +78,19 @@ def _preflight(
     candidate_path: Path,
     scope_path: Path,
     approval_path: Path,
+    historical_manifest_path: Path,
+    mock_e2e_path: Path,
+    request_history_path: Path,
     attempts_root: Path,
-) -> tuple[dict, dict, dict]:
+) -> tuple[dict, dict, dict, dict]:
     approval = validate_installed_approval(
         approval_path, candidate_path, scope_path
     )
     candidate = load_minimal_artifact(candidate_path)
     scope = load_minimal_artifact(scope_path)
+    historical_manifest = load_minimal_artifact(historical_manifest_path)
+    mock_e2e = load_minimal_artifact(mock_e2e_path)
+    request_history = load_minimal_artifact(request_history_path)
     current_head = _git(repo_root, "rev-parse", "HEAD")
     remote_head = _git(repo_root, "rev-parse", f"fork/{_BRANCH}")
     worktree_status = _git(
@@ -102,20 +113,45 @@ def _preflight(
     ):
         raise MinimalArkApprovalError("runtime_artifact_hash_mismatch")
     artifacts = candidate.get("artifact_hashes", {})
+    historical_manifest_sha = hashlib.sha256(
+        canonical_json_bytes(historical_manifest)
+    ).hexdigest()
+    mock_e2e_sha = hashlib.sha256(canonical_json_bytes(mock_e2e)).hexdigest()
+    request_history_sha = hashlib.sha256(
+        canonical_json_bytes(request_history)
+    ).hexdigest()
     errors = validate_minimal_candidate(
         candidate,
         repo_root,
         expected_git_head=current_head,
-        historical_evidence_manifest_sha256=artifacts.get(
-            "historical_evidence_manifest_sha256", ""
-        ),
-        mock_e2e_sha256=artifacts.get("mock_e2e_sha256", ""),
+        historical_evidence_manifest_sha256=historical_manifest_sha,
+        mock_e2e_sha256=mock_e2e_sha,
+        request_history_registry_sha256=request_history_sha,
+    )
+    if (
+        historical_manifest_sha
+        != artifacts.get("historical_evidence_manifest_sha256")
+        or mock_e2e_sha != artifacts.get("mock_e2e_sha256")
+        or request_history_sha
+        != artifacts.get("request_history_registry_sha256")
+    ):
+        errors.append("runtime_evidence_hash_mismatch")
+    errors.extend(
+        verify_historical_evidence_manifest(repo_root, historical_manifest)
+    )
+    errors.extend(validate_minimal_mock_e2e(mock_e2e))
+    errors.extend(
+        validate_historical_request_id_registry(
+            repo_root,
+            request_history,
+            historical_manifest,
+        )
     )
     candidate_sha = approval["approval_candidate_sha256"]
     errors.extend(validate_minimal_scope(scope, candidate_sha, attempts_root))
     if errors:
         raise MinimalArkApprovalError("runtime_preflight_failed")
-    return approval, candidate, scope
+    return approval, candidate, scope, request_history
 
 
 def main() -> int:
@@ -124,17 +160,23 @@ def main() -> int:
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--scope", type=Path, required=True)
     parser.add_argument("--approval", type=Path, required=True)
+    parser.add_argument("--historical-manifest", type=Path, required=True)
+    parser.add_argument("--mock-e2e", type=Path, required=True)
+    parser.add_argument("--request-history", type=Path, required=True)
     parser.add_argument("--attempts-root", type=Path, required=True)
     parser.add_argument("--lock", type=Path, required=True)
     parser.add_argument("--request-id")
     parser.add_argument("--execute", action="store_true")
     args = parser.parse_args()
     try:
-        approval, _candidate, scope = _preflight(
+        approval, _candidate, scope, request_history = _preflight(
             args.repo_root.resolve(),
             args.candidate.expanduser().absolute(),
             args.scope.expanduser().absolute(),
             args.approval.expanduser().absolute(),
+            args.historical_manifest.expanduser().absolute(),
+            args.mock_e2e.expanduser().absolute(),
+            args.request_history.expanduser().absolute(),
             args.attempts_root.expanduser().absolute(),
         )
         if not args.execute:
@@ -154,14 +196,20 @@ def main() -> int:
         ) is None:
             raise MinimalArkApprovalError("request_id_invalid")
         with _exclusive_lock(args.lock.expanduser().absolute()):
+            attempts_root = args.attempts_root.expanduser().absolute()
             result = execute_minimal_ark_canary(
                 repo_root=args.repo_root.resolve(),
-                attempts_root=args.attempts_root.expanduser().absolute(),
+                attempts_root=attempts_root,
                 scope_id=scope["scope_id"],
                 candidate_sha256=approval["approval_candidate_sha256"],
                 request_id=args.request_id,
                 transport=ArkHostTransport(),
                 secret_reader=read_minimal_ark_keychain_secret_once,
+                request_id_guard=lambda request_id: validate_request_id_available(
+                    request_id,
+                    request_history,
+                    attempts_root,
+                ),
                 clock=lambda: datetime.now(UTC).isoformat(),
             )
         print(
@@ -179,7 +227,12 @@ def main() -> int:
             )
         )
         return 0 if result.status == "SUCCEEDED" else 1
-    except (MinimalArkApprovalError, OSError, ValueError) as exc:
+    except (
+        MinimalArkApprovalError,
+        MinimalArkCanaryError,
+        OSError,
+        ValueError,
+    ) as exc:
         print(json.dumps({"status": "BLOCKED", "reason": str(exc)}, sort_keys=True))
         return 1
 

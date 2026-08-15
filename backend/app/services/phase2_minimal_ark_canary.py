@@ -461,6 +461,44 @@ def mark_minimal_dispatch(path: Path, *, now: str) -> dict[str, Any]:
     return ledger
 
 
+def release_prepared_attempt(path: Path) -> None:
+    ledger = _read_ledger(path)
+    request_directory = path.parent
+    scope_directory = request_directory.parent
+    attempts_root = scope_directory.parent
+    if (
+        ledger.get("state") != "PREPARED"
+        or ledger.get("attempt_count") != 0
+        or ledger.get("dispatch_started") is not False
+        or ledger.get("terminal_state") is not None
+        or request_directory.name != ledger.get("request_id")
+        or scope_directory.name != ledger.get("scope_id")
+    ):
+        raise MinimalArkCanaryError("prepared_attempt_release_forbidden")
+    try:
+        if set(request_directory.iterdir()) != {path}:
+            raise MinimalArkCanaryError("prepared_attempt_release_forbidden")
+        path.unlink()
+        request_handle = os.open(request_directory, os.O_RDONLY | _DIRECTORY)
+        try:
+            os.fsync(request_handle)
+        finally:
+            os.close(request_handle)
+        request_directory.rmdir()
+        if any(scope_directory.iterdir()):
+            raise MinimalArkCanaryError("prepared_attempt_release_forbidden")
+        scope_directory.rmdir()
+        root_handle = os.open(attempts_root, os.O_RDONLY | _DIRECTORY)
+        try:
+            os.fsync(root_handle)
+        finally:
+            os.close(root_handle)
+    except MinimalArkCanaryError:
+        raise
+    except OSError as exc:
+        raise MinimalArkCanaryError("prepared_attempt_release_failed") from exc
+
+
 def finalize_minimal_attempt(
     path: Path,
     *,
@@ -705,9 +743,16 @@ def execute_minimal_ark_canary(
     request_id: str,
     transport: ArkHostTransport,
     secret_reader: Callable[[], str],
+    request_id_guard: Callable[[str], None],
     clock: Callable[[], str],
 ) -> MinimalCanaryResult:
     """Execute one already approved attempt without fallback or retry."""
+    try:
+        request_id_guard(request_id)
+    except MinimalArkCanaryError:
+        raise
+    except Exception as exc:
+        raise MinimalArkCanaryError("request_id_guard_failed") from exc
     inputs = build_minimal_execution_inputs(repo_root, request_id)
     ledger_path = reserve_minimal_attempt(
         attempts_root,
@@ -716,9 +761,20 @@ def execute_minimal_ark_canary(
         inputs=inputs,
         now=clock(),
     )
-    secret = secret_reader()
-    if not isinstance(secret, str):
-        raise MinimalArkCanaryError("keychain_secret_invalid")
+    try:
+        secret = secret_reader()
+        if not isinstance(secret, str):
+            raise MinimalArkCanaryError("keychain_secret_invalid")
+    except Exception as exc:
+        try:
+            release_prepared_attempt(ledger_path)
+        except MinimalArkCanaryError as cleanup_exc:
+            raise MinimalArkCanaryError(
+                "prepared_attempt_release_failed"
+            ) from cleanup_exc
+        if isinstance(exc, MinimalArkCanaryError):
+            raise
+        raise MinimalArkCanaryError("keychain_secret_unavailable") from exc
     mark_minimal_dispatch(ledger_path, now=clock())
     try:
         response = transport.send(inputs, secret)

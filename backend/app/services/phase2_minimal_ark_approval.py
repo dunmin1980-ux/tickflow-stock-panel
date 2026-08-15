@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 from pathlib import Path
@@ -27,6 +28,8 @@ from app.services.phase2_minimal_ark_canary import (
 
 _SHA256 = "0123456789abcdef"
 _NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+_REQUEST_ID = re.compile(r"^[0-9a-f]{32}$")
+_REQUEST_ID_BYTES = re.compile(rb"(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])")
 _SOURCE_PATHS = {
     "ark_adapter": "backend/app/providers/ark_provider.py",
     "claims_renderer": "backend/app/services/phase2_claims_renderer.py",
@@ -97,6 +100,7 @@ class MinimalArtifactHashes(_StrictFrozenModel):
     projection_sha256: str
     prompt_sha256: str
     request_contract_sha256: str
+    request_history_registry_sha256: str
 
     @field_validator("*")
     @classmethod
@@ -245,12 +249,111 @@ def build_historical_evidence_manifest(repo_root: Path) -> dict[str, Any]:
     }
 
 
+def verify_historical_evidence_manifest(
+    repo_root: Path,
+    manifest: Any,
+) -> list[str]:
+    try:
+        expected = build_historical_evidence_manifest(repo_root)
+    except MinimalArkApprovalError:
+        return ["historical_evidence_invalid"]
+    if manifest != expected:
+        return ["historical_evidence_mutated"]
+    return []
+
+
+def build_historical_request_id_registry(
+    repo_root: Path,
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    if verify_historical_evidence_manifest(repo_root, manifest):
+        raise MinimalArkApprovalError("historical_evidence_invalid")
+    request_ids: set[str] = set()
+    for item in manifest["files"]:
+        raw = _regular_bytes(
+            repo_root / item["path"],
+            "historical_evidence_file_invalid",
+        )
+        request_ids.update(
+            match.group().decode("ascii")
+            for match in _REQUEST_ID_BYTES.finditer(raw)
+        )
+    if not request_ids:
+        raise MinimalArkApprovalError("historical_request_registry_empty")
+    return {
+        "request_history_registry_version": 1,
+        "status": "FROZEN_PRESERVED",
+        "source_manifest_sha256": _canonical_sha256(manifest),
+        "request_id_count": len(request_ids),
+        "request_ids": sorted(request_ids),
+    }
+
+
+def validate_historical_request_id_registry(
+    repo_root: Path,
+    registry: Any,
+    manifest: dict[str, Any],
+) -> list[str]:
+    try:
+        expected = build_historical_request_id_registry(repo_root, manifest)
+    except MinimalArkApprovalError:
+        return ["historical_request_registry_invalid"]
+    if registry != expected:
+        return ["historical_request_registry_mutated"]
+    return []
+
+
+def validate_request_id_available(
+    request_id: str,
+    registry: dict[str, Any],
+    attempts_root: Path,
+) -> None:
+    if _REQUEST_ID.fullmatch(request_id) is None:
+        raise MinimalArkApprovalError("request_id_invalid")
+    request_ids = registry.get("request_ids")
+    if (
+        registry.get("request_history_registry_version") != 1
+        or registry.get("status") != "FROZEN_PRESERVED"
+        or not isinstance(request_ids, list)
+        or request_ids != sorted(set(request_ids))
+        or registry.get("request_id_count") != len(request_ids)
+        or any(
+            not isinstance(value, str) or _REQUEST_ID.fullmatch(value) is None
+            for value in request_ids
+        )
+    ):
+        raise MinimalArkApprovalError("historical_request_registry_invalid")
+    if request_id in request_ids:
+        raise MinimalArkApprovalError("request_id_reused")
+    if attempts_root.is_symlink():
+        raise MinimalArkApprovalError("minimal_attempt_history_invalid")
+    if not attempts_root.exists():
+        return
+    if not attempts_root.is_dir():
+        raise MinimalArkApprovalError("minimal_attempt_history_invalid")
+    for ledger_path in attempts_root.rglob("ledger.json"):
+        try:
+            metadata = os.lstat(ledger_path)
+            ledger = json.loads(
+                _regular_bytes(ledger_path, "minimal_attempt_history_invalid")
+            )
+        except (UnicodeDecodeError, json.JSONDecodeError, OSError) as exc:
+            raise MinimalArkApprovalError(
+                "minimal_attempt_history_invalid"
+            ) from exc
+        if stat.S_IMODE(metadata.st_mode) != 0o600 or not isinstance(ledger, dict):
+            raise MinimalArkApprovalError("minimal_attempt_history_invalid")
+        if ledger.get("request_id") == request_id:
+            raise MinimalArkApprovalError("request_id_reused")
+
+
 def build_minimal_candidate(
     repo_root: Path,
     *,
     source_git_head: str,
     historical_evidence_manifest_sha256: str,
     mock_e2e_sha256: str,
+    request_history_registry_sha256: str,
 ) -> dict[str, Any]:
     inputs = build_minimal_execution_inputs(repo_root, "0" * 32)
     claims_schema_sha256 = _canonical_sha256(inputs.claims_schema)
@@ -276,6 +379,9 @@ def build_minimal_candidate(
             "prompt_sha256": inputs.prompt_sha256,
             "request_contract_sha256": _sha256(
                 _regular_bytes(request_contract_path, "request_contract_invalid")
+            ),
+            "request_history_registry_sha256": (
+                request_history_registry_sha256
             ),
         },
         "source_bindings": _source_bindings(repo_root),
@@ -304,6 +410,7 @@ def validate_minimal_candidate(
     expected_git_head: str,
     historical_evidence_manifest_sha256: str,
     mock_e2e_sha256: str,
+    request_history_registry_sha256: str,
 ) -> list[str]:
     try:
         parsed = MinimalArkCandidate.model_validate(candidate)
@@ -314,6 +421,7 @@ def validate_minimal_candidate(
                 historical_evidence_manifest_sha256
             ),
             mock_e2e_sha256=mock_e2e_sha256,
+            request_history_registry_sha256=request_history_registry_sha256,
         )
     except (ValidationError, MinimalArkApprovalError):
         return ["candidate_schema_invalid"]
@@ -459,6 +567,7 @@ def _mock_run(
         request_id=request_id,
         transport=ArkHostTransport(mock_transport=httpx.MockTransport(counted)),
         secret_reader=lambda: "PHASE2_OFFLINE_MOCK_SENTINEL",
+        request_id_guard=lambda _request_id: None,
         clock=lambda: next(times),
     )
     return (
@@ -562,6 +671,33 @@ def run_minimal_mock_e2e(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
         "secret_hits": secret_hits,
         "temporary_residue": 0 if not runtime_root.exists() else 1,
     }
+
+
+def validate_minimal_mock_e2e(evidence: Any) -> list[str]:
+    if not isinstance(evidence, dict):
+        return ["mock_e2e_invalid"]
+    happy = evidence.get("happy_path")
+    failures = evidence.get("failure_cases")
+    if (
+        evidence.get("mock_e2e_version") != 1
+        or evidence.get("status") != "MOCK_E2E_PASSED"
+        or evidence.get("happy_path_runs") != 3
+        or not isinstance(happy, list)
+        or len(happy) != 3
+        or any(item.get("status") != "SUCCEEDED" for item in happy)
+        or evidence.get("rendered_sha256_unique_count") != 1
+        or not isinstance(failures, list)
+        or [item.get("status") for item in failures]
+        != ["HTTP_ERROR", "TIMEOUT", "CANDIDATE_REJECTED", "CLAIMS_REJECTED"]
+        or evidence.get("total_mock_attempts") != 7
+        or evidence.get("real_provider_attempts") != 0
+        or evidence.get("real_ai_calls") != 0
+        or evidence.get("keychain_secret_read") is not False
+        or evidence.get("secret_hits") != 0
+        or evidence.get("temporary_residue") != 0
+    ):
+        return ["mock_e2e_invalid"]
+    return []
 
 
 def validate_installed_approval(

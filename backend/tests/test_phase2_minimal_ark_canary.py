@@ -94,6 +94,7 @@ def _run_with_handler(
         request_id="a" * 32,
         transport=ArkHostTransport(mock_transport=handler),
         secret_reader=lambda: SENTINEL_SECRET,
+        request_id_guard=lambda _request_id: None,
         clock=lambda: next(times),
     )
 
@@ -495,3 +496,100 @@ def test_unexpected_host_validation_failure_is_terminal_and_not_retried(
     assert result.attempt_count == 1
     assert calls == 1
     assert ledger["terminal_state"] == "INTERNAL_ERROR"
+
+
+def test_request_id_guard_blocks_before_secret_reservation_and_transport(
+    tmp_path: Path,
+) -> None:
+    secret_reads = 0
+    transport_calls = 0
+
+    def secret_reader() -> str:
+        nonlocal secret_reads
+        secret_reads += 1
+        return SENTINEL_SECRET
+
+    def reject_reused_id(_request_id: str) -> None:
+        raise MinimalArkCanaryError("request_id_reused")
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal transport_calls
+        transport_calls += 1
+        return httpx.Response(200, json=_envelope())
+
+    with pytest.raises(MinimalArkCanaryError, match="request_id_reused"):
+        execute_minimal_ark_canary(
+            repo_root=REPO_ROOT,
+            attempts_root=tmp_path / "attempts",
+            scope_id="b" * 64,
+            candidate_sha256="c" * 64,
+            request_id="a" * 32,
+            transport=ArkHostTransport(
+                mock_transport=httpx.MockTransport(handler)
+            ),
+            secret_reader=secret_reader,
+            request_id_guard=reject_reused_id,
+            clock=lambda: "2026-08-16T00:00:00Z",
+        )
+
+    assert secret_reads == 0
+    assert transport_calls == 0
+    assert not (tmp_path / "attempts").exists()
+
+
+def test_keychain_failure_releases_prepared_scope_without_consuming_attempt(
+    tmp_path: Path,
+) -> None:
+    attempts_root = tmp_path / "attempts"
+
+    def unavailable_secret() -> str:
+        raise MinimalArkCanaryError("keychain_secret_unavailable")
+
+    with pytest.raises(MinimalArkCanaryError, match="keychain_secret_unavailable"):
+        execute_minimal_ark_canary(
+            repo_root=REPO_ROOT,
+            attempts_root=attempts_root,
+            scope_id="b" * 64,
+            candidate_sha256="c" * 64,
+            request_id="a" * 32,
+            transport=ArkHostTransport(
+                mock_transport=httpx.MockTransport(
+                    lambda _request: httpx.Response(200, json=_envelope())
+                )
+            ),
+            secret_reader=unavailable_secret,
+            request_id_guard=lambda _request_id: None,
+            clock=lambda: "2026-08-16T00:00:00Z",
+        )
+
+    assert attempts_root.exists()
+    assert list(attempts_root.iterdir()) == []
+
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, json=_envelope())
+
+    times = iter(
+        (
+            "2026-08-16T00:01:00Z",
+            "2026-08-16T00:01:01Z",
+            "2026-08-16T00:01:02Z",
+        )
+    )
+    result = execute_minimal_ark_canary(
+        repo_root=REPO_ROOT,
+        attempts_root=attempts_root,
+        scope_id="b" * 64,
+        candidate_sha256="c" * 64,
+        request_id="a" * 32,
+        transport=ArkHostTransport(mock_transport=httpx.MockTransport(handler)),
+        secret_reader=lambda: SENTINEL_SECRET,
+        request_id_guard=lambda _request_id: None,
+        clock=lambda: next(times),
+    )
+
+    assert result.status == "SUCCEEDED"
+    assert calls == 1
