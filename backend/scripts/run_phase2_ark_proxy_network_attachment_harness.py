@@ -135,11 +135,14 @@ def run_case(*, run_number: int, image_id: str, root: Path) -> dict[str, Any]:
         _run(network_connect_command(names))
         pre_start = _inspect_container(names)
         validate_pre_start_proxy_attachments(pre_start, names)
-        validate_production_networks(_network_metadata(names), names)
+        pre_start_networks = _network_metadata(names)
+        validate_production_networks(pre_start_networks, names)
         empty_metadata = _empty_endpoint_metadata(pre_start)
         _run(["docker", "container", "start", names["proxy"]])
         post_start = _inspect_container(names)
-        validate_post_start_proxy_attachments(post_start, names)
+        post_start_networks = _network_metadata(names)
+        validate_production_networks(post_start_networks, names)
+        validate_post_start_proxy_attachments(post_start, names, post_start_networks)
         if (output_dir / "dispatch.ready").exists():
             raise ValueError("attachment_harness_dispatch_gate_released")
         return {
