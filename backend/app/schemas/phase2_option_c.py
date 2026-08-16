@@ -18,6 +18,17 @@ FixtureSource = Literal[
     "DETERMINISTIC_TEST_FIXTURE",
 ]
 ActionSide = Literal["BUY", "HOLD", "SELL"]
+InterpretationCode = Literal[
+    "MIXED_TECHNICAL_STRUCTURE",
+    "POSITIVE_TEST_STRUCTURE",
+    "RISK_TEST_STRUCTURE",
+]
+SignalCode = Literal[
+    "POSITIVE_OBSERVATION",
+    "MIXED_OBSERVATION",
+    "RISK_OBSERVATION",
+    "INVALID",
+]
 VendorPendingItem = Literal[
     "intraday_batch_entitlement",
     "first_30m_bucket_includes_09_30",
@@ -160,6 +171,53 @@ class PaperAction(SimulationSafety):
         if self.side == "HOLD" and self.quantity != 0:
             raise ValueError("hold_quantity_must_be_zero")
         return self
+
+
+class ResearchInterpretation(SimulationSafety):
+    interpretation_schema_version: Literal[1]
+    interpretation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_fixture: FixtureSource
+    symbol: Literal["000403.SZ"]
+    trade_date: date
+    code: InterpretationCode
+    reason_refs: list[str] = Field(min_length=1)
+    facts_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    claims_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class ResearchSignal(SimulationSafety):
+    signal_schema_version: Literal[1]
+    signal_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    interpretation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_fixture: FixtureSource
+    symbol: Literal["000403.SZ"]
+    trade_date: date
+    code: SignalCode
+    reason_refs: list[str] = Field(min_length=1)
+    facts_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    claims_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class ResearchDecision(SimulationSafety):
+    decision_schema_version: Literal[1]
+    decision_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    symbol: Literal["000403.SZ"]
+    name: Literal["派林生物"]
+    decision_trade_date: date
+    decision_at: datetime
+    timezone: Literal["Asia/Shanghai"]
+    fixture_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    facts_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    projection_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    claims_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    interpretation: ResearchInterpretation
+    signal: ResearchSignal
+    action: PaperAction
+
+    @field_validator("decision_at")
+    @classmethod
+    def validate_decision_at(cls, value: datetime) -> datetime:
+        return _validate_shanghai_datetime(value)
 
 
 class MarketBar(SimulationSafety):
