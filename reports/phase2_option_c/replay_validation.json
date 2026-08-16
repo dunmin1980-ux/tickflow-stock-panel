@@ -1,0 +1,23 @@
+{
+  "artifact_sha256": {
+    "account_config.json": "bf05237f2b6da526a13e6d413a0c467fcdf16b9ba1ef996d99ae802abc358aee",
+    "chenquant_daily.json": "addb7805ab44d01b506bbc2ca7795b57afa25b47f255ed4f44e62a2f38af9481",
+    "chenquant_daily.md": "17fbd50c689da02af7541a38c63aa5422387aed81c52ebf007b2b4179f498fd2",
+    "decision.json": "aaa7564df129435a7fee4924b565aa5c90fbb46ecdd5775cef823a6970e9dde8",
+    "paper_account.json": "8d79eb89bb5f321b4c2d7c00bf301a8504c38654f9ccd59827bba0860d95d8d2",
+    "trade_ledger.json": "5a558d1b76560db61bb00e9948b8783e99f3cc7ec48dcd813a1f71f8bd9c6775"
+  },
+  "can_publish": false,
+  "errors": [],
+  "json_identical": true,
+  "markdown_identical": true,
+  "mismatched_artifacts": [],
+  "pnl_identical": true,
+  "position_identical": true,
+  "replay_count": 3,
+  "replay_schema_version": 1,
+  "simulation_only": "SIMULATION ONLY",
+  "status": "DETERMINISTIC_REPLAY_PASSED",
+  "trade_ledger_identical": true,
+  "trading_advice": false
+}

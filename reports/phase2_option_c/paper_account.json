@@ -1,0 +1,37 @@
+{
+  "account_schema_version": 1,
+  "can_publish": false,
+  "cash_cny": "100000.00",
+  "config": {
+    "buy_lot_size": 100,
+    "buy_lots_per_signal": 1,
+    "can_publish": false,
+    "commission_rate": "0.0003",
+    "config_version": 1,
+    "currency": "CNY",
+    "initial_cash_cny": "100000.00",
+    "minimum_commission_cny": "5.00",
+    "sell_lots_per_signal": 1,
+    "sell_stamp_tax_rate": "0.0005",
+    "simulation_only": "SIMULATION ONLY",
+    "slippage_rate": "0",
+    "trading_advice": false
+  },
+  "config_sha256": "bf05237f2b6da526a13e6d413a0c467fcdf16b9ba1ef996d99ae802abc358aee",
+  "current_drawdown_cny": "0.00",
+  "lots": [],
+  "mark_price": "10.43",
+  "mark_trade_date": "2026-07-31",
+  "market_value_cny": "0.00",
+  "max_drawdown_cny": "0.00",
+  "peak_equity_cny": "100000.00",
+  "processed_action_ids": [
+    "01996d7d4c37aaa7ecc2cd9c612e69d81465264950321c263654cf5b7521ba5a"
+  ],
+  "realized_pnl_cny": "0.00",
+  "simulation_only": "SIMULATION ONLY",
+  "total_equity_cny": "100000.00",
+  "trades": [],
+  "trading_advice": false,
+  "unrealized_pnl_cny": "0.00"
+}

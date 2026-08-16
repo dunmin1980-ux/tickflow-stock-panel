@@ -1,0 +1,9 @@
+{
+  "can_publish": false,
+  "simulation_only": "SIMULATION ONLY",
+  "symbol": "000403.SZ",
+  "trade_count": 0,
+  "trade_ledger_schema_version": 1,
+  "trades": [],
+  "trading_advice": false
+}

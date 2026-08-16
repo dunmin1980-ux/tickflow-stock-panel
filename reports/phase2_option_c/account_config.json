@@ -1,0 +1,15 @@
+{
+  "buy_lot_size": 100,
+  "buy_lots_per_signal": 1,
+  "can_publish": false,
+  "commission_rate": "0.0003",
+  "config_version": 1,
+  "currency": "CNY",
+  "initial_cash_cny": "100000.00",
+  "minimum_commission_cny": "5.00",
+  "sell_lots_per_signal": 1,
+  "sell_stamp_tax_rate": "0.0005",
+  "simulation_only": "SIMULATION ONLY",
+  "slippage_rate": "0",
+  "trading_advice": false
+}
