@@ -116,6 +116,9 @@ class ReferenceFixtureManifest(SimulationSafety):
         "reports/phase2_claims/fixtures/000403SZ_claims.json"
     ]
     claims_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    claims_artifact_simulation_only: Literal["SIMULATION ONLY"]
+    claims_artifact_can_publish: Literal[False]
+    claims_artifact_trading_advice: Literal[False]
     claims_document_schema_file: Literal[
         "reports/phase2_claims/schema/phase2_claims.schema.json"
     ]

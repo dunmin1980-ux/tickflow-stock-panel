@@ -7,14 +7,19 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from app.schemas.phase2_option_c import (
-    PaperAction,
     ResearchDecision,
     ResearchInterpretation,
     ResearchSignal,
+    SimulationConfig,
     canonical_option_c_bytes,
 )
-from app.services.phase2_claims_service import CLAIMS_VALID
-from app.services.phase2_option_c_fixture import ReferenceFixtureBundle
+from app.services.phase2_claims_service import CLAIMS_VALID, canonical_json_bytes
+from app.services.phase2_option_c_fixture import (
+    ReferenceFixtureBundle,
+    ReferenceFixtureError,
+    verify_reference_projection,
+)
+from app.services.phase2_paper_trading import derive_action, new_account
 
 SHANGHAI_OFFSET = timedelta(hours=8)
 REFERENCE_REASON_PREDICATES = (
@@ -50,8 +55,14 @@ def _verify_bundle_identity(bundle: ReferenceFixtureBundle) -> str:
         canonical_option_c_bytes(bundle.manifest)
     ).hexdigest()
     claims_sha256 = hashlib.sha256(bundle.canonical_claims).hexdigest()
+    claims_model_bytes = canonical_json_bytes(bundle.claims.model_dump(mode="json"))
+    try:
+        verify_reference_projection(bundle)
+    except ReferenceFixtureError as exc:
+        raise ResearchDecisionError("fixture_identity_mismatch") from exc
     if (
-        claims_sha256 != bundle.manifest.claims_sha256
+        claims_model_bytes != bundle.canonical_claims
+        or claims_sha256 != bundle.manifest.claims_sha256
         or bundle.validation.normalized_sha256 != claims_sha256
         or bundle.claims.facts_binding.facts_sha256 != bundle.manifest.facts_sha256
         or bundle.projection.get("projection_sha256")
@@ -171,44 +182,14 @@ def build_research_decision(
         can_publish=False,
         trading_advice=False,
     )
-    decision_id = _identity(
-        {
-            **common_identity,
-            "identity_type": "research_decision_v1",
-            "fixture_manifest_sha256": manifest_sha256,
-            "projection_sha256": bundle.manifest.projection_sha256,
-            "decision_at": decision_at.isoformat(),
-            "signal_id": signal_id,
-        }
-    )
-    action_id = _identity(
-        {
-            "identity_type": "paper_action_v1",
-            "decision_id": decision_id,
-            "side": "HOLD",
-            "quantity": 0,
-            "reason_refs": reason_refs,
-        }
-    )
-    action = PaperAction(
-        action_schema_version=1,
-        action_id=action_id,
-        decision_id=decision_id,
-        symbol="000403.SZ",
-        decision_trade_date=bundle.manifest.trade_date,
+    config = SimulationConfig.default()
+    action = derive_action(
+        signal,
+        new_account(config),
+        config,
         decision_at=decision_at,
-        timezone="Asia/Shanghai",
-        side="HOLD",
-        quantity=0,
-        reason_refs=reason_refs,
-        source_fixture="DETERMINISTIC_REFERENCE_FIXTURE",
-        facts_sha256=bundle.manifest.facts_sha256,
-        claims_sha256=bundle.manifest.claims_sha256,
-        signal_id=signal_id,
-        simulation_only="SIMULATION ONLY",
-        can_publish=False,
-        trading_advice=False,
     )
+    decision_id = action.decision_id
     return ResearchDecision(
         decision_schema_version=1,
         decision_id=decision_id,

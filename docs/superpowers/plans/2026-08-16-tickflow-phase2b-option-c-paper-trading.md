@@ -218,7 +218,9 @@ The manifest includes `evidence_available_at` from the Phase 1
 `run_completed_at`, `facts_sha256`, `projection_sha256`, `claims_sha256`, both
 schema hashes, renderer hash, the four vendor-pending items, and fixed safety
 flags. `reference_typed_claims.json` remains an exact canonical
-`ClaimsDocument`; the source label exists only in the manifest.
+`ClaimsDocument`; the source label and the exact Claims artifact safety state
+(`SIMULATION ONLY`, `can_publish=false`, and `trading_advice=false`) exist in
+the hash-binding manifest so the frozen Typed Claims Schema is not modified.
 
 - [ ] **Step 4: Run fixture and existing Claims tests**
 
@@ -697,4 +699,3 @@ git push fork codex/tickflow-phase2-ai-review
 Verify local and fork heads match, the worktree is clean, and the final state is
 `PHASE2B_OPTION_C_PAPER_TRADING_READY`. Do not start a three-symbol run, real
 Provider request, main-system integration, or live Paper Trading operation.
-

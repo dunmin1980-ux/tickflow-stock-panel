@@ -94,6 +94,39 @@ def _validate_account_config(
         raise PaperTradingError("account_config_identity_mismatch")
 
 
+def _validate_action_provenance(
+    account: PaperAccount,
+    action: PaperAction,
+    signal: ResearchSignal,
+) -> None:
+    expected = derive_action(
+        signal,
+        account,
+        account.config,
+        decision_at=action.decision_at,
+    )
+    if canonical_option_c_bytes(action) != canonical_option_c_bytes(expected):
+        raise PaperTradingError("action_provenance_mismatch")
+
+
+def _validate_account_temporal_boundary(
+    account: PaperAccount,
+    signal: ResearchSignal,
+    decision_at: datetime,
+) -> None:
+    if account.mark_trade_date is not None and account.mark_trade_date > signal.trade_date:
+        raise PaperTradingError("account_state_after_decision")
+    if any(lot.acquired_trade_date > signal.trade_date for lot in account.lots):
+        raise PaperTradingError("account_state_after_decision")
+    if any(
+        trade.trade_date > signal.trade_date
+        or trade.order_timestamp > decision_at
+        or trade.execution_timestamp > decision_at
+        for trade in account.trades
+    ):
+        raise PaperTradingError("account_state_after_decision")
+
+
 def eligible_quantity(
     account: PaperAccount,
     symbol: str,
@@ -124,6 +157,7 @@ def derive_action(
         or decision_at.date() != signal.trade_date
     ):
         raise PaperTradingError("decision_timestamp_invalid")
+    _validate_account_temporal_boundary(account, signal, decision_at)
     if signal.code in {"POSITIVE_OBSERVATION", "RISK_OBSERVATION"} and (
         signal.source_fixture != "DETERMINISTIC_TEST_FIXTURE"
     ):
@@ -406,11 +440,14 @@ def execute_action(
     account: PaperAccount,
     action: PaperAction,
     execution_bar: MarketBar | None,
+    *,
+    signal: ResearchSignal,
 ) -> PaperAccount:
     """Apply one deterministic action without mutating the input account."""
     _validate_account_config(account, account.config)
     if action.action_id in account.processed_action_ids:
         raise PaperTradingError("duplicate_action")
+    _validate_action_provenance(account, action, signal)
     if action.side == "HOLD":
         if execution_bar is not None:
             raise PaperTradingError("hold_must_not_have_execution_bar")

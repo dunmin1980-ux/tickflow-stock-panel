@@ -26,6 +26,7 @@ from app.schemas.phase2_option_c import (
 from app.services.phase2_option_c_fixture import (
     ReferenceFixtureBundle,
     load_reference_fixture,
+    verify_reference_projection,
 )
 from app.services.phase2_paper_trading import execute_action, mark_to_market, new_account
 from app.services.phase2_research_decision import build_research_decision
@@ -33,6 +34,16 @@ from app.services.phase2_research_decision import build_research_decision
 REFERENCE_DECISION_AT = datetime.fromisoformat("2026-07-31T21:15:00+08:00")
 ZERO = Decimal("0.00")
 PERCENT_QUANTUM = Decimal("0.0001")
+REQUIRED_REPLAY_ARTIFACTS = frozenset(
+    {
+        "account_config.json",
+        "chenquant_daily.json",
+        "chenquant_daily.md",
+        "decision.json",
+        "paper_account.json",
+        "trade_ledger.json",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -100,6 +111,7 @@ def build_chenquant_daily(
     account: PaperAccount,
 ) -> ChenQuantDaily:
     """Build the closed single-symbol daily report from validated snapshots."""
+    verify_reference_projection(bundle)
     claims = _claims_by_predicate(bundle)
     daily_close = Decimal(str(bundle.projection["safe_facts"]["daily"]["close"]))
     rsi6 = Decimal(
@@ -231,7 +243,12 @@ def run_reference_simulation(repo_root: Path) -> OptionCRun:
     bundle = load_reference_fixture(repo_root)
     config = SimulationConfig.default()
     decision = build_research_decision(bundle, REFERENCE_DECISION_AT)
-    account = execute_action(new_account(config), decision.action, None)
+    account = execute_action(
+        new_account(config),
+        decision.action,
+        None,
+        signal=decision.signal,
+    )
     daily_facts = bundle.projection["safe_facts"]["daily"]
     account = mark_to_market(
         account,
@@ -299,6 +316,13 @@ def validate_replay(runs: Sequence[OptionCRun]) -> ReplayValidation:
             trading_advice=False,
         )
     artifact_names = sorted(set().union(*(run.artifacts for run in runs)))
+    missing_required = sorted(
+        REQUIRED_REPLAY_ARTIFACTS
+        - set.intersection(*(set(run.artifacts) for run in runs))
+    )
+    unexpected_artifacts = sorted(
+        set(artifact_names) - REQUIRED_REPLAY_ARTIFACTS
+    )
     mismatched = [
         name
         for name in artifact_names
@@ -311,27 +335,46 @@ def validate_replay(runs: Sequence[OptionCRun]) -> ReplayValidation:
         name: _sha256(runs[0].artifacts[name])
         for name in sorted(runs[0].artifacts)
     }
+    complete_artifact_set = not missing_required and not unexpected_artifacts
     json_names = [name for name in artifact_names if name.endswith(".json")]
-    json_identical = not any(name in mismatched for name in json_names)
+    json_identical = complete_artifact_set and not any(
+        name in mismatched for name in json_names
+    )
+    replay_passed = complete_artifact_set and not mismatched
     return ReplayValidation(
         replay_schema_version=1,
         status=(
             "DETERMINISTIC_REPLAY_PASSED"
-            if not mismatched
+            if replay_passed
             else "DETERMINISTIC_REPLAY_FAILED"
         ),
         replay_count=3,
         artifact_sha256=artifact_hashes,
         mismatched_artifacts=mismatched,
-        trade_ledger_identical="trade_ledger.json" not in mismatched,
-        position_identical="paper_account.json" not in mismatched,
+        trade_ledger_identical=(
+            complete_artifact_set and "trade_ledger.json" not in mismatched
+        ),
+        position_identical=(
+            complete_artifact_set and "paper_account.json" not in mismatched
+        ),
         pnl_identical=(
-            "paper_account.json" not in mismatched
+            complete_artifact_set
+            and "paper_account.json" not in mismatched
             and "chenquant_daily.json" not in mismatched
         ),
         json_identical=json_identical,
-        markdown_identical="chenquant_daily.md" not in mismatched,
-        errors=[] if not mismatched else ["replay_artifact_mismatch"],
+        markdown_identical=(
+            complete_artifact_set and "chenquant_daily.md" not in mismatched
+        ),
+        errors=(
+            []
+            if replay_passed
+            else [
+                *(["replay_required_artifacts_missing"] if missing_required else []),
+                *(["replay_unexpected_artifacts"] if unexpected_artifacts else []),
+                *(["replay_artifact_mismatch"] if mismatched else []),
+            ]
+        ),
         simulation_only="SIMULATION ONLY",
         can_publish=False,
         trading_advice=False,

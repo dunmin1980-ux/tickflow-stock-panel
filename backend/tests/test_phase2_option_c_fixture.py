@@ -73,6 +73,9 @@ def test_reference_fixture_binds_all_frozen_identities() -> None:
     assert bundle.manifest.can_publish is False
     assert bundle.manifest.trading_advice is False
     assert bundle.manifest.simulation_only == "SIMULATION ONLY"
+    assert bundle.manifest.claims_artifact_simulation_only == "SIMULATION ONLY"
+    assert bundle.manifest.claims_artifact_can_publish is False
+    assert bundle.manifest.claims_artifact_trading_advice is False
 
 
 def test_reference_claims_artifact_remains_a_strict_claims_document() -> None:
@@ -89,6 +92,9 @@ def test_reference_claims_artifact_remains_a_strict_claims_document() -> None:
     manifest = json.loads(artifacts["reference_fixture_manifest.json"])
     claims = json.loads(artifacts["reference_typed_claims.json"])
     assert manifest["source"] == "DETERMINISTIC_REFERENCE_FIXTURE"
+    assert manifest["claims_artifact_simulation_only"] == "SIMULATION ONLY"
+    assert manifest["claims_artifact_can_publish"] is False
+    assert manifest["claims_artifact_trading_advice"] is False
     assert "source" not in claims
     assert claims["source_system"] == "tickflow-stock-panel"
 

@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+from copy import deepcopy
+from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
 from app.services.phase2_chenquant_daily import (
+    build_chenquant_daily,
     render_chenquant_daily,
     run_reference_simulation,
 )
+from app.services.phase2_option_c_fixture import ReferenceFixtureError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -95,3 +101,16 @@ def test_reference_artifact_set_is_closed_and_canonical() -> None:
         "trade_ledger.json",
     ]
     assert all(raw.endswith(b"\n") for raw in run.artifacts.values())
+
+
+def test_daily_rejects_projection_content_with_stale_self_hash() -> None:
+    run = run_reference_simulation(REPO_ROOT)
+    altered_projection = deepcopy(run.bundle.projection)
+    altered_projection["safe_facts"]["indicators"]["rsi6"]["value"] = 1
+
+    with pytest.raises(ReferenceFixtureError, match="projection_identity_mismatch"):
+        build_chenquant_daily(
+            replace(run.bundle, projection=altered_projection),
+            run.decision,
+            run.account,
+        )

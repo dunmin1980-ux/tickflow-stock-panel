@@ -90,7 +90,9 @@ the schema-owned `source_system=tickflow-stock-panel`. A separate closed
 - exact Typed Claims Schema SHA-256;
 - exact `reference_typed_claims.json` SHA-256;
 - fixed source paths relative to the repository;
-- `trading_advice=false` and `can_publish=false`;
+- the exact Claims artifact safety state `SIMULATION ONLY`,
+  `can_publish=false`, and `trading_advice=false` without changing the frozen
+  Typed Claims Schema;
 - the four existing vendor-pending items.
 
 The manifest does not claim to be an AI result, and its source label is not

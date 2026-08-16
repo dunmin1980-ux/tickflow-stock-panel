@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+from copy import deepcopy
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
@@ -9,7 +11,10 @@ from pydantic import ValidationError
 
 from app.schemas.phase2_claims import ClaimsDocument
 from app.schemas.phase2_option_c import ResearchDecision
-from app.services.phase2_claims_service import ClaimsValidationResult
+from app.services.phase2_claims_service import (
+    ClaimsValidationResult,
+    canonical_json_bytes,
+)
 from app.services.phase2_option_c_fixture import load_reference_fixture
 from app.services.phase2_research_decision import (
     ResearchDecisionError,
@@ -98,14 +103,40 @@ def test_decision_rejects_invalid_claims_validation() -> None:
         build_research_decision(replace(bundle, validation=invalid), DECISION_AT)
 
 
+def test_decision_rejects_in_memory_claims_tampering_with_frozen_bytes() -> None:
+    bundle = load_reference_fixture(REPO_ROOT)
+    payload = bundle.claims.model_dump(mode="json")
+    payload["claims"][0]["claim_id"] = (
+        "000403SZ-20260731-001-market-scope-tampered"
+    )
+    altered = ClaimsDocument.model_validate(payload)
+
+    with pytest.raises(ResearchDecisionError, match="fixture_identity_mismatch"):
+        build_research_decision(replace(bundle, claims=altered), DECISION_AT)
+
+
 def test_decision_rejects_claim_after_decision_date() -> None:
     bundle = load_reference_fixture(REPO_ROOT)
     payload = bundle.claims.model_dump(mode="json")
     payload["claims"][0]["scope"]["as_of"] = "2026-08-01"
     altered = ClaimsDocument.model_validate(payload)
+    altered_raw = canonical_json_bytes(altered.model_dump(mode="json"))
+    altered_sha256 = hashlib.sha256(altered_raw).hexdigest()
+    internally_consistent = replace(
+        bundle,
+        claims=altered,
+        canonical_claims=altered_raw,
+        manifest=bundle.manifest.model_copy(
+            update={"claims_sha256": altered_sha256}
+        ),
+        validation=replace(
+            bundle.validation,
+            normalized_sha256=altered_sha256,
+        ),
+    )
 
     with pytest.raises(ResearchDecisionError, match="claim_as_of_after_decision"):
-        build_research_decision(replace(bundle, claims=altered), DECISION_AT)
+        build_research_decision(internally_consistent, DECISION_AT)
 
 
 def test_decision_rejects_fixture_manifest_identity_mismatch() -> None:
@@ -117,6 +148,18 @@ def test_decision_rejects_fixture_manifest_identity_mismatch() -> None:
     with pytest.raises(ResearchDecisionError, match="fixture_identity_mismatch"):
         build_research_decision(
             replace(bundle, manifest=altered_manifest),
+            DECISION_AT,
+        )
+
+
+def test_decision_rejects_projection_content_with_stale_self_hash() -> None:
+    bundle = load_reference_fixture(REPO_ROOT)
+    altered_projection = deepcopy(bundle.projection)
+    altered_projection["safe_facts"]["daily"]["close"] = "999.99"
+
+    with pytest.raises(ResearchDecisionError, match="fixture_identity_mismatch"):
+        build_research_decision(
+            replace(bundle, projection=altered_projection),
             DECISION_AT,
         )
 

@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from app.schemas.phase2_option_c import (
     MarketBar,
+    PaperAccount,
     PaperAction,
     ResearchSignal,
     SimulationConfig,
@@ -78,6 +79,31 @@ def _signal(
             "trading_advice": False,
         }
     )
+
+
+def _derived_action(
+    account: PaperAccount,
+    code: str,
+    *,
+    trade_date: date = date(2026, 8, 3),
+    source_fixture: str = "DETERMINISTIC_TEST_FIXTURE",
+    signal_character: str = "e",
+) -> tuple[ResearchSignal, PaperAction]:
+    signal = _signal(
+        code,
+        trade_date=trade_date,
+        source_fixture=source_fixture,
+        signal_character=signal_character,
+    )
+    action = derive_action(
+        signal,
+        account,
+        account.config,
+        decision_at=datetime.fromisoformat(
+            f"{trade_date.isoformat()}T15:15:00+08:00"
+        ),
+    )
+    return signal, action
 
 
 def _bar(
@@ -199,9 +225,13 @@ def test_new_account_has_only_virtual_cash() -> None:
 
 def test_hold_is_idempotently_recorded_without_trade() -> None:
     account = new_account(SimulationConfig.default())
-    action = PaperAction.model_validate(_action_payload(side="HOLD", quantity=0))
+    signal, action = _derived_action(
+        account,
+        "MIXED_OBSERVATION",
+        source_fixture="DETERMINISTIC_REFERENCE_FIXTURE",
+    )
 
-    updated = execute_action(account, action, None)
+    updated = execute_action(account, action, None, signal=signal)
 
     assert updated.cash_cny == account.cash_cny
     assert updated.lots == []
@@ -209,25 +239,30 @@ def test_hold_is_idempotently_recorded_without_trade() -> None:
     assert updated.processed_action_ids == [action.action_id]
 
     with pytest.raises(PaperTradingError, match="duplicate_action"):
-        execute_action(updated, action, None)
+        execute_action(updated, action, None, signal=signal)
 
 
 def test_action_rejects_tampered_account_config_identity() -> None:
-    account = new_account(SimulationConfig.default()).model_copy(
+    valid = new_account(SimulationConfig.default())
+    signal, action = _derived_action(
+        valid,
+        "MIXED_OBSERVATION",
+        source_fixture="DETERMINISTIC_REFERENCE_FIXTURE",
+    )
+    account = valid.model_copy(
         update={"config_sha256": "0" * 64}
     )
-    action = PaperAction.model_validate(_action_payload(side="HOLD", quantity=0))
 
     with pytest.raises(PaperTradingError, match="account_config_identity_mismatch"):
-        execute_action(account, action, None)
+        execute_action(account, action, None, signal=signal)
 
 
 def test_buy_executes_at_next_trading_day_open_with_decimal_fees() -> None:
     config = SimulationConfig.default()
     account = new_account(config)
-    action = PaperAction.model_validate(_action_payload())
+    signal, action = _derived_action(account, "POSITIVE_OBSERVATION")
 
-    updated = execute_action(account, action, _bar())
+    updated = execute_action(account, action, _bar(), signal=signal)
 
     assert updated.cash_cny == Decimal("98945.00")
     assert len(updated.lots) == 1
@@ -254,19 +289,33 @@ def test_buy_executes_at_next_trading_day_open_with_decimal_fees() -> None:
     assert updated.max_drawdown_cny == Decimal("5.00")
 
 
+def test_execute_action_rejects_action_not_derived_from_supplied_signal() -> None:
+    config = SimulationConfig.default()
+    account = new_account(config)
+    signal = _signal("POSITIVE_OBSERVATION")
+    forged = PaperAction.model_validate(_action_payload(action_character="9"))
+
+    with pytest.raises(PaperTradingError, match="action_provenance_mismatch"):
+        execute_action(account, forged, _bar(), signal=signal)
+
+
 def test_buy_fill_ignores_future_close_value() -> None:
     config = SimulationConfig.default()
-    action = PaperAction.model_validate(_action_payload())
+    first_account = new_account(config)
+    second_account = new_account(config)
+    signal, action = _derived_action(first_account, "POSITIVE_OBSERVATION")
 
     lower_close = execute_action(
-        new_account(config),
+        first_account,
         action,
         _bar(close_price="1.00"),
+        signal=signal,
     )
     higher_close = execute_action(
-        new_account(config),
+        second_account,
         action,
         _bar(close_price="99.00"),
+        signal=signal,
     )
 
     assert lower_close == higher_close
@@ -274,7 +323,7 @@ def test_buy_fill_ignores_future_close_value() -> None:
 
 def test_buy_rejects_same_day_execution_bar() -> None:
     account = new_account(SimulationConfig.default())
-    action = PaperAction.model_validate(_action_payload())
+    signal, action = _derived_action(account, "POSITIVE_OBSERVATION")
 
     with pytest.raises(PaperTradingError, match="next_trading_day_open_required"):
         execute_action(
@@ -284,6 +333,7 @@ def test_buy_rejects_same_day_execution_bar() -> None:
                 trade_date=date(2026, 8, 3),
                 previous_trade_date=date(2026, 7, 31),
             ),
+            signal=signal,
         )
 
 
@@ -295,10 +345,10 @@ def test_buy_rejects_insufficient_cash_without_mutation() -> None:
         }
     )
     account = new_account(config)
-    action = PaperAction.model_validate(_action_payload())
+    signal, action = _derived_action(account, "POSITIVE_OBSERVATION")
 
     with pytest.raises(PaperTradingError, match="insufficient_cash"):
-        execute_action(account, action, _bar())
+        execute_action(account, action, _bar(), signal=signal)
 
     assert account.cash_cny == Decimal("1000.00")
     assert account.lots == []
@@ -342,11 +392,59 @@ def test_deterministic_rule_maps_closed_signals_to_actions() -> None:
         )
 
 
-def test_t1_eligibility_and_partial_then_full_exit() -> None:
+def test_rule_rejects_account_marked_after_signal_trade_date() -> None:
     config = SimulationConfig.default()
+    future_account = mark_to_market(
+        new_account(config),
+        _bar(),
+    )
+
+    with pytest.raises(PaperTradingError, match="account_state_after_decision"):
+        derive_action(
+            _signal("POSITIVE_OBSERVATION"),
+            future_account,
+            config,
+            decision_at=datetime.fromisoformat("2026-08-03T15:15:00+08:00"),
+        )
+
+
+def test_rule_rejects_future_lot_or_trade_hidden_behind_past_mark() -> None:
+    config = SimulationConfig.default()
+    initial = new_account(config)
+    signal, action = _derived_action(initial, "POSITIVE_OBSERVATION")
+    future_account = execute_action(initial, action, _bar(), signal=signal)
+    past_mark = date(2026, 8, 3)
+    signal = _signal("RISK_OBSERVATION")
+
+    for hidden_future in (
+        future_account.model_copy(
+            update={"mark_trade_date": past_mark, "trades": []}
+        ),
+        future_account.model_copy(
+            update={"mark_trade_date": past_mark, "lots": []}
+        ),
+    ):
+        with pytest.raises(PaperTradingError, match="account_state_after_decision"):
+            derive_action(
+                signal,
+                hidden_future,
+                config,
+                decision_at=datetime.fromisoformat(
+                    "2026-08-03T15:15:00+08:00"
+                ),
+            )
+
+
+def test_t1_eligibility_and_partial_then_full_exit() -> None:
+    config = SimulationConfig.model_validate(
+        {
+            **SimulationConfig.default().model_dump(),
+            "buy_lots_per_signal": 2,
+        }
+    )
     account = new_account(config)
-    buy = PaperAction.model_validate(_action_payload(quantity=200))
-    account = execute_action(account, buy, _bar())
+    buy_signal, buy = _derived_action(account, "POSITIVE_OBSERVATION")
+    account = execute_action(account, buy, _bar(), signal=buy_signal)
 
     assert eligible_quantity(account, "000403.SZ", date(2026, 8, 4)) == 0
     assert eligible_quantity(account, "000403.SZ", date(2026, 8, 5)) == 200
@@ -374,6 +472,7 @@ def test_t1_eligibility_and_partial_then_full_exit() -> None:
                 previous_trade_date=date(2026, 8, 3),
                 open_price="11.00",
             ),
+            signal=risk,
         )
 
     account = execute_action(
@@ -384,6 +483,7 @@ def test_t1_eligibility_and_partial_then_full_exit() -> None:
             previous_trade_date=date(2026, 8, 4),
             open_price="11.00",
         ),
+        signal=risk,
     )
     assert account.cash_cny == Decimal("98989.45")
     assert account.lots[0].remaining_quantity == 100
@@ -415,6 +515,7 @@ def test_t1_eligibility_and_partial_then_full_exit() -> None:
             previous_trade_date=date(2026, 8, 5),
             open_price="10.00",
         ),
+        signal=final_risk,
     )
 
     assert account.lots == []
@@ -429,10 +530,13 @@ def test_t1_eligibility_and_partial_then_full_exit() -> None:
 
 
 def test_mark_to_market_updates_unrealized_pnl_and_max_drawdown() -> None:
+    initial = new_account(SimulationConfig.default())
+    signal, action = _derived_action(initial, "POSITIVE_OBSERVATION")
     account = execute_action(
-        new_account(SimulationConfig.default()),
-        PaperAction.model_validate(_action_payload()),
+        initial,
+        action,
         _bar(),
+        signal=signal,
     )
 
     lower = mark_to_market(
@@ -458,10 +562,13 @@ def test_mark_to_market_updates_unrealized_pnl_and_max_drawdown() -> None:
 
 
 def test_commission_above_minimum_is_decimal() -> None:
+    initial = new_account(SimulationConfig.default())
+    signal, action = _derived_action(initial, "POSITIVE_OBSERVATION")
     account = execute_action(
-        new_account(SimulationConfig.default()),
-        PaperAction.model_validate(_action_payload()),
+        initial,
+        action,
         _bar(open_price="500.00", close_price="500.00"),
+        signal=signal,
     )
 
     assert account.trades[0].gross_amount_cny == Decimal("50000.00")

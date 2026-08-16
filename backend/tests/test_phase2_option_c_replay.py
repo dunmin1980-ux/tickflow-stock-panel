@@ -57,6 +57,23 @@ def test_replay_requires_exactly_three_runs() -> None:
     assert result.errors == ["replay_count_must_equal_three"]
 
 
+def test_replay_rejects_three_runs_missing_all_required_artifacts() -> None:
+    runs = [
+        replace(run_reference_simulation(REPO_ROOT), artifacts={})
+        for _ in range(3)
+    ]
+
+    result = validate_replay(runs)
+
+    assert result.status == "DETERMINISTIC_REPLAY_FAILED"
+    assert "replay_required_artifacts_missing" in result.errors
+    assert result.trade_ledger_identical is False
+    assert result.position_identical is False
+    assert result.pnl_identical is False
+    assert result.json_identical is False
+    assert result.markdown_identical is False
+
+
 def test_atomic_delivery_publishes_only_closed_artifact_tree(tmp_path: Path) -> None:
     reports_root = tmp_path / "reports"
     reports_root.mkdir()

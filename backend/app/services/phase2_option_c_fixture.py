@@ -17,7 +17,10 @@ from app.schemas.phase2_claims import (
     claims_json_schema,
 )
 from app.schemas.phase2_option_c import ReferenceFixtureManifest, canonical_option_c_bytes
-from app.services.phase2_ai_worker_protocol import build_worker_projection
+from app.services.phase2_ai_worker_protocol import (
+    build_worker_projection,
+    compute_projection_sha256,
+)
 from app.services.phase2_claims_renderer import render_claims_document
 from app.services.phase2_claims_service import (
     CLAIMS_VALID,
@@ -105,6 +108,17 @@ def _require_hash(raw: bytes, expected: str, *, label: str) -> str:
     if actual != expected:
         raise ReferenceFixtureError(f"{label}_sha256_mismatch")
     return actual
+
+
+def verify_reference_projection(bundle: ReferenceFixtureBundle) -> None:
+    """Bind mutable in-memory projection content to the frozen manifest hash."""
+    if (
+        bundle.projection.get("projection_sha256")
+        != bundle.manifest.projection_sha256
+        or compute_projection_sha256(bundle.projection)
+        != bundle.manifest.projection_sha256
+    ):
+        raise ReferenceFixtureError("projection_identity_mismatch")
 
 
 def load_reference_fixture(repo_root: Path) -> ReferenceFixtureBundle:
@@ -218,6 +232,9 @@ def load_reference_fixture(repo_root: Path) -> ReferenceFixtureBundle:
         projection_sha256=projection["projection_sha256"],
         claims_file=CLAIMS_FILE,
         claims_sha256=claims_sha256,
+        claims_artifact_simulation_only="SIMULATION ONLY",
+        claims_artifact_can_publish=False,
+        claims_artifact_trading_advice=False,
         claims_document_schema_file=CLAIMS_SCHEMA_FILE,
         claims_document_schema_sha256=claims_schema_sha256,
         worker_candidate_schema_sha256=worker_schema_sha256,
@@ -243,6 +260,7 @@ def load_reference_fixture(repo_root: Path) -> ReferenceFixtureBundle:
 
 def build_reference_artifacts(bundle: ReferenceFixtureBundle) -> dict[str, bytes]:
     """Return the only two canonical reference-fixture artifacts."""
+    verify_reference_projection(bundle)
     return {
         "reference_fixture_manifest.json": canonical_option_c_bytes(bundle.manifest),
         "reference_typed_claims.json": bundle.canonical_claims,
