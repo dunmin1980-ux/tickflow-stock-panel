@@ -9,28 +9,101 @@ from pydantic import ValidationError
 from app.schemas.phase2_option_c import (
     MarketBar,
     PaperAction,
+    ResearchSignal,
     SimulationConfig,
     canonical_option_c_bytes,
 )
+from app.services.phase2_paper_trading import (
+    PaperTradingError,
+    derive_action,
+    eligible_quantity,
+    execute_action,
+    mark_to_market,
+    new_account,
+)
 
 
-def _action_payload(*, side: str = "BUY", quantity: object = 100) -> dict[str, object]:
+def _action_payload(
+    *,
+    side: str = "BUY",
+    quantity: object = 100,
+    action_character: str = "a",
+    signal_character: str = "e",
+    decision_trade_date: date = date(2026, 8, 3),
+) -> dict[str, object]:
     return {
         "action_schema_version": 1,
-        "action_id": "a" * 64,
+        "action_id": action_character * 64,
         "decision_id": "b" * 64,
         "symbol": "000403.SZ",
-        "decision_trade_date": date(2026, 8, 3),
-        "decision_at": datetime.fromisoformat("2026-08-03T21:15:00+08:00"),
+        "decision_trade_date": decision_trade_date,
+        "decision_at": datetime.fromisoformat(
+            f"{decision_trade_date.isoformat()}T15:15:00+08:00"
+        ),
         "timezone": "Asia/Shanghai",
         "side": side,
         "quantity": quantity,
         "reason_refs": ["fixture-positive-signal"],
         "source_fixture": "DETERMINISTIC_TEST_FIXTURE",
+        "facts_sha256": "c" * 64,
+        "claims_sha256": "d" * 64,
+        "signal_id": signal_character * 64,
         "simulation_only": "SIMULATION ONLY",
         "can_publish": False,
         "trading_advice": False,
     }
+
+
+def _signal(
+    code: str,
+    *,
+    trade_date: date = date(2026, 8, 3),
+    source_fixture: str = "DETERMINISTIC_TEST_FIXTURE",
+    signal_character: str = "e",
+) -> ResearchSignal:
+    return ResearchSignal.model_validate(
+        {
+            "signal_schema_version": 1,
+            "signal_id": signal_character * 64,
+            "interpretation_id": "f" * 64,
+            "source_fixture": source_fixture,
+            "symbol": "000403.SZ",
+            "trade_date": trade_date,
+            "code": code,
+            "reason_refs": ["deterministic-test-rule"],
+            "facts_sha256": "c" * 64,
+            "claims_sha256": "d" * 64,
+            "simulation_only": "SIMULATION ONLY",
+            "can_publish": False,
+            "trading_advice": False,
+        }
+    )
+
+
+def _bar(
+    *,
+    trade_date: date = date(2026, 8, 4),
+    previous_trade_date: date = date(2026, 8, 3),
+    open_price: str = "10.50",
+    close_price: str = "10.80",
+) -> MarketBar:
+    return MarketBar(
+        market_bar_schema_version=1,
+        source_fixture="DETERMINISTIC_TEST_FIXTURE",
+        symbol="000403.SZ",
+        trade_date=trade_date,
+        previous_trade_date=previous_trade_date,
+        available_at=datetime.fromisoformat(
+            f"{trade_date.isoformat()}T15:01:00+08:00"
+        ),
+        timezone="Asia/Shanghai",
+        open=Decimal(open_price),
+        close=Decimal(close_price),
+        price_basis="raw",
+        simulation_only="SIMULATION ONLY",
+        can_publish=False,
+        trading_advice=False,
+    )
 
 
 def test_simulation_config_is_decimal_and_canonical() -> None:
@@ -87,6 +160,7 @@ def test_market_bar_is_strict_raw_open_evidence() -> None:
         source_fixture="DETERMINISTIC_TEST_FIXTURE",
         symbol="000403.SZ",
         trade_date=date(2026, 8, 4),
+        previous_trade_date=date(2026, 8, 3),
         available_at=datetime.fromisoformat("2026-08-04T15:01:00+08:00"),
         timezone="Asia/Shanghai",
         open=Decimal("10.50"),
@@ -102,3 +176,293 @@ def test_market_bar_is_strict_raw_open_evidence() -> None:
 
     with pytest.raises(ValidationError):
         MarketBar.model_validate({**bar.model_dump(), "open": 10.5})
+
+
+def test_new_account_has_only_virtual_cash() -> None:
+    config = SimulationConfig.default()
+    account = new_account(config)
+
+    assert account.cash_cny == Decimal("100000.00")
+    assert account.lots == []
+    assert account.trades == []
+    assert account.processed_action_ids == []
+    assert account.realized_pnl_cny == Decimal("0.00")
+    assert account.unrealized_pnl_cny == Decimal("0.00")
+    assert account.market_value_cny == Decimal("0.00")
+    assert account.total_equity_cny == Decimal("100000.00")
+    assert account.peak_equity_cny == Decimal("100000.00")
+    assert account.max_drawdown_cny == Decimal("0.00")
+    assert account.config_sha256 == __import__("hashlib").sha256(
+        canonical_option_c_bytes(config)
+    ).hexdigest()
+
+
+def test_hold_is_idempotently_recorded_without_trade() -> None:
+    account = new_account(SimulationConfig.default())
+    action = PaperAction.model_validate(_action_payload(side="HOLD", quantity=0))
+
+    updated = execute_action(account, action, None)
+
+    assert updated.cash_cny == account.cash_cny
+    assert updated.lots == []
+    assert updated.trades == []
+    assert updated.processed_action_ids == [action.action_id]
+
+    with pytest.raises(PaperTradingError, match="duplicate_action"):
+        execute_action(updated, action, None)
+
+
+def test_action_rejects_tampered_account_config_identity() -> None:
+    account = new_account(SimulationConfig.default()).model_copy(
+        update={"config_sha256": "0" * 64}
+    )
+    action = PaperAction.model_validate(_action_payload(side="HOLD", quantity=0))
+
+    with pytest.raises(PaperTradingError, match="account_config_identity_mismatch"):
+        execute_action(account, action, None)
+
+
+def test_buy_executes_at_next_trading_day_open_with_decimal_fees() -> None:
+    config = SimulationConfig.default()
+    account = new_account(config)
+    action = PaperAction.model_validate(_action_payload())
+
+    updated = execute_action(account, action, _bar())
+
+    assert updated.cash_cny == Decimal("98945.00")
+    assert len(updated.lots) == 1
+    assert updated.lots[0].remaining_quantity == 100
+    assert updated.lots[0].remaining_cost_cny == Decimal("1055.00")
+    assert len(updated.trades) == 1
+    trade = updated.trades[0]
+    assert trade.side == "BUY"
+    assert trade.quantity == 100
+    assert trade.execution_price == Decimal("10.50")
+    assert trade.gross_amount_cny == Decimal("1050.00")
+    assert trade.commission_cny == Decimal("5.00")
+    assert trade.stamp_tax_cny == Decimal("0.00")
+    assert trade.net_cash_flow_cny == Decimal("-1055.00")
+    assert trade.realized_pnl_cny == Decimal("0.00")
+    assert trade.facts_sha256 == "c" * 64
+    assert trade.claims_sha256 == "d" * 64
+    assert trade.signal_id == "e" * 64
+    assert updated.market_value_cny == Decimal("1050.00")
+    assert updated.unrealized_pnl_cny == Decimal("-5.00")
+    assert updated.total_equity_cny == Decimal("99995.00")
+    assert updated.peak_equity_cny == Decimal("100000.00")
+    assert updated.current_drawdown_cny == Decimal("5.00")
+    assert updated.max_drawdown_cny == Decimal("5.00")
+
+
+def test_buy_fill_ignores_future_close_value() -> None:
+    config = SimulationConfig.default()
+    action = PaperAction.model_validate(_action_payload())
+
+    lower_close = execute_action(
+        new_account(config),
+        action,
+        _bar(close_price="1.00"),
+    )
+    higher_close = execute_action(
+        new_account(config),
+        action,
+        _bar(close_price="99.00"),
+    )
+
+    assert lower_close == higher_close
+
+
+def test_buy_rejects_same_day_execution_bar() -> None:
+    account = new_account(SimulationConfig.default())
+    action = PaperAction.model_validate(_action_payload())
+
+    with pytest.raises(PaperTradingError, match="next_trading_day_open_required"):
+        execute_action(
+            account,
+            action,
+            _bar(
+                trade_date=date(2026, 8, 3),
+                previous_trade_date=date(2026, 7, 31),
+            ),
+        )
+
+
+def test_buy_rejects_insufficient_cash_without_mutation() -> None:
+    config = SimulationConfig.model_validate(
+        {
+            **SimulationConfig.default().model_dump(),
+            "initial_cash_cny": Decimal("1000.00"),
+        }
+    )
+    account = new_account(config)
+    action = PaperAction.model_validate(_action_payload())
+
+    with pytest.raises(PaperTradingError, match="insufficient_cash"):
+        execute_action(account, action, _bar())
+
+    assert account.cash_cny == Decimal("1000.00")
+    assert account.lots == []
+    assert account.trades == []
+
+
+def test_deterministic_rule_maps_closed_signals_to_actions() -> None:
+    config = SimulationConfig.default()
+    empty = new_account(config)
+
+    buy = derive_action(
+        _signal("POSITIVE_OBSERVATION"),
+        empty,
+        config,
+        decision_at=datetime.fromisoformat("2026-08-03T15:15:00+08:00"),
+    )
+    hold = derive_action(
+        _signal(
+            "MIXED_OBSERVATION",
+            source_fixture="DETERMINISTIC_REFERENCE_FIXTURE",
+        ),
+        empty,
+        config,
+        decision_at=datetime.fromisoformat("2026-08-03T15:15:00+08:00"),
+    )
+
+    assert buy.side == "BUY"
+    assert buy.quantity == 100
+    assert hold.side == "HOLD"
+    assert hold.quantity == 0
+
+    with pytest.raises(PaperTradingError, match="test_signal_source_required"):
+        derive_action(
+            _signal(
+                "POSITIVE_OBSERVATION",
+                source_fixture="DETERMINISTIC_REFERENCE_FIXTURE",
+            ),
+            empty,
+            config,
+            decision_at=datetime.fromisoformat("2026-08-03T15:15:00+08:00"),
+        )
+
+
+def test_t1_eligibility_and_partial_then_full_exit() -> None:
+    config = SimulationConfig.default()
+    account = new_account(config)
+    buy = PaperAction.model_validate(_action_payload(quantity=200))
+    account = execute_action(account, buy, _bar())
+
+    assert eligible_quantity(account, "000403.SZ", date(2026, 8, 4)) == 0
+    assert eligible_quantity(account, "000403.SZ", date(2026, 8, 5)) == 200
+
+    risk = _signal(
+        "RISK_OBSERVATION",
+        trade_date=date(2026, 8, 4),
+        signal_character="1",
+    )
+    partial_sell = derive_action(
+        risk,
+        account,
+        config,
+        decision_at=datetime.fromisoformat("2026-08-04T15:15:00+08:00"),
+    )
+    assert partial_sell.side == "SELL"
+    assert partial_sell.quantity == 100
+
+    with pytest.raises(PaperTradingError, match="next_trading_day_open_required"):
+        execute_action(
+            account,
+            partial_sell,
+            _bar(
+                trade_date=date(2026, 8, 4),
+                previous_trade_date=date(2026, 8, 3),
+                open_price="11.00",
+            ),
+        )
+
+    account = execute_action(
+        account,
+        partial_sell,
+        _bar(
+            trade_date=date(2026, 8, 5),
+            previous_trade_date=date(2026, 8, 4),
+            open_price="11.00",
+        ),
+    )
+    assert account.cash_cny == Decimal("98989.45")
+    assert account.lots[0].remaining_quantity == 100
+    assert account.lots[0].remaining_cost_cny == Decimal("1052.50")
+    assert account.trades[-1].commission_cny == Decimal("5.00")
+    assert account.trades[-1].stamp_tax_cny == Decimal("0.55")
+    assert account.trades[-1].net_cash_flow_cny == Decimal("1094.45")
+    assert account.trades[-1].realized_pnl_cny == Decimal("41.95")
+    assert account.realized_pnl_cny == Decimal("41.95")
+    assert account.unrealized_pnl_cny == Decimal("47.50")
+    assert account.total_equity_cny == Decimal("100089.45")
+
+    final_risk = _signal(
+        "RISK_OBSERVATION",
+        trade_date=date(2026, 8, 5),
+        signal_character="2",
+    )
+    full_sell = derive_action(
+        final_risk,
+        account,
+        config,
+        decision_at=datetime.fromisoformat("2026-08-05T15:15:00+08:00"),
+    )
+    account = execute_action(
+        account,
+        full_sell,
+        _bar(
+            trade_date=date(2026, 8, 6),
+            previous_trade_date=date(2026, 8, 5),
+            open_price="10.00",
+        ),
+    )
+
+    assert account.lots == []
+    assert account.cash_cny == Decimal("99983.95")
+    assert account.realized_pnl_cny == Decimal("-16.05")
+    assert account.unrealized_pnl_cny == Decimal("0.00")
+    assert account.market_value_cny == Decimal("0.00")
+    assert account.total_equity_cny == Decimal("99983.95")
+    assert account.peak_equity_cny == Decimal("100089.45")
+    assert account.current_drawdown_cny == Decimal("105.50")
+    assert account.max_drawdown_cny == Decimal("105.50")
+
+
+def test_mark_to_market_updates_unrealized_pnl_and_max_drawdown() -> None:
+    account = execute_action(
+        new_account(SimulationConfig.default()),
+        PaperAction.model_validate(_action_payload()),
+        _bar(),
+    )
+
+    lower = mark_to_market(
+        account,
+        _bar(open_price="10.50", close_price="9.00"),
+    )
+    assert lower.unrealized_pnl_cny == Decimal("-155.00")
+    assert lower.total_equity_cny == Decimal("99845.00")
+    assert lower.max_drawdown_cny == Decimal("155.00")
+
+    higher = mark_to_market(
+        lower,
+        _bar(
+            trade_date=date(2026, 8, 5),
+            previous_trade_date=date(2026, 8, 4),
+            close_price="12.00",
+        ),
+    )
+    assert higher.unrealized_pnl_cny == Decimal("145.00")
+    assert higher.total_equity_cny == Decimal("100145.00")
+    assert higher.peak_equity_cny == Decimal("100145.00")
+    assert higher.max_drawdown_cny == Decimal("155.00")
+
+
+def test_commission_above_minimum_is_decimal() -> None:
+    account = execute_action(
+        new_account(SimulationConfig.default()),
+        PaperAction.model_validate(_action_payload()),
+        _bar(open_price="500.00", close_price="500.00"),
+    )
+
+    assert account.trades[0].gross_amount_cny == Decimal("50000.00")
+    assert account.trades[0].commission_cny == Decimal("15.00")

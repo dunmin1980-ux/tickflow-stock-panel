@@ -154,6 +154,9 @@ class PaperAction(SimulationSafety):
     quantity: int = Field(ge=0)
     reason_refs: list[str] = Field(min_length=1)
     source_fixture: FixtureSource
+    facts_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    claims_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    signal_id: str = Field(pattern=r"^[0-9a-f]{64}$")
 
     @field_validator("decision_at")
     @classmethod
@@ -225,6 +228,7 @@ class MarketBar(SimulationSafety):
     source_fixture: FixtureSource
     symbol: Literal["000403.SZ"]
     trade_date: date
+    previous_trade_date: date
     available_at: datetime
     timezone: Literal["Asia/Shanghai"]
     open: Decimal = Field(gt=0)
@@ -242,6 +246,88 @@ class MarketBar(SimulationSafety):
         if not value.is_finite():
             raise ValueError("market_price_must_be_finite")
         return money(value)
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> MarketBar:
+        if self.previous_trade_date >= self.trade_date:
+            raise ValueError("previous_trade_date_must_precede_trade_date")
+        if self.available_at.date() != self.trade_date:
+            raise ValueError("bar_availability_date_mismatch")
+        return self
+
+
+class PositionLot(SimulationSafety):
+    lot_schema_version: Literal[1]
+    lot_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_action_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    symbol: Literal["000403.SZ"]
+    acquired_trade_date: date
+    original_quantity: int = Field(gt=0)
+    remaining_quantity: int = Field(ge=0)
+    remaining_cost_cny: Decimal = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_remaining_position(self) -> PositionLot:
+        if self.remaining_quantity > self.original_quantity:
+            raise ValueError("remaining_quantity_exceeds_original")
+        if self.remaining_quantity == 0 and self.remaining_cost_cny != 0:
+            raise ValueError("closed_lot_cost_must_be_zero")
+        if self.remaining_quantity > 0 and self.remaining_cost_cny <= 0:
+            raise ValueError("open_lot_cost_must_be_positive")
+        return self
+
+
+class TradeRecord(SimulationSafety):
+    trade_schema_version: Literal[1]
+    execution_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    action_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    order_timestamp: datetime
+    execution_timestamp: datetime
+    trade_date: date
+    symbol: Literal["000403.SZ"]
+    side: Literal["BUY", "SELL"]
+    quantity: int = Field(gt=0)
+    execution_price: Decimal = Field(gt=0)
+    gross_amount_cny: Decimal = Field(gt=0)
+    commission_cny: Decimal = Field(ge=0)
+    stamp_tax_cny: Decimal = Field(ge=0)
+    net_cash_flow_cny: Decimal
+    realized_pnl_cny: Decimal
+    reason_refs: list[str] = Field(min_length=1)
+    facts_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    claims_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    signal_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("order_timestamp", "execution_timestamp")
+    @classmethod
+    def validate_trade_timestamp(cls, value: datetime) -> datetime:
+        return _validate_shanghai_datetime(value)
+
+
+class PaperAccount(SimulationSafety):
+    account_schema_version: Literal[1]
+    config: SimulationConfig
+    config_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    cash_cny: Decimal = Field(ge=0)
+    lots: list[PositionLot]
+    trades: list[TradeRecord]
+    processed_action_ids: list[str]
+    realized_pnl_cny: Decimal
+    unrealized_pnl_cny: Decimal
+    market_value_cny: Decimal = Field(ge=0)
+    total_equity_cny: Decimal = Field(ge=0)
+    peak_equity_cny: Decimal = Field(ge=0)
+    current_drawdown_cny: Decimal = Field(ge=0)
+    max_drawdown_cny: Decimal = Field(ge=0)
+    mark_price: Decimal | None
+    mark_trade_date: date | None
+
+    @field_validator("processed_action_ids")
+    @classmethod
+    def validate_unique_actions(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)):
+            raise ValueError("processed_action_ids_must_be_unique")
+        return value
 
 
 def canonical_option_c_bytes(
