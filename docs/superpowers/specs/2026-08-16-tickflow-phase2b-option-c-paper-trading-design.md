@@ -79,21 +79,23 @@ or web application router.
 
 ## Deterministic Reference Fixture
 
-`reference_typed_claims.json` is a wrapper around the already validated
-`000403.SZ` Claims document. It binds:
+`reference_typed_claims.json` is an exact `ClaimsDocument` and therefore keeps
+the schema-owned `source_system=tickflow-stock-panel`. A separate closed
+`reference_fixture_manifest.json` binds:
 
 - source label `DETERMINISTIC_REFERENCE_FIXTURE`;
 - symbol, name, and trade date;
 - exact Facts SHA-256;
 - exact minimal Projection SHA-256;
 - exact Typed Claims Schema SHA-256;
-- exact Claims document SHA-256;
+- exact `reference_typed_claims.json` SHA-256;
 - fixed source paths relative to the repository;
 - `trading_advice=false` and `can_publish=false`;
 - the four existing vendor-pending items.
 
-The wrapper does not claim to be an AI result. The host re-runs the current
-Typed Claims Validator before any interpretation. A fixture identity mismatch,
+The manifest does not claim to be an AI result, and its source label is not
+injected into the strict Claims schema. The host re-runs the current Typed
+Claims Validator before any interpretation. A fixture identity mismatch,
 invalid Claim, unexpected symbol, unexpected trade date, sensitive content,
 forbidden trading claim, non-finite number, or raw/qfq mismatch blocks the
 entire decision.
@@ -254,6 +256,7 @@ The artifact tree is:
 ```text
 reports/phase2_option_c/
   reference_typed_claims.json
+  reference_fixture_manifest.json
   account_config.json
   decision.json
   paper_account.json
