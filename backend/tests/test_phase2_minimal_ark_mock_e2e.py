@@ -207,6 +207,9 @@ def test_mock_e2e_runs_real_validators_three_times_without_keychain(
     assert evidence["rendered_sha256_unique_count"] == 1
     assert all(run["provider_attempt_count"] == 1 for run in evidence["happy_path"])
     assert all(run["status"] == "SUCCEEDED" for run in evidence["happy_path"])
+    assert all(run["attempt_state"] == "CONSUMED" for run in evidence["happy_path"])
+    assert all(run["retry_count"] == 0 for run in evidence["happy_path"])
+    assert all(run["second_request_count"] == 0 for run in evidence["happy_path"])
     assert {case["status"] for case in evidence["failure_cases"]} == {
         "HTTP_ERROR",
         "TIMEOUT",
@@ -214,6 +217,13 @@ def test_mock_e2e_runs_real_validators_three_times_without_keychain(
         "CLAIMS_REJECTED",
     }
     assert all(case["provider_attempt_count"] == 1 for case in evidence["failure_cases"])
+    assert all(
+        case["attempt_state"] == "CONSUMED" for case in evidence["failure_cases"]
+    )
+    assert all(case["retry_count"] == 0 for case in evidence["failure_cases"])
+    assert all(
+        case["second_request_count"] == 0 for case in evidence["failure_cases"]
+    )
     assert evidence["total_mock_attempts"] == 7
     assert evidence["real_provider_attempts"] == 0
     assert evidence["real_ai_calls"] == 0

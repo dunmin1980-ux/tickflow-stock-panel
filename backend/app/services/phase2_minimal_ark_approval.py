@@ -24,6 +24,7 @@ from app.services.phase2_minimal_ark_canary import (
     ArkHostTransport,
     build_minimal_execution_inputs,
     execute_minimal_ark_canary,
+    load_minimal_request_contract,
 )
 
 _SHA256 = "0123456789abcdef"
@@ -586,6 +587,14 @@ def _mock_run(
         request_id_guard=lambda _request_id: None,
         clock=lambda: next(times),
     )
+    ledger = json.loads(_regular_bytes(result.ledger_path, "mock_ledger_invalid"))
+    attempt_state = (
+        "CONSUMED"
+        if ledger.get("state") == "TERMINAL"
+        and ledger.get("attempt_count") == 1
+        and ledger.get("dispatch_started") is True
+        else "INVALID"
+    )
     return (
         {
             "case": label,
@@ -599,6 +608,9 @@ def _mock_run(
             "claims_candidate_sha256": result.claims_candidate_sha256,
             "rendered_sha256": result.rendered_sha256,
             "can_publish": result.can_publish,
+            "attempt_state": attempt_state,
+            "retry_count": load_minimal_request_contract().retry_count,
+            "second_request_count": max(calls - 1, 0),
         },
         calls,
     )
@@ -705,6 +717,12 @@ def validate_minimal_mock_e2e(evidence: Any) -> list[str]:
         or not isinstance(failures, list)
         or [item.get("status") for item in failures]
         != ["HTTP_ERROR", "TIMEOUT", "CANDIDATE_REJECTED", "CLAIMS_REJECTED"]
+        or any(
+            item.get("attempt_state") != "CONSUMED"
+            for item in [*happy, *failures]
+        )
+        or any(item.get("retry_count") != 0 for item in [*happy, *failures])
+        or any(item.get("second_request_count") != 0 for item in [*happy, *failures])
         or evidence.get("total_mock_attempts") != 7
         or evidence.get("real_provider_attempts") != 0
         or evidence.get("real_ai_calls") != 0
