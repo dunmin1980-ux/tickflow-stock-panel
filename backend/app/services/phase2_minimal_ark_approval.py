@@ -32,6 +32,9 @@ _NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 _REQUEST_ID = re.compile(r"^[0-9a-f]{32}$")
 _REQUEST_ID_BYTES = re.compile(rb"(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])")
 _EXPERIMENT_ID = "MINIMAL_ARK_READ_TIMEOUT_EXPERIMENT_V1"
+_FROZEN_NON_REUSABLE_REQUEST_IDS = (
+    "459db009c89853f9240d4a155a93d275",
+)
 _SOURCE_PATHS = {
     "ark_adapter": "backend/app/providers/ark_provider.py",
     "claims_renderer": "backend/app/services/phase2_claims_renderer.py",
@@ -277,7 +280,7 @@ def build_historical_request_id_registry(
 ) -> dict[str, Any]:
     if verify_historical_evidence_manifest(repo_root, manifest):
         raise MinimalArkApprovalError("historical_evidence_invalid")
-    request_ids: set[str] = set()
+    request_ids: set[str] = set(_FROZEN_NON_REUSABLE_REQUEST_IDS)
     for item in manifest["files"]:
         raw = _regular_bytes(
             repo_root / item["path"],

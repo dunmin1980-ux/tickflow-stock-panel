@@ -259,6 +259,7 @@ def test_historical_request_registry_is_deterministic_and_blocks_reuse(
     assert "2f17745f58534063bdd7eda1eb0d16f1" in first["request_ids"]
     assert "93cf0ea84804444ebc9745fa34c4bb82" in first["request_ids"]
     assert "d57b276fe9014d35bdae5a92950ca17b" in first["request_ids"]
+    assert "459db009c89853f9240d4a155a93d275" in first["request_ids"]
     assert validate_historical_request_id_registry(
         REPO_ROOT, first, manifest
     ) == []
@@ -268,6 +269,12 @@ def test_historical_request_registry_is_deterministic_and_blocks_reuse(
             "2f17745f58534063bdd7eda1eb0d16f1",
             first,
             tmp_path / "attempts",
+        )
+    with pytest.raises(MinimalArkApprovalError, match="request_id_reused"):
+        validate_request_id_available(
+            "459db009c89853f9240d4a155a93d275",
+            first,
+            tmp_path / "fresh-attempts",
         )
 
 
