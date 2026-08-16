@@ -108,7 +108,8 @@ def build_offline_artifacts(
         raise MinimalArkApprovalError("scope_validation_failed")
     verification = {
         "verification_version": 1,
-        "status": "MINIMAL_ARK_CANARY_OFFLINE_VERIFIED",
+        "status": "MINIMAL_ARK_TIMEOUT_V1_OFFLINE_VERIFIED",
+        "experiment_id": "MINIMAL_ARK_READ_TIMEOUT_EXPERIMENT_V1",
         "source_git_head": head,
         "local_fork_remote": "MATCHED",
         "worktree": "CLEAN",
@@ -116,6 +117,9 @@ def build_offline_artifacts(
         "approval_scope_id": scope["scope_id"],
         "scope_historical_attempts": 0,
         "scope_availability": "AVAILABLE",
+        "connect_timeout_seconds": 10,
+        "read_timeout_seconds": 300,
+        "write_timeout_seconds": 180,
         "historical_request_id_count": request_history["request_id_count"],
         "mock_e2e": "PASSED",
         "real_ark_provider_attempts": 0,

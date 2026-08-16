@@ -30,6 +30,7 @@ _SHA256 = "0123456789abcdef"
 _NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 _REQUEST_ID = re.compile(r"^[0-9a-f]{32}$")
 _REQUEST_ID_BYTES = re.compile(rb"(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])")
+_EXPERIMENT_ID = "MINIMAL_ARK_READ_TIMEOUT_EXPERIMENT_V1"
 _SOURCE_PATHS = {
     "ark_adapter": "backend/app/providers/ark_provider.py",
     "claims_renderer": "backend/app/services/phase2_claims_renderer.py",
@@ -77,12 +78,15 @@ class _StrictFrozenModel(BaseModel):
 
 class MinimalExecutionContract(_StrictFrozenModel):
     can_publish: Literal[False]
+    connect_timeout_seconds: Literal[10]
     maximum_attempts: Literal[1]
+    read_timeout_seconds: Literal[300]
     retry_count: Literal[0]
     store: Literal[False]
     stream: Literal[False]
     strict_json_schema: Literal[True]
     tools: tuple[()]
+    write_timeout_seconds: Literal[180]
 
     @field_validator("tools", mode="before")
     @classmethod
@@ -101,6 +105,7 @@ class MinimalArtifactHashes(_StrictFrozenModel):
     prompt_sha256: str
     request_contract_sha256: str
     request_history_registry_sha256: str
+    typed_claims_schema_sha256: str
 
     @field_validator("*")
     @classmethod
@@ -120,6 +125,7 @@ class MinimalArkCandidate(_StrictFrozenModel):
     endpoint: Literal["https://ark.cn-beijing.volces.com/api/v3/responses"]
     symbol: Literal["000403.SZ"]
     trade_date: Literal["2026-07-31"]
+    experiment_id: Literal["MINIMAL_ARK_READ_TIMEOUT_EXPERIMENT_V1"]
     artifact_hashes: MinimalArtifactHashes
     source_bindings: dict[str, str]
     execution_contract: MinimalExecutionContract
@@ -155,8 +161,10 @@ class MinimalArkScope(_StrictFrozenModel):
     exact_model_id: Literal["doubao-seed-2-1-turbo-260628"]
     symbol: Literal["000403.SZ"]
     trade_date: Literal["2026-07-31"]
+    experiment_id: Literal["MINIMAL_ARK_READ_TIMEOUT_EXPERIMENT_V1"]
     historical_attempts: int
     availability: Literal["AVAILABLE", "BLOCKED"]
+    attempt_directory: Literal["ABSENT", "PRESENT"]
     maximum_attempts: Literal[1]
     retry_count: Literal[0]
 
@@ -368,6 +376,7 @@ def build_minimal_candidate(
         "endpoint": inputs.endpoint,
         "symbol": inputs.symbol,
         "trade_date": inputs.trade_date,
+        "experiment_id": _EXPERIMENT_ID,
         "artifact_hashes": {
             "claims_schema_sha256": claims_schema_sha256,
             "facts_sha256": EXPECTED_FACTS_SHA256,
@@ -383,16 +392,20 @@ def build_minimal_candidate(
             "request_history_registry_sha256": (
                 request_history_registry_sha256
             ),
+            "typed_claims_schema_sha256": claims_schema_sha256,
         },
         "source_bindings": _source_bindings(repo_root),
         "execution_contract": {
             "can_publish": False,
+            "connect_timeout_seconds": inputs.contract.connect_timeout_seconds,
             "maximum_attempts": 1,
+            "read_timeout_seconds": inputs.contract.read_timeout_seconds,
             "retry_count": 0,
             "store": False,
             "stream": False,
             "strict_json_schema": True,
             "tools": [],
+            "write_timeout_seconds": inputs.contract.write_timeout_seconds,
         },
         "manual_review": "PENDING",
         "three_symbol_batch": "NOT_APPROVED",
@@ -438,6 +451,7 @@ def _scope_identity(candidate_sha256: str) -> dict[str, Any]:
         "scope_type": "phase2b_minimal_ark_ai_canary",
         "symbol": "000403.SZ",
         "trade_date": "2026-07-31",
+        "experiment_id": _EXPERIMENT_ID,
     }
 
 
@@ -464,8 +478,10 @@ def build_minimal_scope(
         "exact_model_id": identity["exact_model_id"],
         "symbol": identity["symbol"],
         "trade_date": identity["trade_date"],
+        "experiment_id": identity["experiment_id"],
         "historical_attempts": historical_attempts,
         "availability": "AVAILABLE" if historical_attempts == 0 else "BLOCKED",
+        "attempt_directory": "ABSENT" if historical_attempts == 0 else "PRESENT",
         "maximum_attempts": 1,
         "retry_count": 0,
     }

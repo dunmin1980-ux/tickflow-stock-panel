@@ -12,7 +12,7 @@
   "path": "/api/v3/responses",
   "port": 443,
   "provider_id": "volcengine_ark",
-  "read_timeout_seconds": 180,
+  "read_timeout_seconds": 300,
   "retry_count": 0,
   "scheme": "https",
   "store": false,

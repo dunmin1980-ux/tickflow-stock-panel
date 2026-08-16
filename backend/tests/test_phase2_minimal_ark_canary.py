@@ -119,11 +119,15 @@ def test_execution_inputs_bind_frozen_facts_and_strict_request() -> None:
     assert inputs.request_body["store"] is False
     assert inputs.request_body["stream"] is False
     assert inputs.request_body["tools"] == []
+    assert "reasoning" not in inputs.request_body
     assert inputs.request_body["text"]["format"]["type"] == "json_schema"
     assert inputs.request_body["text"]["format"]["strict"] is True
     assert inputs.contract.retry_count == 0
     assert inputs.contract.maximum_attempts == 1
     assert inputs.contract.can_publish is False
+    assert inputs.contract.connect_timeout_seconds == 10
+    assert inputs.contract.read_timeout_seconds == 300
+    assert inputs.contract.write_timeout_seconds == 180
 
 
 def test_prompt_identity_excludes_dynamic_request_id() -> None:
@@ -153,6 +157,7 @@ def test_contract_rejects_non_strict_or_retrying_variants(tmp_path: Path) -> Non
         ("hostname_verification", False),
         ("follow_redirects", True),
         ("trust_env", True),
+        ("read_timeout_seconds", 180),
     ):
         mutated = dict(contract)
         mutated[field] = invalid

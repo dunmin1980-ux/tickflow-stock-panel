@@ -69,14 +69,18 @@ def test_candidate_is_deterministic_minimal_and_fully_bound(tmp_path: Path) -> N
     )
     assert candidate["symbol"] == "000403.SZ"
     assert candidate["trade_date"] == "2026-07-31"
+    assert candidate["experiment_id"] == "MINIMAL_ARK_READ_TIMEOUT_EXPERIMENT_V1"
     assert candidate["execution_contract"] == {
         "can_publish": False,
+        "connect_timeout_seconds": 10,
         "maximum_attempts": 1,
+        "read_timeout_seconds": 300,
         "retry_count": 0,
         "store": False,
         "stream": False,
         "strict_json_schema": True,
         "tools": [],
+        "write_timeout_seconds": 180,
     }
     assert candidate["artifact_hashes"]["facts_sha256"] == (
         "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956"
@@ -90,6 +94,21 @@ def test_candidate_is_deterministic_minimal_and_fully_bound(tmp_path: Path) -> N
     assert candidate["artifact_hashes"]["mock_e2e_sha256"] == mock_sha
     assert candidate["artifact_hashes"]["request_history_registry_sha256"] == (
         request_history_sha
+    )
+    assert candidate["artifact_hashes"]["prompt_sha256"] == (
+        "99969ff4fcd6cf190c5d9267e4aeeb195b3ce7c8cb26f9d3abb26755eefcef46"
+    )
+    assert candidate["artifact_hashes"]["typed_claims_schema_sha256"] == (
+        candidate["artifact_hashes"]["claims_schema_sha256"]
+    )
+    assert candidate["source_bindings"]["ark_adapter"] == (
+        "9a5e494ef11de990a27d1143e29f177fd4cb0741a2901c63f1f2f8143a0e22a6"
+    )
+    assert candidate["source_bindings"]["claims_validator"] == (
+        "3dc7da12501672c3a7e7e9b8d68f184a51bb2434cb256220f4b311c770806a40"
+    )
+    assert candidate["source_bindings"]["claims_renderer"] == (
+        "53d94e60fce7914582c85beea977ca65f7a6713c7066ee65df2c84a8ec6c361e"
     )
     assert set(candidate["source_bindings"]) == {
         "ark_adapter",
@@ -153,6 +172,11 @@ def test_new_scope_is_deterministic_available_and_attempt_free(tmp_path: Path) -
     assert first == second
     assert first["availability"] == "AVAILABLE"
     assert first["historical_attempts"] == 0
+    assert first["attempt_directory"] == "ABSENT"
+    assert first["experiment_id"] == "MINIMAL_ARK_READ_TIMEOUT_EXPERIMENT_V1"
+    assert first["scope_id"] != (
+        "e07c9e16355f160796765c59db68c9aa1fc9e19c04002130d5f7f0cd1fa3b81a"
+    )
     assert first["maximum_attempts"] == 1
     assert first["retry_count"] == 0
     assert validate_minimal_scope(first, candidate_sha, attempts_root) == []

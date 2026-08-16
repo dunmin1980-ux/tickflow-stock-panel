@@ -89,7 +89,7 @@ class MinimalArkRequestContract(BaseModel):
     follow_redirects: Literal[False]
     trust_env: Literal[False]
     connect_timeout_seconds: Literal[10]
-    read_timeout_seconds: Literal[180]
+    read_timeout_seconds: Literal[300]
     write_timeout_seconds: Literal[180]
     maximum_response_bytes: Literal[1_048_576]
     stream: Literal[False]
