@@ -330,6 +330,106 @@ class PaperAccount(SimulationSafety):
         return value
 
 
+class PriceState(SimulationSafety):
+    mark_price: Decimal = Field(gt=0)
+    price_basis: Literal["raw"]
+    trade_date: date
+    source: Literal["PHASE2_FROZEN_FACTS"]
+
+
+class DailyFactsSummary(SimulationSafety):
+    daily_close: Decimal = Field(gt=0)
+    daily_close_basis: Literal["raw"]
+    macd_relation: Literal["ABOVE", "BELOW", "EQUAL_WITHIN_EPSILON"]
+    rsi6: Decimal
+    ma_order: list[Literal["ma60", "ma5", "ma10", "ma20"]]
+    market_scope: Literal["incomplete"]
+
+    @field_validator("daily_close", "rsi6")
+    @classmethod
+    def validate_finite_fact(cls, value: Decimal) -> Decimal:
+        if not value.is_finite():
+            raise ValueError("daily_fact_must_be_finite")
+        return value
+
+
+class PaperPositionSummary(SimulationSafety):
+    cash_cny: Decimal = Field(ge=0)
+    quantity: int = Field(ge=0)
+    eligible_quantity: int = Field(ge=0)
+    ineligible_quantity: int = Field(ge=0)
+    position_cost_cny: Decimal = Field(ge=0)
+    market_value_cny: Decimal = Field(ge=0)
+    realized_pnl_cny: Decimal
+    unrealized_pnl_cny: Decimal
+    total_equity_cny: Decimal = Field(ge=0)
+    cumulative_return_percent: Decimal
+    current_drawdown_cny: Decimal = Field(ge=0)
+    max_drawdown_cny: Decimal = Field(ge=0)
+
+
+class ChenQuantDaily(SimulationSafety):
+    daily_schema_version: Literal[1]
+    status: Literal["OPTION_C_REFERENCE_READY"]
+    report_date: date
+    symbol: Literal["000403.SZ"]
+    name: Literal["派林生物"]
+    timezone: Literal["Asia/Shanghai"]
+    price_state: PriceState
+    facts_summary: DailyFactsSummary
+    validated_claim_ids: list[str] = Field(min_length=1)
+    interpretation: Literal["MIXED_TECHNICAL_STRUCTURE"]
+    research_signal: Literal["MIXED_OBSERVATION"]
+    paper_action: Literal["HOLD"]
+    action_reason_refs: list[str] = Field(min_length=1)
+    position: PaperPositionSummary
+    simulated_trades: list[TradeRecord]
+    facts_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    projection_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    claims_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    fixture_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    config_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    decision_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    vendor_pending: list[VendorPendingItem] = Field(min_length=4, max_length=4)
+    risk_notices: list[
+        Literal[
+            "MARKET_SCOPE_INCOMPLETE",
+            "FINANCIAL_DATA_UNAVAILABLE",
+            "NEWS_DATA_UNAVAILABLE",
+            "VENDOR_SEMANTICS_PENDING",
+            "SIMULATION_NOT_INVESTMENT_ADVICE",
+        ]
+    ]
+    next_observation_conditions: list[
+        Literal[
+            "RECHECK_VALIDATED_CLAIMS",
+            "VERIFY_VENDOR_PENDING",
+            "WAIT_FOR_NEXT_APPROVED_DAILY_EVIDENCE",
+        ]
+    ]
+    real_provider_integration: Literal["DEFERRED_FROZEN"]
+    real_provider_attempts: Literal[0]
+    real_ai_calls: Literal[0]
+    real_trading: Literal["DISABLED"]
+
+
+class ReplayValidation(SimulationSafety):
+    replay_schema_version: Literal[1]
+    status: Literal[
+        "DETERMINISTIC_REPLAY_PASSED",
+        "DETERMINISTIC_REPLAY_FAILED",
+    ]
+    replay_count: int = Field(ge=0)
+    artifact_sha256: dict[str, str]
+    mismatched_artifacts: list[str]
+    trade_ledger_identical: bool
+    position_identical: bool
+    pnl_identical: bool
+    json_identical: bool
+    markdown_identical: bool
+    errors: list[str]
+
+
 def canonical_option_c_bytes(
     value: BaseModel | Mapping[str, Any],
 ) -> bytes:
