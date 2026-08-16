@@ -18,6 +18,12 @@ FixtureSource = Literal[
     "DETERMINISTIC_TEST_FIXTURE",
 ]
 ActionSide = Literal["BUY", "HOLD", "SELL"]
+VendorPendingItem = Literal[
+    "intraday_batch_entitlement",
+    "first_30m_bucket_includes_09_30",
+    "volume_unit",
+    "amount_unit",
+]
 
 
 def money(value: Decimal | str | int) -> Decimal:
@@ -82,6 +88,41 @@ class SimulationConfig(SimulationSafety):
             can_publish=False,
             trading_advice=False,
         )
+
+
+class ReferenceFixtureManifest(SimulationSafety):
+    fixture_manifest_version: Literal[1]
+    source: Literal["DETERMINISTIC_REFERENCE_FIXTURE"]
+    symbol: Literal["000403.SZ"]
+    name: Literal["派林生物"]
+    trade_date: date
+    timezone: Literal["Asia/Shanghai"]
+    evidence_available_at: datetime
+    facts_file: Literal["reports/phase2_facts/000403SZ_facts.json"]
+    facts_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    projection_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    claims_file: Literal[
+        "reports/phase2_claims/fixtures/000403SZ_claims.json"
+    ]
+    claims_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    claims_document_schema_file: Literal[
+        "reports/phase2_claims/schema/phase2_claims.schema.json"
+    ]
+    claims_document_schema_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    worker_candidate_schema_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_daily_summary_file: Literal[
+        "reports/phase1_observation/2026-07-31/daily_summary.json"
+    ]
+    source_daily_summary_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    claims_renderer_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    claim_count: int = Field(ge=1)
+    facts_pointer_binding_count: int = Field(ge=1)
+    vendor_pending: list[VendorPendingItem] = Field(min_length=4, max_length=4)
+
+    @field_validator("evidence_available_at")
+    @classmethod
+    def validate_evidence_available_at(cls, value: datetime) -> datetime:
+        return _validate_shanghai_datetime(value)
 
 
 def _validate_shanghai_datetime(value: datetime) -> datetime:
