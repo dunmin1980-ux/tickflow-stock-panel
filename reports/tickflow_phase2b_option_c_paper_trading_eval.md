@@ -1,117 +1,181 @@
 # TickFlow Phase 2B Option C Paper Trading 评测报告
 
-## 1. 最终状态
+## 1. 状态
 
 ```text
 PHASE2B_OPTION_C_PAPER_TRADING_READY
 ```
 
-| 项目 | 状态 |
+开工 Head：`3d2fbac2c723dcb24664af20398537c44eb1dce1`
+
+实现提交：`05ae11a44083402c386d0c6732c1701d59a85e9f`
+
+该状态仅表示单票离线模拟工程门禁通过，不得解释为实盘、荐股、自动发布或
+生产就绪批准。
+
+| 门禁 | 当前结果 |
 |---|---|
+| Resume state audit | PASSED |
 | Option A | EXHAUSTED |
 | Option C | ACTIVE |
-| Real Provider integration | DEFERRED / FROZEN |
-| Paper Trading Engine | READY |
+| Legacy Provider path | FROZEN |
 | Reference Fixture | VALID |
-| Claims integration | PASSED |
+| Claims Validator | PASSED |
 | Research Decision Layer | PASSED |
-| PnL accounting | PASSED |
+| Paper Trading Engine | PASSED |
+| A-share T+1 | PASSED |
+| Next-day-open policy | PASSED |
 | Look-ahead guard | PASSED |
-| Replay x3 | PASSED |
+| Decimal / PnL / drawdown | PASSED |
+| Idempotency | PASSED |
 | ChenQuant Daily | PASSED |
+| Replay x3 | PASSED |
+| Independent review | NO P0/P1 ACTIONABLE FINDINGS |
 | Real trading | DISABLED |
-| Independent review | NO ACTIONABLE P0/P1 FINDINGS |
 
-实现提交：`f87257c697a6f49864c4458d2f14461530aeb34d`
+## 2. 范围与架构
 
-开工基线：`8f4b0f8f885a625a51e3213414b074807affdd98`
+本轮继续现有 Option C 旁路模块，没有创建第二套引擎，也没有接入主 API/UI、
+批量回测引擎、Provider、TickFlow、券商、云端或正式 Obsidian Vault。
 
-## 2. 本轮交付范围
-
-本轮建立了独立旁路的单标的确定性研究与模拟账本，不接主 API/UI，
-不复用批量回测引擎，不连接 Provider、TickFlow、券商或任何实盘路径。
-
-固定业务标的：`000403.SZ` 派林生物。
-
-闭环为：
+固定业务标的：`000403.SZ` 派林生物。固定业务链：
 
 ```text
-冻结 Facts / Projection
-→ 严格 Typed Claims
-→ INTERPRETATION
-→ SIGNAL
-→ 确定性规则 ACTION
-→ A 股 T+1 Paper Trading
-→ Decimal PnL
-→ ChenQuant Daily
-→ Replay x3
+Frozen Facts / Projection
+-> strict Typed Claims
+-> INTERPRETATION
+-> SIGNAL
+-> deterministic ACTION
+-> A-share T+1 Paper Trading
+-> Decimal PnL
+-> ChenQuant Daily
+-> Replay x3
 ```
 
-冻结业务样本的结果为：
+冻结业务证据重新计算为：
 
 ```text
-MIXED_TECHNICAL_STRUCTURE
-→ MIXED_OBSERVATION
-→ HOLD
+MIXED_TECHNICAL_STRUCTURE -> MIXED_OBSERVATION -> HOLD
 ```
 
-没有为演示 BUY/SELL 伪造业务行情。BUY/SELL、部分卖出和全量退出仅在
-`DETERMINISTIC_TEST_FIXTURE` 测试路径中验证，未进入发布目录。
+没有为展示 BUY/SELL 改写业务行情。BUY、SELL、部分退出和全部退出只使用明确标记
+`DETERMINISTIC_TEST_FIXTURE` 的测试数据，不进入业务发布目录。
 
-## 3. 核心合同
+## 3. 本轮补强
 
-### 3.1 研究与行动分层
+### 3.1 显式配置与身份
 
-- Facts、Projection、Claims、Interpretation、Signal、Action 使用不同严格对象；
-- Claims 不能直接执行 Action；
-- 执行入口必须同时收到对应 Signal，并用当前账户快照重新计算 Action；
-- 手工构造或来源不匹配的 Action 以 `action_provenance_mismatch` 阻断；
-- Claims 对象必须与冻结 canonical bytes 一致；
-- Projection 内容必须重新计算 SHA-256，不能只信任对象内自报哈希。
+`PaperTradingConfig` 固定并哈希绑定：
 
-### 3.2 A 股执行规则
+```text
+initial_cash=100000.00
+commission_rate=0.0003
+minimum_commission=5.00
+sell_fee_rate=0.0005
+lot_size=100
+t_plus_one=true
+execution_policy=NEXT_TRADING_DAY_OPEN
+slippage_rate=0
+```
 
-- 所有金额使用 `Decimal`，JSON 金额使用字符串，不使用浮点金额；
-- 买入数量必须为 100 股整数手，数量字段为整数；
-- 当日买入的持仓当日不可卖出；
-- 信号形成后，只能使用下一交易日 `open` 成交；
-- 决策日期、前一交易日和执行日期必须形成连续合同；
-- 成交不读取下一交易日 `close`，改变未来收盘价不影响成交结果；
-- 账户 mark、持仓 lot 或成交记录晚于信号日期时拒绝生成 Action；
-- 重复 Action ID 在账本变更前阻断。
+费率仅为测试专用显式配置，不宣称等同真实券商费率。每个 Action 记录
+`decision_id`、`order_id`、`action_id`、`idempotency_key` 和
+`fixture_identity`。幂等键绑定 symbol、decision date、signal identity、
+side/quantity、Fixture identity 和 Paper config identity。
 
-### 3.3 费用与盈亏
+账户分别保存已处理 decision、order、action 和 idempotency key。任何重复身份都在
+成交和账本变更前阻断。
 
-固定配置：
+### 3.2 下一交易日开盘与 T+1
 
-- 初始现金：`100000.00 CNY`；
-- 佣金率：`0.0003`；
-- 最低佣金：`5.00 CNY`；
-- 卖出印花税率：`0.0005`；
-- 滑点：`0`；
-- 成本分配：FIFO；
-- 支持部分退出、全部退出、已实现/未实现盈亏、总权益和最大回撤。
+可执行 Action 不再接收调用方直接指定的单根 Bar。引擎只接受封闭的
+`DeterministicMarketFixture`：
 
-## 4. 确定性证据
+- 交易日历必须有序且唯一；
+- Bar 日期必须唯一，并与前一交易日和 Fixture 身份一致；
+- 只查找 decision date 的精确下一交易日；
+- 精确下一日 Bar 缺失时返回 `NO_EXECUTION_PRICE_AVAILABLE`；
+- 不跳到更远日期，不使用决策日 close，不使用下一日 close 作为成交价；
+- 成交价固定为精确下一交易日 `open`。
 
-输出目录：`reports/phase2_option_c/`
+买入 lot 明确记录 `acquired_trade_date` 和 `sellable_from_trade_date`。卖出资格
+只由后者判断，不用自然日推算；当日不可卖，下一 Fixture 交易日才可卖。
 
-共 10 个文件：
+### 3.3 账本与 PnL
 
-1. `account_config.json`
-2. `chenquant_daily.json`
-3. `chenquant_daily.md`
-4. `decision.json`
-5. `evidence_index.json`
-6. `paper_account.json`
-7. `reference_fixture_manifest.json`
-8. `reference_typed_claims.json`
-9. `replay_validation.json`
-10. `trade_ledger.json`
+全部核心金额使用 `Decimal` 并按 CNY `0.01` 确定性舍入。Trade 明确记录：
 
-重复离线构建后，10 个文件的 SHA-256 全部不变。
+```text
+execution_price
+gross_amount_cny
+commission_cny
+stamp_tax_cny
+fees_cny
+sell_cost_cny
+cost_basis_cny
+net_cash_flow_cny
+realized_pnl_cny
+```
 
-Replay 结果：
+严格 schema 会交叉验证费用分量、BUY 成本基础/净现金流、SELL 净收入/成本基础/
+已实现盈亏和时间顺序。账户继续计算现金、FIFO 持仓成本、市场价值、未实现盈亏、
+总权益、权益峰值和最大回撤。
+
+### 3.4 Fixture provenance 与时间门禁
+
+Reference manifest SHA-256 贯穿 Interpretation、Signal 和 Action 的
+`fixture_identity`。Projection 日期即使具有重新计算后的有效自哈希，只要不等于
+manifest 交易日也会以 `projection_date_mismatch` 阻断。执行 Fixture 的 source、
+symbol 或 scenario identity 不一致同样阻断。市场 Fixture 另有基于完整日历和 Bar
+内容计算的 identity；执行入口会重新计算，Trade 与 execution ID 同时绑定该身份。
+
+`reference_typed_claims.json` 使用显式
+`source=DETERMINISTIC_REFERENCE_FIXTURE` 的非发布 envelope；内嵌
+`claims_document` 仍与冻结 canonical ClaimsDocument 字节一致并继续经过现有
+Typed Claims Validator，未向冻结 Claims Schema 注入字段。
+
+## 4. 33 项需求覆盖
+
+| # | 合同 | 证据状态 |
+|---:|---|---|
+| 1 | initial cash | PASSED |
+| 2 | BUY | PASSED / TEST FIXTURE ONLY |
+| 3 | HOLD | PASSED / REFERENCE FIXTURE |
+| 4 | SELL | PASSED / TEST FIXTURE ONLY |
+| 5 | partial sell | PASSED |
+| 6 | full exit | PASSED |
+| 7 | insufficient cash | PASSED |
+| 8 | insufficient holdings | PASSED |
+| 9 | invalid quantity | PASSED |
+| 10 | 100-share buy lot | PASSED |
+| 11 | commission | PASSED |
+| 12 | minimum commission | PASSED |
+| 13 | sell fee | PASSED |
+| 14 | realized PnL | PASSED |
+| 15 | unrealized PnL | PASSED |
+| 16 | total equity | PASSED |
+| 17 | max drawdown | PASSED |
+| 18 | duplicate decision | PASSED |
+| 19 | duplicate order | PASSED |
+| 20 | T+1 same-day sell blocked | PASSED |
+| 21 | T+1 next-day sell allowed | PASSED |
+| 22 | missing next-day price | PASSED |
+| 23 | Facts timestamp after decision blocked | PASSED |
+| 24 | future market data blocked | PASSED |
+| 25 | Projection date mismatch blocked | PASSED |
+| 26 | invalid Claims produces no action | PASSED |
+| 27 | Fixture identity mismatch blocked | PASSED |
+| 28 | deterministic BUY fixture | PASSED |
+| 29 | deterministic SELL fixture | PASSED |
+| 30 | deterministic HOLD fixture | PASSED |
+| 31 | replay x3 | PASSED |
+| 32 | Daily JSON deterministic | PASSED |
+| 33 | Daily Markdown deterministic | PASSED |
+
+## 5. 构建与重放证据
+
+输出目录：`reports/phase2_option_c/`，共 10 个普通文件。连续两次离线构建的
+全部文件 SHA-256 完全一致。
 
 ```text
 replay_count=3
@@ -123,94 +187,25 @@ json_identical=true
 markdown_identical=true
 ```
 
-Replay 校验器要求六个运行工件完整存在；三次运行同时缺失同一文件时不会再
-误判为通过。
-
-## 5. Fixture 与安全标识
-
-冻结身份：
-
-| 对象 | SHA-256 |
-|---|---|
-| Facts | `adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956` |
-| Projection | `0ffe5b7fbd57d6b16af073db12d826c940c88b43547870f6b9513401eb49fb1f` |
-| Typed Claims | `66f7ef471b293a4d5453ca53fd91668f217176915e6e88f2ce88f4f037559183` |
-
-`reference_typed_claims.json` 保持冻结 Typed Claims Schema 的精确
-`ClaimsDocument`，不向冻结 Schema 注入额外字段。它的 SHA-256 由
-`reference_fixture_manifest.json` 绑定，manifest 同时为该 Claims 文件声明：
+Replay evidence SHA-256：
 
 ```text
-claims_artifact_simulation_only=SIMULATION ONLY
-claims_artifact_can_publish=false
-claims_artifact_trading_advice=false
+d906f9bb5eae728039cd6fb6a35b128c218ef3cd45c6bd6fd9441fc485cd713e
 ```
 
-发布目录未发现 Secret、Authorization、Cookie、Session、测试夹具标识或
-明确交易建议措辞。全部文件为普通文件，mode `0600`，无符号链接。
+生成的业务日报继续固定 `SIMULATION ONLY`、`can_publish=false`、
+`trading_advice=false`，结果为 HOLD 且模拟成交数为 0。
 
-## 6. 历史证据保护
+## 6. 冻结证据与外部行为
 
-受保护历史证据文件数：`273`。
-
-构建前后聚合 SHA-256 均为：
+273 个受保护历史文件在构建前后聚合 SHA-256 均为：
 
 ```text
 caa81d6f500ed69be79bd168244fb9eadad1c465299c717d95c7a3712a212234
 ```
 
-结论：Phase 1 行情证据、请求审计、Facts、Claims、Provider/Ark、Relay、
-Isolation 和 Obsidian Preview 历史证据均未修改。
-
-## 7. 测试与复审
-
-### 7.1 通过项
-
-| 验证 | 结果 |
-|---|---:|
-| Option C + Claims 集成 | `132 passed` |
-| compileall | PASSED |
-| Ruff | PASSED |
-| git diff --check | PASSED |
-| 离线构建 | PASSED |
-| Replay x3 | PASSED |
-| 敏感信息扫描 | PASSED |
-| 禁止网络/Provider/backtest 依赖扫描 | PASSED |
-| 独立复审 | NO ACTIONABLE P0/P1 FINDINGS |
-
-独立复审先后发现 6 个 P1，均已增加失败用例并关闭：
-
-1. Action 执行入口缺少 Signal 来源绑定；
-2. 内存 Claims 可与冻结 canonical bytes 脱节；
-3. Replay 在全部缺少必需文件时可能误判通过；
-4. 严格 Claims 文件缺少明确的旁路安全绑定；
-5. 未来账户快照可影响过去信号；
-6. Projection 内容未重新计算自哈希。
-
-最终复审结果：`NO ACTIONABLE P0/P1 FINDINGS`。
-
-### 7.2 全量后端说明
-
-全量后端结果：
-
-```text
-2835 passed
-58 failed
-13 warnings
-```
-
-58 个失败不在 Option C 新模块：
-
-- 44 个 Ark/Provider 失败已在开工 Head `8f4b0f8` 复现；
-- 13 个 Gold 失败已在开工 Head 以相同集合复现；
-- 1 个冻结 Minimal Ark launcher 测试绑定旧 Git Head，任何 Option C 新提交都会
-  触发 `runtime_git_head_mismatch`。
-
-Option C 只新增或修改自身 schema、service、离线脚本、专项测试和文档，未修改
-Ark/Provider、Gold 或主 API/UI。按本阶段边界，不重开冻结 Provider 和既有 Gold
-工程债务，也不重生成 Candidate/Scope 来制造全量绿色结果。
-
-## 8. 外部行为审计
+因此 Phase 1 行情与请求审计、Phase 2 Facts/Claims、历史 Provider/Ark、Relay、
+Isolation 和 Obsidian Preview 证据未改变。
 
 ```text
 TickFlow API requests=0
@@ -222,25 +217,51 @@ Real trading=DISABLED
 Integrated Gold=DISABLED
 ```
 
-未读取或输出真实 Key，未配置 AI，未发起 DNS/TLS/HTTP Provider 探测，未连接
-券商，未写入正式 Obsidian Vault，未接 Telegram/OpenClaw，未部署云端。
+未读取或输出真实 Key，未发起 DNS/TLS/HTTP 探测，未连接券商，未写正式 Vault，
+未接 Telegram/OpenClaw，也未重新部署云端。
 
-## 9. 结论与下一动作
+## 7. 验证状态
 
-Option C 已达到单标的确定性 Paper Trading 工程就绪状态。当前结论仅证明：
+| 验证 | 结果 |
+|---|---:|
+| Paper Trading 专项 | `32 passed` |
+| Option C 专项 | `64 passed` |
+| Option C + Claims/Renderer | `141 passed` |
+| compileall | PASSED |
+| Ruff F821 | PASSED |
+| focused Ruff | PASSED |
+| git diff --check | PASSED |
+| 两次离线构建 | PASSED / SHA IDENTICAL |
+| 敏感信息扫描 | PASSED |
+| 禁止 backtest/provider/network 依赖扫描 | PASSED |
+| 独立复审 | NO P0/P1 ACTIONABLE FINDINGS |
 
-- 冻结研究证据可以稳定映射为确定性 HOLD；
-- 测试夹具可以验证 T+1、下一交易日开盘成交、费用、持仓和 PnL；
-- 同一输入重复执行三次结果完全一致；
-- 业务链不再依赖真实 LLM Provider；
-- 不存在真实交易路径。
+独立复审首次发现两项 P1：
 
-它不代表实盘可用，不代表三票批次通过，也不构成投资建议。
+1. 市场 Fixture identity 未绑定日历和 Bar 内容；
+2. `reference_typed_claims.json` 未在文件自身明确 reference source。
 
-下一动作：
+两项均按 TDD 修复。复审回归确认市场身份会在执行入口重新计算，Trade 保留研究
+Fixture 和市场 Fixture 两类身份；Claims envelope 显式标记来源，内嵌文档仍与
+冻结 canonical ClaimsDocument 字节一致。最终结论：
+
+```text
+NO P0/P1 ACTIONABLE FINDINGS
+```
+
+本轮未修改共享核心模块，因此未重跑历史全量后端。此前全量基线为
+`2835 passed / 58 frozen Ark/Gold failures`；按批准边界不重开这些冻结工程债务。
+
+## 8. 结论
+
+当前代码已证明单票确定性研究信号可以进入独立的 T+1 模拟账本，并在精确下一
+交易日开盘政策下稳定计算现金、持仓和 PnL。它仍只是工程侧的离线模拟闭环，
+不代表真实交易可用，也不构成投资建议。
+
+全部门禁通过，下一动作固定为：
 
 ```text
 RUN_SINGLE_SYMBOL_PAPER_TRADING_VALIDATION
 ```
 
-本阶段完成后停止，不自动启动三票、不接主系统、不运行真实 Provider。
+不会自动启动三票、Provider、主系统集成、Paper Trading 实时任务或下一阶段。
