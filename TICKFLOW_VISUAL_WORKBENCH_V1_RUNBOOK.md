@@ -1,13 +1,12 @@
 # TickFlow Visual Workbench v1 Runbook
 
-## Current status
+## Status
 
-`DELIVERY_SPRINT_BLOCKED_BY_P0_P1`
+`TICKFLOW_VISUAL_WORKBENCH_V1_RELEASED`
 
-The browser workbench is implemented and safe for the released frozen
-`000403.SZ` reference workflow. It is not a released daily product because the
-current Option C contract cannot represent a new validated real-market daily
-input. Do not treat a deterministic test fixture as daily research evidence.
+This is a local, single-symbol A-share research and Paper Trading workbench for
+`000403.SZ` 派林生物. It is always `SIMULATION ONLY`; real trading and broker
+connectivity are disabled.
 
 ## Start
 
@@ -23,67 +22,105 @@ Or run from the repository root:
 ./scripts/start_tickflow_visual.sh
 ```
 
-The launcher binds only `127.0.0.1:3018`, builds the frontend when needed,
-starts FastAPI, waits for `/health`, and opens:
+The launcher installs the locked stock-sdk bridge dependency when needed,
+builds the frontend when sources changed, binds only `127.0.0.1:3018`, waits
+for health, and opens:
 
 ```text
 http://127.0.0.1:3018/paper-trading
 ```
 
-It reuses a healthy server and never kills a process that already owns the
-port. Set a different local port only when required:
+It reuses a healthy server and never kills an unrelated process. To use a
+different local port:
 
 ```bash
 TICKFLOW_VISUAL_PORT=3020 ./scripts/start_tickflow_visual.sh
 ```
 
-## What works
+## Daily SOP
 
-- Account KPIs, positions, decisions, trades, PnL, drawdown, and equity curve.
-- Research Signal, Paper Action, and deterministic Claims status.
-- ChenQuant Daily JSON/Markdown rendering.
-- Frozen reference account initialization and idempotent re-open.
-- Refresh/restart recovery from immutable Option C state.
-- Friendly fail-closed errors and double-click protection.
-- `SIMULATION ONLY`, `can_publish=false`, and `REAL TRADING DISABLED`.
+1. Start the workbench after the A-share close. The preparation gate opens at
+   `15:10 Asia/Shanghai`.
+2. Confirm the page shows the intended date and `SIMULATION ONLY / REAL TRADING
+   DISABLED`.
+3. Click `运行今日模拟盘` once.
+4. Wait for `本次已写入日结`.
+5. Review Research Signal, Paper Action, Claims date, account KPIs, positions,
+   decisions, trades, equity/PnL, and ChenQuant Daily.
 
-## State and inputs
+Before 15:10 the button is disabled. A stale market date, unavailable source,
+invalid raw/qfq relationship, incomplete calendar, duplicate run, or tampered
+artifact fails closed without changing the account.
 
-The startup script uses:
+If an open position crosses a material raw/qfq adjustment-factor change, the
+run stops with an enterprise-action review message. v1 does not guess dividend,
+split, rights, or share-count adjustments, so it cannot publish a false PnL.
+
+## What One Click Does
+
+For the fixed symbol only, the backend serially obtains:
+
+1. raw daily history;
+2. qfq daily history;
+3. the A-share trading calendar.
+
+It writes a strict `VALIDATED_DAILY_INPUT` bundle, computes deterministic
+indicators, Facts, Projection, Typed Claims and Research Signal, then passes the
+canonical input to the released Option C runner. It does not call an AI model.
+
+Signals use same-basis qfq Typed Claims. Raw prices are used for valuation and
+next-trading-day-open execution. Volume and amount units remain explicitly
+marked `VENDOR_CONFIRMATION_PENDING` and are not used to create the action.
+
+## Account Semantics
+
+- A BUY or SELL decision is queued on the decision date.
+- Execution requires the next available trading day's raw opening price.
+- A-share T+1 remains enabled; same-day sell is rejected.
+- BUY quantity uses 100-share lots.
+- Cash, fees, cost basis and PnL use Decimal accounting.
+- HOLD is a valid result and creates no order or trade.
+- Repeating an already published input is idempotent.
+
+## State and Output
+
+Runtime data is Git-ignored under:
 
 ```text
-backend/data/user_data/phase2_option_c_paper/reference_account/
-backend/data/user_data/phase2_option_c_paper/inputs/
+backend/data/user_data/phase2_option_c_paper/
+├── inputs/YYYY-MM-DD/
+│   ├── raw_daily.json
+│   ├── qfq_daily.json
+│   ├── facts.json
+│   ├── projection.json
+│   ├── claims.json
+│   ├── claims_validation.json
+│   ├── input.json
+│   └── manifest.json
+└── reference_account/
+    ├── current_state.json
+    └── days/YYYY-MM-DD/
+        ├── chenquant_daily.json
+        ├── chenquant_daily.md
+        ├── decision_ledger.json
+        ├── trade_ledger.json
+        ├── position_lots.json
+        └── equity_history.json
 ```
 
-A staged filename is:
+The browser reads these persisted Option C artifacts through the authenticated
+thin API. Refreshing or restarting does not recompute ledger values in the UI.
 
-```text
-YYYY-MM-DD_input.json
-```
+## Safety Boundary
 
-It must pass the existing strict `ContinuousDayInput` contract. The Visual
-layer does not fetch prices, generate Claims, alter the input, or guess a
-missing next-day open.
+- Symbol: `000403.SZ` only.
+- AI Provider calls: `0`.
+- Broker and real trading: disabled.
+- Three-symbol batch: not released.
+- Cloud deployment: not performed.
+- Automatic publishing: disabled.
+- `can_publish=false` and `trading_advice=false` remain fixed.
 
-## Current P1 blocker
-
-The released schema currently has only:
-
-```text
-DETERMINISTIC_REFERENCE_FIXTURE
-DETERMINISTIC_TEST_FIXTURE
-```
-
-The reference is fixed to `2026-07-31`; the test fixture must not be presented
-as real daily evidence. A follow-up scope must add an approved validated-daily
-input contract and deterministic daily Facts/Claims preparation before this
-workbench can be released for actual daily use.
-
-## Safety
-
-- No Ark or OpenAI call.
-- No broker or real-trading route.
-- No cloud deployment.
-- No three-symbol batch.
-- No automatic publishing.
+Do not delete or edit `current_state.json`, day directories, or validated input
+bundles to change an outcome. Archive a disposable test account instead of
+rewriting history.

@@ -313,6 +313,14 @@ def test_market_fixture_is_ordered_unique_and_closed() -> None:
     assert fixture.fixture_identity != fixture.scenario_fixture_identity
 
 
+def test_market_bar_rejects_non_executable_reference_source() -> None:
+    payload = _bar().model_dump(mode="python")
+    payload["source_fixture"] = "DETERMINISTIC_REFERENCE_FIXTURE"
+
+    with pytest.raises(ValidationError):
+        MarketBar(**payload)
+
+
 def test_execution_bar_is_available_at_next_day_open() -> None:
     bar = _market_fixture().bars[0]
 

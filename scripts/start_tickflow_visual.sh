@@ -13,6 +13,8 @@ LOG_FILE="${RUNTIME_DIR}/server.log"
 STARTUP_LOCK="${RUNTIME_DIR}/.startup.lock"
 STARTUP_LOCK_OWNER="${STARTUP_LOCK}/owner.pid"
 PYTHON="${TICKFLOW_VISUAL_PYTHON:-${ROOT}/backend/.venv/bin/python}"
+STOCKSDK_BRIDGE_DIR="${TICKFLOW_STOCKSDK_BRIDGE_DIR:-${ROOT}/backend/app/plugins/stocksdk}"
+STOCKSDK_PACKAGE="${STOCKSDK_BRIDGE_DIR}/node_modules/stock-sdk/package.json"
 
 health_ready() {
   curl --silent --show-error --fail --max-time 2 "${HEALTH_URL}" >/dev/null 2>&1
@@ -36,6 +38,7 @@ if [[ "${1:-}" == "--dry-run" ]]; then
   printf 'port=%s\n' "${PORT}"
   printf 'url=%s\n' "${URL}"
   printf 'data_dir=%s\n' "${DATA_DIR}"
+  printf 'stocksdk_bridge=%s\n' "${STOCKSDK_BRIDGE_DIR}"
   printf 'gold_workspace_enabled=false\n'
   printf 'real_trading=DISABLED\n'
   exit 0
@@ -89,6 +92,26 @@ fi
 if [[ ! -x "${PYTHON}" ]]; then
   printf 'PYTHON_RUNTIME_MISSING path=%s\n' "${PYTHON}" >&2
   exit 1
+fi
+
+if [[ ! -f "${STOCKSDK_PACKAGE}" || -L "${STOCKSDK_PACKAGE}" ]]; then
+  if [[ -L "${STOCKSDK_BRIDGE_DIR}" || ! -f "${STOCKSDK_BRIDGE_DIR}/package.json" || -L "${STOCKSDK_BRIDGE_DIR}/package.json" || ! -f "${STOCKSDK_BRIDGE_DIR}/package-lock.json" || -L "${STOCKSDK_BRIDGE_DIR}/package-lock.json" ]]; then
+    printf 'STOCKSDK_BRIDGE_MANIFEST_INVALID path=%s\n' "${STOCKSDK_BRIDGE_DIR}" >&2
+    exit 1
+  fi
+  if ! command -v npm >/dev/null 2>&1; then
+    printf 'STOCKSDK_NPM_MISSING\n' >&2
+    exit 1
+  fi
+  printf 'INSTALLING_STOCKSDK_BRIDGE\n'
+  (
+    cd "${STOCKSDK_BRIDGE_DIR}"
+    npm ci --ignore-scripts
+  )
+  if [[ ! -f "${STOCKSDK_PACKAGE}" || -L "${STOCKSDK_PACKAGE}" ]]; then
+    printf 'STOCKSDK_BRIDGE_INSTALL_FAILED\n' >&2
+    exit 1
+  fi
 fi
 
 DIST_INDEX="${ROOT}/frontend/dist/index.html"

@@ -128,7 +128,11 @@ def build_mvp_daily(result: ContinuousDayResult) -> MvpChenQuantDaily:
         (
             "FROZEN_REFERENCE_EVIDENCE"
             if result.day_input.source_fixture == "DETERMINISTIC_REFERENCE_FIXTURE"
-            else "DETERMINISTIC_TEST_FIXTURE_ONLY"
+            else (
+                "VALIDATED_DAILY_INPUT"
+                if result.day_input.source_fixture == "VALIDATED_DAILY_INPUT"
+                else "DETERMINISTIC_TEST_FIXTURE_ONLY"
+            )
         ),
     ]
     next_conditions = [

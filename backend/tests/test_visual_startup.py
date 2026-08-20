@@ -97,3 +97,49 @@ def test_startup_script_has_valid_bash_syntax() -> None:
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_startup_installs_locked_stocksdk_bridge_dependency_when_missing(
+    tmp_path: Path,
+) -> None:
+    bridge = tmp_path / "stocksdk"
+    bridge.mkdir()
+    (bridge / "package.json").write_text('{"name":"test"}\n')
+    (bridge / "package-lock.json").write_text('{"lockfileVersion":3}\n')
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    npm_log = tmp_path / "npm.log"
+    fake_python = fake_bin / "python"
+    fake_python.write_text("#!/bin/sh\nexit 0\n")
+    fake_python.chmod(0o755)
+    (fake_bin / "curl").write_text("#!/bin/sh\nexit 1\n")
+    (fake_bin / "curl").chmod(0o755)
+    (fake_bin / "npm").write_text(
+        "#!/bin/sh\n"
+        f"printf '%s\\n' \"$*\" > {npm_log!s}\n"
+        f"mkdir -p {bridge!s}/node_modules/stock-sdk\n"
+        f"printf '{{}}\\n' > {bridge!s}/node_modules/stock-sdk/package.json\n"
+    )
+    (fake_bin / "npm").chmod(0o755)
+
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "DATA_DIR": str(tmp_path / "data"),
+            "TICKFLOW_STOCKSDK_BRIDGE_DIR": str(bridge),
+            "TICKFLOW_VISUAL_PYTHON": str(fake_python),
+            "TICKFLOW_VISUAL_STARTUP_WAIT_SECONDS": "1",
+            "TICKFLOW_VISUAL_SKIP_BROWSER": "1",
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "INSTALLING_STOCKSDK_BRIDGE" in result.stdout
+    assert npm_log.read_text().strip() == "ci --ignore-scripts"
+    assert (bridge / "node_modules" / "stock-sdk" / "package.json").is_file()

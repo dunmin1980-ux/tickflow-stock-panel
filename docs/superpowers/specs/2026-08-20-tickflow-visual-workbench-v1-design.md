@@ -20,9 +20,15 @@ execution, accounting, PnL, drawdown, idempotency, and state recovery.
   publishing path is introduced.
 - No market value, ledger value, signal, action, fee, or PnL is recomputed in
   the API or frontend.
-- Fresh inputs must already be strict `ContinuousDayInput` artifacts. Missing
-  inputs fail closed; the workbench never guesses prices or falls back to a
-  same-day close.
+- Fresh inputs are generated only by the single-symbol validated daily builder
+  from serial raw/qfq history and trading-calendar reads. Missing, stale,
+  inconsistent, or re-signed-but-nonderivable inputs fail closed; the
+  workbench never guesses prices or falls back to a same-day close.
+- Signals are derived only from same-basis qfq Typed Claims. Raw prices remain
+  authoritative for valuation and next-trading-day-open execution.
+- An open position encountering a material raw/qfq adjustment-factor change
+  fails closed before ledger mutation because corporate-action accounting is
+  outside v1.
 - A new account may be initialized once from the released frozen reference
   fixture. The UI labels its effective data date and never presents it as
   current-day market data.
@@ -34,7 +40,7 @@ execution, accounting, PnL, drawdown, idempotency, and state recovery.
 `Phase2VisualWorkbenchService` owns no trading rules. It:
 
 1. loads the latest state through `OptionCStateStore`;
-2. validates staged daily inputs through `load_day_input`;
+2. prepares or reloads a strict `VALIDATED_DAILY_INPUT` bundle;
 3. calls `run_daily_once` exactly once per accepted input;
 4. aggregates immutable ledgers, equity history, Daily JSON/Markdown, Claims
    validation state, and input readiness into a browser response;
@@ -52,11 +58,17 @@ cross-process state lock. Duplicate input returns the existing published day.
 
 Input resolution order:
 
-1. strict staged file for the requested Asia/Shanghai date;
-2. released frozen reference input only when the account has no published day;
-3. `PAPER_INPUT_MISSING` with no state mutation.
+1. released frozen reference input only for its exact reference date;
+2. an already published strict daily bundle for the requested date;
+3. after `15:10 Asia/Shanghai`, one serial raw/qfq/calendar preparation for the
+   current date;
+4. a stable fail-closed error with no account mutation.
 
-This is a preparation and validation layer, not a market-data downloader.
+The builder writes a fixed artifact set atomically. Every load rechecks source
+hashes and deterministically reconstructs Facts, Projection, Claims,
+validation, Signal, valuation, and execution-price bindings. The legacy
+`YYYY-MM-DD_input.json` compatibility path is intentionally not accepted by the
+Visual workbench.
 
 ### Frontend
 

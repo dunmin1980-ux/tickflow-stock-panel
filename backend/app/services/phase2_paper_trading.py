@@ -79,8 +79,11 @@ def _resolve_execution_bar(
     action: PaperAction,
     fixture: DeterministicMarketFixture,
 ) -> MarketBar:
-    if action.source_fixture != "DETERMINISTIC_TEST_FIXTURE":
-        raise PaperTradingError("executable_action_requires_test_fixture")
+    if action.source_fixture not in {
+        "DETERMINISTIC_TEST_FIXTURE",
+        "VALIDATED_DAILY_INPUT",
+    }:
+        raise PaperTradingError("executable_action_requires_validated_fixture")
     if fixture.fixture_identity != fixture.computed_fixture_identity():
         raise PaperTradingError("fixture_identity_mismatch")
     if (
@@ -187,7 +190,8 @@ def derive_action(
         raise PaperTradingError("decision_timestamp_invalid")
     _validate_account_temporal_boundary(account, signal, decision_at)
     if signal.code in {"POSITIVE_OBSERVATION", "RISK_OBSERVATION"} and (
-        signal.source_fixture != "DETERMINISTIC_TEST_FIXTURE"
+        signal.source_fixture
+        not in {"DETERMINISTIC_TEST_FIXTURE", "VALIDATED_DAILY_INPUT"}
     ):
         raise PaperTradingError("test_signal_source_required")
     total_quantity = sum(lot.remaining_quantity for lot in account.lots)

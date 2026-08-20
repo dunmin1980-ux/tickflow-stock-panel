@@ -1340,7 +1340,15 @@ export interface ClientStatus {
 
 // ===== Paper Trading Visual Workbench =====
 export interface PaperInputReadiness {
-  status: 'READY_REFERENCE' | 'READY_STAGED' | 'ALREADY_PUBLISHED' | 'MISSING'
+  status:
+    | 'READY_REFERENCE'
+    | 'READY_STAGED'
+    | 'READY_VALIDATED_DAILY'
+    | 'PREPARABLE'
+    | 'WAITING_FOR_CLOSE'
+    | 'ALREADY_PUBLISHED'
+    | 'BLOCKED'
+    | 'MISSING'
   requested_date: string
   effective_trade_date: string | null
   source_fixture: string | null
@@ -1360,6 +1368,8 @@ export interface PaperClaimsStatus {
   raw_qfq_mismatch_count: number
   sensitive_hit_count: number
   can_publish: false
+  source_fixture?: string
+  trade_date?: string
 }
 
 export interface PaperAccountSummary {

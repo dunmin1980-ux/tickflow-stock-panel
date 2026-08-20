@@ -17,12 +17,19 @@ SHANGHAI_OFFSET = timedelta(hours=8)
 FixtureSource = Literal[
     "DETERMINISTIC_REFERENCE_FIXTURE",
     "DETERMINISTIC_TEST_FIXTURE",
+    "VALIDATED_DAILY_INPUT",
+]
+ExecutableFixtureSource = Literal[
+    "DETERMINISTIC_TEST_FIXTURE",
+    "VALIDATED_DAILY_INPUT",
 ]
 ActionSide = Literal["BUY", "HOLD", "SELL"]
 InterpretationCode = Literal[
     "MIXED_TECHNICAL_STRUCTURE",
     "POSITIVE_TEST_STRUCTURE",
     "RISK_TEST_STRUCTURE",
+    "POSITIVE_TECHNICAL_STRUCTURE",
+    "RISK_TECHNICAL_STRUCTURE",
 ]
 SignalCode = Literal[
     "POSITIVE_OBSERVATION",
@@ -244,7 +251,7 @@ class ResearchDecision(SimulationSafety):
 
 class MarketBar(SimulationSafety):
     market_bar_schema_version: Literal[1]
-    source_fixture: Literal["DETERMINISTIC_TEST_FIXTURE"]
+    source_fixture: ExecutableFixtureSource
     scenario_fixture_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
     symbol: Literal["000403.SZ"]
     trade_date: date
@@ -314,7 +321,7 @@ class ValuationBar(SimulationSafety):
 
 class DeterministicMarketFixture(SimulationSafety):
     market_fixture_schema_version: Literal[1]
-    source_fixture: Literal["DETERMINISTIC_TEST_FIXTURE"]
+    source_fixture: ExecutableFixtureSource
     symbol: Literal["000403.SZ"]
     scenario_fixture_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
     fixture_identity: str = Field(pattern=r"^[0-9a-f]{64}$")

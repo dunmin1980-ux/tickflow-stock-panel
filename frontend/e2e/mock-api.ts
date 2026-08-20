@@ -121,17 +121,18 @@ export const paperTradingDashboard = {
   last_completed_trade_date: null,
   safety: { simulation_only: 'SIMULATION ONLY', real_trading: 'DISABLED', can_publish: false, trading_advice: false },
   input_readiness: {
-    status: 'READY_REFERENCE',
+    status: 'PREPARABLE',
     requested_date: '2026-08-20',
-    effective_trade_date: '2026-07-31',
-    source_fixture: 'DETERMINISTIC_REFERENCE_FIXTURE',
-    is_current_date: false,
-    message: 'FROZEN_REFERENCE_INITIALIZATION_AVAILABLE',
+    effective_trade_date: null,
+    source_fixture: 'VALIDATED_DAILY_INPUT',
+    is_current_date: true,
+    message: 'VALIDATED_DAILY_INPUT_CAN_BE_PREPARED',
   },
   claims: {
     status: 'VALID', errors: [], normalized_sha256: 'a'.repeat(64), claim_count: 11,
     facts_pointer_binding_count: 14, free_text_field_count: 0, unsourced_claim_count: 0,
     trading_claim_count: 0, raw_qfq_mismatch_count: 0, sensitive_hit_count: 0, can_publish: false,
+    source_fixture: 'VALIDATED_DAILY_INPUT', trade_date: '2026-08-20',
   },
   account: {
     initial_cash_cny: '100000.00', cash_cny: '100000.00', market_value_cny: '0.00',

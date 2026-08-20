@@ -322,7 +322,8 @@ async function login(page: Page): Promise<void> {
   await expect(page.getByText('登录访问', { exact: true })).toBeVisible()
   await page.getByPlaceholder('访问密码').fill('e2e-local-fixture')
   await page.getByRole('button', { name: '登录', exact: true }).click()
-  await expect(page).toHaveURL(/\/watchlist$/)
+  await expect(page).toHaveURL(/\/paper-trading$/)
+  await page.goto('/watchlist')
   await expect(page.getByRole('heading', { name: '自选股', exact: true })).toBeVisible()
 }
 

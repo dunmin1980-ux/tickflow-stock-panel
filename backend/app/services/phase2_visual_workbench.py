@@ -15,7 +15,6 @@ from app.services.phase2_option_c_continuous import ContinuousRunError
 from app.services.phase2_option_c_daily import (
     OptionCDailyError,
     build_reference_day_input,
-    load_day_input,
     run_daily_once,
 )
 from app.services.phase2_option_c_fixture import (
@@ -23,6 +22,11 @@ from app.services.phase2_option_c_fixture import (
     load_reference_fixture,
 )
 from app.services.phase2_option_c_state import OptionCStateError, OptionCStateStore
+from app.services.phase2_visual_daily_input import (
+    Phase2VisualDailyInputBuilder,
+    VisualDailyInputError,
+    load_validated_daily_bundle,
+)
 
 
 class VisualWorkbenchError(ValueError):
@@ -42,12 +46,22 @@ def _regular_bytes(path: Path, *, code: str) -> bytes:
 class Phase2VisualWorkbenchService:
     """Aggregate Option C state without owning any trading or accounting rule."""
 
-    def __init__(self, *, repo_root: Path, state_root: Path, input_root: Path) -> None:
+    def __init__(
+        self,
+        *,
+        repo_root: Path,
+        state_root: Path,
+        input_root: Path,
+        daily_input_builder: Phase2VisualDailyInputBuilder | None = None,
+    ) -> None:
         self.repo_root = repo_root.resolve(strict=True)
         self.state_root = state_root
         self.input_root = input_root
         self._ensure_parent(self.state_root.parent)
         self._ensure_parent(self.input_root)
+        self.daily_input_builder = daily_input_builder or Phase2VisualDailyInputBuilder(
+            input_root=self.input_root
+        )
 
     @staticmethod
     def _ensure_parent(path: Path) -> None:
@@ -74,31 +88,44 @@ class Phase2VisualWorkbenchService:
         except OptionCStateError as exc:
             raise VisualWorkbenchError("PAPER_STATE_UNAVAILABLE") from exc
 
-    def _staged_path(self, target: date) -> Path:
-        return self.input_root / f"{target.isoformat()}_input.json"
+    @staticmethod
+    def _translate_input_error(exc: VisualDailyInputError) -> VisualWorkbenchError:
+        code = str(exc).split(":", 1)[0]
+        if code == "MARKET_NOT_CLOSED":
+            return VisualWorkbenchError("PAPER_MARKET_NOT_CLOSED")
+        if code == "MARKET_SOURCE_UNAVAILABLE":
+            return VisualWorkbenchError("PAPER_MARKET_SOURCE_UNAVAILABLE")
+        if code == "INPUT_PREPARATION_ALREADY_LOCKED":
+            return VisualWorkbenchError("PAPER_RUN_ALREADY_LOCKED")
+        if code == "CORPORATE_ACTION_ACCOUNTING_UNSUPPORTED":
+            return VisualWorkbenchError("PAPER_CORPORATE_ACTION_REVIEW_REQUIRED")
+        if code in {
+            "HISTORICAL_LIVE_PREPARATION_FORBIDDEN",
+            "LATEST_TRADE_DATE_MISMATCH",
+            "VALIDATED_DAILY_BUNDLE_MISSING",
+        }:
+            return VisualWorkbenchError("PAPER_INPUT_NOT_READY")
+        return VisualWorkbenchError("PAPER_INPUT_INVALID")
 
-    def _resolve_input(self, target: date, *, state) -> tuple[ContinuousDayInput | None, dict]:
-        staged = self._staged_path(target)
-        if staged.exists() or staged.is_symlink():
-            try:
-                day_input = load_day_input(staged)
-            except OptionCDailyError as exc:
-                raise VisualWorkbenchError("PAPER_INPUT_INVALID") from exc
-            if day_input.trade_date != target:
-                raise VisualWorkbenchError("PAPER_INPUT_DATE_MISMATCH")
-            if day_input.source_fixture == "DETERMINISTIC_TEST_FIXTURE":
-                raise VisualWorkbenchError("PAPER_TEST_FIXTURE_NOT_ALLOWED")
-            return day_input, {
-                "status": "READY_STAGED",
-                "requested_date": target.isoformat(),
-                "effective_trade_date": day_input.trade_date.isoformat(),
-                "source_fixture": day_input.source_fixture,
-                "is_current_date": True,
-                "message": "VALIDATED_DAILY_INPUT_AVAILABLE",
-            }
+    @staticmethod
+    def _readiness_payload(target: date, readiness: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "status": readiness["status"],
+            "requested_date": target.isoformat(),
+            "effective_trade_date": readiness.get("effective_trade_date"),
+            "source_fixture": readiness.get("source_fixture", "VALIDATED_DAILY_INPUT"),
+            "is_current_date": readiness["status"] != "BLOCKED",
+            "message": readiness["message"],
+        }
 
-        reference = self.reference_input()
+    def _resolve_input(
+        self,
+        target: date,
+        *,
+        state,
+    ) -> tuple[ContinuousDayInput | None, dict[str, Any]]:
         published_dates = {entry.trade_date for entry in state.decision_ledger}
+        reference = self.reference_input()
         if target == reference.trade_date:
             status = "ALREADY_PUBLISHED" if target in published_dates else "READY_REFERENCE"
             return reference, {
@@ -113,23 +140,20 @@ class Phase2VisualWorkbenchService:
                     else "FROZEN_REFERENCE_INITIALIZATION_AVAILABLE"
                 ),
             }
-        if not state.decision_ledger:
-            return reference, {
-                "status": "READY_REFERENCE",
-                "requested_date": target.isoformat(),
-                "effective_trade_date": reference.trade_date.isoformat(),
-                "source_fixture": reference.source_fixture,
-                "is_current_date": False,
-                "message": "FROZEN_REFERENCE_INITIALIZATION_AVAILABLE",
-            }
-        return None, {
-            "status": "MISSING",
-            "requested_date": target.isoformat(),
-            "effective_trade_date": None,
-            "source_fixture": None,
-            "is_current_date": False,
-            "message": "VALIDATED_DAILY_INPUT_REQUIRED",
-        }
+        try:
+            readiness = self.daily_input_builder.readiness(target)
+            day_input = None
+            if readiness["status"] == "READY_VALIDATED_DAILY":
+                day_input = load_validated_daily_bundle(self.input_root, target).day_input
+                if target in published_dates:
+                    readiness = {
+                        **readiness,
+                        "status": "ALREADY_PUBLISHED",
+                        "message": "VALIDATED_DAILY_ALREADY_PUBLISHED",
+                    }
+            return day_input, self._readiness_payload(target, readiness)
+        except VisualDailyInputError as exc:
+            raise self._translate_input_error(exc) from exc
 
     def _latest_daily(self, state) -> tuple[dict[str, Any] | None, str | None]:
         if state.last_completed_trade_date is None:
@@ -151,7 +175,25 @@ class Phase2VisualWorkbenchService:
             raise VisualWorkbenchError("PAPER_DAILY_UNAVAILABLE") from exc
         return _json_model(daily), markdown
 
-    def _claims(self) -> dict[str, Any]:
+    def _claims(self, target: date, state) -> dict[str, Any]:
+        candidates = [target]
+        if state.last_completed_trade_date is not None:
+            candidates.append(state.last_completed_trade_date)
+        for trade_date in candidates:
+            if not (self.input_root / trade_date.isoformat()).is_dir():
+                continue
+            try:
+                validation = load_validated_daily_bundle(
+                    self.input_root, trade_date
+                ).validation
+            except VisualDailyInputError as exc:
+                raise self._translate_input_error(exc) from exc
+            return {
+                **validation.to_dict(),
+                "status": "VALID" if validation.status == "CLAIMS_VALID" else "INVALID",
+                "source_fixture": "VALIDATED_DAILY_INPUT",
+                "trade_date": trade_date.isoformat(),
+            }
         try:
             validation = load_reference_fixture(self.repo_root).validation
         except ReferenceFixtureError as exc:
@@ -159,6 +201,8 @@ class Phase2VisualWorkbenchService:
         return {
             **validation.to_dict(),
             "status": "VALID" if validation.status == "CLAIMS_VALID" else "INVALID",
+            "source_fixture": "DETERMINISTIC_REFERENCE_FIXTURE",
+            "trade_date": self.reference_input().trade_date.isoformat(),
         }
 
     @staticmethod
@@ -206,7 +250,7 @@ class Phase2VisualWorkbenchService:
                 "trading_advice": False,
             },
             "input_readiness": readiness,
-            "claims": self._claims(),
+            "claims": self._claims(target, state),
             "account": self._account(state, latest_daily),
             "positions": [_json_model(lot) for lot in state.account.lots],
             "decisions": [_json_model(entry) for entry in state.decision_ledger],
@@ -219,8 +263,13 @@ class Phase2VisualWorkbenchService:
     def run(self, target: date) -> dict[str, Any]:
         state = self._state()
         day_input, readiness = self._resolve_input(target, state=state)
-        if day_input is None or readiness["status"] == "MISSING":
-            raise VisualWorkbenchError("PAPER_INPUT_MISSING")
+        if day_input is None and readiness["status"] == "PREPARABLE":
+            try:
+                day_input = self.daily_input_builder.prepare(target, state).day_input
+            except VisualDailyInputError as exc:
+                raise self._translate_input_error(exc) from exc
+        if day_input is None:
+            raise VisualWorkbenchError("PAPER_INPUT_NOT_READY")
         try:
             result = run_daily_once(
                 self.repo_root,

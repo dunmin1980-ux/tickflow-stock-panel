@@ -51,6 +51,8 @@ const BASE_DASHBOARD: PaperTradingDashboard = {
     raw_qfq_mismatch_count: 0,
     sensitive_hit_count: 0,
     can_publish: false,
+    source_fixture: 'DETERMINISTIC_REFERENCE_FIXTURE',
+    trade_date: '2026-07-31',
   },
   account: {
     initial_cash_cny: '100000.00',
@@ -155,7 +157,7 @@ describe('PaperTrading', () => {
     expect(screen.getByText('REAL TRADING DISABLED')).toBeInTheDocument()
     expect(screen.getAllByText('MIXED OBSERVATION').length).toBeGreaterThan(0)
     expect(screen.getAllByText('HOLD').length).toBeGreaterThan(0)
-    expect(screen.getByText('VALID / 11 claims')).toBeInTheDocument()
+    expect(screen.getByText('VALID / 11 claims · 2026-07-31')).toBeInTheDocument()
     expect(screen.getByText('100 股')).toBeInTheDocument()
     expect(screen.getByLabelText('权益曲线')).toHaveTextContent('chart:1')
     expect(screen.getByText('ChenQuant Paper Trading Daily')).toBeInTheDocument()
@@ -178,12 +180,12 @@ describe('PaperTrading', () => {
     const ready = {
       ...BASE_DASHBOARD,
       input_readiness: {
-        status: 'READY_REFERENCE' as const,
+        status: 'PREPARABLE' as const,
         requested_date: '2026-08-20',
-        effective_trade_date: '2026-07-31',
-        source_fixture: 'DETERMINISTIC_REFERENCE_FIXTURE',
-        is_current_date: false,
-        message: 'FROZEN_REFERENCE_INITIALIZATION_AVAILABLE',
+        effective_trade_date: null,
+        source_fixture: 'VALIDATED_DAILY_INPUT',
+        is_current_date: true,
+        message: 'VALIDATED_DAILY_INPUT_CAN_BE_PREPARED',
       },
       last_completed_trade_date: null,
       decisions: [],
@@ -212,12 +214,12 @@ describe('PaperTrading', () => {
     const ready = {
       ...BASE_DASHBOARD,
       input_readiness: {
-        status: 'READY_REFERENCE' as const,
+        status: 'PREPARABLE' as const,
         requested_date: '2026-08-20',
-        effective_trade_date: '2026-07-31',
-        source_fixture: 'DETERMINISTIC_REFERENCE_FIXTURE',
-        is_current_date: false,
-        message: 'FROZEN_REFERENCE_INITIALIZATION_AVAILABLE',
+        effective_trade_date: null,
+        source_fixture: 'VALIDATED_DAILY_INPUT',
+        is_current_date: true,
+        message: 'VALIDATED_DAILY_INPUT_CAN_BE_PREPARED',
       },
     }
     vi.mocked(api.paperTradingDashboard).mockResolvedValue(ready)
@@ -228,5 +230,46 @@ describe('PaperTrading', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('模拟盘引擎拒绝了本次输入')
     expect(screen.getByText('¥102,000.00')).toBeInTheDocument()
+  })
+
+  it('keeps the one-click run disabled until the A-share close gate', async () => {
+    vi.mocked(api.paperTradingDashboard).mockResolvedValue({
+      ...BASE_DASHBOARD,
+      input_readiness: {
+        status: 'WAITING_FOR_CLOSE',
+        requested_date: '2026-08-20',
+        effective_trade_date: null,
+        source_fixture: 'VALIDATED_DAILY_INPUT',
+        is_current_date: true,
+        message: 'WAIT_UNTIL_15_10',
+      },
+    })
+    renderPage()
+
+    const button = await screen.findByRole('button', { name: '运行今日模拟盘' })
+    expect(button).toBeDisabled()
+    expect(screen.getByText('A 股收盘后 15:10 起可准备今日输入')).toBeInTheDocument()
+    expect(api.paperTradingRun).not.toHaveBeenCalled()
+  })
+
+  it('does not send another request after the day is already published', async () => {
+    vi.mocked(api.paperTradingDashboard).mockResolvedValue({
+      ...BASE_DASHBOARD,
+      input_readiness: {
+        status: 'ALREADY_PUBLISHED',
+        requested_date: '2026-08-20',
+        effective_trade_date: '2026-08-20',
+        source_fixture: 'VALIDATED_DAILY_INPUT',
+        is_current_date: true,
+        message: 'VALIDATED_DAILY_ALREADY_PUBLISHED',
+      },
+    })
+    renderPage()
+
+    const button = await screen.findByRole('button', { name: '运行今日模拟盘' })
+    expect(button).toBeDisabled()
+    expect(screen.getByText('该数据日已完成，重复运行将进行幂等校验')).toBeInTheDocument()
+    fireEvent.click(button)
+    expect(api.paperTradingRun).not.toHaveBeenCalled()
   })
 })

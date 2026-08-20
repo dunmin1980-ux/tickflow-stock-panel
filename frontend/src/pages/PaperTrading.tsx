@@ -46,6 +46,9 @@ function actionTone(action: string | undefined) {
 function readinessText(data: PaperTradingDashboard) {
   const readiness = data.input_readiness
   if (readiness.status === 'MISSING') return '当前日期缺少已验证的离线输入'
+  if (readiness.status === 'WAITING_FOR_CLOSE') return 'A 股收盘后 15:10 起可准备今日输入'
+  if (readiness.status === 'BLOCKED') return '当前日期不允许生成新的模拟盘输入'
+  if (readiness.status === 'PREPARABLE') return '点击运行后将校验并准备今日单票日线输入'
   if (readiness.status === 'ALREADY_PUBLISHED') return '该数据日已完成，重复运行将进行幂等校验'
   if (!readiness.is_current_date) {
     return `首次可用冻结基准 ${readiness.effective_trade_date ?? '--'} 初始化账户`
@@ -82,7 +85,12 @@ export function PaperTrading() {
   })
 
   const data = query.data
-  const canRun = data ? data.input_readiness.status !== 'MISSING' : false
+  const canRun = data ? [
+    'READY_REFERENCE',
+    'READY_STAGED',
+    'READY_VALIDATED_DAILY',
+    'PREPARABLE',
+  ].includes(data.input_readiness.status) : false
   const latestDecision = data?.decisions.at(-1)
   const signal = data?.latest_daily?.research_signal ?? latestDecision?.research_signal
   const action = data?.latest_daily?.paper_action ?? latestDecision?.paper_action
@@ -195,7 +203,10 @@ export function PaperTrading() {
                 </div>
                 <div>
                   <div className="text-[10px] text-muted">Claims</div>
-                  <div className="mt-1 text-xs font-semibold text-bull">{data.claims.status} / {data.claims.claim_count} claims</div>
+                  <div className="mt-1 text-xs font-semibold text-bull">
+                    {data.claims.status} / {data.claims.claim_count} claims
+                    {data.claims.trade_date ? ` · ${data.claims.trade_date}` : ''}
+                  </div>
                 </div>
               </div>
             </div>

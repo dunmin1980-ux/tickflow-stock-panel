@@ -14,6 +14,10 @@ router = APIRouter(prefix="/api/paper-trading", tags=["paper-trading"])
 
 ERROR_MESSAGES = {
     "PAPER_INPUT_MISSING": "当前日期没有已验证的离线输入, 未执行模拟盘。",
+    "PAPER_INPUT_NOT_READY": "当前日期尚未具备可安全执行的已验证日线输入。",
+    "PAPER_MARKET_NOT_CLOSED": "A 股尚未收盘, 请在 15:10 后再运行今日模拟盘。",
+    "PAPER_MARKET_SOURCE_UNAVAILABLE": "日线数据源暂时不可用, 模拟账户未发生变化。",
+    "PAPER_CORPORATE_ACTION_REVIEW_REQUIRED": "检测到持仓跨除权口径变化, 需人工核验企业行动后再继续。",
     "PAPER_INPUT_DATE_MISMATCH": "离线输入日期与请求日期不一致。",
     "PAPER_INPUT_INVALID": "离线输入未通过严格合同校验。",
     "PAPER_TEST_FIXTURE_NOT_ALLOWED": "测试行情不能用于日常模拟账户。",
@@ -26,6 +30,10 @@ ERROR_MESSAGES = {
 
 ERROR_STATUS = {
     "PAPER_INPUT_MISSING": 409,
+    "PAPER_INPUT_NOT_READY": 409,
+    "PAPER_MARKET_NOT_CLOSED": 409,
+    "PAPER_MARKET_SOURCE_UNAVAILABLE": 503,
+    "PAPER_CORPORATE_ACTION_REVIEW_REQUIRED": 409,
     "PAPER_INPUT_DATE_MISMATCH": 422,
     "PAPER_INPUT_INVALID": 422,
     "PAPER_TEST_FIXTURE_NOT_ALLOWED": 422,

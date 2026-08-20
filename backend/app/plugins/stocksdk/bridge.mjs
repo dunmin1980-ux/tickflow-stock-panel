@@ -14,6 +14,8 @@
  *
  * op:
  *   daily        —— 日K(adjust 默认 none), 每个 symbol 一组 bars
+ *   visual_daily —— Visual Workbench 单票日K，固定 Tencent HTTPS fallback
+ *   calendar     —— A 股交易日历
  *   adj          —— 除权因子: 取 hfq 与 none 收盘价, ex_factor = close_hfq / close_none
  *   minute       —— 分钟K(period 默认 5)
  *   realtime     —— 全 A 股实时快照(batch.cn)
@@ -115,6 +117,70 @@ function guessSuffix(code) {
   return ''
 }
 
+function toTencentSymbol(symbol) {
+  const value = String(symbol).trim()
+  const match = value.match(/^(\d{6})(?:\.(SZ|SH|BJ))?$/i)
+  if (!match) throw new Error(`unsupported A-share symbol: ${value}`)
+  const code = match[1]
+  const suffix = (match[2] || guessSuffix(code)).toLowerCase()
+  if (!['sz', 'sh', 'bj'].includes(suffix)) {
+    throw new Error(`unsupported A-share market: ${value}`)
+  }
+  return `${suffix}${code}`
+}
+
+function parseTencentAssignment(text) {
+  const start = text.indexOf('{')
+  if (start < 0) throw new Error('Tencent kline response has no JSON object')
+  return JSON.parse(text.slice(start))
+}
+
+async function fetchTencentDaily(sym, { adjust, start, end, count = 600 }) {
+  const tencentSymbol = toTencentSymbol(sym)
+  const normalizedAdjust = normAdjust(adjust)
+  const suffix = normalizedAdjust === 'qfq' ? 'qfq' : normalizedAdjust === 'hfq' ? 'hfq' : ''
+  const key = suffix ? `${suffix}day` : 'day'
+  const params = `${tencentSymbol},day,,,${count},${suffix || 'none'}`
+  const url = `https://ifzq.gtimg.cn/appstock/app/fqkline/get?_var=tickflow_visual&param=${encodeURIComponent(params)}`
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/json,text/plain,*/*',
+      'User-Agent': 'tickflow-stock-panel/visual-v1',
+    },
+    signal: AbortSignal.timeout(20000),
+  })
+  if (!response.ok) throw new Error(`Tencent kline HTTP ${response.status}`)
+  const payload = parseTencentAssignment(await response.text())
+  if (payload.code !== 0) throw new Error(`Tencent kline error: ${payload.msg || payload.code}`)
+  const document = payload.data && payload.data[tencentSymbol]
+  const bars = document && document[key]
+  if (!Array.isArray(bars)) throw new Error(`Tencent kline dataset missing: ${key}`)
+  const quote = document.qt && document.qt[tencentSymbol]
+  const quoteDate = Array.isArray(quote) && quote[30] ? String(quote[30]).slice(0, 8) : ''
+  const quoteAmount = Array.isArray(quote) && quote[35]
+    ? Number(String(quote[35]).split('/')[2])
+    : null
+  const compactStart = start ? String(start).replaceAll('-', '') : null
+  const compactEnd = end ? String(end).replaceAll('-', '') : null
+  return bars
+    .map((bar) => {
+      const compactDate = String(bar[0]).replaceAll('-', '')
+      return {
+        date: String(bar[0]),
+        open: Number(bar[1]),
+        close: Number(bar[2]),
+        high: Number(bar[3]),
+        low: Number(bar[4]),
+        volume: Number(bar[5]),
+        amount: compactDate === quoteDate && Number.isFinite(quoteAmount) ? quoteAmount : null,
+      }
+    })
+    .filter((bar) => {
+      const compactDate = bar.date.replaceAll('-', '')
+      return (!compactStart || compactDate >= compactStart) && (!compactEnd || compactDate <= compactEnd)
+    })
+}
+
 /** stock-sdk 的 adjust 取值是 '' | 'qfq' | 'hfq'（无 'none'）。这里做兼容映射。 */
 function normAdjust(v) {
   if (v === 'hfq') return 'hfq'
@@ -157,6 +223,22 @@ async function opDaily(sdk, job) {
     out[sym] = Array.isArray(r) ? r : []
   })
   return out
+}
+
+async function opVisualDaily(job) {
+  const { symbols = [], adjust = 'none', start, end } = job
+  if (symbols.length !== 1) throw new Error('visual_daily requires exactly one symbol')
+  const symbol = symbols[0]
+  return { [symbol]: await fetchTencentDaily(symbol, { adjust, start, end }) }
+}
+
+async function opCalendar(sdk, job) {
+  const { start, end } = job
+  const dates = await sdk.reference.tradingCalendar()
+  return (Array.isArray(dates) ? dates : []).filter((value) => {
+    const compact = String(value).replaceAll('-', '')
+    return (!start || compact >= String(start)) && (!end || compact <= String(end))
+  })
 }
 
 async function opAdj(sdk, job) {
@@ -266,6 +348,12 @@ async function main() {
     switch (op) {
       case 'daily':
         rows = await opDaily(sdk, job)
+        break
+      case 'visual_daily':
+        rows = await opVisualDaily(job)
+        break
+      case 'calendar':
+        rows = await opCalendar(sdk, job)
         break
       case 'adj':
         rows = await opAdj(sdk, job)

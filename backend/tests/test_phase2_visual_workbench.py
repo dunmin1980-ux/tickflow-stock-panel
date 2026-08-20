@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import date
+import copy
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api import paper_trading as paper_trading_api
+from app.services.phase2_visual_daily_input import (
+    DailyMarketSnapshot,
+    Phase2VisualDailyInputBuilder,
+)
 from app.services.phase2_visual_workbench import (
     Phase2VisualWorkbenchService,
     VisualWorkbenchError,
@@ -18,16 +23,73 @@ TODAY = date(2026, 8, 20)
 REFERENCE_DATE = date(2026, 7, 31)
 
 
-def service_for(tmp_path: Path) -> Phase2VisualWorkbenchService:
+class FakeDailyGateway:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def fetch(self, symbol: str, requested_date: date) -> DailyMarketSnapshot:
+        self.calls += 1
+        rows: list[dict] = []
+        trading_dates: list[date] = []
+        cursor = requested_date
+        while len(trading_dates) < 100:
+            if cursor.weekday() < 5:
+                trading_dates.insert(0, cursor)
+            cursor = date.fromordinal(cursor.toordinal() - 1)
+        for index, trade_date in enumerate(trading_dates):
+            close = 10 + (index % 3) * 0.01
+            rows.append(
+                {
+                    "trade_date": trade_date.isoformat(),
+                    "open": close - 0.01,
+                    "high": close + 0.05,
+                    "low": close - 0.05,
+                    "close": close,
+                    "volume": 100000 + index,
+                    "amount": (100000 + index) * close,
+                }
+            )
+        return DailyMarketSnapshot(
+            source_provider="stocksdk_tencent_fallback",
+            symbol=symbol,
+            requested_date=requested_date,
+            fetched_at=datetime.fromisoformat(
+                f"{requested_date.isoformat()}T16:20:00+08:00"
+            ),
+            raw_rows=copy.deepcopy(rows),
+            qfq_rows=copy.deepcopy(rows),
+            trading_dates=[trading_dates[-2], requested_date, date(2026, 8, 21)],
+            request_count=3,
+        )
+
+
+def daily_builder(tmp_path: Path, gateway: FakeDailyGateway) -> Phase2VisualDailyInputBuilder:
+    return Phase2VisualDailyInputBuilder(
+        input_root=tmp_path / "inputs",
+        market_gateway=gateway,
+        now=lambda: datetime.fromisoformat("2026-08-20T16:20:00+08:00"),
+    )
+
+
+def service_for(
+    tmp_path: Path,
+    *,
+    builder: Phase2VisualDailyInputBuilder | None = None,
+) -> Phase2VisualWorkbenchService:
     return Phase2VisualWorkbenchService(
         repo_root=REPO_ROOT,
         state_root=tmp_path / "state",
         input_root=tmp_path / "inputs",
+        daily_input_builder=builder,
     )
 
 
-def test_empty_dashboard_is_safe_and_reference_ready(tmp_path: Path) -> None:
-    dashboard = service_for(tmp_path).dashboard(TODAY)
+def test_empty_dashboard_is_safe_and_current_input_is_preparable(tmp_path: Path) -> None:
+    gateway = FakeDailyGateway()
+    dashboard = service_for(
+        tmp_path,
+        builder=daily_builder(tmp_path, gateway),
+    ).dashboard(TODAY)
 
     assert dashboard["status"] == "VISUAL_WORKBENCH_READY"
     assert dashboard["symbol"] == "000403.SZ"
@@ -38,12 +100,12 @@ def test_empty_dashboard_is_safe_and_reference_ready(tmp_path: Path) -> None:
         "trading_advice": False,
     }
     assert dashboard["input_readiness"] == {
-        "status": "READY_REFERENCE",
+        "status": "PREPARABLE",
         "requested_date": "2026-08-20",
-        "effective_trade_date": "2026-07-31",
-        "source_fixture": "DETERMINISTIC_REFERENCE_FIXTURE",
-        "is_current_date": False,
-        "message": "FROZEN_REFERENCE_INITIALIZATION_AVAILABLE",
+        "effective_trade_date": None,
+        "source_fixture": "VALIDATED_DAILY_INPUT",
+        "is_current_date": True,
+        "message": "VALIDATED_DAILY_INPUT_CAN_BE_PREPARED",
     }
     assert dashboard["claims"]["status"] == "VALID"
     assert dashboard["claims"]["unsourced_claim_count"] == 0
@@ -59,25 +121,33 @@ def test_empty_dashboard_is_safe_and_reference_ready(tmp_path: Path) -> None:
     assert dashboard["chenquant_daily_markdown"] is None
 
 
-def test_one_click_reference_run_persists_hold_and_daily(tmp_path: Path) -> None:
-    service = service_for(tmp_path)
+def test_one_click_prepares_current_input_once_and_persists_daily(tmp_path: Path) -> None:
+    gateway = FakeDailyGateway()
+    builder = daily_builder(tmp_path, gateway)
+    service = service_for(tmp_path, builder=builder)
 
-    result = service.run(TODAY)
-    recovered = service_for(tmp_path).dashboard(TODAY)
+    first = service.run(TODAY)
+    second = service.run(TODAY)
+    recovered = service_for(tmp_path, builder=builder).dashboard(TODAY)
 
-    assert result["run_status"] == "DAY_PUBLISHED"
-    assert result["latest_daily"]["report_date"] == "2026-07-31"
-    assert result["latest_daily"]["research_signal"] == "MIXED_OBSERVATION"
-    assert result["latest_daily"]["paper_action"] == "HOLD"
-    assert result["decisions"][0]["paper_action"] == "HOLD"
-    assert result["trades"] == []
-    assert result["account"]["cash_cny"] == "100000.00"
-    assert result["account"]["total_equity_cny"] == "100000.00"
-    assert "SIMULATION ONLY" in result["chenquant_daily_markdown"]
-    assert recovered["latest_daily"] == result["latest_daily"]
-    assert recovered["decisions"] == result["decisions"]
-    assert recovered["equity_history"] == result["equity_history"]
-    assert recovered["input_readiness"]["status"] == "MISSING"
+    assert first["run_status"] == "DAY_PUBLISHED"
+    assert second["run_status"] == "DAY_ALREADY_PUBLISHED"
+    assert first["latest_daily"]["report_date"] == "2026-08-20"
+    assert first["latest_daily"]["source_fixture"] == "VALIDATED_DAILY_INPUT"
+    assert "VALIDATED_DAILY_INPUT" in first["latest_daily"]["risk_notes"]
+    assert "DETERMINISTIC_TEST_FIXTURE_ONLY" not in first["latest_daily"]["risk_notes"]
+    assert first["decisions"][0]["trade_date"] == "2026-08-20"
+    assert first["decisions"][0]["input_identity"]
+    assert first["trades"] == []
+    assert first["account"]["cash_cny"] == "100000.00"
+    assert first["account"]["total_equity_cny"] == "100000.00"
+    assert "SIMULATION ONLY" in first["chenquant_daily_markdown"]
+    assert recovered["latest_daily"] == first["latest_daily"]
+    assert recovered["decisions"] == first["decisions"]
+    assert recovered["equity_history"] == first["equity_history"]
+    assert recovered["input_readiness"]["status"] == "ALREADY_PUBLISHED"
+    assert recovered["claims"]["status"] == "VALID"
+    assert gateway.calls == 1
 
 
 def test_exact_reference_run_is_idempotent(tmp_path: Path) -> None:
@@ -97,7 +167,7 @@ def test_missing_new_daily_input_fails_closed_without_mutation(tmp_path: Path) -
     service.run(REFERENCE_DATE)
     before = service.dashboard(TODAY)
 
-    with pytest.raises(VisualWorkbenchError, match="PAPER_INPUT_MISSING"):
+    with pytest.raises(VisualWorkbenchError, match="PAPER_INPUT_NOT_READY"):
         service.run(TODAY)
 
     after = service.dashboard(TODAY)
@@ -106,15 +176,15 @@ def test_missing_new_daily_input_fails_closed_without_mutation(tmp_path: Path) -
     assert after["equity_history"] == before["equity_history"]
 
 
-def test_staged_input_date_mismatch_fails_before_engine(tmp_path: Path) -> None:
+def test_legacy_staged_input_is_ignored_before_engine(tmp_path: Path) -> None:
     service = service_for(tmp_path)
     source = service.reference_input()
     target = service.input_root / "2026-08-20_input.json"
     target.write_bytes(source.model_dump_json().encode())
 
-    with pytest.raises(VisualWorkbenchError, match="PAPER_INPUT_DATE_MISMATCH"):
+    with pytest.raises(VisualWorkbenchError, match="PAPER_INPUT_NOT_READY"):
         service.run(TODAY)
-    target.unlink()
+    assert target.is_file()
     assert service.dashboard(TODAY)["decisions"] == []
 
 
@@ -151,6 +221,10 @@ def test_api_uses_app_service_and_defaults_to_shanghai_today(monkeypatch) -> Non
     ("code", "status_code"),
     [
         ("PAPER_INPUT_MISSING", 409),
+        ("PAPER_INPUT_NOT_READY", 409),
+        ("PAPER_MARKET_NOT_CLOSED", 409),
+        ("PAPER_MARKET_SOURCE_UNAVAILABLE", 503),
+        ("PAPER_CORPORATE_ACTION_REVIEW_REQUIRED", 409),
         ("PAPER_INPUT_DATE_MISMATCH", 422),
         ("PAPER_STATE_UNAVAILABLE", 503),
     ],
