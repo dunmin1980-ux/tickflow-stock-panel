@@ -7,9 +7,9 @@
   ],
   "can_publish": false,
   "claims_sha256": "66f7ef471b293a4d5453ca53fd91668f217176915e6e88f2ce88f4f037559183",
-  "config_sha256": "bf05237f2b6da526a13e6d413a0c467fcdf16b9ba1ef996d99ae802abc358aee",
+  "config_sha256": "70d2f4de250df5665f013d48462ac8d905b5811a51d9430f2d10d4ade65fe9bf",
   "daily_schema_version": 1,
-  "decision_id": "b1a75574442e7b08d7710fdc389194a6613f6af1480dfc415a40d14df61a4659",
+  "decision_id": "0fa0688c94619ff0fc1cc502fc7999e6df64f6cfbb2491f4bdd64c9e7383663b",
   "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
   "facts_summary": {
     "can_publish": false,

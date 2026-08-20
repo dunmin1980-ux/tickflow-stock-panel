@@ -75,7 +75,7 @@
 **Interfaces:**
 - Produces: `money(value: Decimal | str | int) -> Decimal`
 - Produces: `canonical_option_c_bytes(value: BaseModel | Mapping[str, Any]) -> bytes`
-- Produces: `SimulationConfig`, `MarketBar`, `ResearchInterpretation`, `ResearchSignal`, `PaperAction`, `PositionLot`, `TradeRecord`, and `PaperAccount`.
+- Produces: `PaperTradingConfig`, `DeterministicMarketFixture`, `MarketBar`, `ResearchInterpretation`, `ResearchSignal`, `PaperAction`, `PositionLot`, `TradeRecord`, and `PaperAccount`.
 
 - [ ] **Step 1: Write failing strict-model and Decimal tests**
 
@@ -83,9 +83,10 @@ Add tests proving that config values are `Decimal`, JSON money is serialized as 
 
 ```python
 def test_simulation_config_is_decimal_and_canonical() -> None:
-    config = SimulationConfig.default()
-    assert config.initial_cash_cny == Decimal("100000.00")
-    assert b'"initial_cash_cny":"100000.00"' in canonical_option_c_bytes(config)
+    config = PaperTradingConfig.default()
+    assert config.initial_cash == Decimal("100000.00")
+    assert config.t_plus_one is True
+    assert config.execution_policy == "NEXT_TRADING_DAY_OPEN"
 
 
 @pytest.mark.parametrize("quantity", [True, 1.5, -100, 50])
@@ -119,15 +120,17 @@ FixtureSource = Literal["DETERMINISTIC_REFERENCE_FIXTURE", "DETERMINISTIC_TEST_F
 Implement `money()` with `Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)` and reject bool, NaN, Infinity, and non-string floats at strict model boundaries. Serialize Decimal money as strings, never JSON floats. Fix the default configuration to:
 
 ```python
-SimulationConfig(
+PaperTradingConfig(
     config_version=1,
-    initial_cash_cny=Decimal("100000.00"),
-    buy_lot_size=100,
+    initial_cash=Decimal("100000.00"),
+    lot_size=100,
     buy_lots_per_signal=1,
     sell_lots_per_signal=1,
     commission_rate=Decimal("0.0003"),
-    minimum_commission_cny=Decimal("5.00"),
-    sell_stamp_tax_rate=Decimal("0.0005"),
+    minimum_commission=Decimal("5.00"),
+    sell_fee_rate=Decimal("0.0005"),
+    t_plus_one=True,
+    execution_policy="NEXT_TRADING_DAY_OPEN",
     slippage_rate=Decimal("0"),
     currency="CNY",
     simulation_only="SIMULATION ONLY",
@@ -217,10 +220,11 @@ worker_candidate_schema_sha256=9e80c214fc338790c17af28167f9e3916435f3e52fecbaf79
 The manifest includes `evidence_available_at` from the Phase 1
 `run_completed_at`, `facts_sha256`, `projection_sha256`, `claims_sha256`, both
 schema hashes, renderer hash, the four vendor-pending items, and fixed safety
-flags. `reference_typed_claims.json` remains an exact canonical
-`ClaimsDocument`; the source label and the exact Claims artifact safety state
-(`SIMULATION ONLY`, `can_publish=false`, and `trading_advice=false`) exist in
-the hash-binding manifest so the frozen Typed Claims Schema is not modified.
+flags. `reference_typed_claims.json` is a strict safe envelope with
+`source=DETERMINISTIC_REFERENCE_FIXTURE`; its nested `claims_document` remains
+the exact canonical `ClaimsDocument`. The source label and artifact safety state
+(`SIMULATION ONLY`, `can_publish=false`, and `trading_advice=false`) stay outside
+the nested frozen Typed Claims Schema.
 
 - [ ] **Step 4: Run fixture and existing Claims tests**
 
@@ -328,16 +332,17 @@ git commit -m "feat: add deterministic research decision layer"
 
 **Interfaces:**
 - Produces: `new_account(config: SimulationConfig) -> PaperAccount`.
-- Produces: `execute_action(account: PaperAccount, action: PaperAction, execution_bar: MarketBar | None) -> PaperAccount`.
+- Produces: `execute_action(account: PaperAccount, action: PaperAction, market_fixture: DeterministicMarketFixture | None) -> PaperAccount`.
 - Produces: `mark_to_market(account: PaperAccount, bar: MarketBar) -> PaperAccount`.
 - Produces: `eligible_quantity(account: PaperAccount, symbol: str, trade_date: date) -> int`.
 
 - [ ] **Step 1: Write failing cash, execution, and quantity tests**
 
-Cover initial cash, HOLD with no bar, one-lot BUY, insufficient cash, invalid
-quantity, duplicate action identity, and rejection of any BUY not divisible by
-100. Prove execution uses `execution_bar.open`, ignores its close for fills,
-and rejects a bar whose trade date is not strictly after the decision date.
+Cover initial cash, HOLD with no Market Fixture, one-lot BUY, insufficient cash,
+invalid quantity, duplicate decision/order/action/idempotency identities, and
+rejection of any BUY not divisible by 100. Prove execution resolves the exact
+next Fixture trade date's `open`, ignores its close for fills, and returns
+`NO_EXECUTION_PRICE_AVAILABLE` rather than skipping a missing bar.
 
 - [ ] **Step 2: Run focused tests and verify RED**
 
@@ -354,10 +359,10 @@ Use these formulas with Decimal inputs:
 
 ```python
 gross = money(execution_price * quantity)
-commission = max(money(gross * config.commission_rate), config.minimum_commission_cny)
-stamp_tax = money(gross * config.sell_stamp_tax_rate) if side == "SELL" else Decimal("0.00")
+commission = max(money(gross * config.commission_rate), config.minimum_commission)
+sell_fee = money(gross * config.sell_fee_rate) if side == "SELL" else Decimal("0.00")
 buy_cash_delta = -(gross + commission)
-sell_cash_delta = gross - commission - stamp_tax
+sell_cash_delta = gross - commission - sell_fee
 ```
 
 Store buy cost as `gross + commission`. For a partial FIFO exit, allocate cost
@@ -379,7 +384,8 @@ Expected: at least the first T+1 or PnL assertion fails before implementation.
 
 - [ ] **Step 6: Implement T+1 lots, marking, PnL, and drawdown**
 
-Only lots with `acquired_trade_date < execution_trade_date` are eligible to
+Each lot records the exact next Fixture date in `sellable_from_trade_date`; only
+lots whose sellable date is not later than the execution date are eligible to
 sell. `mark_to_market` accepts a traceable raw mark bar, computes position
 market value, unrealized PnL, total equity, peak equity, current drawdown, and
 max drawdown with Decimal money. It never changes realized PnL or trade history.

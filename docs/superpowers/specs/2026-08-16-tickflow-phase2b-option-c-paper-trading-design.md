@@ -79,8 +79,10 @@ or web application router.
 
 ## Deterministic Reference Fixture
 
-`reference_typed_claims.json` is an exact `ClaimsDocument` and therefore keeps
-the schema-owned `source_system=tickflow-stock-panel`. A separate closed
+`reference_typed_claims.json` is a strict non-publishable envelope with
+`source=DETERMINISTIC_REFERENCE_FIXTURE`. Its nested `claims_document` is the
+exact validated `ClaimsDocument` and keeps the schema-owned
+`source_system=tickflow-stock-panel`. A separate closed
 `reference_fixture_manifest.json` binds:
 
 - source label `DETERMINISTIC_REFERENCE_FIXTURE`;
@@ -88,16 +90,18 @@ the schema-owned `source_system=tickflow-stock-panel`. A separate closed
 - exact Facts SHA-256;
 - exact minimal Projection SHA-256;
 - exact Typed Claims Schema SHA-256;
-- exact `reference_typed_claims.json` SHA-256;
+- exact nested canonical `ClaimsDocument` SHA-256; the delivery evidence index
+  separately binds the envelope file SHA-256;
 - fixed source paths relative to the repository;
 - the exact Claims artifact safety state `SIMULATION ONLY`,
   `can_publish=false`, and `trading_advice=false` without changing the frozen
   Typed Claims Schema;
 - the four existing vendor-pending items.
 
-The manifest does not claim to be an AI result, and its source label is not
-injected into the strict Claims schema. The host re-runs the current Typed
-Claims Validator before any interpretation. A fixture identity mismatch,
+Neither envelope nor manifest claims to be an AI result. The source label stays
+outside the nested strict Claims schema, and the envelope records the exact
+canonical ClaimsDocument SHA-256. The host re-runs the current Typed Claims
+Validator before any interpretation. A fixture identity mismatch,
 invalid Claim, unexpected symbol, unexpected trade date, sensitive content,
 forbidden trading claim, non-finite number, or raw/qfq mismatch blocks the
 entire decision.
@@ -143,8 +147,9 @@ an order.
 
 Actions are only `BUY`, `HOLD`, or `SELL`. They are produced exclusively by a
 deterministic rule engine from a valid signal plus a portfolio snapshot and an
-eligible execution bar. Free text and AI output are never accepted as an
-action input.
+immutable Paper Trading configuration. Free text, AI output, and market prices
+are never accepted as action inputs. A separate execution step resolves an
+executable action against the closed deterministic Market Fixture.
 
 The minimum deterministic action rules are:
 
@@ -164,9 +169,10 @@ backtest engine. It stores:
 - immutable account configuration;
 - cash ledger;
 - position lots and acquisition trade dates;
-- decision records;
-- pending actions;
+- explicit `sellable_from_trade_date` per lot;
+- processed decision, order, action, and idempotency identities;
 - execution records;
+- total fees, sell-side cost, and allocated cost basis per trade;
 - realized and unrealized PnL;
 - equity and peak equity;
 - drawdown;
@@ -182,47 +188,59 @@ The readiness configuration is explicit simulation metadata, not a statement
 of a current broker tariff:
 
 ```text
-initial_cash_cny=100000.00
-buy_lot_size=100
+initial_cash=100000.00
+lot_size=100
 commission_rate=0.0003
-minimum_commission_cny=5.00
-sell_stamp_tax_rate=0.0005
+minimum_commission=5.00
+sell_fee_rate=0.0005
+t_plus_one=true
+execution_policy=NEXT_TRADING_DAY_OPEN
 slippage_rate=0
 currency=CNY
 ```
 
-Commission applies to both sides with the fixed minimum. Stamp tax applies to
-sell executions only. Tests bind this configuration by canonical JSON hash.
+Commission applies to both sides with the fixed minimum. The explicit
+test-only sell fee applies to sell executions only; these values are not
+represented as a broker tariff. Tests bind this configuration by canonical
+JSON hash.
 
 ## A-Share T+1 And Execution Timing
 
 A decision is timestamped in `Asia/Shanghai` and can only use evidence whose
 `as_of` value is not later than the decision time. An action generated from
-that decision may execute only on the first validated market bar whose trade
-date is strictly later than the decision trade date. The execution price is
-that next trading day's `open`.
+that decision is resolved against an ordered, unique deterministic Market
+Fixture calendar. The Fixture carries a content-derived identity over its
+calendar, bars, prices, source, and safety state; the engine recomputes this
+identity before execution and records it in each Trade. It may execute only on
+the exact next available trade date, at that date's validated `open`; a missing
+exact-next-date bar raises
+`NO_EXECUTION_PRICE_AVAILABLE` and the engine never skips to a later bar.
 
 The engine rejects:
 
-- same-day execution after an end-of-day decision;
-- a bar at or before the decision time;
-- a bar whose date is not after the decision trade date;
+- a decision date absent from the Fixture calendar;
+- a missing exact next-trading-date open bar;
+- a symbol, source, raw price basis, or Fixture identity mismatch;
 - a future close used as an execution price;
 - any price not traceable to the selected bar's `open` field;
 - a sell of shares acquired on the same trade date;
 - unavailable, non-finite, non-positive, or basis-ambiguous prices;
 - hidden gap filling or synthetic replacement of missing market data.
 
-The frozen `2026-07-31` business sample produces `HOLD`, so it needs no future
-execution bar. Synthetic BUY/SELL tests use explicitly labeled next-trading-day
-open bars and remain outside the business artifact route.
+Each acquired lot records the exact next Fixture trade date as
+`sellable_from_trade_date`; eligibility uses that field rather than calendar-day
+arithmetic. The frozen `2026-07-31` business sample produces `HOLD`, so it needs
+no market Fixture. Synthetic BUY/SELL tests use explicitly labeled closed
+calendars and next-trading-day open bars outside the business artifact route.
 
 ## Idempotency And Atomic Publication
 
-Each decision has a canonical identity derived from the contract version,
-symbol, decision time, Facts SHA-256, Claims SHA-256, signal identity, and
-pre-decision account snapshot SHA-256. Each executable action adds the selected
-execution-bar SHA-256. A duplicate identity is rejected before ledger mutation.
+Each decision has a canonical identity derived from signal identity, Fixture
+identity, decision time, immutable configuration, and the pre-decision account
+snapshot. The separate idempotency key binds symbol, decision date, signal
+identity, action side and quantity, Fixture identity, and Paper configuration
+identity. `order_id` is derived from that key. Duplicate decision, order,
+action, or idempotency identity is rejected before ledger mutation.
 
 State transitions are pure: valid input state plus one event yields a new state
 and an append-only event. Publication writes to a sibling staging directory,

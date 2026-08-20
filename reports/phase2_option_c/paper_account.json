@@ -3,21 +3,23 @@
   "can_publish": false,
   "cash_cny": "100000.00",
   "config": {
-    "buy_lot_size": 100,
     "buy_lots_per_signal": 1,
     "can_publish": false,
     "commission_rate": "0.0003",
     "config_version": 1,
     "currency": "CNY",
-    "initial_cash_cny": "100000.00",
-    "minimum_commission_cny": "5.00",
+    "execution_policy": "NEXT_TRADING_DAY_OPEN",
+    "initial_cash": "100000.00",
+    "lot_size": 100,
+    "minimum_commission": "5.00",
+    "sell_fee_rate": "0.0005",
     "sell_lots_per_signal": 1,
-    "sell_stamp_tax_rate": "0.0005",
     "simulation_only": "SIMULATION ONLY",
     "slippage_rate": "0",
+    "t_plus_one": true,
     "trading_advice": false
   },
-  "config_sha256": "bf05237f2b6da526a13e6d413a0c467fcdf16b9ba1ef996d99ae802abc358aee",
+  "config_sha256": "70d2f4de250df5665f013d48462ac8d905b5811a51d9430f2d10d4ade65fe9bf",
   "current_drawdown_cny": "0.00",
   "lots": [],
   "mark_price": "10.43",
@@ -26,7 +28,16 @@
   "max_drawdown_cny": "0.00",
   "peak_equity_cny": "100000.00",
   "processed_action_ids": [
-    "01996d7d4c37aaa7ecc2cd9c612e69d81465264950321c263654cf5b7521ba5a"
+    "99bb0e80bb01cf096a6f82161dc8a65403198b5cc1b2b78a60cdc17b27c7eabd"
+  ],
+  "processed_decision_ids": [
+    "0fa0688c94619ff0fc1cc502fc7999e6df64f6cfbb2491f4bdd64c9e7383663b"
+  ],
+  "processed_idempotency_keys": [
+    "a26003292a55467228af8922f7e695f52ff5c69f0039c3d06002712aa80bd625"
+  ],
+  "processed_order_ids": [
+    "8e518bec3305045550621721485792debefd10cb6a7469f045ac1ce4a5c3e98f"
   ],
   "realized_pnl_cny": "0.00",
   "simulation_only": "SIMULATION ONLY",

@@ -1,1381 +1,1393 @@
 {
-  "claims": [
-    {
-      "claim_id": "000403SZ-20260731-001-market-scope",
-      "claim_type": "SCOPE_NOTICE",
-      "object": {
-        "scope_key": "market_scope",
-        "value": "incomplete",
-        "value_type": "scope"
-      },
-      "predicate": "market_scope",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/scope/market_scope"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": null,
-        "template_id": "scope_notice_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "none"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-002-financial-scope",
-      "claim_type": "SCOPE_NOTICE",
-      "object": {
-        "scope_key": "financial_scope",
-        "value": "unavailable",
-        "value_type": "scope"
-      },
-      "predicate": "financial_scope",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/scope/financial_scope"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": null,
-        "template_id": "scope_notice_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "none"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-003-news-scope",
-      "claim_type": "SCOPE_NOTICE",
-      "object": {
-        "scope_key": "news_scope",
-        "value": "unavailable",
-        "value_type": "scope"
-      },
-      "predicate": "news_scope",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/scope/news_scope"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": null,
-        "template_id": "scope_notice_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "none"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-004-industry-scope",
-      "claim_type": "SCOPE_NOTICE",
-      "object": {
-        "scope_key": "industry_scope",
-        "value": "unavailable",
-        "value_type": "scope"
-      },
-      "predicate": "industry_scope",
-      "provenance": {
-        "calculation_ref": "normalize_scope_v1",
-        "fact_refs": [
-          "/scope/industry_scope"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": null,
-        "template_id": "scope_notice_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "none"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-005-daily-close",
-      "claim_type": "NUMERIC_OBSERVATION",
-      "object": {
-        "unit": "raw_price",
-        "value": 10.43,
-        "value_type": "number"
-      },
-      "predicate": "daily_close",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/daily/close"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "raw"
-      },
-      "rendering": {
-        "display_precision": 2,
-        "template_id": "daily_close_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-006-daily-open-close-percent",
-      "claim_type": "NUMERIC_OBSERVATION",
-      "object": {
-        "unit": "percent",
-        "value": 0.6756756756756785,
-        "value_type": "number"
-      },
-      "predicate": "daily_open_to_close_percent",
-      "provenance": {
-        "calculation_ref": "percentage_difference_v1",
-        "fact_refs": [
-          "/daily/open",
-          "/daily/close"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "raw"
-      },
-      "rendering": {
-        "display_precision": 4,
-        "template_id": "daily_open_to_close_percent_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-007-ma5",
-      "claim_type": "NUMERIC_OBSERVATION",
-      "object": {
-        "unit": "qfq_price",
-        "value": 10.136,
-        "value_type": "number"
-      },
-      "predicate": "ma5",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/indicators/ma5/value"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "qfq"
-      },
-      "rendering": {
-        "display_precision": 4,
-        "template_id": "indicator_numeric_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-008-ma10",
-      "claim_type": "NUMERIC_OBSERVATION",
-      "object": {
-        "unit": "qfq_price",
-        "value": 9.866,
-        "value_type": "number"
-      },
-      "predicate": "ma10",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/indicators/ma10/value"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "qfq"
-      },
-      "rendering": {
-        "display_precision": 4,
-        "template_id": "indicator_numeric_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-009-ma20",
-      "claim_type": "NUMERIC_OBSERVATION",
-      "object": {
-        "unit": "qfq_price",
-        "value": 9.6425,
-        "value_type": "number"
-      },
-      "predicate": "ma20",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/indicators/ma20/value"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "qfq"
-      },
-      "rendering": {
-        "display_precision": 4,
-        "template_id": "indicator_numeric_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-010-ma60",
-      "claim_type": "NUMERIC_OBSERVATION",
-      "object": {
-        "unit": "qfq_price",
-        "value": 10.683,
-        "value_type": "number"
-      },
-      "predicate": "ma60",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/indicators/ma60/value"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "qfq"
-      },
-      "rendering": {
-        "display_precision": 4,
-        "template_id": "indicator_numeric_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-011-macd-dif",
-      "claim_type": "NUMERIC_OBSERVATION",
-      "object": {
-        "unit": "qfq_price",
-        "value": -0.007465131240531164,
-        "value_type": "number"
-      },
-      "predicate": "macd_dif",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/indicators/macd_dif/value"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "qfq"
-      },
-      "rendering": {
-        "display_precision": 4,
-        "template_id": "indicator_numeric_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-012-macd-dea",
-      "claim_type": "NUMERIC_OBSERVATION",
-      "object": {
-        "unit": "qfq_price",
-        "value": -0.18656732410368454,
-        "value_type": "number"
-      },
-      "predicate": "macd_dea",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/indicators/macd_dea/value"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "qfq"
-      },
-      "rendering": {
-        "display_precision": 4,
-        "template_id": "indicator_numeric_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-013-macd-hist",
-      "claim_type": "NUMERIC_OBSERVATION",
-      "object": {
-        "unit": "qfq_price",
-        "value": 0.35820438572630675,
-        "value_type": "number"
-      },
-      "predicate": "macd_hist",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/indicators/macd_hist/value"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "qfq"
-      },
-      "rendering": {
-        "display_precision": 4,
-        "template_id": "indicator_numeric_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-014-rsi6",
-      "claim_type": "NUMERIC_OBSERVATION",
-      "object": {
-        "unit": "dimensionless",
-        "value": 76.21830812329453,
-        "value_type": "number"
-      },
-      "predicate": "rsi6",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/indicators/rsi6/value"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": 4,
-        "template_id": "indicator_numeric_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-015-rsi14",
-      "claim_type": "NUMERIC_OBSERVATION",
-      "object": {
-        "unit": "dimensionless",
-        "value": 58.59950492944132,
-        "value_type": "number"
-      },
-      "predicate": "rsi14",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/indicators/rsi14/value"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": 4,
-        "template_id": "indicator_numeric_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-016-boll-upper",
-      "claim_type": "NUMERIC_OBSERVATION",
-      "object": {
-        "unit": "qfq_price",
-        "value": 10.501063672039606,
-        "value_type": "number"
-      },
-      "predicate": "boll_upper",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/indicators/boll_upper/value"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "qfq"
-      },
-      "rendering": {
-        "display_precision": 4,
-        "template_id": "indicator_numeric_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-017-boll-middle",
-      "claim_type": "NUMERIC_OBSERVATION",
-      "object": {
-        "unit": "qfq_price",
-        "value": 9.6425,
-        "value_type": "number"
-      },
-      "predicate": "boll_middle",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/indicators/boll_middle/value"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "qfq"
-      },
-      "rendering": {
-        "display_precision": 4,
-        "template_id": "indicator_numeric_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-018-boll-lower",
-      "claim_type": "NUMERIC_OBSERVATION",
-      "object": {
-        "unit": "qfq_price",
-        "value": 8.783936327960394,
-        "value_type": "number"
-      },
-      "predicate": "boll_lower",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/indicators/boll_lower/value"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "qfq"
-      },
-      "rendering": {
-        "display_precision": 4,
-        "template_id": "indicator_numeric_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-019-atr14",
-      "claim_type": "NUMERIC_OBSERVATION",
-      "object": {
-        "unit": "qfq_price",
-        "value": 0.429555321578577,
-        "value_type": "number"
-      },
-      "predicate": "atr14",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/indicators/atr14/value"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "qfq"
-      },
-      "rendering": {
-        "display_precision": 4,
-        "template_id": "indicator_numeric_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-020-minute-1m-bar-count",
-      "claim_type": "NUMERIC_OBSERVATION",
-      "object": {
-        "unit": "count",
-        "value": 241,
-        "value_type": "number"
-      },
-      "predicate": "minute_1m_bar_count",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/minute_1m/bar_count"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": 0,
-        "template_id": "data_quality_count_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1m"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-021-minute-30m-bar-count",
-      "claim_type": "NUMERIC_OBSERVATION",
-      "object": {
-        "unit": "count",
-        "value": 8,
-        "value_type": "number"
-      },
-      "predicate": "minute_30m_bar_count",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/minute_30m/bar_count"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": 0,
-        "template_id": "data_quality_count_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "30m"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-022-daily-contract-status",
-      "claim_type": "ENUM_STATE",
-      "object": {
-        "unit": "none",
-        "value": "PASSED",
-        "value_type": "enum"
-      },
-      "predicate": "daily_contract_status",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/daily/contract_status"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": null,
-        "template_id": "contract_state_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-023-minute-1m-contract-status",
-      "claim_type": "ENUM_STATE",
-      "object": {
-        "unit": "none",
-        "value": "PASSED",
-        "value_type": "enum"
-      },
-      "predicate": "minute_1m_contract_status",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/minute_1m/status"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": null,
-        "template_id": "contract_state_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1m"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-024-minute-30m-contract-status",
-      "claim_type": "ENUM_STATE",
-      "object": {
-        "unit": "none",
-        "value": "PASSED",
-        "value_type": "enum"
-      },
-      "predicate": "minute_30m_contract_status",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/minute_30m/status"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": null,
-        "template_id": "contract_state_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "30m"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-025-adjustment-factor-status",
-      "claim_type": "ENUM_STATE",
-      "object": {
-        "unit": "none",
-        "value": "PASSED",
-        "value_type": "enum"
-      },
-      "predicate": "adjustment_factor_status",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/adjustment_factors/status"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": null,
-        "template_id": "contract_state_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-026-data-freshness",
-      "claim_type": "ENUM_STATE",
-      "object": {
-        "unit": "none",
-        "value": "fresh",
-        "value_type": "enum"
-      },
-      "predicate": "data_freshness",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/data_freshness"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": null,
-        "template_id": "contract_state_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-027-adjustment-repeat-stable",
-      "claim_type": "BOOLEAN_STATE",
-      "object": {
-        "unit": "none",
-        "value": true,
-        "value_type": "boolean"
-      },
-      "predicate": "adjustment_repeat_stable",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/adjustment_factors/repeat_stable"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": null,
-        "template_id": "boolean_state_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-028-adjustment-second-adjustment-detected",
-      "claim_type": "BOOLEAN_STATE",
-      "object": {
-        "unit": "none",
-        "value": false,
-        "value_type": "boolean"
-      },
-      "predicate": "adjustment_second_adjustment_detected",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/adjustment_factors/second_adjustment_detected"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": null,
-        "template_id": "boolean_state_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-029-minute-30m-first-bucket-mechanically-explained",
-      "claim_type": "BOOLEAN_STATE",
-      "object": {
-        "unit": "none",
-        "value": true,
-        "value_type": "boolean"
-      },
-      "predicate": "minute_30m_first_bucket_mechanically_explained",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/minute_30m/first_bucket_mechanically_explained"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": null,
-        "template_id": "boolean_state_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "30m"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-030-minute-1m-duplicate-timestamp-count",
-      "claim_type": "DATA_QUALITY_STATE",
-      "object": {
-        "unit": "count",
-        "value": 0,
-        "value_type": "number"
-      },
-      "predicate": "minute_1m_duplicate_timestamp_count",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/minute_1m/duplicate_timestamp_count"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": 0,
-        "template_id": "data_quality_count_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1m"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-031-minute-1m-lunch-break-bar-count",
-      "claim_type": "DATA_QUALITY_STATE",
-      "object": {
-        "unit": "count",
-        "value": 0,
-        "value_type": "number"
-      },
-      "predicate": "minute_1m_lunch_break_bar_count",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/minute_1m/lunch_break_bar_count"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": 0,
-        "template_id": "data_quality_count_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1m"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-032-minute-1m-material-ohlc-anomaly-count",
-      "claim_type": "DATA_QUALITY_STATE",
-      "object": {
-        "unit": "count",
-        "value": 0,
-        "value_type": "number"
-      },
-      "predicate": "minute_1m_material_ohlc_anomaly_count",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/minute_1m/material_ohlc_anomaly_count"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": 0,
-        "template_id": "data_quality_count_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1m"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-033-minute-1m-material-negative-amount-count",
-      "claim_type": "DATA_QUALITY_STATE",
-      "object": {
-        "unit": "count",
-        "value": 0,
-        "value_type": "number"
-      },
-      "predicate": "minute_1m_material_negative_amount_count",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/minute_1m/material_negative_amount_count"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": 0,
-        "template_id": "data_quality_count_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1m"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-034-minute-30m-duplicate-timestamp-count",
-      "claim_type": "DATA_QUALITY_STATE",
-      "object": {
-        "unit": "count",
-        "value": 0,
-        "value_type": "number"
-      },
-      "predicate": "minute_30m_duplicate_timestamp_count",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/minute_30m/duplicate_timestamp_count"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": 0,
-        "template_id": "data_quality_count_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "30m"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-035-minute-30m-lunch-break-bar-count",
-      "claim_type": "DATA_QUALITY_STATE",
-      "object": {
-        "unit": "count",
-        "value": 0,
-        "value_type": "number"
-      },
-      "predicate": "minute_30m_lunch_break_bar_count",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/minute_30m/lunch_break_bar_count"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": 0,
-        "template_id": "data_quality_count_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "30m"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-036-minute-30m-ohlc-mismatch-count",
-      "claim_type": "DATA_QUALITY_STATE",
-      "object": {
-        "unit": "count",
-        "value": 0,
-        "value_type": "number"
-      },
-      "predicate": "minute_30m_ohlc_mismatch_count",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/minute_30m/ohlc_mismatch_count"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": 0,
-        "template_id": "data_quality_count_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "30m"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-037-minute-30m-non-first-bucket-volume-amount-mismatch-count",
-      "claim_type": "DATA_QUALITY_STATE",
-      "object": {
-        "unit": "count",
-        "value": 0,
-        "value_type": "number"
-      },
-      "predicate": "minute_30m_non_first_bucket_volume_amount_mismatch_count",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/minute_30m/non_first_bucket_volume_amount_mismatch_count"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": 0,
-        "template_id": "data_quality_count_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "30m"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-038-minute-30m-material-ohlc-anomaly-count",
-      "claim_type": "DATA_QUALITY_STATE",
-      "object": {
-        "unit": "count",
-        "value": 0,
-        "value_type": "number"
-      },
-      "predicate": "minute_30m_material_ohlc_anomaly_count",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/minute_30m/material_ohlc_anomaly_count"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": 0,
-        "template_id": "data_quality_count_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "30m"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-039-minute-30m-material-negative-amount-count",
-      "claim_type": "DATA_QUALITY_STATE",
-      "object": {
-        "unit": "count",
-        "value": 0,
-        "value_type": "number"
-      },
-      "predicate": "minute_30m_material_negative_amount_count",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/minute_30m/material_negative_amount_count"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": 0,
-        "template_id": "data_quality_count_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "30m"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    },
-    {
-      "claim_id": "000403SZ-20260731-040-macd-dif-vs-dea",
-      "claim_type": "SAME_BASIS_COMPARISON",
-      "object": {
-        "left": {
-          "fact_ref": "/indicators/macd_dif/value",
-          "label_id": "macd_dif",
-          "price_basis": "qfq",
-          "unit": "qfq_price",
-          "value": -0.007465131240531164
+  "artifact_schema_version": 1,
+  "can_publish": false,
+  "claims_document": {
+    "claims": [
+      {
+        "claim_id": "000403SZ-20260731-001-market-scope",
+        "claim_type": "SCOPE_NOTICE",
+        "object": {
+          "scope_key": "market_scope",
+          "value": "incomplete",
+          "value_type": "scope"
         },
-        "relation": "ABOVE",
-        "right": {
-          "fact_ref": "/indicators/macd_dea/value",
-          "label_id": "macd_dea",
-          "price_basis": "qfq",
-          "unit": "qfq_price",
-          "value": -0.18656732410368454
+        "predicate": "market_scope",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/scope/market_scope"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
         },
-        "value_type": "comparison"
+        "rendering": {
+          "display_precision": null,
+          "template_id": "scope_notice_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "none"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
       },
-      "predicate": "macd_dif_vs_dea",
-      "provenance": {
-        "calculation_ref": "compare_numbers_v1",
-        "fact_refs": [
-          "/indicators/macd_dif/value",
-          "/indicators/macd_dea/value"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "qfq"
+      {
+        "claim_id": "000403SZ-20260731-002-financial-scope",
+        "claim_type": "SCOPE_NOTICE",
+        "object": {
+          "scope_key": "financial_scope",
+          "value": "unavailable",
+          "value_type": "scope"
+        },
+        "predicate": "financial_scope",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/scope/financial_scope"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": null,
+          "template_id": "scope_notice_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "none"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
       },
-      "rendering": {
-        "display_precision": 4,
-        "template_id": "same_basis_comparison_v1"
+      {
+        "claim_id": "000403SZ-20260731-003-news-scope",
+        "claim_type": "SCOPE_NOTICE",
+        "object": {
+          "scope_key": "news_scope",
+          "value": "unavailable",
+          "value_type": "scope"
+        },
+        "predicate": "news_scope",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/scope/news_scope"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": null,
+          "template_id": "scope_notice_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "none"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
       },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
+      {
+        "claim_id": "000403SZ-20260731-004-industry-scope",
+        "claim_type": "SCOPE_NOTICE",
+        "object": {
+          "scope_key": "industry_scope",
+          "value": "unavailable",
+          "value_type": "scope"
+        },
+        "predicate": "industry_scope",
+        "provenance": {
+          "calculation_ref": "normalize_scope_v1",
+          "fact_refs": [
+            "/scope/industry_scope"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": null,
+          "template_id": "scope_notice_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "none"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
       },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
+      {
+        "claim_id": "000403SZ-20260731-005-daily-close",
+        "claim_type": "NUMERIC_OBSERVATION",
+        "object": {
+          "unit": "raw_price",
+          "value": 10.43,
+          "value_type": "number"
+        },
+        "predicate": "daily_close",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/daily/close"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "raw"
+        },
+        "rendering": {
+          "display_precision": 2,
+          "template_id": "daily_close_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
       },
-      "validation_status": "VALIDATED"
+      {
+        "claim_id": "000403SZ-20260731-006-daily-open-close-percent",
+        "claim_type": "NUMERIC_OBSERVATION",
+        "object": {
+          "unit": "percent",
+          "value": 0.6756756756756785,
+          "value_type": "number"
+        },
+        "predicate": "daily_open_to_close_percent",
+        "provenance": {
+          "calculation_ref": "percentage_difference_v1",
+          "fact_refs": [
+            "/daily/open",
+            "/daily/close"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "raw"
+        },
+        "rendering": {
+          "display_precision": 4,
+          "template_id": "daily_open_to_close_percent_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-007-ma5",
+        "claim_type": "NUMERIC_OBSERVATION",
+        "object": {
+          "unit": "qfq_price",
+          "value": 10.136,
+          "value_type": "number"
+        },
+        "predicate": "ma5",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/indicators/ma5/value"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "qfq"
+        },
+        "rendering": {
+          "display_precision": 4,
+          "template_id": "indicator_numeric_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-008-ma10",
+        "claim_type": "NUMERIC_OBSERVATION",
+        "object": {
+          "unit": "qfq_price",
+          "value": 9.866,
+          "value_type": "number"
+        },
+        "predicate": "ma10",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/indicators/ma10/value"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "qfq"
+        },
+        "rendering": {
+          "display_precision": 4,
+          "template_id": "indicator_numeric_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-009-ma20",
+        "claim_type": "NUMERIC_OBSERVATION",
+        "object": {
+          "unit": "qfq_price",
+          "value": 9.6425,
+          "value_type": "number"
+        },
+        "predicate": "ma20",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/indicators/ma20/value"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "qfq"
+        },
+        "rendering": {
+          "display_precision": 4,
+          "template_id": "indicator_numeric_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-010-ma60",
+        "claim_type": "NUMERIC_OBSERVATION",
+        "object": {
+          "unit": "qfq_price",
+          "value": 10.683,
+          "value_type": "number"
+        },
+        "predicate": "ma60",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/indicators/ma60/value"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "qfq"
+        },
+        "rendering": {
+          "display_precision": 4,
+          "template_id": "indicator_numeric_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-011-macd-dif",
+        "claim_type": "NUMERIC_OBSERVATION",
+        "object": {
+          "unit": "qfq_price",
+          "value": -0.007465131240531164,
+          "value_type": "number"
+        },
+        "predicate": "macd_dif",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/indicators/macd_dif/value"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "qfq"
+        },
+        "rendering": {
+          "display_precision": 4,
+          "template_id": "indicator_numeric_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-012-macd-dea",
+        "claim_type": "NUMERIC_OBSERVATION",
+        "object": {
+          "unit": "qfq_price",
+          "value": -0.18656732410368454,
+          "value_type": "number"
+        },
+        "predicate": "macd_dea",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/indicators/macd_dea/value"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "qfq"
+        },
+        "rendering": {
+          "display_precision": 4,
+          "template_id": "indicator_numeric_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-013-macd-hist",
+        "claim_type": "NUMERIC_OBSERVATION",
+        "object": {
+          "unit": "qfq_price",
+          "value": 0.35820438572630675,
+          "value_type": "number"
+        },
+        "predicate": "macd_hist",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/indicators/macd_hist/value"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "qfq"
+        },
+        "rendering": {
+          "display_precision": 4,
+          "template_id": "indicator_numeric_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-014-rsi6",
+        "claim_type": "NUMERIC_OBSERVATION",
+        "object": {
+          "unit": "dimensionless",
+          "value": 76.21830812329453,
+          "value_type": "number"
+        },
+        "predicate": "rsi6",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/indicators/rsi6/value"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": 4,
+          "template_id": "indicator_numeric_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-015-rsi14",
+        "claim_type": "NUMERIC_OBSERVATION",
+        "object": {
+          "unit": "dimensionless",
+          "value": 58.59950492944132,
+          "value_type": "number"
+        },
+        "predicate": "rsi14",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/indicators/rsi14/value"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": 4,
+          "template_id": "indicator_numeric_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-016-boll-upper",
+        "claim_type": "NUMERIC_OBSERVATION",
+        "object": {
+          "unit": "qfq_price",
+          "value": 10.501063672039606,
+          "value_type": "number"
+        },
+        "predicate": "boll_upper",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/indicators/boll_upper/value"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "qfq"
+        },
+        "rendering": {
+          "display_precision": 4,
+          "template_id": "indicator_numeric_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-017-boll-middle",
+        "claim_type": "NUMERIC_OBSERVATION",
+        "object": {
+          "unit": "qfq_price",
+          "value": 9.6425,
+          "value_type": "number"
+        },
+        "predicate": "boll_middle",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/indicators/boll_middle/value"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "qfq"
+        },
+        "rendering": {
+          "display_precision": 4,
+          "template_id": "indicator_numeric_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-018-boll-lower",
+        "claim_type": "NUMERIC_OBSERVATION",
+        "object": {
+          "unit": "qfq_price",
+          "value": 8.783936327960394,
+          "value_type": "number"
+        },
+        "predicate": "boll_lower",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/indicators/boll_lower/value"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "qfq"
+        },
+        "rendering": {
+          "display_precision": 4,
+          "template_id": "indicator_numeric_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-019-atr14",
+        "claim_type": "NUMERIC_OBSERVATION",
+        "object": {
+          "unit": "qfq_price",
+          "value": 0.429555321578577,
+          "value_type": "number"
+        },
+        "predicate": "atr14",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/indicators/atr14/value"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "qfq"
+        },
+        "rendering": {
+          "display_precision": 4,
+          "template_id": "indicator_numeric_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-020-minute-1m-bar-count",
+        "claim_type": "NUMERIC_OBSERVATION",
+        "object": {
+          "unit": "count",
+          "value": 241,
+          "value_type": "number"
+        },
+        "predicate": "minute_1m_bar_count",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/minute_1m/bar_count"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": 0,
+          "template_id": "data_quality_count_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1m"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-021-minute-30m-bar-count",
+        "claim_type": "NUMERIC_OBSERVATION",
+        "object": {
+          "unit": "count",
+          "value": 8,
+          "value_type": "number"
+        },
+        "predicate": "minute_30m_bar_count",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/minute_30m/bar_count"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": 0,
+          "template_id": "data_quality_count_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "30m"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-022-daily-contract-status",
+        "claim_type": "ENUM_STATE",
+        "object": {
+          "unit": "none",
+          "value": "PASSED",
+          "value_type": "enum"
+        },
+        "predicate": "daily_contract_status",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/daily/contract_status"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": null,
+          "template_id": "contract_state_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-023-minute-1m-contract-status",
+        "claim_type": "ENUM_STATE",
+        "object": {
+          "unit": "none",
+          "value": "PASSED",
+          "value_type": "enum"
+        },
+        "predicate": "minute_1m_contract_status",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/minute_1m/status"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": null,
+          "template_id": "contract_state_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1m"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-024-minute-30m-contract-status",
+        "claim_type": "ENUM_STATE",
+        "object": {
+          "unit": "none",
+          "value": "PASSED",
+          "value_type": "enum"
+        },
+        "predicate": "minute_30m_contract_status",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/minute_30m/status"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": null,
+          "template_id": "contract_state_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "30m"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-025-adjustment-factor-status",
+        "claim_type": "ENUM_STATE",
+        "object": {
+          "unit": "none",
+          "value": "PASSED",
+          "value_type": "enum"
+        },
+        "predicate": "adjustment_factor_status",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/adjustment_factors/status"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": null,
+          "template_id": "contract_state_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-026-data-freshness",
+        "claim_type": "ENUM_STATE",
+        "object": {
+          "unit": "none",
+          "value": "fresh",
+          "value_type": "enum"
+        },
+        "predicate": "data_freshness",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/data_freshness"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": null,
+          "template_id": "contract_state_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-027-adjustment-repeat-stable",
+        "claim_type": "BOOLEAN_STATE",
+        "object": {
+          "unit": "none",
+          "value": true,
+          "value_type": "boolean"
+        },
+        "predicate": "adjustment_repeat_stable",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/adjustment_factors/repeat_stable"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": null,
+          "template_id": "boolean_state_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-028-adjustment-second-adjustment-detected",
+        "claim_type": "BOOLEAN_STATE",
+        "object": {
+          "unit": "none",
+          "value": false,
+          "value_type": "boolean"
+        },
+        "predicate": "adjustment_second_adjustment_detected",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/adjustment_factors/second_adjustment_detected"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": null,
+          "template_id": "boolean_state_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-029-minute-30m-first-bucket-mechanically-explained",
+        "claim_type": "BOOLEAN_STATE",
+        "object": {
+          "unit": "none",
+          "value": true,
+          "value_type": "boolean"
+        },
+        "predicate": "minute_30m_first_bucket_mechanically_explained",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/minute_30m/first_bucket_mechanically_explained"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": null,
+          "template_id": "boolean_state_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "30m"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-030-minute-1m-duplicate-timestamp-count",
+        "claim_type": "DATA_QUALITY_STATE",
+        "object": {
+          "unit": "count",
+          "value": 0,
+          "value_type": "number"
+        },
+        "predicate": "minute_1m_duplicate_timestamp_count",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/minute_1m/duplicate_timestamp_count"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": 0,
+          "template_id": "data_quality_count_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1m"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-031-minute-1m-lunch-break-bar-count",
+        "claim_type": "DATA_QUALITY_STATE",
+        "object": {
+          "unit": "count",
+          "value": 0,
+          "value_type": "number"
+        },
+        "predicate": "minute_1m_lunch_break_bar_count",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/minute_1m/lunch_break_bar_count"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": 0,
+          "template_id": "data_quality_count_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1m"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-032-minute-1m-material-ohlc-anomaly-count",
+        "claim_type": "DATA_QUALITY_STATE",
+        "object": {
+          "unit": "count",
+          "value": 0,
+          "value_type": "number"
+        },
+        "predicate": "minute_1m_material_ohlc_anomaly_count",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/minute_1m/material_ohlc_anomaly_count"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": 0,
+          "template_id": "data_quality_count_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1m"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-033-minute-1m-material-negative-amount-count",
+        "claim_type": "DATA_QUALITY_STATE",
+        "object": {
+          "unit": "count",
+          "value": 0,
+          "value_type": "number"
+        },
+        "predicate": "minute_1m_material_negative_amount_count",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/minute_1m/material_negative_amount_count"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": 0,
+          "template_id": "data_quality_count_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1m"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-034-minute-30m-duplicate-timestamp-count",
+        "claim_type": "DATA_QUALITY_STATE",
+        "object": {
+          "unit": "count",
+          "value": 0,
+          "value_type": "number"
+        },
+        "predicate": "minute_30m_duplicate_timestamp_count",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/minute_30m/duplicate_timestamp_count"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": 0,
+          "template_id": "data_quality_count_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "30m"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-035-minute-30m-lunch-break-bar-count",
+        "claim_type": "DATA_QUALITY_STATE",
+        "object": {
+          "unit": "count",
+          "value": 0,
+          "value_type": "number"
+        },
+        "predicate": "minute_30m_lunch_break_bar_count",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/minute_30m/lunch_break_bar_count"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": 0,
+          "template_id": "data_quality_count_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "30m"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-036-minute-30m-ohlc-mismatch-count",
+        "claim_type": "DATA_QUALITY_STATE",
+        "object": {
+          "unit": "count",
+          "value": 0,
+          "value_type": "number"
+        },
+        "predicate": "minute_30m_ohlc_mismatch_count",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/minute_30m/ohlc_mismatch_count"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": 0,
+          "template_id": "data_quality_count_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "30m"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-037-minute-30m-non-first-bucket-volume-amount-mismatch-count",
+        "claim_type": "DATA_QUALITY_STATE",
+        "object": {
+          "unit": "count",
+          "value": 0,
+          "value_type": "number"
+        },
+        "predicate": "minute_30m_non_first_bucket_volume_amount_mismatch_count",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/minute_30m/non_first_bucket_volume_amount_mismatch_count"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": 0,
+          "template_id": "data_quality_count_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "30m"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-038-minute-30m-material-ohlc-anomaly-count",
+        "claim_type": "DATA_QUALITY_STATE",
+        "object": {
+          "unit": "count",
+          "value": 0,
+          "value_type": "number"
+        },
+        "predicate": "minute_30m_material_ohlc_anomaly_count",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/minute_30m/material_ohlc_anomaly_count"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": 0,
+          "template_id": "data_quality_count_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "30m"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-039-minute-30m-material-negative-amount-count",
+        "claim_type": "DATA_QUALITY_STATE",
+        "object": {
+          "unit": "count",
+          "value": 0,
+          "value_type": "number"
+        },
+        "predicate": "minute_30m_material_negative_amount_count",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/minute_30m/material_negative_amount_count"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": 0,
+          "template_id": "data_quality_count_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "30m"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-040-macd-dif-vs-dea",
+        "claim_type": "SAME_BASIS_COMPARISON",
+        "object": {
+          "left": {
+            "fact_ref": "/indicators/macd_dif/value",
+            "label_id": "macd_dif",
+            "price_basis": "qfq",
+            "unit": "qfq_price",
+            "value": -0.007465131240531164
+          },
+          "relation": "ABOVE",
+          "right": {
+            "fact_ref": "/indicators/macd_dea/value",
+            "label_id": "macd_dea",
+            "price_basis": "qfq",
+            "unit": "qfq_price",
+            "value": -0.18656732410368454
+          },
+          "value_type": "comparison"
+        },
+        "predicate": "macd_dif_vs_dea",
+        "provenance": {
+          "calculation_ref": "compare_numbers_v1",
+          "fact_refs": [
+            "/indicators/macd_dif/value",
+            "/indicators/macd_dea/value"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "qfq"
+        },
+        "rendering": {
+          "display_precision": 4,
+          "template_id": "same_basis_comparison_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-041-ma-value-order",
+        "claim_type": "ORDERED_RELATION",
+        "object": {
+          "operands": [
+            {
+              "fact_ref": "/indicators/ma60/value",
+              "label_id": "ma60",
+              "price_basis": "qfq",
+              "unit": "qfq_price",
+              "value": 10.683
+            },
+            {
+              "fact_ref": "/indicators/ma5/value",
+              "label_id": "ma5",
+              "price_basis": "qfq",
+              "unit": "qfq_price",
+              "value": 10.136
+            },
+            {
+              "fact_ref": "/indicators/ma10/value",
+              "label_id": "ma10",
+              "price_basis": "qfq",
+              "unit": "qfq_price",
+              "value": 9.866
+            },
+            {
+              "fact_ref": "/indicators/ma20/value",
+              "label_id": "ma20",
+              "price_basis": "qfq",
+              "unit": "qfq_price",
+              "value": 9.6425
+            }
+          ],
+          "relation": "DESCENDING",
+          "value_type": "ordered_relation"
+        },
+        "predicate": "ma_value_order",
+        "provenance": {
+          "calculation_ref": "ordered_relation_v1",
+          "fact_refs": [
+            "/indicators/ma60/value",
+            "/indicators/ma5/value",
+            "/indicators/ma10/value",
+            "/indicators/ma20/value"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "qfq"
+        },
+        "rendering": {
+          "display_precision": 4,
+          "template_id": "ordered_relation_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "1d"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      },
+      {
+        "claim_id": "000403SZ-20260731-042-vendor-pending",
+        "claim_type": "VENDOR_PENDING_NOTICE",
+        "object": {
+          "items": [
+            "intraday_batch_entitlement",
+            "first_30m_bucket_includes_09_30",
+            "volume_unit",
+            "amount_unit"
+          ],
+          "value_type": "vendor_pending"
+        },
+        "predicate": "vendor_pending",
+        "provenance": {
+          "calculation_ref": null,
+          "fact_refs": [
+            "/vendor_pending"
+          ],
+          "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+          "price_basis": "none"
+        },
+        "rendering": {
+          "display_precision": null,
+          "template_id": "vendor_pending_v1"
+        },
+        "scope": {
+          "as_of": "2026-07-31",
+          "timeframe": "none"
+        },
+        "subject": {
+          "entity_type": "stock",
+          "symbol": "000403.SZ"
+        },
+        "validation_status": "VALIDATED"
+      }
+    ],
+    "claims_schema_version": 1,
+    "facts_binding": {
+      "facts_file": "reports/phase2_facts/000403SZ_facts.json",
+      "facts_schema_version": 1,
+      "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956"
     },
-    {
-      "claim_id": "000403SZ-20260731-041-ma-value-order",
-      "claim_type": "ORDERED_RELATION",
-      "object": {
-        "operands": [
-          {
-            "fact_ref": "/indicators/ma60/value",
-            "label_id": "ma60",
-            "price_basis": "qfq",
-            "unit": "qfq_price",
-            "value": 10.683
-          },
-          {
-            "fact_ref": "/indicators/ma5/value",
-            "label_id": "ma5",
-            "price_basis": "qfq",
-            "unit": "qfq_price",
-            "value": 10.136
-          },
-          {
-            "fact_ref": "/indicators/ma10/value",
-            "label_id": "ma10",
-            "price_basis": "qfq",
-            "unit": "qfq_price",
-            "value": 9.866
-          },
-          {
-            "fact_ref": "/indicators/ma20/value",
-            "label_id": "ma20",
-            "price_basis": "qfq",
-            "unit": "qfq_price",
-            "value": 9.6425
-          }
-        ],
-        "relation": "DESCENDING",
-        "value_type": "ordered_relation"
-      },
-      "predicate": "ma_value_order",
-      "provenance": {
-        "calculation_ref": "ordered_relation_v1",
-        "fact_refs": [
-          "/indicators/ma60/value",
-          "/indicators/ma5/value",
-          "/indicators/ma10/value",
-          "/indicators/ma20/value"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "qfq"
-      },
-      "rendering": {
-        "display_precision": 4,
-        "template_id": "ordered_relation_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "1d"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
+    "name": "派林生物",
+    "scope": {
+      "financial_scope": "unavailable",
+      "industry_scope": "unavailable",
+      "market_scope": "incomplete",
+      "news_scope": "unavailable"
     },
-    {
-      "claim_id": "000403SZ-20260731-042-vendor-pending",
-      "claim_type": "VENDOR_PENDING_NOTICE",
-      "object": {
-        "items": [
-          "intraday_batch_entitlement",
-          "first_30m_bucket_includes_09_30",
-          "volume_unit",
-          "amount_unit"
-        ],
-        "value_type": "vendor_pending"
-      },
-      "predicate": "vendor_pending",
-      "provenance": {
-        "calculation_ref": null,
-        "fact_refs": [
-          "/vendor_pending"
-        ],
-        "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
-        "price_basis": "none"
-      },
-      "rendering": {
-        "display_precision": null,
-        "template_id": "vendor_pending_v1"
-      },
-      "scope": {
-        "as_of": "2026-07-31",
-        "timeframe": "none"
-      },
-      "subject": {
-        "entity_type": "stock",
-        "symbol": "000403.SZ"
-      },
-      "validation_status": "VALIDATED"
-    }
-  ],
-  "claims_schema_version": 1,
-  "facts_binding": {
-    "facts_file": "reports/phase2_facts/000403SZ_facts.json",
-    "facts_schema_version": 1,
-    "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956"
+    "source_system": "tickflow-stock-panel",
+    "symbol": "000403.SZ",
+    "timezone": "Asia/Shanghai",
+    "trade_date": "2026-07-31",
+    "trading_advice": false,
+    "vendor_pending": [
+      "intraday_batch_entitlement",
+      "first_30m_bucket_includes_09_30",
+      "volume_unit",
+      "amount_unit"
+    ]
   },
+  "claims_document_sha256": "66f7ef471b293a4d5453ca53fd91668f217176915e6e88f2ce88f4f037559183",
   "name": "派林生物",
-  "scope": {
-    "financial_scope": "unavailable",
-    "industry_scope": "unavailable",
-    "market_scope": "incomplete",
-    "news_scope": "unavailable"
-  },
-  "source_system": "tickflow-stock-panel",
+  "simulation_only": "SIMULATION ONLY",
+  "source": "DETERMINISTIC_REFERENCE_FIXTURE",
   "symbol": "000403.SZ",
   "timezone": "Asia/Shanghai",
   "trade_date": "2026-07-31",
-  "trading_advice": false,
-  "vendor_pending": [
-    "intraday_batch_entitlement",
-    "first_30m_bucket_includes_09_30",
-    "volume_unit",
-    "amount_unit"
-  ]
+  "trading_advice": false
 }

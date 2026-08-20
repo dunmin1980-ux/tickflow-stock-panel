@@ -60,6 +60,8 @@ def _verify_bundle_identity(bundle: ReferenceFixtureBundle) -> str:
         verify_reference_projection(bundle)
     except ReferenceFixtureError as exc:
         raise ResearchDecisionError("fixture_identity_mismatch") from exc
+    if bundle.projection.get("trade_date") != bundle.manifest.trade_date.isoformat():
+        raise ResearchDecisionError("projection_date_mismatch")
     if (
         claims_model_bytes != bundle.canonical_claims
         or claims_sha256 != bundle.manifest.claims_sha256
@@ -136,6 +138,7 @@ def build_research_decision(
         "trade_date": bundle.manifest.trade_date.isoformat(),
         "facts_sha256": bundle.manifest.facts_sha256,
         "claims_sha256": bundle.manifest.claims_sha256,
+        "fixture_identity": manifest_sha256,
         "reason_refs": reason_refs,
     }
     interpretation_id = _identity(
@@ -155,6 +158,7 @@ def build_research_decision(
         reason_refs=reason_refs,
         facts_sha256=bundle.manifest.facts_sha256,
         claims_sha256=bundle.manifest.claims_sha256,
+        fixture_identity=manifest_sha256,
         simulation_only="SIMULATION ONLY",
         can_publish=False,
         trading_advice=False,
@@ -178,6 +182,7 @@ def build_research_decision(
         reason_refs=reason_refs,
         facts_sha256=bundle.manifest.facts_sha256,
         claims_sha256=bundle.manifest.claims_sha256,
+        fixture_identity=manifest_sha256,
         simulation_only="SIMULATION ONLY",
         can_publish=False,
         trading_advice=False,

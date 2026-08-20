@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from app.schemas.phase2_claims import ClaimsDocument
 from app.schemas.phase2_option_c import ResearchDecision
+from app.services.phase2_ai_worker_protocol import compute_projection_sha256
 from app.services.phase2_claims_service import (
     ClaimsValidationResult,
     canonical_json_bytes,
@@ -162,6 +163,24 @@ def test_decision_rejects_projection_content_with_stale_self_hash() -> None:
             replace(bundle, projection=altered_projection),
             DECISION_AT,
         )
+
+
+def test_decision_rejects_projection_date_mismatch_with_valid_self_hash() -> None:
+    bundle = load_reference_fixture(REPO_ROOT)
+    altered_projection = deepcopy(bundle.projection)
+    altered_projection["trade_date"] = "2026-08-01"
+    altered_sha256 = compute_projection_sha256(altered_projection)
+    altered_projection["projection_sha256"] = altered_sha256
+    altered_bundle = replace(
+        bundle,
+        projection=altered_projection,
+        manifest=bundle.manifest.model_copy(
+            update={"projection_sha256": altered_sha256}
+        ),
+    )
+
+    with pytest.raises(ResearchDecisionError, match="projection_date_mismatch"):
+        build_research_decision(altered_bundle, DECISION_AT)
 
 
 def test_research_decision_schema_forbids_free_text_and_action_override() -> None:

@@ -6,8 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from app.services.phase2_claims_service import canonical_json_bytes
 from app.services.phase2_option_c_fixture import (
     ReferenceFixtureError,
+    ReferenceTypedClaimsArtifact,
     build_reference_artifacts,
     load_reference_fixture,
 )
@@ -78,7 +80,7 @@ def test_reference_fixture_binds_all_frozen_identities() -> None:
     assert bundle.manifest.claims_artifact_trading_advice is False
 
 
-def test_reference_claims_artifact_remains_a_strict_claims_document() -> None:
+def test_reference_claims_artifact_is_explicit_safe_envelope() -> None:
     bundle = load_reference_fixture(REPO_ROOT)
     artifacts = build_reference_artifacts(bundle)
 
@@ -86,17 +88,24 @@ def test_reference_claims_artifact_remains_a_strict_claims_document() -> None:
         "reference_fixture_manifest.json",
         "reference_typed_claims.json",
     ]
-    assert artifacts["reference_typed_claims.json"] == (
-        REPO_ROOT / "reports/phase2_claims/fixtures/000403SZ_claims.json"
-    ).read_bytes()
     manifest = json.loads(artifacts["reference_fixture_manifest.json"])
-    claims = json.loads(artifacts["reference_typed_claims.json"])
+    artifact = ReferenceTypedClaimsArtifact.model_validate_json(
+        artifacts["reference_typed_claims.json"]
+    )
     assert manifest["source"] == "DETERMINISTIC_REFERENCE_FIXTURE"
     assert manifest["claims_artifact_simulation_only"] == "SIMULATION ONLY"
     assert manifest["claims_artifact_can_publish"] is False
     assert manifest["claims_artifact_trading_advice"] is False
-    assert "source" not in claims
-    assert claims["source_system"] == "tickflow-stock-panel"
+    assert artifact.source == "DETERMINISTIC_REFERENCE_FIXTURE"
+    assert artifact.claims_document_sha256 == CLAIMS_SHA256
+    assert artifact.claims_document == bundle.claims
+    assert canonical_json_bytes(
+        artifact.claims_document.model_dump(mode="json")
+    ) == bundle.canonical_claims
+    assert artifact.claims_document.source_system == "tickflow-stock-panel"
+    assert artifact.simulation_only == "SIMULATION ONLY"
+    assert artifact.can_publish is False
+    assert artifact.trading_advice is False
 
 
 def test_reference_fixture_is_deterministic() -> None:

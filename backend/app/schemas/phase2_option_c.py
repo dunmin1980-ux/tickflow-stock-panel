@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Mapping
 from datetime import date, datetime, timedelta
@@ -57,23 +58,25 @@ class SimulationSafety(StrictOptionCModel):
     trading_advice: Literal[False]
 
 
-class SimulationConfig(SimulationSafety):
+class PaperTradingConfig(SimulationSafety):
     config_version: Literal[1]
-    initial_cash_cny: Decimal
-    buy_lot_size: Literal[100]
+    initial_cash: Decimal
+    lot_size: Literal[100]
     buy_lots_per_signal: int = Field(ge=1)
     sell_lots_per_signal: int = Field(ge=1)
     commission_rate: Decimal
-    minimum_commission_cny: Decimal
-    sell_stamp_tax_rate: Decimal
+    minimum_commission: Decimal
+    sell_fee_rate: Decimal
+    t_plus_one: Literal[True]
+    execution_policy: Literal["NEXT_TRADING_DAY_OPEN"]
     slippage_rate: Literal[Decimal("0")]
     currency: Literal["CNY"]
 
     @field_validator(
-        "initial_cash_cny",
+        "initial_cash",
         "commission_rate",
-        "minimum_commission_cny",
-        "sell_stamp_tax_rate",
+        "minimum_commission",
+        "sell_fee_rate",
         "slippage_rate",
     )
     @classmethod
@@ -83,22 +86,27 @@ class SimulationConfig(SimulationSafety):
         return value
 
     @classmethod
-    def default(cls) -> SimulationConfig:
+    def default(cls) -> PaperTradingConfig:
         return cls(
             config_version=1,
-            initial_cash_cny=Decimal("100000.00"),
-            buy_lot_size=100,
+            initial_cash=Decimal("100000.00"),
+            lot_size=100,
             buy_lots_per_signal=1,
             sell_lots_per_signal=1,
             commission_rate=Decimal("0.0003"),
-            minimum_commission_cny=Decimal("5.00"),
-            sell_stamp_tax_rate=Decimal("0.0005"),
+            minimum_commission=Decimal("5.00"),
+            sell_fee_rate=Decimal("0.0005"),
+            t_plus_one=True,
+            execution_policy="NEXT_TRADING_DAY_OPEN",
             slippage_rate=Decimal("0"),
             currency="CNY",
             simulation_only="SIMULATION ONLY",
             can_publish=False,
             trading_advice=False,
         )
+
+
+SimulationConfig = PaperTradingConfig
 
 
 class ReferenceFixtureManifest(SimulationSafety):
@@ -149,6 +157,8 @@ class PaperAction(SimulationSafety):
     action_schema_version: Literal[1]
     action_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     decision_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    order_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    idempotency_key: str = Field(pattern=r"^[0-9a-f]{64}$")
     symbol: Literal["000403.SZ"]
     decision_trade_date: date
     decision_at: datetime
@@ -160,6 +170,7 @@ class PaperAction(SimulationSafety):
     facts_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     claims_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     signal_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    fixture_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
 
     @field_validator("decision_at")
     @classmethod
@@ -189,6 +200,7 @@ class ResearchInterpretation(SimulationSafety):
     reason_refs: list[str] = Field(min_length=1)
     facts_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     claims_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    fixture_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class ResearchSignal(SimulationSafety):
@@ -202,6 +214,7 @@ class ResearchSignal(SimulationSafety):
     reason_refs: list[str] = Field(min_length=1)
     facts_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     claims_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    fixture_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class ResearchDecision(SimulationSafety):
@@ -229,6 +242,7 @@ class ResearchDecision(SimulationSafety):
 class MarketBar(SimulationSafety):
     market_bar_schema_version: Literal[1]
     source_fixture: FixtureSource
+    scenario_fixture_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
     symbol: Literal["000403.SZ"]
     trade_date: date
     previous_trade_date: date
@@ -259,18 +273,67 @@ class MarketBar(SimulationSafety):
         return self
 
 
+class DeterministicMarketFixture(SimulationSafety):
+    market_fixture_schema_version: Literal[1]
+    source_fixture: Literal["DETERMINISTIC_TEST_FIXTURE"]
+    symbol: Literal["000403.SZ"]
+    scenario_fixture_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
+    fixture_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
+    trade_dates: list[date] = Field(min_length=2)
+    bars: list[MarketBar]
+
+    @classmethod
+    def create(cls, **values: Any) -> DeterministicMarketFixture:
+        provisional = cls.model_construct(fixture_identity="0" * 64, **values)
+        payload = provisional.model_dump(mode="json", exclude={"fixture_identity"})
+        identity = hashlib.sha256(canonical_option_c_bytes(payload)).hexdigest()
+        return cls(fixture_identity=identity, **values)
+
+    def computed_fixture_identity(self) -> str:
+        payload = self.model_dump(mode="json", exclude={"fixture_identity"})
+        return hashlib.sha256(canonical_option_c_bytes(payload)).hexdigest()
+
+    @model_validator(mode="after")
+    def validate_market_calendar_and_bars(self) -> DeterministicMarketFixture:
+        if self.trade_dates != sorted(set(self.trade_dates)):
+            raise ValueError("market_trade_dates_must_be_sorted_unique")
+        bar_dates = [bar.trade_date for bar in self.bars]
+        if len(bar_dates) != len(set(bar_dates)):
+            raise ValueError("market_bar_dates_must_be_unique")
+        expected_identity = self.computed_fixture_identity()
+        if self.fixture_identity != expected_identity:
+            raise ValueError("market_fixture_identity_mismatch")
+        date_index = {trade_date: index for index, trade_date in enumerate(self.trade_dates)}
+        for bar in self.bars:
+            index = date_index.get(bar.trade_date)
+            if (
+                bar.source_fixture != self.source_fixture
+                or bar.scenario_fixture_identity
+                != self.scenario_fixture_identity
+                or bar.symbol != self.symbol
+                or index is None
+                or index == 0
+                or bar.previous_trade_date != self.trade_dates[index - 1]
+            ):
+                raise ValueError("market_bar_calendar_mismatch")
+        return self
+
+
 class PositionLot(SimulationSafety):
     lot_schema_version: Literal[1]
     lot_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     source_action_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     symbol: Literal["000403.SZ"]
     acquired_trade_date: date
+    sellable_from_trade_date: date
     original_quantity: int = Field(gt=0)
     remaining_quantity: int = Field(ge=0)
     remaining_cost_cny: Decimal = Field(ge=0)
 
     @model_validator(mode="after")
     def validate_remaining_position(self) -> PositionLot:
+        if self.sellable_from_trade_date <= self.acquired_trade_date:
+            raise ValueError("sellable_date_must_follow_acquisition")
         if self.remaining_quantity > self.original_quantity:
             raise ValueError("remaining_quantity_exceeds_original")
         if self.remaining_quantity == 0 and self.remaining_cost_cny != 0:
@@ -284,6 +347,8 @@ class TradeRecord(SimulationSafety):
     trade_schema_version: Literal[1]
     execution_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     action_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    order_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    idempotency_key: str = Field(pattern=r"^[0-9a-f]{64}$")
     order_timestamp: datetime
     execution_timestamp: datetime
     trade_date: date
@@ -294,17 +359,52 @@ class TradeRecord(SimulationSafety):
     gross_amount_cny: Decimal = Field(gt=0)
     commission_cny: Decimal = Field(ge=0)
     stamp_tax_cny: Decimal = Field(ge=0)
+    fees_cny: Decimal = Field(ge=0)
+    sell_cost_cny: Decimal = Field(ge=0)
+    cost_basis_cny: Decimal = Field(ge=0)
     net_cash_flow_cny: Decimal
     realized_pnl_cny: Decimal
     reason_refs: list[str] = Field(min_length=1)
     facts_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     claims_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     signal_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    fixture_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
+    market_fixture_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
 
     @field_validator("order_timestamp", "execution_timestamp")
     @classmethod
     def validate_trade_timestamp(cls, value: datetime) -> datetime:
         return _validate_shanghai_datetime(value)
+
+    @model_validator(mode="after")
+    def validate_accounting_identity(self) -> TradeRecord:
+        if self.execution_timestamp.date() != self.trade_date:
+            raise ValueError("execution_timestamp_trade_date_mismatch")
+        if self.order_timestamp >= self.execution_timestamp:
+            raise ValueError("order_must_precede_execution")
+        fees = money(self.commission_cny + self.stamp_tax_cny)
+        if self.fees_cny != fees:
+            raise ValueError("trade_fee_components_mismatch")
+        if self.side == "BUY":
+            expected_cost = money(self.gross_amount_cny + fees)
+            if (
+                self.stamp_tax_cny != 0
+                or self.sell_cost_cny != 0
+                or self.cost_basis_cny != expected_cost
+                or self.net_cash_flow_cny != -expected_cost
+                or self.realized_pnl_cny != 0
+            ):
+                raise ValueError("buy_trade_accounting_mismatch")
+        else:
+            expected_proceeds = money(self.gross_amount_cny - fees)
+            if (
+                self.sell_cost_cny != fees
+                or self.net_cash_flow_cny != expected_proceeds
+                or self.realized_pnl_cny
+                != money(expected_proceeds - self.cost_basis_cny)
+            ):
+                raise ValueError("sell_trade_accounting_mismatch")
+        return self
 
 
 class PaperAccount(SimulationSafety):
@@ -315,6 +415,9 @@ class PaperAccount(SimulationSafety):
     lots: list[PositionLot]
     trades: list[TradeRecord]
     processed_action_ids: list[str]
+    processed_decision_ids: list[str]
+    processed_order_ids: list[str]
+    processed_idempotency_keys: list[str]
     realized_pnl_cny: Decimal
     unrealized_pnl_cny: Decimal
     market_value_cny: Decimal = Field(ge=0)
@@ -325,11 +428,16 @@ class PaperAccount(SimulationSafety):
     mark_price: Decimal | None
     mark_trade_date: date | None
 
-    @field_validator("processed_action_ids")
+    @field_validator(
+        "processed_action_ids",
+        "processed_decision_ids",
+        "processed_order_ids",
+        "processed_idempotency_keys",
+    )
     @classmethod
-    def validate_unique_actions(cls, value: list[str]) -> list[str]:
+    def validate_unique_processed_identities(cls, value: list[str]) -> list[str]:
         if len(value) != len(set(value)):
-            raise ValueError("processed_action_ids_must_be_unique")
+            raise ValueError("processed_identities_must_be_unique")
         return value
 
 

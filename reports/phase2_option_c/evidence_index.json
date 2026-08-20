@@ -1,14 +1,14 @@
 {
   "ark_minimal_path": "FROZEN",
   "artifact_sha256": {
-    "account_config.json": "bf05237f2b6da526a13e6d413a0c467fcdf16b9ba1ef996d99ae802abc358aee",
-    "chenquant_daily.json": "addb7805ab44d01b506bbc2ca7795b57afa25b47f255ed4f44e62a2f38af9481",
+    "account_config.json": "70d2f4de250df5665f013d48462ac8d905b5811a51d9430f2d10d4ade65fe9bf",
+    "chenquant_daily.json": "0cabd8199b6efc33d3b78c0de65213b9fe928f0ae401a2b0e7db7019370959ae",
     "chenquant_daily.md": "17fbd50c689da02af7541a38c63aa5422387aed81c52ebf007b2b4179f498fd2",
-    "decision.json": "aaa7564df129435a7fee4924b565aa5c90fbb46ecdd5775cef823a6970e9dde8",
-    "paper_account.json": "8d79eb89bb5f321b4c2d7c00bf301a8504c38654f9ccd59827bba0860d95d8d2",
+    "decision.json": "0d349e236c3de9baf7ecd4f79ec210eec94ee5ca64bdcc25842eb971cf2f0f84",
+    "paper_account.json": "ba1e4072fb279b3ede6b33f64fe24d3bb802d0fd3944737cd1441cced416baaa",
     "reference_fixture_manifest.json": "9d4b6852f5a7a4ad7a0ed933e7039e7628e3c06b7fc452db0565843860ec0a80",
-    "reference_typed_claims.json": "66f7ef471b293a4d5453ca53fd91668f217176915e6e88f2ce88f4f037559183",
-    "replay_validation.json": "ce27af86e46aac2305a6cfae40467db16de310225cf4e427d3f72a4fba886d06",
+    "reference_typed_claims.json": "783b2e29d53a408da2bd3fc101743d4995d760321ff2487a0043571fd8cc8565",
+    "replay_validation.json": "d906f9bb5eae728039cd6fb6a35b128c218ef3cd45c6bd6fd9441fc485cd713e",
     "trade_ledger.json": "5a558d1b76560db61bb00e9948b8783e99f3cc7ec48dcd813a1f71f8bd9c6775"
   },
   "broker_calls": 0,

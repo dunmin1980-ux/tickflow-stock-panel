@@ -82,8 +82,8 @@ def _position_summary(
         start=ZERO,
     )
     cumulative_return = (
-        (account.total_equity_cny - account.config.initial_cash_cny)
-        / account.config.initial_cash_cny
+        (account.total_equity_cny - account.config.initial_cash)
+        / account.config.initial_cash
         * Decimal("100")
     ).quantize(PERCENT_QUANTUM, rounding=ROUND_HALF_UP)
     return PaperPositionSummary(
@@ -255,6 +255,7 @@ def run_reference_simulation(repo_root: Path) -> OptionCRun:
         MarketBar(
             market_bar_schema_version=1,
             source_fixture="DETERMINISTIC_REFERENCE_FIXTURE",
+            scenario_fixture_identity=decision.fixture_manifest_sha256,
             symbol="000403.SZ",
             trade_date=bundle.manifest.trade_date,
             previous_trade_date=date(2026, 7, 30),

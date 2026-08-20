@@ -7,16 +7,20 @@ import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
 
 from app.schemas.phase2_claims import (
     ClaimsDocument,
     WorkerClaimsCandidate,
     claims_json_schema,
 )
-from app.schemas.phase2_option_c import ReferenceFixtureManifest, canonical_option_c_bytes
+from app.schemas.phase2_option_c import (
+    ReferenceFixtureManifest,
+    SimulationSafety,
+    canonical_option_c_bytes,
+)
 from app.services.phase2_ai_worker_protocol import (
     build_worker_projection,
     compute_projection_sha256,
@@ -69,6 +73,17 @@ class ReferenceFixtureBundle:
     projection: dict[str, Any]
     rendered_claims: str
     canonical_claims: bytes
+
+
+class ReferenceTypedClaimsArtifact(SimulationSafety):
+    artifact_schema_version: Literal[1]
+    source: Literal["DETERMINISTIC_REFERENCE_FIXTURE"]
+    symbol: Literal["000403.SZ"]
+    name: Literal["派林生物"]
+    trade_date: date
+    timezone: Literal["Asia/Shanghai"]
+    claims_document_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    claims_document: ClaimsDocument
 
 
 def _sha256(raw: bytes) -> str:
@@ -259,9 +274,22 @@ def load_reference_fixture(repo_root: Path) -> ReferenceFixtureBundle:
 
 
 def build_reference_artifacts(bundle: ReferenceFixtureBundle) -> dict[str, bytes]:
-    """Return the only two canonical reference-fixture artifacts."""
+    """Return an explicit safe envelope and its canonical fixture manifest."""
     verify_reference_projection(bundle)
+    claims_artifact = ReferenceTypedClaimsArtifact(
+        artifact_schema_version=1,
+        source="DETERMINISTIC_REFERENCE_FIXTURE",
+        symbol="000403.SZ",
+        name="派林生物",
+        trade_date=bundle.manifest.trade_date,
+        timezone="Asia/Shanghai",
+        claims_document_sha256=bundle.manifest.claims_sha256,
+        claims_document=bundle.claims,
+        simulation_only="SIMULATION ONLY",
+        can_publish=False,
+        trading_advice=False,
+    )
     return {
         "reference_fixture_manifest.json": canonical_option_c_bytes(bundle.manifest),
-        "reference_typed_claims.json": bundle.canonical_claims,
+        "reference_typed_claims.json": canonical_option_c_bytes(claims_artifact),
     }
