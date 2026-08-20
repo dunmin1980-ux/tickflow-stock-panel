@@ -112,6 +112,40 @@ const overviewMarket = {
   industry_rank: { leading: [], lagging: [] },
 }
 
+export const paperTradingDashboard = {
+  status: 'VISUAL_WORKBENCH_READY',
+  symbol: '000403.SZ',
+  name: '派林生物',
+  timezone: 'Asia/Shanghai',
+  requested_date: '2026-08-20',
+  last_completed_trade_date: null,
+  safety: { simulation_only: 'SIMULATION ONLY', real_trading: 'DISABLED', can_publish: false, trading_advice: false },
+  input_readiness: {
+    status: 'READY_REFERENCE',
+    requested_date: '2026-08-20',
+    effective_trade_date: '2026-07-31',
+    source_fixture: 'DETERMINISTIC_REFERENCE_FIXTURE',
+    is_current_date: false,
+    message: 'FROZEN_REFERENCE_INITIALIZATION_AVAILABLE',
+  },
+  claims: {
+    status: 'VALID', errors: [], normalized_sha256: 'a'.repeat(64), claim_count: 11,
+    facts_pointer_binding_count: 14, free_text_field_count: 0, unsourced_claim_count: 0,
+    trading_claim_count: 0, raw_qfq_mismatch_count: 0, sensitive_hit_count: 0, can_publish: false,
+  },
+  account: {
+    initial_cash_cny: '100000.00', cash_cny: '100000.00', market_value_cny: '0.00',
+    total_equity_cny: '100000.00', cumulative_return_percent: '0.0000', realized_pnl_cny: '0.00',
+    unrealized_pnl_cny: '0.00', current_drawdown_cny: '0.00', max_drawdown_cny: '0.00', pending_action: null,
+  },
+  positions: [],
+  decisions: [],
+  trades: [],
+  equity_history: [],
+  latest_daily: null,
+  chenquant_daily_markdown: null,
+}
+
 const reviewReport = {
   id: 'review-e2e',
   title: 'A 股盘后复盘 2026-07-19',
@@ -245,6 +279,7 @@ function payloadFor(url: URL): unknown | undefined {
   if (pathname === '/api/intraday/indices') return { rows: [], count: 0 }
   if (pathname === '/api/analysis-menus') return { items: [] }
   if (pathname === '/api/gold/status') return { enabled: false }
+  if (pathname === '/api/paper-trading/dashboard') return paperTradingDashboard
   if (pathname === '/api/pipeline/jobs') return { active_id: null, jobs: [] }
   if (pathname === '/api/alerts') return { alerts: [], total: 0 }
 

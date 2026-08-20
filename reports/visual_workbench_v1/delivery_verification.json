@@ -1,0 +1,19 @@
+{
+  "can_publish": false,
+  "candidate_status": "DELIVERY_SPRINT_BLOCKED_BY_P0_P1",
+  "cloud_deployment": "NOT_RUN",
+  "focused_backend_passed": 171,
+  "full_backend_failed": 58,
+  "full_backend_failures_reproduced_on_clean_base": true,
+  "full_backend_passed": 2885,
+  "frontend_e2e_passed": 24,
+  "frontend_unit_passed": 102,
+  "integrated_gold": "DISABLED",
+  "p1_blocker": "INPUT_PREPARATION_CONTRACT_UNAVAILABLE",
+  "provider_calls": 0,
+  "real_trading": "DISABLED",
+  "release_marker_created": false,
+  "release_tag_created": false,
+  "simulation_only": "SIMULATION ONLY",
+  "symbol": "000403.SZ"
+}

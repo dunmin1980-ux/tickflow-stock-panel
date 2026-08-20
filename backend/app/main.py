@@ -27,6 +27,7 @@ from app.api import (
     market_recap,
     monitor_rules,
     overview,
+    paper_trading,
     pipeline,
     rps,
     screener,
@@ -218,6 +219,14 @@ async def lifespan(app: FastAPI):
     repo = KlineRepository(store)
     app.state.datastore = store
     app.state.repo = repo
+    from app.services.phase2_visual_workbench import Phase2VisualWorkbenchService
+
+    paper_root = settings.data_dir / "user_data" / "phase2_option_c_paper"
+    app.state.phase2_visual_workbench = Phase2VisualWorkbenchService(
+        repo_root=Path(__file__).resolve().parents[2],
+        state_root=paper_root / "reference_account",
+        input_root=paper_root / "inputs",
+    )
     _initialize_desktop_workspace(app)
     # 在接受回测请求前固定 managed generation，避免首批并发 worker 各自创建版本。
     if settings.backtest_matrix_disk_cache_enabled:
@@ -511,6 +520,7 @@ app.include_router(backtest.router)
 app.include_router(intraday.router)
 app.include_router(indices.router)
 app.include_router(overview.router)
+app.include_router(paper_trading.router)
 app.include_router(analysis.router)
 app.include_router(pipeline.router)
 app.include_router(data.router)

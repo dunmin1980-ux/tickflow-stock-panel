@@ -27,6 +27,7 @@ const Indices = lazy(() => import('./pages/Indices').then(m => ({ default: m.Ind
 const Dev = lazy(() => import('./pages/Dev').then(m => ({ default: m.Dev })))
 const GoldWorkspace = lazy(() => import('./pages/GoldWorkspace').then(m => ({ default: m.GoldWorkspace })))
 const ClientConnection = lazy(() => import('./pages/ClientConnection').then(m => ({ default: m.ClientConnection })))
+const PaperTrading = lazy(() => import('./pages/PaperTrading').then(m => ({ default: m.PaperTrading })))
 
 // 首次使用守卫 —— 未完成向导则重定向到 /onboarding
 // 只挂在根路由上;/onboarding 本身不被守卫,避免循环重定向。
@@ -67,8 +68,9 @@ export const router = createBrowserRouter([
       </OnboardingGuard>
     ),
     children: [
-      { index: true, element: <Navigate to="/watchlist" replace /> },
-      { path: 'overview', element: <Navigate to="/" replace /> },
+      { index: true, element: <Navigate to="/paper-trading" replace /> },
+      { path: 'overview', element: <Navigate to="/paper-trading" replace /> },
+      { path: 'paper-trading', element: <PaperTrading /> },
       { path: 'analysis', element: <Navigate to="/settings?tab=ext-pages" replace /> },
       { path: 'analysis/:menuId', element: <AnalysisDetail /> },
       { path: 'concept-analysis', element: <ConceptAnalysis /> },

@@ -44,4 +44,20 @@ describe('desktop client API', () => {
       preferred_mode: 'hybrid',
     })
   })
+
+  it('surfaces the stable public message from structured API errors', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      detail: {
+        code: 'PAPER_INPUT_MISSING',
+        message: '当前日期没有已验证的离线输入',
+      },
+    }), {
+      status: 409,
+      headers: { 'Content-Type': 'application/json' },
+    })))
+
+    await expect(api.paperTradingRun('2026-08-20')).rejects.toMatchObject({
+      message: '当前日期没有已验证的离线输入',
+    })
+  })
 })

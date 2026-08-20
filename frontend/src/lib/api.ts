@@ -44,7 +44,9 @@ async function apiErrorFromResponse(res: Response): Promise<Error> {
       : typeof raw === 'string'
         ? raw
         : raw && typeof raw === 'object'
-          ? JSON.stringify(raw)
+          ? typeof raw.message === 'string'
+            ? raw.message
+            : JSON.stringify(raw)
           : ''
   } catch {
     detail = ''
@@ -1336,6 +1338,123 @@ export interface ClientStatus {
   error_code: string | null
 }
 
+// ===== Paper Trading Visual Workbench =====
+export interface PaperInputReadiness {
+  status: 'READY_REFERENCE' | 'READY_STAGED' | 'ALREADY_PUBLISHED' | 'MISSING'
+  requested_date: string
+  effective_trade_date: string | null
+  source_fixture: string | null
+  is_current_date: boolean
+  message: string
+}
+
+export interface PaperClaimsStatus {
+  status: 'VALID' | 'INVALID'
+  errors: string[]
+  normalized_sha256: string | null
+  claim_count: number
+  facts_pointer_binding_count: number
+  free_text_field_count: number
+  unsourced_claim_count: number
+  trading_claim_count: number
+  raw_qfq_mismatch_count: number
+  sensitive_hit_count: number
+  can_publish: false
+}
+
+export interface PaperAccountSummary {
+  initial_cash_cny: string
+  cash_cny: string
+  market_value_cny: string
+  total_equity_cny: string
+  cumulative_return_percent: string
+  realized_pnl_cny: string
+  unrealized_pnl_cny: string
+  current_drawdown_cny: string
+  max_drawdown_cny: string
+  pending_action: Record<string, unknown> | null
+}
+
+export interface PaperPositionLot {
+  lot_id: string
+  symbol: string
+  acquired_trade_date: string
+  sellable_from_trade_date: string
+  original_quantity: number
+  remaining_quantity: number
+  remaining_cost_cny: string
+  [key: string]: unknown
+}
+
+export interface PaperDecision {
+  trade_date: string
+  decision_at: string
+  research_signal: string
+  paper_action: 'BUY' | 'HOLD' | 'SELL'
+  pending_execution: boolean
+  [key: string]: unknown
+}
+
+export interface PaperTrade {
+  execution_id: string
+  trade_date: string
+  execution_timestamp: string
+  side: 'BUY' | 'SELL'
+  quantity: number
+  execution_price: string
+  fees_cny: string
+  realized_pnl_cny: string
+  [key: string]: unknown
+}
+
+export interface PaperEquityPoint {
+  trade_date: string
+  cash_cny: string
+  market_value_cny: string
+  realized_pnl_cny: string
+  unrealized_pnl_cny: string
+  total_equity_cny: string
+  peak_equity_cny: string
+  current_drawdown_cny: string
+  max_drawdown_cny: string
+  [key: string]: unknown
+}
+
+export interface PaperLatestDaily {
+  report_date: string
+  research_signal: string
+  paper_action: 'BUY' | 'HOLD' | 'SELL'
+  pending_action: 'BUY' | 'SELL' | null
+  source_fixture: string
+  risk_notes: string[]
+  next_observation_conditions: string[]
+  [key: string]: unknown
+}
+
+export interface PaperTradingDashboard {
+  status: 'VISUAL_WORKBENCH_READY'
+  symbol: '000403.SZ'
+  name: '派林生物'
+  timezone: 'Asia/Shanghai'
+  requested_date: string
+  last_completed_trade_date: string | null
+  safety: {
+    simulation_only: 'SIMULATION ONLY'
+    real_trading: 'DISABLED'
+    can_publish: false
+    trading_advice: false
+  }
+  input_readiness: PaperInputReadiness
+  claims: PaperClaimsStatus
+  account: PaperAccountSummary
+  positions: PaperPositionLot[]
+  decisions: PaperDecision[]
+  trades: PaperTrade[]
+  equity_history: PaperEquityPoint[]
+  latest_daily: PaperLatestDaily | null
+  chenquant_daily_markdown: string | null
+}
+
 async function optionalClientStatus(): Promise<ClientStatus | null> {
   const response = await fetch(`${BASE}/api/client/status`, {
     credentials: 'same-origin',
@@ -1349,6 +1468,15 @@ async function optionalClientStatus(): Promise<ClientStatus | null> {
 // ===== API surface =====
 export const api = {
   health: () => request<{ status: string; version: string; mode: string }>('/health'),
+
+  // ===== Paper Trading Visual Workbench =====
+  paperTradingDashboard: (targetDate?: string) => request<PaperTradingDashboard>(
+    `/api/paper-trading/dashboard${targetDate ? `?target_date=${encodeURIComponent(targetDate)}` : ''}`,
+  ),
+  paperTradingRun: (targetDate?: string) => request<PaperTradingDashboard & { run_status: string }>(
+    '/api/paper-trading/run',
+    { method: 'POST', body: JSON.stringify({ target_date: targetDate ?? null }) },
+  ),
 
   // ===== Desktop cloud client =====
   clientConfigGet: () => request<ClientConfig>('/api/client/config'),

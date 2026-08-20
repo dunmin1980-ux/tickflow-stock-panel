@@ -1,9 +1,9 @@
-import { BookOpenCheck, Layers3, Settings, Star, TrendingUp } from 'lucide-react'
+import { BookOpenCheck, Layers3, Settings, TrendingUp, WalletCards } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { cn } from '@/lib/cn'
 
 const destinations = [
-  { to: '/watchlist', label: '自选', icon: Star },
+  { to: '/paper-trading', label: '模拟', icon: WalletCards },
   { to: '/stock-analysis', label: '个股', icon: TrendingUp },
   { to: '/review', label: '复盘', icon: BookOpenCheck },
   { to: '/concept-analysis', label: '概念', icon: Layers3 },

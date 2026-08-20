@@ -11,18 +11,18 @@ const routes = [
 ] as const
 
 const mobileDestinations = [
-  '/watchlist',
+  '/paper-trading',
   '/stock-analysis',
   '/review',
   '/concept-analysis',
   '/settings',
 ]
 
-test('root redirects to the watchlist and exposes the planned responsive shell', async ({ page }, testInfo) => {
+test('root redirects to the Paper Trading workbench and exposes the responsive shell', async ({ page }, testInfo) => {
   const unexpectedRequests = await installMockApi(page)
   await page.goto('/')
-  await expect(page).toHaveURL(/\/watchlist$/)
-  await expect(page.getByRole('heading', { name: '自选股', exact: true })).toBeVisible()
+  await expect(page).toHaveURL(/\/paper-trading$/)
+  await expect(page.getByRole('heading', { name: '模拟投研工作台', exact: true })).toBeVisible()
 
   const mobileNav = page.locator('nav[aria-label="手机主导航"]')
   await expect(mobileNav.locator('a')).toHaveCount(5)

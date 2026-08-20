@@ -30,7 +30,6 @@ import {
   Key,
   Database,
   Loader2,
-  LayoutDashboard,
   Tags,
   TrendingUp,
   Flame,
@@ -50,6 +49,7 @@ import {
   Cloud,
   Laptop,
   Network,
+  WalletCards,
 } from 'lucide-react'
 import { Logo } from './Logo'
 import { api, type IndexQuote } from '@/lib/api'
@@ -85,7 +85,7 @@ type CoreIndex = (typeof CORE_INDEXES)[number]
 type NavItem = { to: string; label: string; icon: React.ComponentType<{ className?: string }> }
 
 const nav: NavItem[] = [
-  { to: '/',                label: '看板',     icon: LayoutDashboard },
+  { to: '/paper-trading',   label: '模拟盘',   icon: WalletCards },
   { to: '/watchlist',  label: '自选',   icon: Star },
   { to: '/screener',   label: '策略',   icon: ScanSearch },
   { to: '/backtest',   label: '回测',   icon: History },
