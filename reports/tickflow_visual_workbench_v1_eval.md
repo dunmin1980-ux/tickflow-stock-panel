@@ -3,84 +3,123 @@
 ## Final status
 
 ```text
-DELIVERY_SPRINT_BLOCKED_BY_P0_P1
+TICKFLOW_VISUAL_WORKBENCH_V1_RELEASED
 ```
 
-## Delivered candidate
+Validated implementation Head:
 
-The candidate adds a thin authenticated API, a browser workbench, a guarded
-one-click daily runner, persisted account/ledger views, equity/PnL charts,
-ChenQuant Daily rendering, friendly errors, and a local-only launcher. It does
-not change the Option C trading engine, Claims Validator, T+1, execution,
-accounting, PnL, drawdown, or recovery implementation.
+```text
+443858e47c14ab118c486c6adac80f991a1f7c81
+```
 
-## P1 blocker
+## Delivered product
 
-`INPUT_PREPARATION_CONTRACT_UNAVAILABLE`
+Visual Workbench v1 turns the released Option C single-symbol Paper Trading
+engine into a local browser workflow for `000403.SZ` 派林生物. The root route opens
+the workbench and displays persisted account KPIs, positions, decisions,
+trades, equity/PnL, Research Signal, Paper Action, Claims validation and
+ChenQuant Daily.
 
-The release requirement says a user must be able to prepare/check and run the
-current daily input from the browser. The current released Option C schema only
-accepts:
+The `运行今日模拟盘` command performs one guarded workflow:
 
-- `DETERMINISTIC_REFERENCE_FIXTURE`, fixed to trade date `2026-07-31`;
-- `DETERMINISTIC_TEST_FIXTURE`, which the released runbook explicitly forbids
-  interpreting as real market evidence.
+```text
+raw/qfq daily history + A-share calendar
+-> deterministic Facts / Projection / Typed Claims / Signal
+-> released Option C Daily Runner
+-> atomic account, ledger, PnL and ChenQuant Daily persistence
+```
 
-There is no current validated Facts/Projection/Claims package on this Mac and
-no approved real daily fixture source in the schema. The Visual layer therefore
-fails closed with `PAPER_INPUT_MISSING` after the reference day instead of
-inventing a price, weakening provenance, or running a test fixture as research.
-This meets the task's explicit P1 definition: `input cannot be prepared`.
+The page and every persisted artifact remain `SIMULATION ONLY`,
+`REAL TRADING DISABLED`, `can_publish=false` and `trading_advice=false`.
 
-## Completed gates
+## P0/P1 safety closeout
+
+- Daily preparation is current-date only and opens after 15:10
+  `Asia/Shanghai`.
+- Market requests are serial and fixed to `000403.SZ`; no batch, AI, broker,
+  Gold or cloud path is involved.
+- raw data supplies valuation and next-trading-day-open execution; qfq data
+  supplies technical indicators and signal Claims.
+- Every saved bundle has a fixed artifact set and is reconstructed from raw/qfq
+  evidence on load. Re-signed input, valuation, signal, projection or Claims
+  tampering fails before account mutation.
+- The legacy `YYYY-MM-DD_input.json` compatibility path is not accepted by the
+  Visual workbench.
+- An open position crossing a material raw/qfq adjustment-factor change fails
+  closed. v1 does not invent dividend, split, rights or share-count accounting.
+- Option C remains authoritative for A-share T+1, next-day-open execution,
+  Decimal accounting, fees, idempotency, state recovery, PnL and drawdown.
+- Preparation and account mutation use independent cross-process locks;
+  duplicate clicks do not duplicate requests, decisions, orders or trades.
+
+## Acceptance evidence
 
 | Gate | Result |
 |---|---|
-| Visual architecture audit/freeze | PASSED |
-| Thin authenticated API | PASSED |
-| Account/position/PnL dashboard | PASSED |
-| Signal/action/Claims view | PASSED |
-| Decision/trade ledgers | PASSED |
-| Equity/PnL chart | PASSED |
-| ChenQuant Daily view | PASSED |
-| State recovery/refresh persistence | PASSED |
+| Dashboard and one-click Daily Run | PASSED |
+| Validated daily Input Builder | PASSED |
+| Account, positions, decisions and trades | PASSED |
+| PnL, equity chart and signal timeline | PASSED |
+| ChenQuant Daily JSON/Markdown | PASSED |
+| T+1 and next-day-open | PASSED |
+| Look-ahead and future-data guards | PASSED |
+| Idempotency and state recovery | PASSED |
+| Refresh persistence and friendly errors | PASSED |
 | Double-click protection | PASSED |
-| Friendly errors | PASSED |
-| Local-only startup/browser open | PASSED |
-| Option C + Visual focused regression | `171 passed` |
-| Frontend unit baseline plus Visual | `102 passed` |
-| Browser E2E across iPhone, Pixel, and desktop | `24 passed` |
-| Production frontend build | PASSED |
-| compileall / Ruff F821 | PASSED |
+| Local startup and browser open | PASSED |
+| Focused backend regression | `161 passed` |
+| Frontend unit tests | `104 passed` |
+| TypeScript and production build | PASSED |
+| Browser E2E: iPhone, Pixel, desktop | `28 passed, 2 skipped` |
+| compileall / Ruff F821 / strict changed-file Ruff | PASSED |
+| Node/Bash syntax, diff check, sensitive scan | PASSED |
+| Independent P0/P1 review | `NO_P0_P1_FINDINGS` |
 
 ## Full backend context
 
-The repository-wide run completed with `2885 passed, 58 failed`. Representative
-Ark build-provenance and Gold store failures were reproduced unchanged in a
-clean detached worktree at the pre-sprint Head. They are pre-existing frozen
-Provider/Gold debt, not Visual v1 regressions, and were not modified because the
-task explicitly freezes those paths.
+The final current-tree full run completed with:
 
-## P0/P1 review
+```text
+2907 passed, 58 failed, 13 warnings
+```
 
-- No wrong trade or PnL path was introduced.
-- No future-data fallback was introduced.
-- Duplicate UI clicks are blocked; the released cross-process lock and
-  idempotency remain authoritative.
-- No real-trading or Provider path is reachable from the page.
-- No secret is returned by the API or written by the launcher.
-- The only actionable release blocker is the missing validated-daily input
-  contract and builder.
+All 58 failures remain in the pre-existing frozen Ark approval/provenance, Ark
+TLS/canary, Gold comparison/store and runtime-head-bound evidence tests. The
+Visual, Option C, Claims, Paper Trading and startup suites have no failures.
+These unrelated paths were not changed or reopened during the sprint.
 
-## Required unblock scope
+## Production data smoke
 
-1. Approve a new non-test `VALIDATED_DAILY_INPUT` provenance contract.
-2. Build deterministic single-symbol daily Facts and Typed Claims from an
-   already validated local market snapshot.
-3. Bind source hashes, availability timestamps, raw/qfq basis, and next-day-open
-   evidence.
-4. Add look-ahead, replay, and missing-price tests.
-5. Feed the resulting canonical `ContinuousDayInput` into the existing runner;
-   do not change accounting or execution rules.
+The stock-sdk/Tencent bridge returned raw and qfq history for `000403.SZ` with
+the same latest date and a valid A-share calendar. A controlled temporary-root
+smoke generated valid Claims and a deterministic signal, published once, then
+returned the existing result idempotently. It did not mutate the formal account
+and did not call any Provider.
 
-No release marker or release tag is created while this P1 remains open.
+## Known limitations
+
+- One symbol only: `000403.SZ`.
+- Local Mac deployment only; no cloud release.
+- Corporate actions require manual review and fail closed while a position is
+  open.
+- volume and amount units remain vendor-confirmation pending and do not drive
+  the action.
+- AI, three-symbol mode, broker integration, real trading and automatic
+  publishing are not released.
+- Existing Ark/Gold full-suite debt is deferred and not part of Visual v1.
+
+## Daily entry
+
+Run from the repository root:
+
+```bash
+./scripts/start_tickflow_visual.sh
+```
+
+The launcher binds `127.0.0.1:3018`, waits for health and opens:
+
+```text
+http://127.0.0.1:3018/paper-trading
+```
+
+Operational instructions are in `TICKFLOW_VISUAL_WORKBENCH_V1_RUNBOOK.md`.
