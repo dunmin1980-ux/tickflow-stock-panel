@@ -1,0 +1,27 @@
+{
+  "can_publish": false,
+  "decision_ledger_schema_version": 1,
+  "decisions": [
+    {
+      "action_id": "7e3c607394cfb22200984c0d6cfb40563e7ee13a4ff4989eddfb6095fb17463f",
+      "can_publish": false,
+      "claims_sha256": "66f7ef471b293a4d5453ca53fd91668f217176915e6e88f2ce88f4f037559183",
+      "decision_at": "2026-07-31T21:15:00+08:00",
+      "decision_entry_schema_version": 1,
+      "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+      "fixture_identity": "9d4b6852f5a7a4ad7a0ed933e7039e7628e3c06b7fc452db0565843860ec0a80",
+      "input_identity": "d10899a84e87364eb457616fd6614d05e13266ed3da5fb70efb11957cfe6b07b",
+      "order_id": null,
+      "paper_action": "HOLD",
+      "pending_execution": false,
+      "projection_sha256": "0ffe5b7fbd57d6b16af073db12d826c940c88b43547870f6b9513401eb49fb1f",
+      "research_signal": "MIXED_OBSERVATION",
+      "signal_id": "7a0bdb29114550fdbdcbb01fecbc1a94ec98e84983c208e8002fd51946068db3",
+      "simulation_only": "SIMULATION ONLY",
+      "trade_date": "2026-07-31",
+      "trading_advice": false
+    }
+  ],
+  "simulation_only": "SIMULATION ONLY",
+  "trading_advice": false
+}

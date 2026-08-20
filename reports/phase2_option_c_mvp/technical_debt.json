@@ -1,0 +1,12 @@
+{
+  "blocking": false,
+  "can_publish": false,
+  "items": [
+    "Only 000403.SZ is supported by the MVP runtime contract.",
+    "Fresh validated daily input packaging remains a manual offline step.",
+    "Scheduling and UI integration are intentionally deferred."
+  ],
+  "simulation_only": "SIMULATION ONLY",
+  "technical_debt_schema_version": 1,
+  "trading_advice": false
+}

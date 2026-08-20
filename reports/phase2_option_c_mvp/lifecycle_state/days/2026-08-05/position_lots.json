@@ -1,0 +1,22 @@
+{
+  "can_publish": false,
+  "lots": [
+    {
+      "acquired_trade_date": "2026-08-04",
+      "can_publish": false,
+      "lot_id": "d9f98fca6e23b07c6a2b512d243afa933432bcf7528ddd7425e68e9eb6590cb4",
+      "lot_schema_version": 1,
+      "original_quantity": 100,
+      "remaining_cost_cny": "1055.00",
+      "remaining_quantity": 100,
+      "sellable_from_trade_date": "2026-08-05",
+      "simulation_only": "SIMULATION ONLY",
+      "source_action_id": "b4ae94aa0c41f9a132f997fbfea97e59452a166131643a37bccde19aedbac5af",
+      "symbol": "000403.SZ",
+      "trading_advice": false
+    }
+  ],
+  "position_lot_ledger_schema_version": 1,
+  "simulation_only": "SIMULATION ONLY",
+  "trading_advice": false
+}

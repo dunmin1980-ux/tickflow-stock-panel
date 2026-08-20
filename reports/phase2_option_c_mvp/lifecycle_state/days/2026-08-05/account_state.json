@@ -1,0 +1,100 @@
+{
+  "account_schema_version": 1,
+  "can_publish": false,
+  "cash_cny": "98945.00",
+  "config": {
+    "buy_lots_per_signal": 1,
+    "can_publish": false,
+    "commission_rate": "0.0003",
+    "config_version": 1,
+    "currency": "CNY",
+    "execution_policy": "NEXT_TRADING_DAY_OPEN",
+    "initial_cash": "100000.00",
+    "lot_size": 100,
+    "minimum_commission": "5.00",
+    "sell_fee_rate": "0.0005",
+    "sell_lots_per_signal": 1,
+    "simulation_only": "SIMULATION ONLY",
+    "slippage_rate": "0",
+    "t_plus_one": true,
+    "trading_advice": false
+  },
+  "config_sha256": "70d2f4de250df5665f013d48462ac8d905b5811a51d9430f2d10d4ade65fe9bf",
+  "current_drawdown_cny": "0.00",
+  "lots": [
+    {
+      "acquired_trade_date": "2026-08-04",
+      "can_publish": false,
+      "lot_id": "d9f98fca6e23b07c6a2b512d243afa933432bcf7528ddd7425e68e9eb6590cb4",
+      "lot_schema_version": 1,
+      "original_quantity": 100,
+      "remaining_cost_cny": "1055.00",
+      "remaining_quantity": 100,
+      "sellable_from_trade_date": "2026-08-05",
+      "simulation_only": "SIMULATION ONLY",
+      "source_action_id": "b4ae94aa0c41f9a132f997fbfea97e59452a166131643a37bccde19aedbac5af",
+      "symbol": "000403.SZ",
+      "trading_advice": false
+    }
+  ],
+  "mark_price": "11.20",
+  "mark_trade_date": "2026-08-05",
+  "market_value_cny": "1120.00",
+  "max_drawdown_cny": "5.00",
+  "peak_equity_cny": "100065.00",
+  "processed_action_ids": [
+    "b4ae94aa0c41f9a132f997fbfea97e59452a166131643a37bccde19aedbac5af",
+    "7b03b9316ff2ddfde93632c00acb6b39d264d6daa3d7f2ae68b9e531fc530178"
+  ],
+  "processed_decision_ids": [
+    "db1937b74c1b699df9d1a886d9b63c08160ae2d33336506e709a600c5253ff5c",
+    "564471b3901e6914f0ea0c922a60ed7822932a3962823971848b6accd71dffdc"
+  ],
+  "processed_idempotency_keys": [
+    "9027e230195723247d2b8e96bdba82938818429964aea4c5dea49e67b907b6f0",
+    "073f5ec7770b238695e23777d4ddf9856f7e2221c6088f074d8a4ed87489dd24"
+  ],
+  "processed_order_ids": [
+    "d8a0ea7bbf5939cad8f274936f22608e4a3e0b24b673ddcfd88df8afb1b085c5"
+  ],
+  "realized_pnl_cny": "0.00",
+  "simulation_only": "SIMULATION ONLY",
+  "total_equity_cny": "100065.00",
+  "trades": [
+    {
+      "action_id": "b4ae94aa0c41f9a132f997fbfea97e59452a166131643a37bccde19aedbac5af",
+      "can_publish": false,
+      "claims_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "commission_cny": "5.00",
+      "cost_basis_cny": "1055.00",
+      "execution_id": "730241f92a51f63bc4762b09e702ef3a2a108c2eb112207b877125f198c32cc7",
+      "execution_price": "10.50",
+      "execution_timestamp": "2026-08-04T09:30:00+08:00",
+      "facts_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "fees_cny": "5.00",
+      "fixture_identity": "9999999999999999999999999999999999999999999999999999999999999999",
+      "gross_amount_cny": "1050.00",
+      "idempotency_key": "9027e230195723247d2b8e96bdba82938818429964aea4c5dea49e67b907b6f0",
+      "market_fixture_identity": "ef3b5d1865f803486af2773adfed662431986188aea751dfe116dfe83f088943",
+      "net_cash_flow_cny": "-1055.00",
+      "order_id": "d8a0ea7bbf5939cad8f274936f22608e4a3e0b24b673ddcfd88df8afb1b085c5",
+      "order_timestamp": "2026-08-03T15:15:00+08:00",
+      "quantity": 100,
+      "realized_pnl_cny": "0.00",
+      "reason_refs": [
+        "mvp-release-2026-08-03-POSITIVE_OBSERVATION"
+      ],
+      "sell_cost_cny": "0.00",
+      "side": "BUY",
+      "signal_id": "286634b10cca9dd6c980a4bef5908562e3443d02ac99bb32a4b836823782e821",
+      "simulation_only": "SIMULATION ONLY",
+      "stamp_tax_cny": "0.00",
+      "symbol": "000403.SZ",
+      "trade_date": "2026-08-04",
+      "trade_schema_version": 1,
+      "trading_advice": false
+    }
+  ],
+  "trading_advice": false,
+  "unrealized_pnl_cny": "65.00"
+}

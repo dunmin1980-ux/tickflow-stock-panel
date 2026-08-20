@@ -69,7 +69,7 @@ class PaperTradingConfig(SimulationSafety):
     sell_fee_rate: Decimal
     t_plus_one: Literal[True]
     execution_policy: Literal["NEXT_TRADING_DAY_OPEN"]
-    slippage_rate: Literal[Decimal("0")]
+    slippage_rate: Decimal
     currency: Literal["CNY"]
 
     @field_validator(
@@ -83,6 +83,13 @@ class PaperTradingConfig(SimulationSafety):
     def validate_finite_decimal(cls, value: Decimal) -> Decimal:
         if not value.is_finite() or value < 0:
             raise ValueError("simulation_decimal_must_be_finite_and_non_negative")
+        return value
+
+    @field_validator("slippage_rate")
+    @classmethod
+    def validate_zero_slippage(cls, value: Decimal) -> Decimal:
+        if value != 0:
+            raise ValueError("paper_slippage_must_remain_zero")
         return value
 
     @classmethod
@@ -120,21 +127,15 @@ class ReferenceFixtureManifest(SimulationSafety):
     facts_file: Literal["reports/phase2_facts/000403SZ_facts.json"]
     facts_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     projection_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    claims_file: Literal[
-        "reports/phase2_claims/fixtures/000403SZ_claims.json"
-    ]
+    claims_file: Literal["reports/phase2_claims/fixtures/000403SZ_claims.json"]
     claims_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     claims_artifact_simulation_only: Literal["SIMULATION ONLY"]
     claims_artifact_can_publish: Literal[False]
     claims_artifact_trading_advice: Literal[False]
-    claims_document_schema_file: Literal[
-        "reports/phase2_claims/schema/phase2_claims.schema.json"
-    ]
+    claims_document_schema_file: Literal["reports/phase2_claims/schema/phase2_claims.schema.json"]
     claims_document_schema_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     worker_candidate_schema_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    source_daily_summary_file: Literal[
-        "reports/phase1_observation/2026-07-31/daily_summary.json"
-    ]
+    source_daily_summary_file: Literal["reports/phase1_observation/2026-07-31/daily_summary.json"]
     source_daily_summary_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     claims_renderer_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     claim_count: int = Field(ge=1)
@@ -179,9 +180,7 @@ class PaperAction(SimulationSafety):
 
     @model_validator(mode="after")
     def validate_side_quantity(self) -> PaperAction:
-        if self.side == "BUY" and (
-            self.quantity <= 0 or self.quantity % 100 != 0
-        ):
+        if self.side == "BUY" and (self.quantity <= 0 or self.quantity % 100 != 0):
             raise ValueError("buy_quantity_must_be_positive_board_lot")
         if self.side == "SELL" and self.quantity <= 0:
             raise ValueError("sell_quantity_must_be_positive_integer")
@@ -348,8 +347,7 @@ class DeterministicMarketFixture(SimulationSafety):
             index = date_index.get(bar.trade_date)
             if (
                 bar.source_fixture != self.source_fixture
-                or bar.scenario_fixture_identity
-                != self.scenario_fixture_identity
+                or bar.scenario_fixture_identity != self.scenario_fixture_identity
                 or bar.symbol != self.symbol
                 or index is None
                 or index == 0
@@ -440,8 +438,7 @@ class TradeRecord(SimulationSafety):
             if (
                 self.sell_cost_cny != fees
                 or self.net_cash_flow_cny != expected_proceeds
-                or self.realized_pnl_cny
-                != money(expected_proceeds - self.cost_basis_cny)
+                or self.realized_pnl_cny != money(expected_proceeds - self.cost_basis_cny)
             ):
                 raise ValueError("sell_trade_accounting_mismatch")
         return self
@@ -559,6 +556,216 @@ class ChenQuantDaily(SimulationSafety):
         ]
     ]
     real_provider_integration: Literal["DEFERRED_FROZEN"]
+    real_provider_attempts: Literal[0]
+    real_ai_calls: Literal[0]
+    real_trading: Literal["DISABLED"]
+
+
+class PendingActionRecord(SimulationSafety):
+    pending_action_schema_version: Literal[1]
+    queued_input_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
+    action: PaperAction
+    signal: ResearchSignal
+
+    @model_validator(mode="after")
+    def validate_pending_action(self) -> PendingActionRecord:
+        if self.action.side == "HOLD" or self.action.order_id is None:
+            raise ValueError("pending_action_must_be_executable")
+        if (
+            self.action.signal_id != self.signal.signal_id
+            or self.action.decision_trade_date != self.signal.trade_date
+            or self.action.fixture_identity != self.signal.fixture_identity
+        ):
+            raise ValueError("pending_action_signal_mismatch")
+        return self
+
+
+class DecisionLedgerEntry(SimulationSafety):
+    decision_entry_schema_version: Literal[1]
+    trade_date: date
+    decision_at: datetime
+    input_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
+    facts_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    projection_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    claims_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    fixture_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
+    signal_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    action_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    order_id: str | None = Field(pattern=r"^[0-9a-f]{64}$")
+    research_signal: SignalCode
+    paper_action: ActionSide
+    pending_execution: bool
+
+    @field_validator("decision_at")
+    @classmethod
+    def validate_decision_at(cls, value: datetime) -> datetime:
+        return _validate_shanghai_datetime(value)
+
+
+class EquityHistoryPoint(SimulationSafety):
+    equity_point_schema_version: Literal[1]
+    trade_date: date
+    cash_cny: Decimal = Field(ge=0)
+    market_value_cny: Decimal = Field(ge=0)
+    realized_pnl_cny: Decimal
+    unrealized_pnl_cny: Decimal
+    total_equity_cny: Decimal = Field(ge=0)
+    peak_equity_cny: Decimal = Field(ge=0)
+    current_drawdown_cny: Decimal = Field(ge=0)
+    max_drawdown_cny: Decimal = Field(ge=0)
+
+
+class ContinuousPaperState(SimulationSafety):
+    continuous_state_schema_version: Literal[1]
+    symbol: Literal["000403.SZ"]
+    account: PaperAccount
+    pending_action: PendingActionRecord | None
+    decision_ledger: list[DecisionLedgerEntry]
+    equity_history: list[EquityHistoryPoint]
+    completed_input_identities: list[str]
+    last_completed_trade_date: date | None
+
+    @model_validator(mode="after")
+    def validate_continuity(self) -> ContinuousPaperState:
+        decision_dates = [entry.trade_date for entry in self.decision_ledger]
+        equity_dates = [point.trade_date for point in self.equity_history]
+        if decision_dates != sorted(set(decision_dates)):
+            raise ValueError("decision_ledger_dates_must_be_sorted_unique")
+        if equity_dates != decision_dates:
+            raise ValueError("equity_history_must_match_decision_dates")
+        if len(self.completed_input_identities) != len(set(self.completed_input_identities)):
+            raise ValueError("completed_input_identities_must_be_unique")
+        if len(self.completed_input_identities) != len(decision_dates):
+            raise ValueError("completed_input_count_mismatch")
+        expected_last = decision_dates[-1] if decision_dates else None
+        if self.last_completed_trade_date != expected_last:
+            raise ValueError("last_completed_trade_date_mismatch")
+        return self
+
+
+class ContinuousDayInput(SimulationSafety):
+    continuous_day_input_schema_version: Literal[1]
+    input_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_fixture: FixtureSource
+    symbol: Literal["000403.SZ"]
+    trade_date: date
+    decision_at: datetime
+    facts_available_at: datetime
+    projection_available_at: datetime
+    signal_generated_at: datetime
+    facts_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    projection_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    claims_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    fixture_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
+    signal: ResearchSignal
+    execution_fixture: DeterministicMarketFixture | None
+    valuation_bar: ValuationBar
+
+    @classmethod
+    def create(cls, **values: Any) -> ContinuousDayInput:
+        provisional = cls.model_construct(input_identity="0" * 64, **values)
+        payload = provisional.model_dump(mode="json", exclude={"input_identity"})
+        identity = hashlib.sha256(canonical_option_c_bytes(payload)).hexdigest()
+        return cls(input_identity=identity, **values)
+
+    @field_validator(
+        "decision_at",
+        "facts_available_at",
+        "projection_available_at",
+        "signal_generated_at",
+    )
+    @classmethod
+    def validate_timestamp(cls, value: datetime) -> datetime:
+        return _validate_shanghai_datetime(value)
+
+    @model_validator(mode="after")
+    def validate_input_identity_and_bindings(self) -> ContinuousDayInput:
+        payload = self.model_dump(mode="json", exclude={"input_identity"})
+        expected = hashlib.sha256(canonical_option_c_bytes(payload)).hexdigest()
+        if self.input_identity != expected:
+            raise ValueError("continuous_day_input_identity_mismatch")
+        if (
+            self.decision_at.date() != self.trade_date
+            or self.signal.trade_date != self.trade_date
+            or self.signal.source_fixture != self.source_fixture
+            or self.signal.symbol != self.symbol
+            or self.signal.facts_sha256 != self.facts_sha256
+            or self.signal.claims_sha256 != self.claims_sha256
+            or self.signal.fixture_identity != self.fixture_identity
+            or self.valuation_bar.trade_date != self.trade_date
+            or self.valuation_bar.symbol != self.symbol
+            or self.valuation_bar.source_fixture != self.source_fixture
+            or self.valuation_bar.scenario_fixture_identity != self.fixture_identity
+        ):
+            raise ValueError("continuous_day_input_binding_mismatch")
+        if self.execution_fixture is not None and self.execution_fixture.symbol != self.symbol:
+            raise ValueError("continuous_execution_fixture_binding_mismatch")
+        return self
+
+
+class MvpPositionSummary(SimulationSafety):
+    cash_cny: Decimal = Field(ge=0)
+    quantity: int = Field(ge=0)
+    sellable_quantity: int = Field(ge=0)
+    ineligible_quantity: int = Field(ge=0)
+    cost_basis_cny: Decimal = Field(ge=0)
+    market_value_cny: Decimal = Field(ge=0)
+    realized_pnl_cny: Decimal
+    unrealized_pnl_cny: Decimal
+    total_equity_cny: Decimal = Field(ge=0)
+    cumulative_return_percent: Decimal
+    current_drawdown_cny: Decimal = Field(ge=0)
+    max_drawdown_cny: Decimal = Field(ge=0)
+
+
+class MvpChenQuantDaily(SimulationSafety):
+    mvp_daily_schema_version: Literal[1]
+    status: Literal["TICKFLOW_PAPER_TRADING_MVP_DAILY_READY"]
+    report_date: date
+    symbol: Literal["000403.SZ"]
+    name: Literal["派林生物"]
+    timezone: Literal["Asia/Shanghai"]
+    source_fixture: FixtureSource
+    facts_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
+    projection_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
+    claims_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
+    signal_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
+    input_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
+    fixture_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
+    account_state_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    research_signal: SignalCode
+    paper_action: ActionSide
+    pending_action: Literal["BUY", "SELL"] | None
+    position: MvpPositionSummary
+    trades_today: list[TradeRecord]
+    decision_ledger_count: int = Field(ge=1)
+    trade_ledger_count: int = Field(ge=0)
+    risk_notes: list[str] = Field(min_length=1)
+    next_observation_conditions: list[str] = Field(min_length=1)
+    real_provider_dependency: Literal["NOT_REQUIRED"]
+    real_provider_attempts: Literal[0]
+    real_ai_calls: Literal[0]
+    real_trading: Literal["DISABLED"]
+
+
+class MvpReleaseReplay(SimulationSafety):
+    release_replay_schema_version: Literal[1]
+    status: Literal["MVP_RELEASE_REPLAY_PASSED", "MVP_RELEASE_REPLAY_FAILED"]
+    replay_count: int = Field(ge=0)
+    release_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    artifact_sha256: dict[str, str]
+    mismatched_artifacts: list[str]
+    decision_ledger_identical: bool
+    trade_ledger_identical: bool
+    positions_identical: bool
+    cash_identical: bool
+    pnl_identical: bool
+    equity_history_identical: bool
+    daily_json_identical: bool
+    daily_markdown_identical: bool
+    final_trade_count: int = Field(ge=0)
+    final_position_quantity: int = Field(ge=0)
+    final_realized_pnl_cny: Decimal
     real_provider_attempts: Literal[0]
     real_ai_calls: Literal[0]
     real_trading: Literal["DISABLED"]

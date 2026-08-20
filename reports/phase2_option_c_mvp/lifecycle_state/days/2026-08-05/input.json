@@ -1,0 +1,52 @@
+{
+  "can_publish": false,
+  "claims_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "continuous_day_input_schema_version": 1,
+  "decision_at": "2026-08-05T15:15:00+08:00",
+  "execution_fixture": null,
+  "facts_available_at": "2026-08-05T15:15:00+08:00",
+  "facts_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "fixture_identity": "9999999999999999999999999999999999999999999999999999999999999999",
+  "input_identity": "a11239cb7461292e6c0c6cb281288fc4bfb745e6982784823d9975b5c02ac5ab",
+  "projection_available_at": "2026-08-05T15:15:00+08:00",
+  "projection_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "signal": {
+    "can_publish": false,
+    "claims_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "code": "RISK_OBSERVATION",
+    "facts_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "fixture_identity": "9999999999999999999999999999999999999999999999999999999999999999",
+    "interpretation_id": "3d366b3280737d9e170f68dc3ac78d88a3b9de1dbf65800eabd2e12443a56b48",
+    "reason_refs": [
+      "mvp-release-2026-08-05-RISK_OBSERVATION"
+    ],
+    "signal_id": "7fe95d35f54316fe766129d3c9b7b2a794b3af9aa6b5c72a42017fbf10a58d91",
+    "signal_schema_version": 1,
+    "simulation_only": "SIMULATION ONLY",
+    "source_fixture": "DETERMINISTIC_TEST_FIXTURE",
+    "symbol": "000403.SZ",
+    "trade_date": "2026-08-05",
+    "trading_advice": false
+  },
+  "signal_generated_at": "2026-08-05T15:15:00+08:00",
+  "simulation_only": "SIMULATION ONLY",
+  "source_fixture": "DETERMINISTIC_TEST_FIXTURE",
+  "symbol": "000403.SZ",
+  "trade_date": "2026-08-05",
+  "trading_advice": false,
+  "valuation_bar": {
+    "available_at": "2026-08-05T15:01:00+08:00",
+    "can_publish": false,
+    "close": "11.20",
+    "previous_trade_date": "2026-08-04",
+    "price_basis": "raw",
+    "scenario_fixture_identity": "9999999999999999999999999999999999999999999999999999999999999999",
+    "simulation_only": "SIMULATION ONLY",
+    "source_fixture": "DETERMINISTIC_TEST_FIXTURE",
+    "symbol": "000403.SZ",
+    "timezone": "Asia/Shanghai",
+    "trade_date": "2026-08-05",
+    "trading_advice": false,
+    "valuation_bar_schema_version": 1
+  }
+}

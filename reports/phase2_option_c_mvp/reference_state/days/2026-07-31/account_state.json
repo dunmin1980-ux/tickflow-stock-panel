@@ -1,0 +1,46 @@
+{
+  "account_schema_version": 1,
+  "can_publish": false,
+  "cash_cny": "100000.00",
+  "config": {
+    "buy_lots_per_signal": 1,
+    "can_publish": false,
+    "commission_rate": "0.0003",
+    "config_version": 1,
+    "currency": "CNY",
+    "execution_policy": "NEXT_TRADING_DAY_OPEN",
+    "initial_cash": "100000.00",
+    "lot_size": 100,
+    "minimum_commission": "5.00",
+    "sell_fee_rate": "0.0005",
+    "sell_lots_per_signal": 1,
+    "simulation_only": "SIMULATION ONLY",
+    "slippage_rate": "0",
+    "t_plus_one": true,
+    "trading_advice": false
+  },
+  "config_sha256": "70d2f4de250df5665f013d48462ac8d905b5811a51d9430f2d10d4ade65fe9bf",
+  "current_drawdown_cny": "0.00",
+  "lots": [],
+  "mark_price": "10.43",
+  "mark_trade_date": "2026-07-31",
+  "market_value_cny": "0.00",
+  "max_drawdown_cny": "0.00",
+  "peak_equity_cny": "100000.00",
+  "processed_action_ids": [
+    "7e3c607394cfb22200984c0d6cfb40563e7ee13a4ff4989eddfb6095fb17463f"
+  ],
+  "processed_decision_ids": [
+    "2c9340272f1404279950882df03bf2b06cea8aa74470441b2c6bdfeae570e45f"
+  ],
+  "processed_idempotency_keys": [
+    "a26003292a55467228af8922f7e695f52ff5c69f0039c3d06002712aa80bd625"
+  ],
+  "processed_order_ids": [],
+  "realized_pnl_cny": "0.00",
+  "simulation_only": "SIMULATION ONLY",
+  "total_equity_cny": "100000.00",
+  "trades": [],
+  "trading_advice": false,
+  "unrealized_pnl_cny": "0.00"
+}

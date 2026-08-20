@@ -1,0 +1,68 @@
+{
+  "can_publish": false,
+  "equity_history_schema_version": 1,
+  "points": [
+    {
+      "can_publish": false,
+      "cash_cny": "100000.00",
+      "current_drawdown_cny": "0.00",
+      "equity_point_schema_version": 1,
+      "market_value_cny": "0.00",
+      "max_drawdown_cny": "0.00",
+      "peak_equity_cny": "100000.00",
+      "realized_pnl_cny": "0.00",
+      "simulation_only": "SIMULATION ONLY",
+      "total_equity_cny": "100000.00",
+      "trade_date": "2026-08-03",
+      "trading_advice": false,
+      "unrealized_pnl_cny": "0.00"
+    },
+    {
+      "can_publish": false,
+      "cash_cny": "98945.00",
+      "current_drawdown_cny": "0.00",
+      "equity_point_schema_version": 1,
+      "market_value_cny": "1080.00",
+      "max_drawdown_cny": "5.00",
+      "peak_equity_cny": "100025.00",
+      "realized_pnl_cny": "0.00",
+      "simulation_only": "SIMULATION ONLY",
+      "total_equity_cny": "100025.00",
+      "trade_date": "2026-08-04",
+      "trading_advice": false,
+      "unrealized_pnl_cny": "25.00"
+    },
+    {
+      "can_publish": false,
+      "cash_cny": "98945.00",
+      "current_drawdown_cny": "0.00",
+      "equity_point_schema_version": 1,
+      "market_value_cny": "1120.00",
+      "max_drawdown_cny": "5.00",
+      "peak_equity_cny": "100065.00",
+      "realized_pnl_cny": "0.00",
+      "simulation_only": "SIMULATION ONLY",
+      "total_equity_cny": "100065.00",
+      "trade_date": "2026-08-05",
+      "trading_advice": false,
+      "unrealized_pnl_cny": "65.00"
+    },
+    {
+      "can_publish": false,
+      "cash_cny": "100039.45",
+      "current_drawdown_cny": "25.55",
+      "equity_point_schema_version": 1,
+      "market_value_cny": "0.00",
+      "max_drawdown_cny": "25.55",
+      "peak_equity_cny": "100065.00",
+      "realized_pnl_cny": "39.45",
+      "simulation_only": "SIMULATION ONLY",
+      "total_equity_cny": "100039.45",
+      "trade_date": "2026-08-06",
+      "trading_advice": false,
+      "unrealized_pnl_cny": "0.00"
+    }
+  ],
+  "simulation_only": "SIMULATION ONLY",
+  "trading_advice": false
+}

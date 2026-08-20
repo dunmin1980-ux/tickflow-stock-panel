@@ -1,0 +1,23 @@
+{
+  "can_publish": false,
+  "equity_history_schema_version": 1,
+  "points": [
+    {
+      "can_publish": false,
+      "cash_cny": "100000.00",
+      "current_drawdown_cny": "0.00",
+      "equity_point_schema_version": 1,
+      "market_value_cny": "0.00",
+      "max_drawdown_cny": "0.00",
+      "peak_equity_cny": "100000.00",
+      "realized_pnl_cny": "0.00",
+      "simulation_only": "SIMULATION ONLY",
+      "total_equity_cny": "100000.00",
+      "trade_date": "2026-07-31",
+      "trading_advice": false,
+      "unrealized_pnl_cny": "0.00"
+    }
+  ],
+  "simulation_only": "SIMULATION ONLY",
+  "trading_advice": false
+}

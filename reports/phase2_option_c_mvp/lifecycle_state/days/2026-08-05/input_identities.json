@@ -1,0 +1,11 @@
+{
+  "can_publish": false,
+  "identities": [
+    "c39530e11311e4c33fe11e9ae08a62235aa746cbfc6b2d06e50e064292f8cd49",
+    "dea909228edc7fb7609b2548d4c4380794e028f7c32103f31fdaf7564ea9ba2c",
+    "a11239cb7461292e6c0c6cb281288fc4bfb745e6982784823d9975b5c02ac5ab"
+  ],
+  "input_identity_schema_version": 1,
+  "simulation_only": "SIMULATION ONLY",
+  "trading_advice": false
+}

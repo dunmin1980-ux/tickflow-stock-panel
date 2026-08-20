@@ -1,0 +1,96 @@
+{
+  "account": {
+    "account_schema_version": 1,
+    "can_publish": false,
+    "cash_cny": "100000.00",
+    "config": {
+      "buy_lots_per_signal": 1,
+      "can_publish": false,
+      "commission_rate": "0.0003",
+      "config_version": 1,
+      "currency": "CNY",
+      "execution_policy": "NEXT_TRADING_DAY_OPEN",
+      "initial_cash": "100000.00",
+      "lot_size": 100,
+      "minimum_commission": "5.00",
+      "sell_fee_rate": "0.0005",
+      "sell_lots_per_signal": 1,
+      "simulation_only": "SIMULATION ONLY",
+      "slippage_rate": "0",
+      "t_plus_one": true,
+      "trading_advice": false
+    },
+    "config_sha256": "70d2f4de250df5665f013d48462ac8d905b5811a51d9430f2d10d4ade65fe9bf",
+    "current_drawdown_cny": "0.00",
+    "lots": [],
+    "mark_price": "10.43",
+    "mark_trade_date": "2026-07-31",
+    "market_value_cny": "0.00",
+    "max_drawdown_cny": "0.00",
+    "peak_equity_cny": "100000.00",
+    "processed_action_ids": [
+      "7e3c607394cfb22200984c0d6cfb40563e7ee13a4ff4989eddfb6095fb17463f"
+    ],
+    "processed_decision_ids": [
+      "2c9340272f1404279950882df03bf2b06cea8aa74470441b2c6bdfeae570e45f"
+    ],
+    "processed_idempotency_keys": [
+      "a26003292a55467228af8922f7e695f52ff5c69f0039c3d06002712aa80bd625"
+    ],
+    "processed_order_ids": [],
+    "realized_pnl_cny": "0.00",
+    "simulation_only": "SIMULATION ONLY",
+    "total_equity_cny": "100000.00",
+    "trades": [],
+    "trading_advice": false,
+    "unrealized_pnl_cny": "0.00"
+  },
+  "can_publish": false,
+  "completed_input_identities": [
+    "d10899a84e87364eb457616fd6614d05e13266ed3da5fb70efb11957cfe6b07b"
+  ],
+  "continuous_state_schema_version": 1,
+  "decision_ledger": [
+    {
+      "action_id": "7e3c607394cfb22200984c0d6cfb40563e7ee13a4ff4989eddfb6095fb17463f",
+      "can_publish": false,
+      "claims_sha256": "66f7ef471b293a4d5453ca53fd91668f217176915e6e88f2ce88f4f037559183",
+      "decision_at": "2026-07-31T21:15:00+08:00",
+      "decision_entry_schema_version": 1,
+      "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
+      "fixture_identity": "9d4b6852f5a7a4ad7a0ed933e7039e7628e3c06b7fc452db0565843860ec0a80",
+      "input_identity": "d10899a84e87364eb457616fd6614d05e13266ed3da5fb70efb11957cfe6b07b",
+      "order_id": null,
+      "paper_action": "HOLD",
+      "pending_execution": false,
+      "projection_sha256": "0ffe5b7fbd57d6b16af073db12d826c940c88b43547870f6b9513401eb49fb1f",
+      "research_signal": "MIXED_OBSERVATION",
+      "signal_id": "7a0bdb29114550fdbdcbb01fecbc1a94ec98e84983c208e8002fd51946068db3",
+      "simulation_only": "SIMULATION ONLY",
+      "trade_date": "2026-07-31",
+      "trading_advice": false
+    }
+  ],
+  "equity_history": [
+    {
+      "can_publish": false,
+      "cash_cny": "100000.00",
+      "current_drawdown_cny": "0.00",
+      "equity_point_schema_version": 1,
+      "market_value_cny": "0.00",
+      "max_drawdown_cny": "0.00",
+      "peak_equity_cny": "100000.00",
+      "realized_pnl_cny": "0.00",
+      "simulation_only": "SIMULATION ONLY",
+      "total_equity_cny": "100000.00",
+      "trade_date": "2026-07-31",
+      "trading_advice": false,
+      "unrealized_pnl_cny": "0.00"
+    }
+  ],
+  "last_completed_trade_date": "2026-07-31",
+  "pending_action": null,
+  "simulation_only": "SIMULATION ONLY",
+  "symbol": "000403.SZ",
+  "trading_advice": false
+}

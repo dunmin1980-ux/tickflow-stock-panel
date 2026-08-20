@@ -1,0 +1,7 @@
+{
+  "can_publish": false,
+  "simulation_only": "SIMULATION ONLY",
+  "trade_ledger_schema_version": 1,
+  "trades": [],
+  "trading_advice": false
+}

@@ -1,0 +1,22 @@
+{
+  "artifact_sha256": {
+    "account_state.json": "02ebed11c2d05fc2c2aa93aecdc0f67d583ff807e9aaeebf42f758695868b717",
+    "chenquant_daily.json": "269a4294c0acce132938a7fbecca13080c9d795dd3fddc6f704b16b009a12754",
+    "chenquant_daily.md": "8b5e50b6460f87630f0588acdb848cd42f5911865e68415da1a96bbed088cff5",
+    "continuous_state.json": "107dc4bbe88b510e4014ce08c7a40d75460ead5b2b14edde350d047ae4238492",
+    "decision_ledger.json": "c5dc060bcf0e380db097f120804ae3f8e8b72ee7975e11c1197ec9e8303ade2b",
+    "equity_history.json": "477017529286ad93b087833831c443999f693f77279f746b4ba6efaedd2e3e8a",
+    "input.json": "9d49001e9a1b05b10583f2f62fd8b1869b23e8b0237de06186636af4884f320c",
+    "input_identities.json": "32e0e04cdc679372accc79dc86793b5ec1c684de605e36f682a46e2a22220f35",
+    "position_lots.json": "54a130b6091f74ed7198be6a72790ebe2680af08ef01f182bac1624e34318aee",
+    "trade_ledger.json": "a22a797f76795106d82797d585b69f93a4eb2067c6339bb0cf0845598f040ed1"
+  },
+  "can_publish": false,
+  "continuous_state_sha256": "107dc4bbe88b510e4014ce08c7a40d75460ead5b2b14edde350d047ae4238492",
+  "input_identity": "8057dd097871c2580fa89912378b4d22ad4444a904e2657ee525e9397ea7b44f",
+  "run_receipt_schema_version": 1,
+  "simulation_only": "SIMULATION ONLY",
+  "status": "DAY_PUBLISHED",
+  "trade_date": "2026-08-06",
+  "trading_advice": false
+}
