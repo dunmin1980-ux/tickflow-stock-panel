@@ -75,7 +75,7 @@
 **Interfaces:**
 - Produces: `money(value: Decimal | str | int) -> Decimal`
 - Produces: `canonical_option_c_bytes(value: BaseModel | Mapping[str, Any]) -> bytes`
-- Produces: `PaperTradingConfig`, `DeterministicMarketFixture`, `MarketBar`, `ResearchInterpretation`, `ResearchSignal`, `PaperAction`, `PositionLot`, `TradeRecord`, and `PaperAccount`.
+- Produces: `PaperTradingConfig`, `DeterministicMarketFixture`, execution-only `MarketBar`, `ValuationBar`, `ResearchInterpretation`, `ResearchSignal`, `PaperAction`, `PositionLot`, `TradeRecord`, and `PaperAccount`.
 
 - [ ] **Step 1: Write failing strict-model and Decimal tests**
 
@@ -333,15 +333,16 @@ git commit -m "feat: add deterministic research decision layer"
 **Interfaces:**
 - Produces: `new_account(config: SimulationConfig) -> PaperAccount`.
 - Produces: `execute_action(account: PaperAccount, action: PaperAction, market_fixture: DeterministicMarketFixture | None) -> PaperAccount`.
-- Produces: `mark_to_market(account: PaperAccount, bar: MarketBar) -> PaperAccount`.
+- Produces: `mark_to_market(account: PaperAccount, bar: ValuationBar, *, valuation_at: datetime) -> PaperAccount`.
 - Produces: `eligible_quantity(account: PaperAccount, symbol: str, trade_date: date) -> int`.
 
 - [ ] **Step 1: Write failing cash, execution, and quantity tests**
 
 Cover initial cash, HOLD with no Market Fixture, one-lot BUY, insufficient cash,
 invalid quantity, duplicate decision/order/action/idempotency identities, and
-rejection of any BUY not divisible by 100. Prove execution resolves the exact
-next Fixture trade date's `open`, ignores its close for fills, and returns
+rejection of any BUY not divisible by 100. Prove HOLD creates no order, execution
+resolves the exact next Fixture trade date's `09:30`-available `open`, rejects
+close fields in execution evidence, validates close availability separately, and returns
 `NO_EXECUTION_PRICE_AVAILABLE` rather than skipping a missing bar.
 
 - [ ] **Step 2: Run focused tests and verify RED**

@@ -13,13 +13,13 @@ from typing import Any
 from app.schemas.phase2_option_c import (
     ChenQuantDaily,
     DailyFactsSummary,
-    MarketBar,
     PaperAccount,
     PaperPositionSummary,
     PriceState,
     ReplayValidation,
     ResearchDecision,
     SimulationConfig,
+    ValuationBar,
     canonical_option_c_bytes,
     money,
 )
@@ -252,8 +252,8 @@ def run_reference_simulation(repo_root: Path) -> OptionCRun:
     daily_facts = bundle.projection["safe_facts"]["daily"]
     account = mark_to_market(
         account,
-        MarketBar(
-            market_bar_schema_version=1,
+        ValuationBar(
+            valuation_bar_schema_version=1,
             source_fixture="DETERMINISTIC_REFERENCE_FIXTURE",
             scenario_fixture_identity=decision.fixture_manifest_sha256,
             symbol="000403.SZ",
@@ -261,13 +261,13 @@ def run_reference_simulation(repo_root: Path) -> OptionCRun:
             previous_trade_date=date(2026, 7, 30),
             available_at=bundle.manifest.evidence_available_at,
             timezone="Asia/Shanghai",
-            open=Decimal(str(daily_facts["open"])),
             close=Decimal(str(daily_facts["close"])),
             price_basis="raw",
             simulation_only="SIMULATION ONLY",
             can_publish=False,
             trading_advice=False,
         ),
+        valuation_at=REFERENCE_DECISION_AT,
     )
     daily = build_chenquant_daily(bundle, decision, account)
     ledger = {

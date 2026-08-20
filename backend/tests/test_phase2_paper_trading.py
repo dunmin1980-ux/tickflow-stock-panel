@@ -15,6 +15,7 @@ from app.schemas.phase2_option_c import (
     PaperTradingConfig,
     ResearchSignal,
     SimulationConfig,
+    ValuationBar,
     canonical_option_c_bytes,
 )
 from app.services.phase2_paper_trading import (
@@ -125,7 +126,6 @@ def _bar(
     trade_date: date = date(2026, 8, 4),
     previous_trade_date: date = date(2026, 8, 3),
     open_price: str = "10.50",
-    close_price: str = "10.80",
 ) -> MarketBar:
     return MarketBar(
         market_bar_schema_version=1,
@@ -135,10 +135,35 @@ def _bar(
         trade_date=trade_date,
         previous_trade_date=previous_trade_date,
         available_at=datetime.fromisoformat(
-            f"{trade_date.isoformat()}T15:01:00+08:00"
+            f"{trade_date.isoformat()}T09:30:00+08:00"
         ),
         timezone="Asia/Shanghai",
         open=Decimal(open_price),
+        price_basis="raw",
+        simulation_only="SIMULATION ONLY",
+        can_publish=False,
+        trading_advice=False,
+    )
+
+
+def _valuation_bar(
+    *,
+    trade_date: date = date(2026, 8, 4),
+    previous_trade_date: date = date(2026, 8, 3),
+    close_price: str = "10.80",
+    available_at: str | None = None,
+) -> ValuationBar:
+    return ValuationBar(
+        valuation_bar_schema_version=1,
+        source_fixture="DETERMINISTIC_TEST_FIXTURE",
+        scenario_fixture_identity="9" * 64,
+        symbol="000403.SZ",
+        trade_date=trade_date,
+        previous_trade_date=previous_trade_date,
+        available_at=datetime.fromisoformat(
+            available_at or f"{trade_date.isoformat()}T15:01:00+08:00"
+        ),
+        timezone="Asia/Shanghai",
         close=Decimal(close_price),
         price_basis="raw",
         simulation_only="SIMULATION ONLY",
@@ -207,11 +232,20 @@ def test_sell_action_allows_positive_integer_quantity_below_one_lot() -> None:
 
 
 def test_hold_action_requires_zero_quantity() -> None:
-    valid = PaperAction.model_validate(_action_payload(side="HOLD", quantity=0))
+    valid_payload = _action_payload(side="HOLD", quantity=0)
+    valid_payload["order_id"] = None
+    valid = PaperAction.model_validate(valid_payload)
     assert valid.quantity == 0
+    assert valid.order_id is None
 
     with pytest.raises(ValidationError):
-        PaperAction.model_validate(_action_payload(side="HOLD", quantity=100))
+        PaperAction.model_validate({**valid_payload, "quantity": 100})
+
+    with pytest.raises(ValidationError, match="hold_must_not_have_order_id"):
+        PaperAction.model_validate(_action_payload(side="HOLD", quantity=0))
+
+    with pytest.raises(ValidationError, match="executable_action_requires_order_id"):
+        PaperAction.model_validate({**_action_payload(), "order_id": None})
 
 
 def test_action_rejects_non_shanghai_offset() -> None:
@@ -230,10 +264,9 @@ def test_market_bar_is_strict_raw_open_evidence() -> None:
         symbol="000403.SZ",
         trade_date=date(2026, 8, 4),
         previous_trade_date=date(2026, 8, 3),
-        available_at=datetime.fromisoformat("2026-08-04T15:01:00+08:00"),
+        available_at=datetime.fromisoformat("2026-08-04T09:30:00+08:00"),
         timezone="Asia/Shanghai",
         open=Decimal("10.50"),
-        close=Decimal("10.80"),
         price_basis="raw",
         simulation_only="SIMULATION ONLY",
         can_publish=False,
@@ -241,10 +274,30 @@ def test_market_bar_is_strict_raw_open_evidence() -> None:
     )
 
     assert bar.open == Decimal("10.50")
-    assert bar.close == Decimal("10.80")
 
     with pytest.raises(ValidationError):
         MarketBar.model_validate({**bar.model_dump(), "open": 10.5})
+
+    with pytest.raises(
+        ValidationError,
+        match="execution_open_must_be_available_at_09_30",
+    ):
+        MarketBar.model_validate(
+            {
+                **bar.model_dump(),
+                "available_at": datetime.fromisoformat(
+                    "2026-08-04T15:01:00+08:00"
+                ),
+            }
+        )
+
+
+def test_valuation_bar_rejects_close_before_market_close() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="close_must_not_be_available_before_market_close",
+    ):
+        _valuation_bar(available_at="2026-08-04T14:59:59+08:00")
 
 
 def test_market_fixture_is_ordered_unique_and_closed() -> None:
@@ -258,6 +311,18 @@ def test_market_fixture_is_ordered_unique_and_closed() -> None:
     assert fixture.bars[0].trade_date == date(2026, 8, 4)
     assert fixture.scenario_fixture_identity == "9" * 64
     assert fixture.fixture_identity != fixture.scenario_fixture_identity
+
+
+def test_execution_bar_is_available_at_next_day_open() -> None:
+    bar = _market_fixture().bars[0]
+
+    assert bar.available_at == datetime.fromisoformat("2026-08-04T09:30:00+08:00")
+
+
+def test_execution_bar_excludes_future_close() -> None:
+    bar = _market_fixture().bars[0]
+
+    assert "close" not in bar.model_dump()
 
 
 def test_market_fixture_identity_is_content_bound_and_rejects_stale_hash() -> None:
@@ -344,6 +409,8 @@ def test_hold_is_idempotently_recorded_without_trade() -> None:
     assert updated.lots == []
     assert updated.trades == []
     assert updated.processed_action_ids == [action.action_id]
+    assert action.order_id is None
+    assert updated.processed_order_ids == []
 
     with pytest.raises(PaperTradingError, match="duplicate_action"):
         execute_action(updated, action, None, signal=signal)
@@ -448,34 +515,25 @@ def test_execute_action_rejects_action_not_derived_from_supplied_signal() -> Non
         execute_action(account, forged, _market_fixture(), signal=signal)
 
 
-def test_buy_fill_ignores_future_close_value() -> None:
-    config = SimulationConfig.default()
-    first_account = new_account(config)
-    second_account = new_account(config)
-    signal, action = _derived_action(first_account, "POSITIVE_OBSERVATION")
+def test_execution_fixture_rejects_future_close_value() -> None:
+    fixture = _market_fixture()
+    payload = fixture.model_dump()
+    payload["bars"][0]["close"] = Decimal("99.00")
 
-    lower_close = execute_action(
-        first_account,
-        action,
-        _market_fixture(bars=[_bar(close_price="1.00")]),
-        signal=signal,
-    )
-    higher_close = execute_action(
-        second_account,
-        action,
-        _market_fixture(bars=[_bar(close_price="99.00")]),
-        signal=signal,
-    )
+    with pytest.raises(ValidationError, match="extra_forbidden"):
+        DeterministicMarketFixture.model_validate(payload)
 
-    assert lower_close.cash_cny == higher_close.cash_cny
-    assert lower_close.lots[0].remaining_quantity == higher_close.lots[0].remaining_quantity
-    assert lower_close.lots[0].remaining_cost_cny == higher_close.lots[0].remaining_cost_cny
-    assert lower_close.trades[0].execution_price == higher_close.trades[0].execution_price
-    assert lower_close.trades[0].gross_amount_cny == higher_close.trades[0].gross_amount_cny
-    assert (
-        lower_close.trades[0].market_fixture_identity
-        != higher_close.trades[0].market_fixture_identity
-    )
+
+def test_mark_to_market_rejects_data_unavailable_at_valuation_time() -> None:
+    account = new_account(SimulationConfig.default())
+    bar = _valuation_bar()
+
+    with pytest.raises(PaperTradingError, match="valuation_data_not_available"):
+        mark_to_market(
+            account,
+            bar,
+            valuation_at=datetime.fromisoformat("2026-08-04T15:00:00+08:00"),
+        )
 
 
 def test_missing_next_trading_day_open_is_blocked_without_skipping() -> None:
@@ -574,7 +632,8 @@ def test_rule_rejects_account_marked_after_signal_trade_date() -> None:
     config = SimulationConfig.default()
     future_account = mark_to_market(
         new_account(config),
-        _bar(),
+        _valuation_bar(),
+        valuation_at=datetime.fromisoformat("2026-08-04T15:15:00+08:00"),
     )
 
     with pytest.raises(PaperTradingError, match="account_state_after_decision"):
@@ -771,7 +830,8 @@ def test_mark_to_market_updates_unrealized_pnl_and_max_drawdown() -> None:
 
     lower = mark_to_market(
         account,
-        _bar(open_price="10.50", close_price="9.00"),
+        _valuation_bar(close_price="9.00"),
+        valuation_at=datetime.fromisoformat("2026-08-04T15:15:00+08:00"),
     )
     assert lower.unrealized_pnl_cny == Decimal("-155.00")
     assert lower.total_equity_cny == Decimal("99845.00")
@@ -779,11 +839,12 @@ def test_mark_to_market_updates_unrealized_pnl_and_max_drawdown() -> None:
 
     higher = mark_to_market(
         lower,
-        _bar(
+        _valuation_bar(
             trade_date=date(2026, 8, 5),
             previous_trade_date=date(2026, 8, 4),
             close_price="12.00",
         ),
+        valuation_at=datetime.fromisoformat("2026-08-05T15:15:00+08:00"),
     )
     assert higher.unrealized_pnl_cny == Decimal("145.00")
     assert higher.total_equity_cny == Decimal("100145.00")
@@ -798,7 +859,7 @@ def test_commission_above_minimum_is_decimal() -> None:
         initial,
         action,
         _market_fixture(
-            bars=[_bar(open_price="500.00", close_price="500.00")]
+            bars=[_bar(open_price="500.00")]
         ),
         signal=signal,
     )

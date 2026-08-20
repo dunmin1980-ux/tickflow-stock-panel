@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -16,12 +16,12 @@ from app.schemas.phase2_option_c import (
     ResearchSignal,
     SimulationConfig,
     TradeRecord,
+    ValuationBar,
     canonical_option_c_bytes,
     money,
 )
 
 ZERO = Decimal("0.00")
-SHANGHAI = timezone(timedelta(hours=8))
 
 
 class PaperTradingError(ValueError):
@@ -72,7 +72,7 @@ def _commission(gross: Decimal, config: SimulationConfig) -> Decimal:
 
 
 def _execution_timestamp(bar: MarketBar) -> datetime:
-    return datetime.combine(bar.trade_date, time(9, 30), tzinfo=SHANGHAI)
+    return bar.available_at
 
 
 def _resolve_execution_bar(
@@ -226,11 +226,15 @@ def derive_action(
             "paper_config_identity": account.config_sha256,
         }
     )
-    order_id = _identity(
-        {
-            "identity_type": "paper_order_v1",
-            "idempotency_key": idempotency_key,
-        }
+    order_id = (
+        None
+        if side == "HOLD"
+        else _identity(
+            {
+                "identity_type": "paper_order_v1",
+                "idempotency_key": idempotency_key,
+            }
+        )
     )
     action_id = _identity(
         {
@@ -320,6 +324,9 @@ def _buy(
     bar: MarketBar,
     fixture: DeterministicMarketFixture,
 ) -> PaperAccount:
+    if action.order_id is None:
+        raise PaperTradingError("executable_action_requires_order_id")
+    order_id = action.order_id
     price = money(bar.open)
     gross = money(price * action.quantity)
     commission = _commission(gross, account.config)
@@ -358,7 +365,7 @@ def _buy(
         trade_schema_version=1,
         execution_id=execution_id,
         action_id=action.action_id,
-        order_id=action.order_id,
+        order_id=order_id,
         idempotency_key=action.idempotency_key,
         order_timestamp=action.decision_at,
         execution_timestamp=_execution_timestamp(bar),
@@ -392,7 +399,7 @@ def _buy(
         trades=[*account.trades, trade],
         processed_action_ids=[*account.processed_action_ids, action.action_id],
         processed_decision_ids=[*account.processed_decision_ids, action.decision_id],
-        processed_order_ids=[*account.processed_order_ids, action.order_id],
+        processed_order_ids=[*account.processed_order_ids, order_id],
         processed_idempotency_keys=[
             *account.processed_idempotency_keys,
             action.idempotency_key,
@@ -409,6 +416,9 @@ def _sell(
     bar: MarketBar,
     fixture: DeterministicMarketFixture,
 ) -> PaperAccount:
+    if action.order_id is None:
+        raise PaperTradingError("executable_action_requires_order_id")
+    order_id = action.order_id
     if eligible_quantity(account, action.symbol, bar.trade_date) < action.quantity:
         raise PaperTradingError("t1_eligible_quantity_insufficient")
     price = money(bar.open)
@@ -460,7 +470,7 @@ def _sell(
         trade_schema_version=1,
         execution_id=execution_id,
         action_id=action.action_id,
-        order_id=action.order_id,
+        order_id=order_id,
         idempotency_key=action.idempotency_key,
         order_timestamp=action.decision_at,
         execution_timestamp=_execution_timestamp(bar),
@@ -494,7 +504,7 @@ def _sell(
         trades=[*account.trades, trade],
         processed_action_ids=[*account.processed_action_ids, action.action_id],
         processed_decision_ids=[*account.processed_decision_ids, action.decision_id],
-        processed_order_ids=[*account.processed_order_ids, action.order_id],
+        processed_order_ids=[*account.processed_order_ids, order_id],
         processed_idempotency_keys=[
             *account.processed_idempotency_keys,
             action.idempotency_key,
@@ -505,9 +515,22 @@ def _sell(
     )
 
 
-def mark_to_market(account: PaperAccount, bar: MarketBar) -> PaperAccount:
+def mark_to_market(
+    account: PaperAccount,
+    bar: ValuationBar,
+    *,
+    valuation_at: datetime,
+) -> PaperAccount:
     """Apply one close mark without changing cash, cost, or trade history."""
     _validate_account_config(account, account.config)
+    if (
+        valuation_at.tzinfo is None
+        or valuation_at.utcoffset() != timedelta(hours=8)
+        or valuation_at.date() != bar.trade_date
+    ):
+        raise PaperTradingError("valuation_timestamp_invalid")
+    if bar.available_at > valuation_at:
+        raise PaperTradingError("valuation_data_not_available")
     if bar.symbol != "000403.SZ":
         raise PaperTradingError("mark_symbol_mismatch")
     if account.mark_trade_date is not None and bar.trade_date < account.mark_trade_date:
@@ -540,7 +563,10 @@ def execute_action(
         raise PaperTradingError("duplicate_action")
     if action.decision_id in account.processed_decision_ids:
         raise PaperTradingError("duplicate_decision")
-    if action.order_id in account.processed_order_ids:
+    if (
+        action.order_id is not None
+        and action.order_id in account.processed_order_ids
+    ):
         raise PaperTradingError("duplicate_order")
     if action.idempotency_key in account.processed_idempotency_keys:
         raise PaperTradingError("duplicate_idempotency_key")
@@ -555,7 +581,7 @@ def execute_action(
                 *account.processed_decision_ids,
                 action.decision_id,
             ],
-            processed_order_ids=[*account.processed_order_ids, action.order_id],
+            processed_order_ids=list(account.processed_order_ids),
             processed_idempotency_keys=[
                 *account.processed_idempotency_keys,
                 action.idempotency_key,

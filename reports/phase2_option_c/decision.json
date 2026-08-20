@@ -1,6 +1,6 @@
 {
   "action": {
-    "action_id": "99bb0e80bb01cf096a6f82161dc8a65403198b5cc1b2b78a60cdc17b27c7eabd",
+    "action_id": "5d0e169e71c45a3ff880cc867410503b746d2921be274705f08a0e8fec75c0ce",
     "action_schema_version": 1,
     "can_publish": false,
     "claims_sha256": "66f7ef471b293a4d5453ca53fd91668f217176915e6e88f2ce88f4f037559183",
@@ -10,7 +10,7 @@
     "facts_sha256": "adae2b97110da8c759fd9697cf2677faeaea5536b9bce4d66c38fcbf75572956",
     "fixture_identity": "9d4b6852f5a7a4ad7a0ed933e7039e7628e3c06b7fc452db0565843860ec0a80",
     "idempotency_key": "a26003292a55467228af8922f7e695f52ff5c69f0039c3d06002712aa80bd625",
-    "order_id": "8e518bec3305045550621721485792debefd10cb6a7469f045ac1ce4a5c3e98f",
+    "order_id": null,
     "quantity": 0,
     "reason_refs": [
       "000403SZ-20260731-001-market-scope",

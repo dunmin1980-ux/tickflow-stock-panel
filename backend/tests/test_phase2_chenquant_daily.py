@@ -57,7 +57,13 @@ def test_reference_run_records_hold_without_execution() -> None:
     run = run_reference_simulation(REPO_ROOT)
 
     assert run.decision.action.side == "HOLD"
+    assert run.decision.action.order_id is None
     assert run.account.processed_action_ids == [run.decision.action.action_id]
+    assert run.account.processed_decision_ids == [run.decision.action.decision_id]
+    assert run.account.processed_order_ids == []
+    assert run.account.processed_idempotency_keys == [
+        run.decision.action.idempotency_key
+    ]
     assert run.account.trades == []
     assert run.account.lots == []
     assert run.account.mark_price == Decimal("10.43")

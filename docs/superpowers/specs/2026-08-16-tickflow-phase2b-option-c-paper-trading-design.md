@@ -210,18 +210,21 @@ A decision is timestamped in `Asia/Shanghai` and can only use evidence whose
 `as_of` value is not later than the decision time. An action generated from
 that decision is resolved against an ordered, unique deterministic Market
 Fixture calendar. The Fixture carries a content-derived identity over its
-calendar, bars, prices, source, and safety state; the engine recomputes this
-identity before execution and records it in each Trade. It may execute only on
-the exact next available trade date, at that date's validated `open`; a missing
-exact-next-date bar raises
+calendar, execution opens, source, and safety state; the engine recomputes this
+identity before execution and records it in each Trade. Execution evidence
+contains no close and must be available at `09:30 Asia/Shanghai`. It may execute
+only on the exact next available trade date, at that date's validated `open`; a
+missing exact-next-date bar raises
 `NO_EXECUTION_PRICE_AVAILABLE` and the engine never skips to a later bar.
+Close valuation uses a separate `ValuationBar`; its close must be available no
+earlier than market close and no later than the explicit valuation timestamp.
 
 The engine rejects:
 
 - a decision date absent from the Fixture calendar;
 - a missing exact next-trading-date open bar;
 - a symbol, source, raw price basis, or Fixture identity mismatch;
-- a future close used as an execution price;
+- a close or other future field in execution evidence;
 - any price not traceable to the selected bar's `open` field;
 - a sell of shares acquired on the same trade date;
 - unavailable, non-finite, non-positive, or basis-ambiguous prices;
@@ -239,8 +242,10 @@ Each decision has a canonical identity derived from signal identity, Fixture
 identity, decision time, immutable configuration, and the pre-decision account
 snapshot. The separate idempotency key binds symbol, decision date, signal
 identity, action side and quantity, Fixture identity, and Paper configuration
-identity. `order_id` is derived from that key. Duplicate decision, order,
-action, or idempotency identity is rejected before ledger mutation.
+identity. Executable BUY/SELL actions derive `order_id` from that key. HOLD keeps
+decision, action, and idempotency identities but fixes `order_id=null` and never
+enters the processed-order ledger. Duplicate decision, executable order, action,
+or idempotency identity is rejected before ledger mutation.
 
 State transitions are pure: valid input state plus one event yields a new state
 and an append-only event. Publication writes to a sibling staging directory,

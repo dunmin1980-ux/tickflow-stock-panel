@@ -1,16 +1,16 @@
-# TickFlow Phase 2B Option C Paper Trading 评测报告
+# TickFlow Phase 2B Option C Paper Trading 评测与单票验证报告
 
 ## 1. 状态
 
 ```text
-PHASE2B_OPTION_C_PAPER_TRADING_READY
+PHASE2B_SINGLE_SYMBOL_PAPER_TRADING_VALIDATED
 ```
 
 开工 Head：`3d2fbac2c723dcb24664af20398537c44eb1dce1`
 
 实现提交：`05ae11a44083402c386d0c6732c1701d59a85e9f`
 
-该状态仅表示单票离线模拟工程门禁通过，不得解释为实盘、荐股、自动发布或
+该状态仅表示 `000403.SZ` 单票离线模拟验证通过，不得解释为实盘、荐股、自动发布或
 生产就绪批准。
 
 | 门禁 | 当前结果 |
@@ -79,9 +79,10 @@ slippage_rate=0
 ```
 
 费率仅为测试专用显式配置，不宣称等同真实券商费率。每个 Action 记录
-`decision_id`、`order_id`、`action_id`、`idempotency_key` 和
-`fixture_identity`。幂等键绑定 symbol、decision date、signal identity、
-side/quantity、Fixture identity 和 Paper config identity。
+`decision_id`、`action_id`、`idempotency_key` 和 `fixture_identity`；只有可执行
+BUY/SELL 才生成 `order_id`。HOLD 固定 `order_id=null`，不进入 order ledger。
+幂等键绑定 symbol、decision date、signal identity、side/quantity、Fixture identity
+和 Paper config identity。
 
 账户分别保存已处理 decision、order、action 和 idempotency key。任何重复身份都在
 成交和账本变更前阻断。
@@ -92,11 +93,15 @@ side/quantity、Fixture identity 和 Paper config identity。
 `DeterministicMarketFixture`：
 
 - 交易日历必须有序且唯一；
-- Bar 日期必须唯一，并与前一交易日和 Fixture 身份一致；
+- 执行 Bar 日期必须唯一，并与前一交易日和 Fixture 身份一致；
+- 执行 Bar 只含 open，且 `available_at` 必须为 09:30；close 字段被拒绝；
 - 只查找 decision date 的精确下一交易日；
 - 精确下一日 Bar 缺失时返回 `NO_EXECUTION_PRICE_AVAILABLE`；
 - 不跳到更远日期，不使用决策日 close，不使用下一日 close 作为成交价；
 - 成交价固定为精确下一交易日 `open`。
+
+日终估值使用独立 `ValuationBar`，close 不得早于 15:00 可用，并且必须满足
+`available_at <= valuation_at`。执行证据和估值证据不再共用同一数据模型。
 
 买入 lot 明确记录 `acquired_trade_date` 和 `sellable_from_trade_date`。卖出资格
 只由后者判断，不用自然日推算；当日不可卖，下一 Fixture 交易日才可卖。
@@ -190,7 +195,7 @@ markdown_identical=true
 Replay evidence SHA-256：
 
 ```text
-d906f9bb5eae728039cd6fb6a35b128c218ef3cd45c6bd6fd9441fc485cd713e
+30565345a6a35115bf3602fe047fbeb1162eaa85b22c1dcea351d6716a30c6d5
 ```
 
 生成的业务日报继续固定 `SIMULATION ONLY`、`can_publish=false`、
@@ -224,9 +229,9 @@ Integrated Gold=DISABLED
 
 | 验证 | 结果 |
 |---|---:|
-| Paper Trading 专项 | `32 passed` |
-| Option C 专项 | `64 passed` |
-| Option C + Claims/Renderer | `141 passed` |
+| Paper Trading 专项 | `36 passed` |
+| Option C 专项 | `68 passed` |
+| Option C + Claims/Renderer/Projection | `167 passed` |
 | compileall | PASSED |
 | Ruff F821 | PASSED |
 | focused Ruff | PASSED |
@@ -236,14 +241,19 @@ Integrated Gold=DISABLED
 | 禁止 backtest/provider/network 依赖扫描 | PASSED |
 | 独立复审 | NO P0/P1 ACTIONABLE FINDINGS |
 
-独立复审首次发现两项 P1：
+工程就绪复审首次发现两项 P1：
 
 1. 市场 Fixture identity 未绑定日历和 Bar 内容；
 2. `reference_typed_claims.json` 未在文件自身明确 reference source。
 
 两项均按 TDD 修复。复审回归确认市场身份会在执行入口重新计算，Trade 保留研究
 Fixture 和市场 Fixture 两类身份；Claims envelope 显式标记来源，内嵌文档仍与
-冻结 canonical ClaimsDocument 字节一致。最终结论：
+冻结 canonical ClaimsDocument 字节一致。
+
+本次单票正式验证复审又发现两项 P1：HOLD 仍登记 order，以及执行 Fixture 将
+09:30 open 与 15:01 才完整可用的 close 混在同一 Bar。两项均按 TDD 修复：HOLD
+不再产生 order；执行 Bar 改为 09:30 open-only，日终 close 使用独立估值合同并
+显式校验 `valuation_at`。最终独立复审结论：
 
 ```text
 NO P0/P1 ACTIONABLE FINDINGS
@@ -261,7 +271,7 @@ NO P0/P1 ACTIONABLE FINDINGS
 全部门禁通过，下一动作固定为：
 
 ```text
-RUN_SINGLE_SYMBOL_PAPER_TRADING_VALIDATION
+DESIGN_CONTINUOUS_SINGLE_SYMBOL_PAPER_RUN
 ```
 
 不会自动启动三票、Provider、主系统集成、Paper Trading 实时任务或下一阶段。

@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Literal
 
@@ -157,7 +157,7 @@ class PaperAction(SimulationSafety):
     action_schema_version: Literal[1]
     action_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     decision_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    order_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    order_id: str | None = Field(pattern=r"^[0-9a-f]{64}$")
     idempotency_key: str = Field(pattern=r"^[0-9a-f]{64}$")
     symbol: Literal["000403.SZ"]
     decision_trade_date: date
@@ -187,6 +187,10 @@ class PaperAction(SimulationSafety):
             raise ValueError("sell_quantity_must_be_positive_integer")
         if self.side == "HOLD" and self.quantity != 0:
             raise ValueError("hold_quantity_must_be_zero")
+        if self.side == "HOLD" and self.order_id is not None:
+            raise ValueError("hold_must_not_have_order_id")
+        if self.side != "HOLD" and self.order_id is None:
+            raise ValueError("executable_action_requires_order_id")
         return self
 
 
@@ -241,7 +245,7 @@ class ResearchDecision(SimulationSafety):
 
 class MarketBar(SimulationSafety):
     market_bar_schema_version: Literal[1]
-    source_fixture: FixtureSource
+    source_fixture: Literal["DETERMINISTIC_TEST_FIXTURE"]
     scenario_fixture_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
     symbol: Literal["000403.SZ"]
     trade_date: date
@@ -249,7 +253,6 @@ class MarketBar(SimulationSafety):
     available_at: datetime
     timezone: Literal["Asia/Shanghai"]
     open: Decimal = Field(gt=0)
-    close: Decimal = Field(gt=0)
     price_basis: Literal["raw"]
 
     @field_validator("available_at")
@@ -257,7 +260,7 @@ class MarketBar(SimulationSafety):
     def validate_available_at(cls, value: datetime) -> datetime:
         return _validate_shanghai_datetime(value)
 
-    @field_validator("open", "close")
+    @field_validator("open")
     @classmethod
     def validate_price(cls, value: Decimal) -> Decimal:
         if not value.is_finite():
@@ -270,6 +273,43 @@ class MarketBar(SimulationSafety):
             raise ValueError("previous_trade_date_must_precede_trade_date")
         if self.available_at.date() != self.trade_date:
             raise ValueError("bar_availability_date_mismatch")
+        if self.available_at.time() != time(9, 30):
+            raise ValueError("execution_open_must_be_available_at_09_30")
+        return self
+
+
+class ValuationBar(SimulationSafety):
+    valuation_bar_schema_version: Literal[1]
+    source_fixture: FixtureSource
+    scenario_fixture_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
+    symbol: Literal["000403.SZ"]
+    trade_date: date
+    previous_trade_date: date
+    available_at: datetime
+    timezone: Literal["Asia/Shanghai"]
+    close: Decimal = Field(gt=0)
+    price_basis: Literal["raw"]
+
+    @field_validator("available_at")
+    @classmethod
+    def validate_available_at(cls, value: datetime) -> datetime:
+        return _validate_shanghai_datetime(value)
+
+    @field_validator("close")
+    @classmethod
+    def validate_price(cls, value: Decimal) -> Decimal:
+        if not value.is_finite():
+            raise ValueError("market_price_must_be_finite")
+        return money(value)
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> ValuationBar:
+        if self.previous_trade_date >= self.trade_date:
+            raise ValueError("previous_trade_date_must_precede_trade_date")
+        if self.available_at.date() != self.trade_date:
+            raise ValueError("bar_availability_date_mismatch")
+        if self.available_at.time() < time(15, 0):
+            raise ValueError("close_must_not_be_available_before_market_close")
         return self
 
 

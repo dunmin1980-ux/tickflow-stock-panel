@@ -28,7 +28,7 @@
   "max_drawdown_cny": "0.00",
   "peak_equity_cny": "100000.00",
   "processed_action_ids": [
-    "99bb0e80bb01cf096a6f82161dc8a65403198b5cc1b2b78a60cdc17b27c7eabd"
+    "5d0e169e71c45a3ff880cc867410503b746d2921be274705f08a0e8fec75c0ce"
   ],
   "processed_decision_ids": [
     "0fa0688c94619ff0fc1cc502fc7999e6df64f6cfbb2491f4bdd64c9e7383663b"
@@ -36,9 +36,7 @@
   "processed_idempotency_keys": [
     "a26003292a55467228af8922f7e695f52ff5c69f0039c3d06002712aa80bd625"
   ],
-  "processed_order_ids": [
-    "8e518bec3305045550621721485792debefd10cb6a7469f045ac1ce4a5c3e98f"
-  ],
+  "processed_order_ids": [],
   "realized_pnl_cny": "0.00",
   "simulation_only": "SIMULATION ONLY",
   "total_equity_cny": "100000.00",
