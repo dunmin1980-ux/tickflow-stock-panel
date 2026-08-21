@@ -174,6 +174,40 @@ def test_visual_provider_deferred_core_routes_do_not_resolve_provider(monkeypatc
     assert routes.redetect() == {"label": "Deferred", "capabilities": {}}
 
 
+def test_visual_provider_deferred_quote_status_does_not_resolve_provider(
+    monkeypatch,
+) -> None:
+    from types import SimpleNamespace
+
+    from app.api import intraday
+
+    monkeypatch.setattr(intraday.settings, "visual_workbench_provider_deferred", True)
+    request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                quote_service=SimpleNamespace(
+                    status=lambda: (_ for _ in ()).throw(
+                        AssertionError("quote provider status read")
+                    )
+                )
+            )
+        )
+    )
+
+    assert intraday.status(request) == {
+        "enabled": False,
+        "running": False,
+        "paused": False,
+        "mode": "deferred",
+        "realtime_allowed": False,
+        "symbol_count": 0,
+        "index_symbol_count": 0,
+        "quote_age_ms": None,
+        "is_trading_hours": False,
+        "last_fetch_ms": None,
+    }
+
+
 def test_startup_installs_locked_stocksdk_bridge_dependency_when_missing(
     tmp_path: Path,
 ) -> None:
