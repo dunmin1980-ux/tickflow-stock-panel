@@ -13,7 +13,9 @@ describe('ConnectionBanner', () => {
 
     render(<ConnectionBanner />)
 
-    expect(screen.getByRole('status')).toHaveTextContent('只读缓存')
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'TickFlow 后端未运行，当前为只读模式',
+    )
     expect(screen.getByRole('status')).toHaveTextContent(
       new Date(CACHED_AT).toLocaleString(),
     )

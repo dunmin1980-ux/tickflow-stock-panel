@@ -6,14 +6,17 @@
 import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { BarChart3, Database, Key, Radio, SlidersHorizontal, Sparkles, Settings2, Zap } from 'lucide-react'
-import { SettingsKeysPanel } from './settings/Keys'
-import { SettingsAIPanel } from './settings/AI'
 import { SettingsMonitoringPanel } from './settings/Monitoring'
 import { SettingsExtPagesPanel } from './settings/ExtPages'
 import { SettingsMenuSettingsPanel } from './settings/MenuSettings'
 import { SettingsSystemPanel } from './settings/System'
 import { SettingsCustomSignalsPanel } from './settings/CustomSignals'
 import { SettingsDataSourcesPanel } from './settings/DataSources'
+import {
+  SettingsVisualAiPanel,
+  SettingsVisualDataKeyPanel,
+  VisualRuntimeStatusPanel,
+} from './settings/VisualRuntime'
 import { PageHeader } from '@/components/PageHeader'
 import { cn } from '@/lib/cn'
 
@@ -30,8 +33,8 @@ type TabDef = {
 }
 
 const TABS: readonly TabDef[] = [
-  { key: 'account',    label: 'TickFlow',   icon: Key,       panel: SettingsKeysPanel },
-  { key: 'ai',         label: 'AI 设置',    icon: Sparkles,  panel: SettingsAIPanel },
+  { key: 'account',    label: 'TickFlow',   icon: Key,       panel: SettingsVisualDataKeyPanel, badge: 'deferred' },
+  { key: 'ai',         label: 'AI 设置',    icon: Sparkles,  panel: SettingsVisualAiPanel, badge: 'deferred' },
   { key: 'monitoring', label: '实时监控',   icon: Radio,     panel: SettingsMonitoringPanel },
   { key: 'data-sources', label: '数据源',     icon: Database,  panel: SettingsDataSourcesPanel, badge: 'beta' },
   { key: 'ext-pages',  label: '扩展页面',   icon: BarChart3, panel: SettingsExtPagesPanel },
@@ -55,7 +58,8 @@ export function Settings() {
         subtitle="管理账户、数据刷新策略和高级功能配置。"
       />
 
-      <div className="px-8 py-6">
+      <div className="px-4 py-5 sm:px-8 sm:py-6">
+        <VisualRuntimeStatusPanel />
         <div className="flex gap-6 items-stretch">
           {/* ===== 竖向 Tab 侧栏（内容垂直居中） ===== */}
           <nav className="w-36 shrink-0">

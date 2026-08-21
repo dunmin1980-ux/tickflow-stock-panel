@@ -232,6 +232,16 @@ describe('PaperTrading', () => {
     expect(screen.getByText('¥102,000.00')).toBeInTheDocument()
   })
 
+  it('explains that the backend is not running when the dashboard is unreachable', async () => {
+    vi.mocked(api.paperTradingDashboard).mockRejectedValue(new TypeError('Failed to fetch'))
+
+    renderPage()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'TickFlow 后端未运行，当前为只读模式',
+    )
+  })
+
   it('keeps the one-click run disabled until the A-share close gate', async () => {
     vi.mocked(api.paperTradingDashboard).mockResolvedValue({
       ...BASE_DASHBOARD,

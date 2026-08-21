@@ -116,6 +116,9 @@ class Settings(BaseSettings):
     # Versioned workspace writes remain off until compatible private clients are deployed.
     workspace_sync_enabled: bool = False
 
+    # Visual v1 daily-use mode keeps every external Provider path deferred.
+    visual_workbench_provider_deferred: bool = False
+
     # Auth — 首次启动时预置访问密码(明文, 仅用于初始化, 详见 services/auth.bootstrap_from_env)
     # 公网服务器部署时免去 SSH 端口转发设密码的麻烦。写入 auth.json(哈希)后即不再读取。
     auth_password: str = ""

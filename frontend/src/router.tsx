@@ -1,14 +1,11 @@
 import { lazy } from 'react'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { Layout } from './components/Layout'
-import { Onboarding } from './pages/Onboarding'
 import { Auth } from './pages/Auth'
-import { useSettings } from './lib/useSharedQueries'
-import { Logo } from './components/Logo'
 
 // 代码分割: 页面全部 lazy 加载, 避免首屏打包所有页面 (ECharts / lightweight-charts /
 // framer-motion 等重库) → 大幅减小首屏 bundle。命名导出用 .then 映射为 default。
-// Layout / Onboarding / Auth 为应用外壳与入口, 保持同步加载。
+// Layout / Auth 为应用外壳与入口, 保持同步加载。
 const Watchlist = lazy(() => import('./pages/Watchlist').then(m => ({ default: m.Watchlist })))
 const Screener = lazy(() => import('./pages/Screener').then(m => ({ default: m.Screener })))
 const Backtest = lazy(() => import('./pages/Backtest').then(m => ({ default: m.Backtest })))
@@ -29,44 +26,12 @@ const GoldWorkspace = lazy(() => import('./pages/GoldWorkspace').then(m => ({ de
 const ClientConnection = lazy(() => import('./pages/ClientConnection').then(m => ({ default: m.ClientConnection })))
 const PaperTrading = lazy(() => import('./pages/PaperTrading').then(m => ({ default: m.PaperTrading })))
 
-// 首次使用守卫 —— 未完成向导则重定向到 /onboarding
-// 只挂在根路由上;/onboarding 本身不被守卫,避免循环重定向。
-// settings 由 Layout 预取,守卫判定不产生额外请求。
-function OnboardingGuard({ children }: { children: React.ReactNode }) {
-  const settings = useSettings()
-
-  // 仅首次加载(本地无缓存)时显示占位。
-  // 后台重取 (isFetching) 时本地已有上一份缓存可用, 直接放行, 避免切页时整屏 logo 闪烁。
-  // 防误重定向已由 Onboarding/AI 等处 invalidate 前的 setQueryData 同步缓存兜底。
-  if (settings.isLoading) {
-    return (
-      <div className="min-h-screen bg-base grid place-items-center">
-        <div className="flex flex-col items-center gap-3 text-muted">
-          <Logo size={28} className="text-foreground" />
-          <div className="text-xs">加载中…</div>
-        </div>
-      </div>
-    )
-  }
-
-  // 查询出错或字段缺失时不拦截 —— 宁可放行,也不把用户卡在空白页
-  if (settings.data && settings.data.onboarding_completed === false) {
-    return <Navigate to="/onboarding" replace />
-  }
-
-  return <>{children}</>
-}
-
 export const router = createBrowserRouter([
-  { path: '/onboarding', element: <Onboarding /> },
+  { path: '/onboarding', element: <Navigate to="/settings?tab=account" replace /> },
   { path: '/login', element: <Auth /> },
   {
     path: '/',
-    element: (
-      <OnboardingGuard>
-        <Layout />
-      </OnboardingGuard>
-    ),
+    element: <Layout />,
     children: [
       { index: true, element: <Navigate to="/paper-trading" replace /> },
       { path: 'overview', element: <Navigate to="/paper-trading" replace /> },

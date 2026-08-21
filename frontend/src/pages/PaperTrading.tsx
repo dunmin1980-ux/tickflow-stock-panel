@@ -18,6 +18,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { PaperEquityChart } from '@/components/paper-trading/PaperEquityChart'
 import { api, type PaperTradingDashboard } from '@/lib/api'
 import { cn } from '@/lib/cn'
+import { BACKEND_OFFLINE_MESSAGE } from '@/lib/connectivity'
 import { QK } from '@/lib/queryKeys'
 
 function money(value: string) {
@@ -41,6 +42,12 @@ function actionTone(action: string | undefined) {
   if (action === 'BUY') return 'text-bull'
   if (action === 'SELL') return 'text-bear'
   return 'text-warning'
+}
+
+function dashboardErrorText(error: unknown) {
+  if (error instanceof TypeError) return BACKEND_OFFLINE_MESSAGE
+  if (error instanceof Error && error.message === BACKEND_OFFLINE_MESSAGE) return error.message
+  return `模拟账户无法安全读取。${error instanceof Error ? ` ${error.message}` : ''}`
 }
 
 function readinessText(data: PaperTradingDashboard) {
@@ -68,6 +75,7 @@ export function PaperTrading() {
     queryKey: QK.paperTrading,
     queryFn: () => api.paperTradingDashboard(),
     refetchOnWindowFocus: false,
+    retry: false,
   })
   const mutation = useMutation({
     mutationFn: (targetDate: string) => api.paperTradingRun(targetDate),
@@ -123,7 +131,7 @@ export function PaperTrading() {
       <div className="flex h-full flex-col">
         <PageHeader title="模拟投研工作台" subtitle="000403.SZ · 派林生物" />
         <div className="m-5 border-l-2 border-danger bg-danger/5 px-3 py-3 text-sm text-danger" role="alert">
-          模拟账户无法安全读取。{query.error instanceof Error ? ` ${query.error.message}` : ''}
+          {dashboardErrorText(query.error)}
         </div>
       </div>
     )

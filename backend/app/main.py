@@ -59,7 +59,7 @@ from app.services.gold_shadow_store import GoldShadowStore
 from app.services.gold_tickflow import GoldTickFlowGateway
 from app.services.quote_service import QuoteService
 from app.tickflow import client as tf_client
-from app.tickflow.capabilities import CapabilityDenied
+from app.tickflow.capabilities import CapabilityDenied, CapabilitySet
 from app.tickflow.policy import detect_capabilities
 from app.tickflow.repository import DataStore, KlineRepository
 from app.workspace.events import WorkspaceEventHub
@@ -69,6 +69,18 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+def _runtime_mode_label() -> str:
+    if settings.visual_workbench_provider_deferred:
+        return "visual_provider_deferred"
+    return tf_client.current_mode()
+
+
+def _initial_runtime_capabilities() -> CapabilitySet:
+    if settings.visual_workbench_provider_deferred:
+        return CapabilitySet()
+    return detect_capabilities()
 
 
 def _desktop_remote_client():
@@ -203,7 +215,7 @@ def _initialize_gold_runtime(app: FastAPI, store: DataStore) -> None:
 async def lifespan(app: FastAPI):
     logger.info(
         "TickFlow Stock Panel v%s starting (mode=%s)",
-        __version__, tf_client.current_mode(),
+        __version__, _runtime_mode_label(),
     )
 
     # 首次启动: 若配置了 AUTH_PASSWORD 环境变量且未设过密码, 用它初始化。
@@ -239,24 +251,30 @@ async def lifespan(app: FastAPI):
     # instruments/index/ETF 仍同步 (毫秒级)。应用立即 ready, 指标算完后自动替换。
     repo.refresh_cache(background=True)
 
-    # 能力探测
-    capset = detect_capabilities()
+    # Visual v1 使用空 capability 集，不解析 Secret，不执行 Provider 探测。
+    capset = _initial_runtime_capabilities()
     app.state.capabilities = capset
     logger.info("ready; %d capabilities active", len(capset.all()))
 
-    # 自定义数据源配置(可选): 失败只记录错误, 不影响 TickFlow 基准路径。
-    try:
-        from app.data_providers import custom as custom_sources
-        custom_sources.load_all()
-        logger.info("custom data sources loaded: %d", len(custom_sources.list_sources()))
-    except Exception as e:  # noqa: BLE001
-        logger.warning("custom data sources init failed: %s", e)
+    # 自定义数据源配置(可选): Visual v1 日用模式不加载 Provider。
+    if settings.visual_workbench_provider_deferred:
+        logger.info("custom data sources skipped: Visual v1 Provider deferred")
+    else:
+        try:
+            from app.data_providers import custom as custom_sources
+            custom_sources.load_all()
+            logger.info("custom data sources loaded: %d", len(custom_sources.list_sources()))
+        except Exception as e:  # noqa: BLE001
+            logger.warning("custom data sources init failed: %s", e)
 
     # 全局行情服务
     qs = QuoteService()
     app.state.quote_service = qs
     qs.set_repo(repo)
-    qs.boot_check()
+    if settings.visual_workbench_provider_deferred:
+        logger.info("quote service skipped: Visual v1 Provider deferred")
+    else:
+        qs.boot_check()
 
     # QuoteService 需要访问 strategy_monitor 等单例
     # 先创建 strategy_monitor，再注入 app.state
@@ -272,54 +290,67 @@ async def lifespan(app: FastAPI):
     depth_service.set_app_state(app.state)
     app.state.depth_service = depth_service
 
-    # 启动调度器(若 enriched 数据为空,首次启动可手动 POST /api/pipeline/run)
-    try:
-        daily_pipeline.set_app_state(app.state)  # 供 depth_finalize job 访问 depth_service
-        scheduler = daily_pipeline.start_scheduler(repo, capset)
-        app.state.scheduler = scheduler
-    except Exception as e:  # noqa: BLE001
-        logger.warning("scheduler not started: %s", e)
+    # Visual v1 只服务确定性 Paper Trading，不安装任何 Provider 调度任务。
+    if settings.visual_workbench_provider_deferred:
         app.state.scheduler = None
+        logger.info("scheduler skipped: Visual v1 Provider deferred")
+    else:
+        try:
+            daily_pipeline.set_app_state(app.state)  # 供 depth_finalize job 访问 depth_service
+            scheduler = daily_pipeline.start_scheduler(repo, capset)
+            app.state.scheduler = scheduler
+        except Exception as e:  # noqa: BLE001
+            logger.warning("scheduler not started: %s", e)
+            app.state.scheduler = None
 
     _initialize_gold_runtime(app, store)
 
     # depth sealed: 启动补跑(当天文件不存在) + 盘中轮询(有能力时)
-    try:
-        depth_service.boot_check()
-        depth_service.start_polling()
-    except Exception as e:  # noqa: BLE001
-        logger.warning("depth_service init failed: %s", e)
+    if settings.visual_workbench_provider_deferred:
+        logger.info("depth service skipped: Visual v1 Provider deferred")
+    else:
+        try:
+            depth_service.boot_check()
+            depth_service.start_polling()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("depth_service init failed: %s", e)
 
-    # 企业微信智能机器人长连接(可选通道, 失败不阻断启动)
-    try:
-        from app.services.wecom_bot_service import WecomBotService
-        wecom_bot_service = WecomBotService()
-        wecom_bot_service.set_app_state(app.state)
-        app.state.wecom_bot_service = wecom_bot_service
-        wecom_bot_service.boot_check()
-    except Exception as e:  # noqa: BLE001
-        logger.warning("wecom_bot_service init failed: %s", e)
+    # 企业微信通道可以读取凭据，Visual v1 日用模式固定不启动。
+    app.state.wecom_bot_service = None
+    if not settings.visual_workbench_provider_deferred:
+        try:
+            from app.services.wecom_bot_service import WecomBotService
+            wecom_bot_service = WecomBotService()
+            wecom_bot_service.set_app_state(app.state)
+            app.state.wecom_bot_service = wecom_bot_service
+            wecom_bot_service.boot_check()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("wecom_bot_service init failed: %s", e)
 
     # 内置扩展表 (概念/行业): 先创建 config (含拉取配置), 默认开启定时拉取。
     # 必须在 pull_scheduler.refresh() 之前执行, 否则全新部署时 scheduler 读不到
     # 刚创建的预设, 定时任务不会启动。
-    try:
-        from app.services.ext_presets import ensure_builtin_presets
-        await ensure_builtin_presets(store.data_dir)
-    except Exception as e:  # noqa: BLE001
-        logger.warning("内置扩展表初始化失败 (不影响启动): %s", e)
+    app.state.pull_scheduler = None
+    if not settings.visual_workbench_provider_deferred:
+        try:
+            from app.services.ext_presets import ensure_builtin_presets
+            await ensure_builtin_presets(store.data_dir)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("内置扩展表初始化失败 (不影响启动): %s", e)
 
-    # 扩展数据定时拉取: 在预设配置就绪后启动, 自动调度 enabled 的预设。
-    from app.services.ext_pull import pull_scheduler
-    pull_scheduler.start(store.data_dir)
-    pull_scheduler.refresh(store.data_dir)
-    app.state.pull_scheduler = pull_scheduler
+        # 扩展数据定时拉取: 在预设配置就绪后启动, 自动调度 enabled 的预设。
+        from app.services.ext_pull import pull_scheduler
+        pull_scheduler.start(store.data_dir)
+        pull_scheduler.refresh(store.data_dir)
+        app.state.pull_scheduler = pull_scheduler
 
     # 财务数据 (需 Expert 套餐): 仅初始化调度器供 /api/financials/sync/* 手动同步,
     # 不启动自动调度——用户在「财务分析」页点「同步」手动拉取。
-    from app.services.financial_sync import financial_scheduler
-    financial_scheduler.start(store.data_dir, capset)
-    app.state.financial_scheduler = financial_scheduler
+    app.state.financial_scheduler = None
+    if not settings.visual_workbench_provider_deferred:
+        from app.services.financial_sync import financial_scheduler
+        financial_scheduler.start(store.data_dir, capset)
+        app.state.financial_scheduler = financial_scheduler
 
     # 策略引擎
     from app.services.screener import ScreenerService

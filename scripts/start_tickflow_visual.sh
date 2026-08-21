@@ -17,6 +17,12 @@ STOCKSDK_BRIDGE_DIR="${TICKFLOW_STOCKSDK_BRIDGE_DIR:-${ROOT}/backend/app/plugins
 STOCKSDK_PACKAGE="${STOCKSDK_BRIDGE_DIR}/node_modules/stock-sdk/package.json"
 
 health_ready() {
+  local payload
+  payload="$(curl --silent --show-error --fail --max-time 2 "${HEALTH_URL}" 2>/dev/null)" || return 1
+  [[ "${payload}" == *'"mode":"visual_provider_deferred"'* ]]
+}
+
+backend_reachable() {
   curl --silent --show-error --fail --max-time 2 "${HEALTH_URL}" >/dev/null 2>&1
 }
 
@@ -40,6 +46,7 @@ if [[ "${1:-}" == "--dry-run" ]]; then
   printf 'data_dir=%s\n' "${DATA_DIR}"
   printf 'stocksdk_bridge=%s\n' "${STOCKSDK_BRIDGE_DIR}"
   printf 'gold_workspace_enabled=false\n'
+  printf 'provider_deferred=true\n'
   printf 'real_trading=DISABLED\n'
   exit 0
 fi
@@ -51,6 +58,11 @@ if health_ready; then
   printf 'ALREADY_RUNNING url=%s\n' "${URL}"
   open_browser
   exit 0
+fi
+
+if backend_reachable; then
+  printf 'BACKEND_MODE_CONFLICT expected=visual_provider_deferred url=%s\n' "${HEALTH_URL}" >&2
+  exit 1
 fi
 
 if [[ -d "${STARTUP_LOCK}" && ! -L "${STARTUP_LOCK}" && -f "${STARTUP_LOCK_OWNER}" && ! -L "${STARTUP_LOCK_OWNER}" ]]; then
@@ -143,6 +155,7 @@ if ! health_ready && [[ -z "${server_pid}" ]]; then
       HOST="${HOST}" \
       PORT="${PORT}" \
       GOLD_WORKSPACE_ENABLED=false \
+      VISUAL_WORKBENCH_PROVIDER_DEFERRED=true \
       "${PYTHON}" -m uvicorn app.main:app --host "${HOST}" --port "${PORT}" \
       >"${LOG_FILE}" 2>&1 &
     launched_pid=$!

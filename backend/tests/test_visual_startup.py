@@ -22,16 +22,21 @@ def test_startup_script_is_local_only_and_never_kills_ports() -> None:
     assert "host=127.0.0.1" in result.stdout
     assert "url=http://127.0.0.1:3018/paper-trading" in result.stdout
     assert "gold_workspace_enabled=false" in result.stdout
+    assert "provider_deferred=true" in result.stdout
     source = SCRIPT.read_text()
     for forbidden in ("pkill", "kill -9", "lsof -ti", "0.0.0.0"):
         assert forbidden not in source
+    assert "VISUAL_WORKBENCH_PROVIDER_DEFERRED=true" in source
 
 
 def test_startup_reuses_healthy_server_and_opens_browser(tmp_path: Path) -> None:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     opened = tmp_path / "opened.txt"
-    (fake_bin / "curl").write_text("#!/bin/sh\nexit 0\n")
+    (fake_bin / "curl").write_text(
+        "#!/bin/sh\nprintf '%s\\n' "
+        "'{\"status\":\"ok\",\"mode\":\"visual_provider_deferred\"}'\n"
+    )
     (fake_bin / "open").write_text(f"#!/bin/sh\nprintf '%s' \"$1\" > {opened!s}\n")
     (fake_bin / "curl").chmod(0o755)
     (fake_bin / "open").chmod(0o755)
@@ -48,6 +53,32 @@ def test_startup_reuses_healthy_server_and_opens_browser(tmp_path: Path) -> None
     assert result.returncode == 0, result.stderr
     assert "ALREADY_RUNNING" in result.stdout
     assert opened.read_text() == "http://127.0.0.1:3018/paper-trading"
+
+
+def test_startup_refuses_a_healthy_non_visual_backend(tmp_path: Path) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    (fake_bin / "curl").write_text(
+        "#!/bin/sh\nprintf '%s\\n' '{\"status\":\"ok\",\"mode\":\"none\"}'\n"
+    )
+    (fake_bin / "curl").chmod(0o755)
+
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "DATA_DIR": str(tmp_path / "data"),
+            "TICKFLOW_VISUAL_SKIP_BROWSER": "1",
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "BACKEND_MODE_CONFLICT" in result.stderr
 
 
 def test_double_click_command_delegates_without_extra_runtime_logic() -> None:
@@ -97,6 +128,50 @@ def test_startup_script_has_valid_bash_syntax() -> None:
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_visual_provider_deferred_runtime_never_resolves_provider(monkeypatch) -> None:
+    from app import main as app_main
+
+    monkeypatch.setattr(app_main.settings, "visual_workbench_provider_deferred", True)
+    monkeypatch.setattr(
+        app_main.tf_client,
+        "current_mode",
+        lambda: (_ for _ in ()).throw(AssertionError("provider identity read")),
+    )
+    monkeypatch.setattr(
+        app_main,
+        "detect_capabilities",
+        lambda: (_ for _ in ()).throw(AssertionError("provider capability probe")),
+    )
+
+    mode = app_main._runtime_mode_label()
+    capset = app_main._initial_runtime_capabilities()
+
+    assert mode == "visual_provider_deferred"
+    assert capset.all() == {}
+
+
+def test_visual_provider_deferred_core_routes_do_not_resolve_provider(monkeypatch) -> None:
+    from app.api import routes
+
+    monkeypatch.setattr(routes.settings, "visual_workbench_provider_deferred", True)
+    monkeypatch.setattr(
+        routes.tf_client,
+        "current_mode",
+        lambda: (_ for _ in ()).throw(AssertionError("provider identity read")),
+    )
+    monkeypatch.setattr(
+        routes,
+        "detect_capabilities",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("provider capability probe")
+        ),
+    )
+
+    assert routes.health()["mode"] == "visual_provider_deferred"
+    assert routes.capabilities() == {"label": "Deferred", "capabilities": {}}
+    assert routes.redetect() == {"label": "Deferred", "capabilities": {}}
 
 
 def test_startup_installs_locked_stocksdk_bridge_dependency_when_missing(

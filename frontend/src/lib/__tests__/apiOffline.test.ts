@@ -61,18 +61,23 @@ describe('offline API behavior', () => {
     expect(await getSnapshot('/api/watchlist')).toBeNull()
   })
 
-  it('does not cache or fall back for a forbidden route', async () => {
+  it('reports backend unavailability without exposing a forbidden cache route', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
 
-    await expect(request('/api/auth/status')).rejects.toThrow('Failed to fetch')
-    expect(connectivityStore.getSnapshot().mode).toBe('online')
+    await expect(request('/api/auth/status')).rejects.toThrow(
+      'TickFlow 后端未运行，当前为只读模式',
+    )
+    expect(connectivityStore.getSnapshot().mode).toBe('offline-readonly')
   })
 
   it('does not reveal a snapshot without an active browser session grant', async () => {
     await putSnapshot('/api/watchlist', { symbols: ['600489.SH'] }, 'r1')
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
 
-    await expect(request('/api/watchlist')).rejects.toThrow('Failed to fetch')
+    await expect(request('/api/watchlist')).rejects.toThrow(
+      'TickFlow 后端未运行，当前为只读模式',
+    )
+    expect(connectivityStore.getSnapshot().mode).toBe('offline-readonly')
   })
 
   it('blocks offline writes before fetch', async () => {

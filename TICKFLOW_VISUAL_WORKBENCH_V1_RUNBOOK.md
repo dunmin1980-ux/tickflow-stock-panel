@@ -37,6 +37,42 @@ different local port:
 TICKFLOW_VISUAL_PORT=3020 ./scripts/start_tickflow_visual.sh
 ```
 
+## Runtime Status
+
+Visual v1 uses the released deterministic Option C engine:
+
+```text
+Paper Trading Engine=ACTIVE
+AI Provider=DEFERRED
+Real Trading=DISABLED
+```
+
+The Settings page displays these boundaries and does not expose the historical
+TickFlow or AI API Key forms. Those legacy forms write to a local
+`backend/data/user_data/secrets.json`, but Visual v1 does not read that file for
+Paper Trading and does not require an Ark, OpenAI, or other model credential.
+
+The Visual launcher sets `VISUAL_WORKBENCH_PROVIDER_DEFERRED=true`. In this
+mode the backend uses an empty capability set and does not start Provider
+capability probes, market synchronization schedules, external data pulls,
+notification transports, or financial synchronization.
+
+Do not configure a real Provider for daily Visual v1 use.
+
+## Backend Availability
+
+The launcher must keep `127.0.0.1:3018` healthy. If the PWA shell remains
+visible after the backend stops, the application enters read-only mode and
+shows:
+
+```text
+TickFlow 后端未运行，当前为只读模式
+```
+
+Run `./scripts/start_tickflow_visual.sh` again. The launcher reuses a healthy
+process or starts the local backend, waits for `/health`, and then opens the
+Paper Trading page. Do not attempt to repair this state by entering an API Key.
+
 ## Daily SOP
 
 1. Start the workbench after the A-share close. The preparation gate opens at

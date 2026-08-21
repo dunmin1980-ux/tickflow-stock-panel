@@ -399,7 +399,9 @@ test('two authenticated clients synchronize, conflict once, and reject offline w
       Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false })
       window.dispatchEvent(new Event('offline'))
     })
-    await expect(mobile.page.getByRole('status').filter({ hasText: '只读缓存' })).toBeVisible()
+    await expect(mobile.page.getByRole('status').filter({
+      hasText: 'TickFlow 后端未运行，当前为只读模式',
+    })).toBeVisible()
     await expect(offlineAdd).toBeDisabled()
     await offlineAdd.dispatchEvent('click')
     await mobile.page.waitForTimeout(100)

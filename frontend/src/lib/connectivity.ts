@@ -1,5 +1,7 @@
 export type ConnectivityMode = 'online' | 'offline-readonly'
 
+export const BACKEND_OFFLINE_MESSAGE = 'TickFlow 后端未运行，当前为只读模式'
+
 export interface ConnectivityState {
   mode: ConnectivityMode
   lastSuccessfulSync: string | null

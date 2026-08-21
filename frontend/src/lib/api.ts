@@ -4,7 +4,7 @@
 // Prod:同源(FastAPI 托管前端 dist)
 
 import { toast } from '@/components/Toast'
-import { connectivityStore, offlineSessionAccess } from './connectivity'
+import { BACKEND_OFFLINE_MESSAGE, connectivityStore, offlineSessionAccess } from './connectivity'
 import { clearAllSnapshots, getSnapshot, putSnapshot } from './offlineDb'
 import { isOfflineCacheAllowed, isWriteMethod } from './offlinePolicy'
 import {
@@ -29,8 +29,15 @@ function enqueueOfflinePersistence(task: () => Promise<void>): Promise<void> {
 
 export class OfflineWriteError extends Error {
   constructor() {
-    super('离线只读模式不允许修改数据')
+    super(BACKEND_OFFLINE_MESSAGE)
     this.name = 'OfflineWriteError'
+  }
+}
+
+export class BackendUnavailableError extends Error {
+  constructor() {
+    super(BACKEND_OFFLINE_MESSAGE)
+    this.name = 'BackendUnavailableError'
   }
 }
 
@@ -91,17 +98,20 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
       cache: path.startsWith('/api/') ? 'no-store' : init?.cache,
     })
   } catch (error) {
-    if (
-      method === 'GET' &&
-      isOfflineCacheAllowed(path) &&
-      offlineSessionAccess.isGranted() &&
-      error instanceof TypeError
-    ) {
-      const cached = await getSnapshot<T>(path)
-      if (cached) {
-        connectivityStore.markOffline(cached.fetchedAt)
-        return cached.data
+    if (error instanceof TypeError) {
+      if (
+        method === 'GET' &&
+        isOfflineCacheAllowed(path) &&
+        offlineSessionAccess.isGranted()
+      ) {
+        const cached = await getSnapshot<T>(path)
+        if (cached) {
+          connectivityStore.markOffline(cached.fetchedAt)
+          return cached.data
+        }
       }
+      connectivityStore.markOffline()
+      throw new BackendUnavailableError()
     }
     throw error
   }
