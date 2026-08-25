@@ -1,70 +1,38 @@
-import { useMemo, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import {
-  AlertTriangle,
-  Banknote,
-  CheckCircle2,
-  CircleDollarSign,
-  FileCheck2,
+  CalendarDays,
+  ClipboardCheck,
+  Database,
+  ListTodo,
   Loader2,
   Play,
+  Server,
   ShieldCheck,
-  TrendingDown,
+  TrendingUp,
   WalletCards,
 } from 'lucide-react'
 
-import { MarkdownRenderer } from '@/components/financials/MarkdownRenderer'
 import { PageHeader } from '@/components/PageHeader'
-import { PaperEquityChart } from '@/components/paper-trading/PaperEquityChart'
-import { api, type PaperTradingDashboard } from '@/lib/api'
+import {
+  actionTone,
+  dashboardErrorText,
+  money,
+  readinessCopy,
+  sellableQuantity,
+  signalLabel,
+  todayEquityChange,
+  todayRealizedPnl,
+  todayUnrealizedPnl,
+  totalPositionQuantity,
+} from '@/components/paper-trading/presentation'
+import { api } from '@/lib/api'
 import { cn } from '@/lib/cn'
-import { BACKEND_OFFLINE_MESSAGE } from '@/lib/connectivity'
 import { QK } from '@/lib/queryKeys'
 
-function money(value: string) {
-  const amount = Number(value)
-  return Number.isFinite(amount)
-    ? new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' }).format(amount)
-    : '--'
-}
-
-function percent(value: string) {
-  const amount = Number(value)
-  if (!Number.isFinite(amount)) return '--'
-  return `${amount > 0 ? '+' : ''}${amount.toFixed(2)}%`
-}
-
-function signalLabel(value: string | undefined) {
-  return value ? value.replaceAll('_', ' ') : '--'
-}
-
-function actionTone(action: string | undefined) {
-  if (action === 'BUY') return 'text-bull'
-  if (action === 'SELL') return 'text-bear'
-  return 'text-warning'
-}
-
-function dashboardErrorText(error: unknown) {
-  if (error instanceof TypeError) return BACKEND_OFFLINE_MESSAGE
-  if (error instanceof Error && error.message === BACKEND_OFFLINE_MESSAGE) return error.message
-  return `模拟账户无法安全读取。${error instanceof Error ? ` ${error.message}` : ''}`
-}
-
-function readinessText(data: PaperTradingDashboard) {
-  const readiness = data.input_readiness
-  if (readiness.status === 'MISSING') return '当前日期缺少已验证的离线输入'
-  if (readiness.status === 'WAITING_FOR_CLOSE') return 'A 股收盘后 15:10 起可准备今日输入'
-  if (readiness.status === 'BLOCKED') return '当前日期不允许生成新的模拟盘输入'
-  if (readiness.status === 'PREPARABLE') return '点击运行后将校验并准备今日单票日线输入'
-  if (readiness.status === 'ALREADY_PUBLISHED') return '该数据日已完成，重复运行将进行幂等校验'
-  if (!readiness.is_current_date) {
-    return `首次可用冻结基准 ${readiness.effective_trade_date ?? '--'} 初始化账户`
-  }
-  return `已验证输入 ${readiness.effective_trade_date ?? '--'}`
-}
-
-function EmptyRow({ children }: { children: React.ReactNode }) {
-  return <div className="py-8 text-center text-xs text-muted">{children}</div>
+function EmptyState({ children }: { children: React.ReactNode }) {
+  return <div className="py-7 text-center text-xs text-muted">{children}</div>
 }
 
 export function PaperTrading() {
@@ -81,11 +49,7 @@ export function PaperTrading() {
     mutationFn: (targetDate: string) => api.paperTradingRun(targetDate),
     onSuccess: result => {
       queryClient.setQueryData(QK.paperTrading, result)
-      setRunMessage(
-        result.run_status === 'DAY_PUBLISHED'
-          ? '本次已写入日结'
-          : '该输入已完成，未重复写入',
-      )
+      setRunMessage(result.run_status === 'DAY_PUBLISHED' ? '今日模拟盘已完成' : '今日模拟盘此前已完成')
     },
     onSettled: () => {
       runningRef.current = false
@@ -99,29 +63,11 @@ export function PaperTrading() {
     'READY_VALIDATED_DAILY',
     'PREPARABLE',
   ].includes(data.input_readiness.status) : false
-  const latestDecision = data?.decisions.at(-1)
-  const signal = data?.latest_daily?.research_signal ?? latestDecision?.research_signal
-  const action = data?.latest_daily?.paper_action ?? latestDecision?.paper_action
-
-  const runToday = () => {
-    if (!data || !canRun || runningRef.current) return
-    runningRef.current = true
-    setRunMessage(null)
-    mutation.mutate(data.requested_date)
-  }
-
-  const kpis = useMemo(() => data ? [
-    { label: '总资产', value: money(data.account.total_equity_cny), icon: CircleDollarSign },
-    { label: '现金', value: money(data.account.cash_cny), icon: Banknote },
-    { label: '持仓市值', value: money(data.account.market_value_cny), icon: WalletCards },
-    { label: '累计收益', value: percent(data.account.cumulative_return_percent), icon: CheckCircle2 },
-    { label: '最大回撤', value: money(data.account.max_drawdown_cny), icon: TrendingDown },
-  ] : [], [data])
 
   if (query.isLoading) {
     return (
       <div className="grid h-full place-items-center text-xs text-muted">
-        <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />正在恢复模拟账户</span>
+        <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />正在读取今日工作台</span>
       </div>
     )
   }
@@ -129,7 +75,7 @@ export function PaperTrading() {
   if (!data || query.error) {
     return (
       <div className="flex h-full flex-col">
-        <PageHeader title="模拟投研工作台" subtitle="000403.SZ · 派林生物" />
+        <PageHeader title="今日工作台" subtitle="000403.SZ · 派林生物" />
         <div className="m-5 border-l-2 border-danger bg-danger/5 px-3 py-3 text-sm text-danger" role="alert">
           {dashboardErrorText(query.error)}
         </div>
@@ -137,10 +83,42 @@ export function PaperTrading() {
     )
   }
 
+  const todayDaily = data.latest_daily?.report_date === data.requested_date ? data.latest_daily : null
+  const todayDecision = data.decisions.slice().reverse().find(decision => decision.trade_date === data.requested_date)
+  const signal = todayDaily?.research_signal ?? todayDecision?.research_signal
+  const action = todayDaily?.paper_action ?? todayDecision?.paper_action
+  const claimsAreCurrent = data.claims.trade_date === data.requested_date
+  const claimsSummary = claimsAreCurrent
+    ? `Claims ${data.claims.status} / ${data.claims.claim_count}`
+    : 'Claims 待生成'
+  const readiness = readinessCopy(data)
+  const quantity = totalPositionQuantity(data)
+  const sellable = sellableQuantity(data)
+  const tradingDay = data.input_readiness.effective_trade_date === data.requested_date
+    || data.latest_daily?.report_date === data.requested_date
+
+  const runToday = () => {
+    if (!canRun || runningRef.current) return
+    runningRef.current = true
+    setRunMessage(null)
+    mutation.mutate(data.requested_date)
+  }
+
+  const actionSummary = !action
+    ? '等待今日确定性决策'
+    : action === 'HOLD'
+    ? '无需交易'
+    : todayDaily?.pending_action
+      ? `${todayDaily.pending_action} 等待执行`
+      : `${action ?? '--'} 已记录`
+  const taskTitle = data.input_readiness.status === 'ALREADY_PUBLISHED'
+    ? '今日决策已完成'
+    : readiness.title
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <PageHeader
-        title="模拟投研工作台"
+        title="今日工作台"
         subtitle={`${data.symbol} · ${data.name}`}
         className="flex-wrap px-3 sm:flex-nowrap sm:px-5"
         right={(
@@ -157,7 +135,7 @@ export function PaperTrading() {
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-20 md:pb-0">
-        <div className="mx-auto w-full max-w-[1500px] space-y-4 px-3 py-3 sm:px-5">
+        <div className="mx-auto w-full max-w-[1400px] space-y-4 px-3 py-3 sm:px-5">
           <div className="flex flex-wrap items-center justify-between gap-2 border-y border-danger/20 bg-danger/5 px-3 py-2 text-[11px]">
             <div className="flex items-center gap-2 font-semibold text-danger">
               <ShieldCheck className="h-4 w-4" />
@@ -165,7 +143,7 @@ export function PaperTrading() {
               <span className="text-muted">/</span>
               <span>REAL TRADING DISABLED</span>
             </div>
-            <span className="font-mono text-muted">最新日结 {data.last_completed_trade_date ?? '尚未运行'}</span>
+            <span className="font-mono text-muted">今日范围 · {data.requested_date}</span>
           </div>
 
           {(mutation.error || runMessage) && (
@@ -180,127 +158,107 @@ export function PaperTrading() {
             </div>
           )}
 
-          <section className="grid grid-cols-2 border-y border-border sm:grid-cols-3 lg:grid-cols-5" aria-label="账户概览">
-            {kpis.map(({ label, value, icon: Icon }, index) => (
-              <div key={label} className={cn(
-                'min-w-0 px-3 py-3',
-                index % 2 === 1 && 'border-l border-border',
-                index % 3 === 0 ? 'sm:border-l-0' : 'sm:border-l sm:border-border',
-                index > 0 ? 'lg:border-l lg:border-border' : 'lg:border-l-0',
-              )}>
+          <section aria-label="今日市场状态" className="grid border-y border-border sm:grid-cols-5">
+            {[
+              { icon: CalendarDays, label: '日期', value: data.requested_date },
+              { icon: TrendingUp, label: '交易日状态', value: tradingDay ? 'A 股交易日' : '交易状态待确认' },
+              { icon: Database, label: '数据状态', value: data.latest_daily?.report_date === data.requested_date ? '数据 READY' : '数据待准备' },
+              { icon: Server, label: '服务状态', value: 'Backend Online' },
+              { icon: ClipboardCheck, label: '今日输入状态', value: readiness.title },
+            ].map(({ icon: Icon, label, value }, index) => (
+              <div key={label} className={cn('min-w-0 px-3 py-3', index > 0 && 'border-t border-border sm:border-l sm:border-t-0')}>
                 <div className="flex items-center gap-1.5 text-[10px] text-muted"><Icon className="h-3.5 w-3.5" />{label}</div>
-                <div className="mt-1 truncate font-mono text-base font-semibold text-foreground">{value}</div>
+                <div className="mt-1 truncate text-sm font-semibold">{value}</div>
               </div>
             ))}
           </section>
 
-          <section className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
-            <div className="border-y border-border px-3 py-3">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold">研究决策状态</h2>
-                <span className="text-[10px] text-muted">{data.latest_daily?.report_date ?? '--'}</span>
+          <div className="grid gap-3 lg:grid-cols-6">
+            <section aria-label="今日 Research Signal" className="order-1 border-y border-border px-4 py-4 lg:col-span-2 lg:order-1">
+              <div className="text-[10px] uppercase text-muted">Research Signal</div>
+              <div className="mt-2 text-xl font-semibold text-foreground">{signalLabel(signal)}</div>
+              <div className={cn('mt-3 text-xs', claimsAreCurrent ? 'text-bull' : 'text-muted')}>
+                {claimsSummary}
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <div className="text-[10px] text-muted">Research Signal</div>
-                  <div className="mt-1 text-xs font-semibold">{signalLabel(signal)}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-muted">Paper Action</div>
-                  <div className={cn('mt-1 text-xs font-semibold', actionTone(action))}>{action ?? '--'}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-muted">Claims</div>
-                  <div className="mt-1 text-xs font-semibold text-bull">
-                    {data.claims.status} / {data.claims.claim_count} claims
-                    {data.claims.trade_date ? ` · ${data.claims.trade_date}` : ''}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="border-y border-border px-3 py-3">
-              <div className="flex items-start gap-2">
-                {canRun ? <FileCheck2 className="mt-0.5 h-4 w-4 shrink-0 text-bull" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />}
-                <div>
-                  <h2 className="text-sm font-semibold">今日输入门禁</h2>
-                  <p className="mt-1 text-xs text-secondary">{readinessText(data)}</p>
-                  <p className="mt-1 font-mono text-[10px] text-muted">requested {data.requested_date}</p>
-                </div>
-              </div>
-            </div>
-          </section>
+            </section>
 
-          <section className="border-y border-border" aria-labelledby="positions-title">
-            <div className="flex items-center justify-between px-3 py-2">
-              <h2 id="positions-title" className="text-sm font-semibold">持仓</h2>
-              <span className="text-[10px] text-muted">A 股 T+1</span>
+            <section aria-label="今日 Paper Action" className="order-2 border-y border-border px-4 py-4 lg:col-span-2 lg:order-2">
+              <div className="text-[10px] uppercase text-muted">Paper Action</div>
+              <div className={cn('mt-2 text-2xl font-semibold', actionTone(action))}>{action ?? '--'}</div>
+              <div className="mt-2 text-xs text-secondary">{actionSummary}</div>
+            </section>
+
+            <section aria-label="今日待办" className="order-3 border-y border-border px-4 py-4 lg:col-span-3 lg:order-5">
+              <div className="flex items-center gap-2 text-sm font-semibold"><ListTodo className="h-4 w-4" />今日待办</div>
+              <div className="mt-3 text-sm font-medium">{taskTitle}</div>
+              <div className="mt-1 text-xs text-secondary">{readiness.detail}</div>
+              {action === 'HOLD' && <div className="mt-2 text-xs text-warning">无需交易，继续观察</div>}
+              {todayDaily?.pending_action && (
+                <div className="mt-2 text-xs text-warning">Pending {todayDaily.pending_action} · 等待既有执行条件</div>
+              )}
+            </section>
+
+            <section aria-label="今日持仓" className="order-4 border-y border-border px-4 py-4 lg:col-span-3 lg:order-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm font-semibold"><WalletCards className="h-4 w-4" />今日持仓</div>
+                <span className="text-[10px] text-muted">A 股 T+1</span>
+              </div>
+              {quantity === 0 ? (
+                <div className="mt-5 text-sm text-secondary">当前空仓</div>
+              ) : (
+                <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
+                  <div><span className="text-muted">当前持仓</span><div className="mt-1 font-medium">{data.symbol}</div></div>
+                  <div><span className="text-muted">持仓数量</span><div className="mt-1 font-mono">{quantity} 股</div></div>
+                  <div><span className="text-muted">可卖数量</span><div className="mt-1 font-mono">{sellable} 股</div></div>
+                </div>
+              )}
+              <div className="mt-3 text-xs text-muted">持仓市值 <span className="font-mono text-foreground">{money(data.account.market_value_cny)}</span></div>
+            </section>
+
+            <section aria-label="今日 PnL" className="order-5 border-y border-border px-4 py-4 lg:col-span-2 lg:order-3">
+              <div className="text-[10px] uppercase text-muted">今日 PnL</div>
+              <div className="mt-2 text-lg font-semibold">今日权益变化 {money(todayEquityChange(data))}</div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <div><span className="text-muted">当日未实现</span><div className="mt-1 font-mono">{money(todayUnrealizedPnl(data))}</div></div>
+                <div><span className="text-muted">当日已实现</span><div className="mt-1 font-mono">{money(todayRealizedPnl(data))}</div></div>
+              </div>
+              <div className="mt-3 text-xs text-muted">总资产 <span className="font-mono text-foreground">{money(data.account.total_equity_cny)}</span></div>
+            </section>
+          </div>
+
+          <section aria-label="ChenQuant Daily 摘要" className="border-y border-border px-4 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold">ChenQuant Daily 摘要</h2>
+              {todayDaily && <Link to="/review" className="text-xs font-medium text-accent hover:underline">查看完整日报</Link>}
             </div>
-            {data.positions.length === 0 ? <EmptyRow>当前无持仓</EmptyRow> : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[680px] text-left text-xs">
-                  <thead className="border-y border-border bg-elevated/40 text-[10px] text-muted">
-                    <tr><th className="px-3 py-2">标的</th><th>数量</th><th>成本</th><th>买入日</th><th>可卖日</th><th>状态</th></tr>
-                  </thead>
-                  <tbody>{data.positions.map(lot => (
-                    <tr key={lot.lot_id} className="border-b border-border/60">
-                      <td className="px-3 py-2 font-medium">{lot.symbol}</td>
-                      <td>{lot.remaining_quantity} 股</td>
-                      <td className="font-mono">{money(lot.remaining_cost_cny)}</td>
-                      <td>{lot.acquired_trade_date}</td>
-                      <td>{lot.sellable_from_trade_date}</td>
-                      <td className="text-bull">T+1 可卖</td>
-                    </tr>
-                  ))}</tbody>
-                </table>
+            {!todayDaily ? <EmptyState>今日复盘尚未生成</EmptyState> : (
+              <div className="mt-3 space-y-3">
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="bg-elevated/40 px-3 py-2 text-xs"><span className="text-muted">今日 Signal</span><div className="mt-1 font-semibold">{signalLabel(signal)}</div></div>
+                  <div className="bg-elevated/40 px-3 py-2 text-xs"><span className="text-muted">今日 Action</span><div className={cn('mt-1 font-semibold', actionTone(action))}>{action}</div></div>
+                  <div className="bg-elevated/40 px-3 py-2 text-xs"><span className="text-muted">核心 Claims</span><div className={cn('mt-1 font-semibold', claimsAreCurrent ? 'text-bull' : 'text-muted')}>{claimsSummary}</div></div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div><div className="text-[10px] uppercase text-muted">Risk Notes</div><ul className="mt-1 space-y-1 text-xs text-secondary">{todayDaily.risk_notes.map(note => <li key={note}>{signalLabel(note)}</li>)}</ul></div>
+                  <div><div className="text-[10px] uppercase text-muted">Next Observation Condition</div><ul className="mt-1 space-y-1 text-xs text-secondary">{todayDaily.next_observation_conditions.map(item => <li key={item}>{signalLabel(item)}</li>)}</ul></div>
+                </div>
               </div>
             )}
           </section>
 
-          <section className="grid gap-4 xl:grid-cols-2">
-            <div className="border-y border-border">
-              <h2 className="px-3 py-2 text-sm font-semibold">决策记录 / Signal Timeline</h2>
-              {data.decisions.length === 0 ? <EmptyRow>尚无决策记录</EmptyRow> : (
-                <div className="max-h-72 overflow-auto">
-                  {data.decisions.slice().reverse().map(decision => (
-                    <div key={`${decision.trade_date}-${String(decision.action_id)}`} className="grid grid-cols-[92px_1fr_auto] gap-3 border-t border-border px-3 py-2 text-xs">
-                      <span className="font-mono text-muted">{decision.trade_date}</span>
-                      <span>{signalLabel(decision.research_signal)}</span>
-                      <span className={cn('font-semibold', actionTone(decision.paper_action))}>{decision.paper_action}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="border-y border-border">
-              <h2 className="px-3 py-2 text-sm font-semibold">交易记录</h2>
-              {data.trades.length === 0 ? <EmptyRow>当前无模拟成交</EmptyRow> : (
-                <div className="max-h-72 overflow-auto">
-                  {data.trades.slice().reverse().map(trade => (
-                    <div key={trade.execution_id} className="grid grid-cols-[84px_48px_1fr_1fr] gap-2 border-t border-border px-3 py-2 text-xs">
-                      <span className="font-mono text-muted">{trade.trade_date}</span>
-                      <span className={actionTone(trade.side)}>{trade.side}</span>
-                      <span>{trade.quantity} 股 @ {money(trade.execution_price)}</span>
-                      <span className="text-right font-mono">PnL {money(trade.realized_pnl_cny)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="border-y border-border px-3 py-3">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">权益与 PnL</h2>
-              <span className="text-[10px] text-muted">已实现 {money(data.account.realized_pnl_cny)} / 未实现 {money(data.account.unrealized_pnl_cny)}</span>
-            </div>
-            <PaperEquityChart points={data.equity_history} />
-          </section>
-
-          <section className="border-y border-border px-3 py-3">
-            <h2 className="text-sm font-semibold">ChenQuant Daily</h2>
-            {data.chenquant_daily_markdown ? (
-              <div className="mt-2 max-w-4xl text-xs"><MarkdownRenderer content={data.chenquant_daily_markdown} /></div>
-            ) : <EmptyRow>运行首个模拟盘日结后生成 Daily</EmptyRow>}
+          <section aria-label="最近 Signal Timeline" className="border-y border-border">
+            <h2 className="px-4 py-3 text-sm font-semibold">最近 Signal Timeline</h2>
+            {data.decisions.length === 0 ? <EmptyState>尚无决策记录</EmptyState> : (
+              <div>
+                {data.decisions.slice(-5).reverse().map(decision => (
+                  <div key={`${decision.trade_date}-${String(decision.action_id)}`} className="grid grid-cols-[92px_1fr_auto] gap-3 border-t border-border px-4 py-2 text-xs">
+                    <span className="font-mono text-muted">{decision.trade_date}</span>
+                    <span>{signalLabel(decision.research_signal)}</span>
+                    <span className={cn('font-semibold', actionTone(decision.paper_action))}>{decision.paper_action}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         </div>
       </div>

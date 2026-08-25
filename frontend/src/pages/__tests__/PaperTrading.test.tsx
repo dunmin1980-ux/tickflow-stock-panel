@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { PaperTrading } from '../PaperTrading'
@@ -132,9 +133,11 @@ function renderPage() {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   return render(
-    <QueryClientProvider client={queryClient}>
-      <PaperTrading />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <PaperTrading />
+      </QueryClientProvider>
+    </MemoryRouter>,
   )
 }
 
@@ -144,23 +147,121 @@ describe('PaperTrading', () => {
     vi.mocked(api.paperTradingDashboard).mockResolvedValue(BASE_DASHBOARD)
   })
 
-  it('renders persisted account, safety, research, ledger, chart, and Daily state', async () => {
+  it('answers what the user should do today without rendering account-lifetime tables', async () => {
+    vi.mocked(api.paperTradingDashboard).mockResolvedValue({
+      ...BASE_DASHBOARD,
+      requested_date: '2026-08-25',
+      last_completed_trade_date: '2026-08-25',
+      input_readiness: {
+        status: 'ALREADY_PUBLISHED',
+        requested_date: '2026-08-25',
+        effective_trade_date: '2026-08-25',
+        source_fixture: 'VALIDATED_DAILY_INPUT',
+        is_current_date: true,
+        message: 'VALIDATED_DAILY_ALREADY_PUBLISHED',
+      },
+      claims: {
+        ...BASE_DASHBOARD.claims,
+        claim_count: 21,
+        trade_date: '2026-08-25',
+      },
+      account: {
+        ...BASE_DASHBOARD.account,
+        cash_cny: '100000.00',
+        market_value_cny: '0.00',
+        total_equity_cny: '100000.00',
+        cumulative_return_percent: '0.0000',
+        realized_pnl_cny: '0.00',
+        unrealized_pnl_cny: '0.00',
+        max_drawdown_cny: '0.00',
+      },
+      positions: [],
+      decisions: [
+        BASE_DASHBOARD.decisions[0],
+        {
+          ...BASE_DASHBOARD.decisions[0],
+          trade_date: '2026-08-25',
+          decision_at: '2026-08-25T16:37:59+08:00',
+          action_id: '5'.repeat(64),
+        },
+      ],
+      equity_history: [
+        BASE_DASHBOARD.equity_history[0],
+        {
+          ...BASE_DASHBOARD.equity_history[0],
+          trade_date: '2026-08-25',
+          cash_cny: '100000.00',
+          market_value_cny: '0.00',
+          total_equity_cny: '100000.00',
+          realized_pnl_cny: '0.00',
+          unrealized_pnl_cny: '0.00',
+        },
+      ],
+      latest_daily: {
+        ...BASE_DASHBOARD.latest_daily!,
+        report_date: '2026-08-25',
+        source_fixture: 'VALIDATED_DAILY_INPUT',
+        risk_notes: ['SIMULATION_ONLY', 'REAL_TRADING_DISABLED'],
+        next_observation_conditions: ['LOAD_NEXT_VALIDATED_DAILY_INPUT'],
+      },
+    })
+
     renderPage()
 
-    expect(await screen.findByText('模拟投研工作台')).toBeInTheDocument()
-    expect(screen.getByText('¥102,000.00')).toBeInTheDocument()
-    expect(screen.getByText('¥80,000.00')).toBeInTheDocument()
-    expect(screen.getByText('¥22,000.00')).toBeInTheDocument()
-    expect(screen.getByText('+2.00%')).toBeInTheDocument()
-    expect(screen.getByText('¥800.00')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '今日工作台' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: '今日市场状态' })).toHaveTextContent('2026-08-25')
+    expect(screen.getByRole('region', { name: '今日市场状态' })).toHaveTextContent('A 股交易日')
+    expect(screen.getByRole('region', { name: '今日市场状态' })).toHaveTextContent('数据 READY')
+    expect(screen.getByRole('region', { name: '今日市场状态' })).toHaveTextContent('Backend Online')
+    expect(screen.getByRole('region', { name: '今日 Research Signal' })).toHaveTextContent('MIXED OBSERVATION')
+    expect(screen.getByRole('region', { name: '今日 Research Signal' })).toHaveTextContent('VALID / 21')
+    expect(screen.getByRole('region', { name: '今日 Paper Action' })).toHaveTextContent('HOLD')
+    expect(screen.getByRole('region', { name: '今日 Paper Action' })).toHaveTextContent('无需交易')
+    expect(screen.getByRole('region', { name: '今日持仓' })).toHaveTextContent('当前空仓')
+    expect(screen.getByRole('region', { name: '今日 PnL' })).toHaveTextContent('今日权益变化')
+    expect(screen.getByRole('region', { name: '今日待办' })).toHaveTextContent('今日决策已完成')
+    expect(screen.getByRole('region', { name: '今日待办' })).toHaveTextContent('无需交易，继续观察')
+    expect(screen.getByRole('region', { name: 'ChenQuant Daily 摘要' })).toHaveTextContent('LOAD NEXT VALIDATED DAILY INPUT')
+    expect(screen.getByRole('link', { name: '查看完整日报' })).toHaveAttribute('href', '/review')
+    expect(screen.getByRole('region', { name: '最近 Signal Timeline' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '历史交易' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '历史决策' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '账户总览' })).not.toBeInTheDocument()
+  })
+
+  it('keeps stale research in the timeline instead of presenting it as today', async () => {
+    renderPage()
+
+    expect(await screen.findByText('今日工作台')).toBeInTheDocument()
     expect(screen.getAllByText('SIMULATION ONLY').length).toBeGreaterThan(0)
     expect(screen.getByText('REAL TRADING DISABLED')).toBeInTheDocument()
-    expect(screen.getAllByText('MIXED OBSERVATION').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('HOLD').length).toBeGreaterThan(0)
-    expect(screen.getByText('VALID / 11 claims · 2026-07-31')).toBeInTheDocument()
-    expect(screen.getByText('100 股')).toBeInTheDocument()
-    expect(screen.getByLabelText('权益曲线')).toHaveTextContent('chart:1')
-    expect(screen.getByText('ChenQuant Paper Trading Daily')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: '今日 Research Signal' })).toHaveTextContent('--')
+    expect(screen.getByRole('region', { name: '今日 Research Signal' })).toHaveTextContent('Claims 待生成')
+    expect(screen.getByRole('region', { name: '今日 Paper Action' })).toHaveTextContent('等待今日确定性决策')
+    expect(screen.getByRole('region', { name: 'ChenQuant Daily 摘要' })).toHaveTextContent('今日复盘尚未生成')
+    expect(screen.getByRole('region', { name: '最近 Signal Timeline' })).toHaveTextContent('MIXED OBSERVATION')
+    expect(screen.getByRole('region', { name: '最近 Signal Timeline' })).toHaveTextContent('HOLD')
+  })
+
+  it('does not label stale Claims as current when a current Daily exists', async () => {
+    vi.mocked(api.paperTradingDashboard).mockResolvedValue({
+      ...BASE_DASHBOARD,
+      requested_date: '2026-08-20',
+      latest_daily: {
+        ...BASE_DASHBOARD.latest_daily!,
+        report_date: '2026-08-20',
+      },
+      claims: {
+        ...BASE_DASHBOARD.claims,
+        trade_date: '2026-07-31',
+      },
+    })
+
+    renderPage()
+
+    expect(await screen.findByRole('region', { name: '今日 Research Signal' })).toHaveTextContent('Claims 待生成')
+    expect(screen.getByRole('region', { name: 'ChenQuant Daily 摘要' })).toHaveTextContent('Claims 待生成')
+    expect(screen.getByRole('region', { name: 'ChenQuant Daily 摘要' })).not.toHaveTextContent('VALID / 11')
   })
 
   it('blocks a run when current validated input is missing', async () => {
@@ -168,7 +269,9 @@ describe('PaperTrading', () => {
 
     const button = await screen.findByRole('button', { name: '运行今日模拟盘' })
     expect(button).toBeDisabled()
-    expect(screen.getByText('当前日期缺少已验证的离线输入')).toBeInTheDocument()
+    expect(screen.getAllByText('今日输入尚未准备').length).toBeGreaterThan(0)
+    expect(screen.getByText('缺少已验证的日线研究输入')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: '今日 PnL' })).toHaveTextContent('今日权益变化 --')
     expect(api.paperTradingRun).not.toHaveBeenCalled()
   })
 
@@ -206,7 +309,7 @@ describe('PaperTrading', () => {
     await waitFor(() => expect(button).toBeDisabled())
 
     finish({ ...BASE_DASHBOARD, run_status: 'DAY_PUBLISHED' })
-    await screen.findByText('本次已写入日结')
+    await screen.findByText('今日模拟盘已完成')
     expect(screen.getAllByText('MIXED OBSERVATION').length).toBeGreaterThan(0)
   })
 
@@ -258,7 +361,8 @@ describe('PaperTrading', () => {
 
     const button = await screen.findByRole('button', { name: '运行今日模拟盘' })
     expect(button).toBeDisabled()
-    expect(screen.getByText('A 股收盘后 15:10 起可准备今日输入')).toBeInTheDocument()
+    expect(screen.getAllByText('收盘后可运行').length).toBeGreaterThan(0)
+    expect(screen.getByText('15:10 后准备今日研究输入')).toBeInTheDocument()
     expect(api.paperTradingRun).not.toHaveBeenCalled()
   })
 
@@ -278,7 +382,8 @@ describe('PaperTrading', () => {
 
     const button = await screen.findByRole('button', { name: '运行今日模拟盘' })
     expect(button).toBeDisabled()
-    expect(screen.getByText('该数据日已完成，重复运行将进行幂等校验')).toBeInTheDocument()
+    expect(screen.getByText('今日决策已完成')).toBeInTheDocument()
+    expect(screen.getByText('再次运行不会产生重复交易')).toBeInTheDocument()
     fireEvent.click(button)
     expect(api.paperTradingRun).not.toHaveBeenCalled()
   })

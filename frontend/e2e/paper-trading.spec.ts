@@ -1,6 +1,41 @@
 import { expect, test } from '@playwright/test'
 import { installMockApi, paperTradingDashboard } from './mock-api'
 
+test('Today Workbench and Paper Account expose distinct product responsibilities', async ({ page }) => {
+  const unexpectedRequests = await installMockApi(page)
+
+  await page.goto('/paper-trading')
+  await expect(page.getByRole('heading', { name: '今日工作台' })).toBeVisible()
+  for (const region of [
+    '今日市场状态',
+    '今日 Research Signal',
+    '今日 Paper Action',
+    '今日持仓',
+    '今日 PnL',
+    '今日待办',
+    'ChenQuant Daily 摘要',
+    '最近 Signal Timeline',
+  ]) {
+    await expect(page.getByRole('region', { name: region })).toBeVisible()
+  }
+  await expect(page.getByRole('button', { name: '运行今日模拟盘' })).toBeVisible()
+  await expect(page.getByRole('region', { name: '历史交易' })).toHaveCount(0)
+  await expect(page.getByRole('region', { name: '历史决策' })).toHaveCount(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1)
+
+  await page.goto('/paper-account')
+  await expect(page.getByRole('heading', { name: '模拟账户' })).toBeVisible()
+  for (const region of ['账户总览', '当前持仓', '历史交易', '历史决策', '账户 PnL']) {
+    await expect(page.getByRole('region', { name: region })).toBeVisible()
+  }
+  await expect(page.getByLabel('权益曲线')).toBeVisible()
+  await expect(page.getByRole('button', { name: '运行今日模拟盘' })).toHaveCount(0)
+  await expect(page.getByRole('region', { name: '今日待办' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: '返回今日工作台' })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1)
+  expect(unexpectedRequests).toEqual([])
+})
+
 test('one-click Paper Trading run persists across refresh and rejects double click', async ({ page }, testInfo) => {
   let state: Record<string, unknown> = paperTradingDashboard
   let runRequests = 0
@@ -59,24 +94,34 @@ test('one-click Paper Trading run persists across refresh and rejects double cli
 
   await page.goto('/paper-trading')
   const run = page.getByRole('button', { name: '运行今日模拟盘' })
+  const tasks = page.getByRole('region', { name: '今日待办' })
   await expect(run).toBeEnabled()
-  await expect(page.getByText('点击运行后将校验并准备今日单票日线输入')).toBeVisible()
+  await expect(tasks.getByText('今日待运行')).toBeVisible()
+  await expect(tasks.getByText('点击运行今日模拟盘')).toBeVisible()
   await run.evaluate((button: HTMLButtonElement) => {
     button.click()
     button.click()
   })
 
-  await expect(page.getByText('本次已写入日结')).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: '今日模拟盘已完成' })).toHaveText('今日模拟盘已完成')
   expect(runRequests).toBe(1)
   await expect(page.getByText('MIXED OBSERVATION').first()).toBeVisible()
   await expect(page.getByText('HOLD').first()).toBeVisible()
-  await expect(page.getByText('ChenQuant Paper Trading Daily')).toBeVisible()
-  await expect(page.getByLabel('权益曲线')).toBeVisible()
+  const dailySummary = page.getByRole('region', { name: 'ChenQuant Daily 摘要' })
+  await expect(dailySummary).toBeVisible()
+  await expect(dailySummary).toContainText('Claims')
+  await expect(page.getByLabel('权益曲线')).toHaveCount(0)
 
   await page.reload()
   await expect(page.getByText('MIXED OBSERVATION').first()).toBeVisible()
   await expect(page.getByRole('button', { name: '运行今日模拟盘' })).toBeDisabled()
-  await expect(page.getByText('该数据日已完成，重复运行将进行幂等校验')).toBeVisible()
+  await expect(page.getByRole('region', { name: '今日待办' })).toContainText('今日决策已完成')
+  await expect(page.getByRole('region', { name: '今日待办' })).toContainText('再次运行不会产生重复交易')
+
+  await page.goto('/paper-account')
+  await expect(page.getByLabel('权益曲线')).toBeVisible()
+  await expect(page.getByRole('region', { name: '历史决策' })).toContainText('MIXED OBSERVATION')
+  await expect(page.getByRole('button', { name: '运行今日模拟盘' })).toHaveCount(0)
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(overflow).toBeLessThanOrEqual(1)

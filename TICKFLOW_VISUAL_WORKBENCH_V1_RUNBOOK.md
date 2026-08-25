@@ -6,6 +6,8 @@
 
 `TICKFLOW_VISUAL_PRODUCT_CLEANUP_RELEASED`
 
+`TICKFLOW_WORKBENCH_ACCOUNT_UX_SPLIT_RELEASED`
+
 This is a local, single-symbol A-share research and Paper Trading workbench for
 `000403.SZ` 派林生物. It is always `SIMULATION ONLY`; real trading and broker
 connectivity are disabled.
@@ -86,6 +88,17 @@ The top status bar describes the actual runtime as `本地模式`, reports backe
 and data-date status, and always shows `SIMULATION ONLY`. It does not represent
 the local process as a cloud deployment.
 
+`/paper-trading` is the Today Workbench. It answers what to do today: market
+and input readiness, Research Signal, Paper Action, deterministic tasks, today's
+position/PnL, ChenQuant Daily summary and the recent signal timeline. It is the
+only page with the `运行今日模拟盘` button.
+
+`/paper-account` is the Paper Account. It answers how the account has performed
+over its lifetime: account KPIs, position lots and T+1 sellable quantity,
+realized/unrealized PnL, equity curve, trades and decisions. It has no run
+button. Both pages read the same persisted Option C dashboard and account state;
+the split does not create a second ledger or calculation path.
+
 ## Capability Labels
 
 Visual v1 labels capabilities by their actual runtime state, not by historical
@@ -130,9 +143,11 @@ Paper Trading page. Do not attempt to repair this state by entering an API Key.
 2. Confirm the page shows the intended date and `SIMULATION ONLY / REAL TRADING
    DISABLED`.
 3. Click `运行今日模拟盘` once.
-4. Wait for `本次已写入日结`.
-5. Review Research Signal, Paper Action, Claims date, account KPIs, positions,
-   decisions, trades, equity/PnL, and ChenQuant Daily.
+4. Wait for `今日模拟盘已完成`.
+5. On `/paper-trading`, review today's status, Research Signal, Paper Action,
+   tasks, position/PnL and ChenQuant Daily summary.
+6. Open `/paper-account` to review account KPIs, positions, decisions, trades,
+   equity curve and lifecycle PnL.
 
 Before 15:10 the button is disabled. A stale market date, unavailable source,
 invalid raw/qfq relationship, incomplete calendar, duplicate run, or tampered
