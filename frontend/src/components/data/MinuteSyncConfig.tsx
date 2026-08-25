@@ -110,7 +110,7 @@ export function MinuteSyncConfig({ caps, onJobStart }: { caps: { label: string; 
           </div>
           <span className="text-[10px] text-muted">天</span>
           {!hasMinuteCap && (
-            <span className="text-[10px] text-warning/80 bg-warning/8 rounded px-1.5 py-px font-medium">需 Pro+</span>
+            <span className="text-[10px] text-warning/80 bg-warning/8 rounded px-1.5 py-px font-medium">DISABLED</span>
           )}
         </div>
       </div>

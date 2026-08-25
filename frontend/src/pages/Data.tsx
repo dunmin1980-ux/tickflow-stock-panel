@@ -11,24 +11,17 @@ import {
   CheckSquare,
   Trash2,
   Plus,
-  Wifi,
   SlidersHorizontal,
   AlertTriangle,
   Info,
   WandSparkles,
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
-import { EndpointTestDialog } from '@/components/EndpointTestDialog'
 import { api, type ExtDataConfig } from '@/lib/api'
 import {
   useCapabilities,
-  useSettings,
   usePreferences,
-  useQuoteStatus,
-  useQuoteInterval,
   useDataStatus,
 } from '@/lib/useSharedQueries'
-import { useToggleRealtimeQuotes, useUpdateQuoteInterval } from '@/lib/useSharedMutations'
 import { QK } from '@/lib/queryKeys'
 import { PageHeader } from '@/components/PageHeader'
 import { formatScheduleDatePart, formatScheduleTimePart, isToday } from '@/lib/format'
@@ -42,15 +35,25 @@ import { ScheduleEditor } from '@/components/data/ScheduleEditor'
 import { ExtendHistoryPanel } from '@/components/data/ExtendHistoryPanel'
 import { RepairDailyPanel } from '@/components/data/RepairDailyPanel'
 import { EnrichedRebuildPanel } from '@/components/data/EnrichedRebuildPanel'
-import { MinuteSyncConfig } from '@/components/data/MinuteSyncConfig'
 import { PipelineScopeConfig } from '@/components/data/PipelineScopeConfig'
 import { PageSettingsModal, getCardVisibility, getCardOrder, type CardKey } from '@/components/data/PageSettingsModal'
-import { QuoteConfigCard } from '@/components/data/QuoteConfigCard'
 import { EnrichedSchemaModal } from '@/components/data/SchemaModal'
 import { Skeleton } from '@/components/data/Skeleton'
 import { ExtDataStatCard } from '@/components/ext-data/ExtDataStatCard'
 import { CreateExtDialog } from '@/components/ext-data/CreateExtDialog'
 import { EditExtDialog } from '@/components/ext-data/EditExtDialog'
+
+const VISUAL_DATA_CAPABILITIES = [
+  ['股票列表', 'READY'],
+  ['日 K', 'READY'],
+  ['除权因子', 'READY'],
+  ['Enriched', 'READY'],
+  ['指数', 'READY'],
+  ['分钟 K', 'DISABLED'],
+  ['财务数据', 'NOT CONNECTED'],
+  ['ETF', 'BETA'],
+  ['扩展概念/行业', 'SNAPSHOT'],
+] as const
 
 export function Data() {
   const qc = useQueryClient()
@@ -59,7 +62,6 @@ export function Data() {
   const topRef = useRef<HTMLDivElement>(null)
 
   const caps = useCapabilities()
-  const settings = useSettings()
 
   const status = useDataStatus({
     refetchInterval: (query) => {
@@ -86,11 +88,21 @@ export function Data() {
     },
   })
 
+  const prefs = usePreferences()
+
   const startSync = useMutation({
-    mutationFn: api.pipelineRun,
+    mutationFn: async () => {
+      await api.updateMinuteSync(
+        false,
+        prefs.data?.minute_sync_days ?? 5,
+        prefs.data?.minute_sync_segment_days ?? 1,
+      )
+      return api.pipelineRun()
+    },
     onSuccess: ({ job_id }) => {
       setActiveJobId(job_id)
       startTime.current = Date.now()
+      qc.invalidateQueries({ queryKey: QK.preferences })
     },
   })
 
@@ -131,7 +143,6 @@ export function Data() {
   const [indexExtendValue, setIndexExtendValue] = useState(6)
   const [indexExtendUnit, setIndexExtendUnit] = useState<'month' | 'year'>('month')
   const [schemaTable, setSchemaTable] = useState<string | null>(null)
-  const [showEndpointTest, setShowEndpointTest] = useState(false)
   const [showCreateExt, setShowCreateExt] = useState(false)
   const [showRepair, setShowRepair] = useState(false)
   const [editingExt, setEditingExt] = useState<ExtDataConfig | null>(null)
@@ -157,40 +168,6 @@ export function Data() {
     },
   })
 
-  const prefs = usePreferences()
-
-  // 数据源列表 + 当前数据源 (顶部"切换数据源"按钮展示)
-  const dataSources = useQuery({
-    queryKey: QK.dataSources,
-    queryFn: api.dataSources,
-    staleTime: 60_000,
-  })
-  const activeProvider = prefs.data?.daily_data_provider || 'tickflow'
-  const activeDataSourceName = activeProvider === 'tickflow'
-    ? 'TickFlow'
-    : (dataSources.data?.custom?.find(s => s.name === activeProvider)?.display_name || activeProvider)
-
-  // tierKey → 自定义数据集名映射 (用于数据画像 CapBadge 显示数据源名而非 TickFlow 档位)
-  const TIERKEY_TO_DATASET: Record<string, string> = {
-    daily: 'daily',
-    adj_factor: 'adj_factor',
-    etf: 'daily',        // ETF 复用日K能力
-    minute: 'minute',
-    financials: 'financial',
-  }
-  // 当前 custom 源支持的数据集集合
-  const activeCustomDatasets = activeProvider !== 'tickflow'
-    ? new Set(dataSources.data?.custom?.find(s => s.name === activeProvider)?.datasets || [])
-    : new Set<string>()
-  // 给定 tierKey, 返回 custom provider 显示名 (走 custom 时) 或 null (走 TickFlow)
-  const getCustomProviderName = (tierKey: string): string | null => {
-    if (activeProvider === 'tickflow') return null
-    const ds = TIERKEY_TO_DATASET[tierKey]
-    if (ds && activeCustomDatasets.has(ds)) return activeDataSourceName
-    return null
-  }
-
-  const minuteAuto = prefs.data?.minute_sync_enabled ?? false
   const pipelineSched = prefs.data?.pipeline_schedule ?? { hour: 15, minute: 30 }
   const instrumentsSched = prefs.data?.instruments_schedule ?? { hour: 9, minute: 10 }
   const indexDailyBatchSize = prefs.data?.index_daily_batch_size ?? 100
@@ -204,36 +181,8 @@ export function Data() {
     onSuccess: () => qc.invalidateQueries({ queryKey: QK.preferences }),
   })
 
-  const [showIntervalEdit, setShowIntervalEdit] = useState(false)
-  const handleToggleIntervalEdit = useCallback((fromEvent?: boolean) => {
-    setShowIntervalEdit(v => {
-      const next = !v
-      if (!fromEvent) {
-        window.dispatchEvent(new CustomEvent('quote-interval-editor-toggle', { detail: { source: 'data' } }))
-      }
-      return next
-    })
-  }, [])
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const ce = e as CustomEvent
-      if (ce.detail?.source !== 'data') {
-        setShowIntervalEdit(v => !v)
-      }
-    }
-    window.addEventListener('quote-interval-editor-toggle', handler)
-    return () => window.removeEventListener('quote-interval-editor-toggle', handler)
-  }, [])
-  const quoteInterval = useQuoteInterval()
-  const updateInterval = useUpdateQuoteInterval()
-
-  const realtimeEnabled = prefs.data?.realtime_quotes_enabled ?? false
-  const quoteStatus = useQuoteStatus()
-  const toggleQuote = useToggleRealtimeQuotes()
-
   const hasAdjCap = !!caps.data?.capabilities?.['adj_factor']
   const hasDailyBatchCap = !!caps.data?.capabilities?.['kline.daily.batch']
-  const hasMinuteCap = !!caps.data?.capabilities?.['kline.minute.batch']
   const indexAuto = prefs.data?.pipeline_pull_index ?? true
   const etfAuto = prefs.data?.pipeline_pull_etf ?? false
   const pipelineSteps = [
@@ -242,7 +191,6 @@ export function Data() {
     '指标',
     ...(indexAuto ? ['指数'] : []),
     ...(etfAuto ? ['ETF'] : []),
-    ...((hasMinuteCap && minuteAuto) ? ['分钟K'] : []),
   ]
 
   // 数据画像卡片显隐(由页面设置弹窗控制,存 localStorage)
@@ -282,8 +230,6 @@ export function Data() {
   const isRunning = job.data?.status === 'running' || job.data?.status === 'pending'
   const isStarting = startSync.isPending
   const hasData = !!(s?.instruments?.rows || s?.daily?.rows)
-  // none 档(无 key / 无效 key) → 禁用立即同步 (同步依赖付费档的批量端点)
-  const isNoKey = settings.data?.mode === 'none'
   const indexOverviewStats = s ? {
     rows: 0,
     earliest_date: s.index_daily?.earliest_date ?? s.index_enriched?.earliest_date ?? null,
@@ -376,6 +322,7 @@ export function Data() {
             skipped={skippedCards.has('instruments')}
             stagePct={activeCard === 'instruments' ? (job.data?.stage_pct ?? 0) : 0}
             tierKey="instruments"
+            capabilityStatus="READY"
             capLimits={caps.data?.capabilities}
             tierLabel={caps.data?.label}
             auto
@@ -394,9 +341,9 @@ export function Data() {
             skipped={skippedCards.has('daily')}
             stagePct={activeCard === 'daily' ? (job.data?.stage_pct ?? 0) : 0}
             tierKey="daily"
+            capabilityStatus="READY"
             capLimits={caps.data?.capabilities}
             tierLabel={caps.data?.label}
-            customProvider={getCustomProviderName('daily')}
             auto
             onShowFields={() => setSchemaTable('daily')}
             onSettings={hasData ? () => setOpenSettings(v => v === 'daily' ? null : 'daily') : undefined}
@@ -415,9 +362,9 @@ export function Data() {
             skipped={skippedCards.has('adj_factor')}
             stagePct={activeCard === 'adj_factor' ? (job.data?.stage_pct ?? 0) : 0}
             tierKey="adj_factor"
+            capabilityStatus="READY"
             capLimits={caps.data?.capabilities}
             tierLabel={caps.data?.label}
-            customProvider={getCustomProviderName('adj_factor')}
             auto
             onShowFields={() => setSchemaTable('adj_factor')}
           />
@@ -434,6 +381,7 @@ export function Data() {
             skipped={skippedCards.has('enriched')}
             stagePct={activeCard === 'enriched' ? (job.data?.stage_pct ?? 0) : 0}
             tierKey="enriched"
+            capabilityStatus="READY"
             capLimits={caps.data?.capabilities}
             tierLabel={caps.data?.label}
             auto
@@ -456,6 +404,7 @@ export function Data() {
             skipped={skippedCards.has('index_daily')}
             stagePct={activeCard === 'index_daily' ? (job.data?.stage_pct ?? 0) : 0}
             tierKey="daily"
+            capabilityStatus="READY"
             capLimits={caps.data?.capabilities}
             tierLabel={caps.data?.label}
             auto={indexAuto}
@@ -478,9 +427,9 @@ export function Data() {
             stats={etfOverviewStats}
             loading={isLoading}
             tierKey="etf"
+            capabilityStatus={s?.etf_daily || s?.etf_instruments ? 'READY' : 'BETA'}
             capLimits={caps.data?.capabilities}
             tierLabel={caps.data?.label}
-            customProvider={getCustomProviderName('etf')}
             auto={etfAuto}
             subLabel="维表 · 日K · 指标"
             fieldTabs={[
@@ -503,13 +452,11 @@ export function Data() {
             skipped={skippedCards.has('minute')}
             stagePct={activeCard === 'minute' ? (job.data?.stage_pct ?? 0) : 0}
             tierKey="minute"
+            capabilityStatus="DISABLED"
             capLimits={caps.data?.capabilities}
             tierLabel={caps.data?.label}
-            customProvider={getCustomProviderName('minute')}
-            auto={minuteAuto}
+            auto={false}
             onShowFields={() => setSchemaTable('minute')}
-            onSettings={hasData ? () => setOpenSettings(v => v === 'minute' ? null : 'minute') : undefined}
-            settingsOpen={openSettings === 'minute'}
           />
         )
       case 'financials':
@@ -520,9 +467,9 @@ export function Data() {
             stats={s?.financials ? { rows: s.financials.rows } : null}
             loading={isLoading}
             tierKey="financials"
+            capabilityStatus="NOT CONNECTED"
             capLimits={caps.data?.capabilities}
             tierLabel={caps.data?.label}
-            customProvider={getCustomProviderName('financials')}
           />
         )
       default:
@@ -579,28 +526,12 @@ export function Data() {
                 扩展数据
               </button>
               <button
-                onClick={() => setShowEndpointTest(true)}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-btn text-secondary hover:text-accent hover:bg-accent/8 text-xs transition-colors duration-150"
-              >
-                <Wifi className="h-3.5 w-3.5" />
-                测试端点
-              </button>
-              <button
                 onClick={() => setOpenSettings('page-settings')}
                 className="inline-flex items-center gap-1 px-2 py-1 rounded-btn text-secondary hover:text-accent hover:bg-accent/8 text-xs transition-colors duration-150"
               >
                 <SlidersHorizontal className="h-3.5 w-3.5" />
                 页面设置
               </button>
-              <div className="w-px h-4 bg-border" />
-              <Link
-                to="/settings?tab=data-sources"
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-btn text-secondary hover:text-accent hover:bg-accent/8 text-xs transition-colors duration-150"
-                title="切换数据源"
-              >
-                <Database className="h-3.5 w-3.5" />
-                <span className="text-foreground/80 max-w-[120px] truncate">{activeDataSourceName}</span>
-              </Link>
               <button
                 onClick={() => setShowClearConfirm(true)}
                 disabled={isRunning}
@@ -615,20 +546,20 @@ export function Data() {
       />
 
       <div className="max-w-6xl space-y-6 px-3 py-4 sm:px-5 lg:px-8 lg:py-6">
-        {/* None 档提示 —— 非阻断: 无需 Key 也可获取历史日K, 仅实时行情等扩展能力受限 */}
-        {isNoKey && (
-          <div className="flex items-center gap-2 rounded-card border border-border bg-elevated/40 px-3 py-2 text-xs">
-            <Info className="h-4 w-4 shrink-0 text-muted" />
-            <span className="text-secondary leading-relaxed">
-              当前为 None 档,将使用免费数据源获取历史日K(无需注册)。
-              配置 API Key 可解锁实时行情监控等扩展能力,前往
-              <Link to="/settings?tab=account" className="mx-0.5 font-medium text-accent hover:underline">
-                配置
-              </Link>
-              。
-            </span>
-          </div>
-        )}
+        <ul aria-label="数据能力状态" className="grid grid-cols-2 border-y border-border sm:grid-cols-3 lg:grid-cols-5">
+          {VISUAL_DATA_CAPABILITIES.map(([label, capability], index) => (
+            <li key={label} className={`min-w-0 px-3 py-2.5 ${index > 0 ? 'border-l border-border' : ''}`}>
+              <div className="truncate text-[10px] text-muted">{label}</div>
+              <div className={capability === 'READY'
+                ? 'mt-1 font-mono text-[11px] font-semibold text-bull'
+                : capability === 'BETA' || capability === 'SNAPSHOT'
+                  ? 'mt-1 font-mono text-[11px] font-semibold text-accent'
+                  : 'mt-1 font-mono text-[11px] font-semibold text-warning'}>
+                {capability}
+              </div>
+            </li>
+          ))}
+        </ul>
 
         {/* 实时进度 */}
         <AnimatePresence>
@@ -645,23 +576,17 @@ export function Data() {
           )}
         </AnimatePresence>
 
-        {/* 实时行情 + 存储 + 调度 */}
+        {/* 运行边界 + 存储 + 调度 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <QuoteConfigCard
-            enabled={realtimeEnabled}
-            running={quoteStatus.data?.running ?? false}
-            isTrading={quoteStatus.data?.is_trading_hours ?? false}
-            lastFetchMs={quoteStatus.data?.last_fetch_ms ?? null}
-            intervalS={quoteInterval.data?.interval ?? quoteStatus.data?.interval_s ?? 6}
-            intervalMin={quoteInterval.data?.min_interval ?? 6}
-            intervalMax={quoteInterval.data?.max_interval ?? 60}
-            loading={quoteStatus.isLoading}
-            onToggle={(v) => toggleQuote.mutate(v)}
-            toggling={toggleQuote.isPending}
-            showIntervalEdit={showIntervalEdit}
-            onShowIntervalEdit={handleToggleIntervalEdit}
-            onIntervalChange={(v) => updateInterval.mutate(v)}
-          />
+          <div className="rounded-card border border-border bg-surface p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-medium text-foreground">实时行情 Provider</h3>
+              <span className="bg-warning/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-warning">DEFERRED</span>
+            </div>
+            <p className="mt-3 text-[11px] leading-relaxed text-muted">
+              Visual v1 不启动实时 Provider，不读取历史凭据。
+            </p>
+          </div>
 
           {/* 自动调度 */}
           <div className="rounded-card border border-border bg-surface p-4">
@@ -912,15 +837,6 @@ export function Data() {
         onClose={() => setSchemaTable(null)}
       />
 
-      {showEndpointTest && (
-        <EndpointTestDialog
-          hasKey={settings.data?.mode === 'api_key'}
-          tierLabel={settings.data?.tier_label ?? ''}
-          currentEndpoint={settings.data?.current_endpoint ?? ''}
-          onClose={() => setShowEndpointTest(false)}
-        />
-      )}
-
       <AnimatePresence>
         {showCreateExt && (
           <CreateExtDialog onClose={() => setShowCreateExt(false)} />
@@ -1074,19 +990,11 @@ export function Data() {
                 </button>
                 {!hasDailyBatchCap && (
                   <span className="text-[10px] text-warning/80 bg-warning/8 rounded px-1.5 py-px font-medium">
-                    需 Starter+ / Pro 批量日 K 权限
+                    当前 Visual v1 未启用批量指数同步
                   </span>
                 )}
               </div>
             </div>
-          </SettingsModal>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {openSettings === 'minute' && (
-          <SettingsModal title="分钟 K · 同步设置" onClose={() => setOpenSettings(null)}>
-            <MinuteSyncConfig caps={caps.data} onJobStart={(jobId) => { setActiveJobId(jobId); setOpenSettings(null) }} />
           </SettingsModal>
         )}
       </AnimatePresence>

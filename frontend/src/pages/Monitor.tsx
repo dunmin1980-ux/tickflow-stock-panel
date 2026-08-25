@@ -544,18 +544,20 @@ function AlertsList({ alertsQuery, confirmClear, setConfirmClear, total, enterTs
         pending={clearMut.isPending}
       />
 
-      <StockPreviewDialog
-        symbol={memberPreview?.symbol ?? previewEv?.symbol ?? null}
-        name={memberPreview?.name ?? previewEv?.name ?? undefined}
-        triggerInfo={previewEv ? {
-          price: previewEv.price ?? null,
-          changePct: previewEv.change_pct ?? null,
-          ts: previewEv.ts,
-          signals: previewEv.signals,
-          message: previewEv.message,
-        } : null}
-        onClose={() => { setPreviewEv(null); setMemberPreview(null) }}
-      />
+      {(memberPreview || previewEv) && (
+        <StockPreviewDialog
+          symbol={memberPreview?.symbol ?? previewEv?.symbol ?? null}
+          name={memberPreview?.name ?? previewEv?.name ?? undefined}
+          triggerInfo={previewEv ? {
+            price: previewEv.price ?? null,
+            changePct: previewEv.change_pct ?? null,
+            ts: previewEv.ts,
+            signals: previewEv.signals,
+            message: previewEv.message,
+          } : null}
+          onClose={() => { setPreviewEv(null); setMemberPreview(null) }}
+        />
+      )}
 
       <DimensionMembersDialog
         target={dimensionTarget}
@@ -751,11 +753,13 @@ function RulesList({ rulesQuery, onEdit }: {
         })
       )}
 
-      <StockPreviewDialog
-        symbol={previewSymbol}
-        name={previewSymbol ? symbolNames[previewSymbol] : undefined}
-        onClose={() => setPreviewSymbol(null)}
-      />
+      {previewSymbol && (
+        <StockPreviewDialog
+          symbol={previewSymbol}
+          name={symbolNames[previewSymbol]}
+          onClose={() => setPreviewSymbol(null)}
+        />
+      )}
     </div>
   )
 }

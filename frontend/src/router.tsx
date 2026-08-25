@@ -9,14 +9,14 @@ import { Auth } from './pages/Auth'
 const Watchlist = lazy(() => import('./pages/Watchlist').then(m => ({ default: m.Watchlist })))
 const Screener = lazy(() => import('./pages/Screener').then(m => ({ default: m.Screener })))
 const Backtest = lazy(() => import('./pages/Backtest').then(m => ({ default: m.Backtest })))
-const Financials = lazy(() => import('./pages/Financials').then(m => ({ default: m.Financials })))
+const FinancialUnavailable = lazy(() => import('./pages/FinancialUnavailable').then(m => ({ default: m.FinancialUnavailable })))
 const Data = lazy(() => import('./pages/Data').then(m => ({ default: m.Data })))
 const Monitor = lazy(() => import('./pages/Monitor').then(m => ({ default: m.Monitor })))
 const AnalysisDetail = lazy(() => import('./pages/AnalysisDetail').then(m => ({ default: m.AnalysisDetail })))
 const ConceptAnalysis = lazy(() => import('./pages/ConceptAnalysis').then(m => ({ default: m.ConceptAnalysis })))
 const IndustryAnalysis = lazy(() => import('./pages/IndustryAnalysis').then(m => ({ default: m.IndustryAnalysis })))
 const StockAnalysis = lazy(() => import('./pages/StockAnalysis').then(m => ({ default: m.StockAnalysis })))
-const Review = lazy(() => import('./pages/Review').then(m => ({ default: m.Review })))
+const DailyReview = lazy(() => import('./pages/DailyReview').then(m => ({ default: m.DailyReview })))
 const LimitUpLadder = lazy(() => import('./pages/LimitUpLadder').then(m => ({ default: m.LimitUpLadder })))
 const Branding = lazy(() => import('./pages/Branding').then(m => ({ default: m.Branding })))
 const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })))
@@ -36,16 +36,17 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="/paper-trading" replace /> },
       { path: 'overview', element: <Navigate to="/paper-trading" replace /> },
       { path: 'paper-trading', element: <PaperTrading /> },
+      { path: 'paper-account', element: <PaperTrading /> },
       { path: 'analysis', element: <Navigate to="/settings?tab=ext-pages" replace /> },
       { path: 'analysis/:menuId', element: <AnalysisDetail /> },
       { path: 'concept-analysis', element: <ConceptAnalysis /> },
       { path: 'industry-analysis', element: <IndustryAnalysis /> },
       { path: 'stock-analysis', element: <StockAnalysis /> },
-      { path: 'review', element: <Review /> },
+      { path: 'review', element: <DailyReview /> },
       { path: 'watchlist', element: <Watchlist /> },
       { path: 'screener', element: <Screener /> },
       { path: 'backtest', element: <Backtest /> },
-      { path: 'financials', element: <Financials /> },
+      { path: 'financials', element: <FinancialUnavailable /> },
       { path: 'data', element: <Data /> },
       { path: 'gold', element: <GoldWorkspace /> },
       { path: 'monitor', element: <Monitor /> },

@@ -111,8 +111,8 @@ test('Visual v1 settings expose runtime boundaries without historical key forms'
   await expect(page.getByText('当前 Visual v1 不使用此配置')).toBeVisible()
   await expect(page.getByPlaceholder('粘贴 TickFlow API Key')).toHaveCount(0)
   if (!isMobile) {
-    await expect(page.getByText('Visual v1 不使用此 Key')).toBeVisible()
-    await expect(page.getByText('Provider 已延后 · Visual v1 不调用')).toBeVisible()
+    const primary = page.getByRole('navigation', { name: '主导航' })
+    await expect(primary.getByRole('link', { name: /Provider|AI配置|实时行情/ })).toHaveCount(0)
   }
   await expect(page.getByText('配置 Key 解锁更多能力')).toHaveCount(0)
   await expect(page.getByText('接入策略生成模型')).toHaveCount(0)

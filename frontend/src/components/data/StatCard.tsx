@@ -88,12 +88,14 @@ function CapBadge({ hasCap, isLocal, tierLabel, tierReq, capInfo, localSuffix, c
 }
 
 export type FieldTab = { label: string; table: string }
+export type VisualCapabilityStatus = 'READY' | 'BETA' | 'SNAPSHOT' | 'DISABLED' | 'NOT CONNECTED'
 
 export function StatCard({
   title, hint, stats, isInstrument = false, loading = false,
   active = false, done = false, skipped = false, stagePct = 0,
   tierKey, capLimits, tierLabel, customProvider,
   auto, onSettings, onShowFields, settingsOpen, subLabel, localBadgeSuffix, fieldTabs,
+  capabilityStatus,
 }: {
   title: string
   hint: string
@@ -114,6 +116,7 @@ export function StatCard({
   auto?: boolean
   subLabel?: string
   localBadgeSuffix?: string
+  capabilityStatus?: VisualCapabilityStatus
   // 多表字段入口: [{label: '维表', table: 'index_instruments'}, ...]
   // 提供时渲染多个图标按钮(每个对应一张表的字段说明); 否则回退到单个 onShowFields
   fieldTabs?: FieldTab[]
@@ -243,15 +246,25 @@ export function StatCard({
         {loading ? (
           <Skeleton w="w-16" h="h-4" />
         ) : (
-          <CapBadge
-            hasCap={hasCap}
-            isLocal={isLocal}
-            tierLabel={tierLabel}
-            tierReq={meta?.tierReq}
-            capInfo={capInfo}
-            localSuffix={localBadgeSuffix}
-            customProvider={customProvider}
-          />
+          capabilityStatus ? (
+            <span className={capabilityStatus === 'READY'
+              ? 'rounded bg-bull/10 px-1.5 py-px text-[10px] font-semibold text-bull'
+              : capabilityStatus === 'BETA' || capabilityStatus === 'SNAPSHOT'
+                ? 'rounded bg-accent/10 px-1.5 py-px text-[10px] font-semibold text-accent'
+                : 'rounded bg-warning/10 px-1.5 py-px text-[10px] font-semibold text-warning'}>
+              {capabilityStatus}
+            </span>
+          ) : (
+            <CapBadge
+              hasCap={hasCap}
+              isLocal={isLocal}
+              tierLabel={tierLabel}
+              tierReq={meta?.tierReq}
+              capInfo={capInfo}
+              localSuffix={localBadgeSuffix}
+              customProvider={customProvider}
+            />
+          )
         )}
       </div>
 

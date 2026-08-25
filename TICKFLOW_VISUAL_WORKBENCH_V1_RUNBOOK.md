@@ -4,6 +4,8 @@
 
 `TICKFLOW_VISUAL_WORKBENCH_V1_RELEASED`
 
+`TICKFLOW_VISUAL_PRODUCT_CLEANUP_RELEASED`
+
 This is a local, single-symbol A-share research and Paper Trading workbench for
 `000403.SZ` 派林生物. It is always `SIMULATION ONLY`; real trading and broker
 connectivity are disabled.
@@ -58,6 +60,54 @@ capability probes, market synchronization schedules, external data pulls,
 notification transports, or financial synchronization.
 
 Do not configure a real Provider for daily Visual v1 use.
+
+## Daily Navigation
+
+The default route opens `/paper-trading`. The desktop primary navigation is
+limited to the six daily-use areas below; Settings remains at the bottom of the
+sidebar:
+
+```text
+今日工作台 -> /paper-trading
+模拟盘     -> /paper-account
+个股研究   -> /stock-analysis
+市场       -> /indices
+监控       -> /monitor
+数据       -> /data
+设置       -> /settings
+```
+
+The mobile navigation exposes the same daily areas in compact form. Historical
+watchlist, screener, backtest, ladder, concept, industry, financial, Provider,
+realtime and AI configuration entries are not primary navigation items. Their
+underlying legacy routes are preserved where applicable.
+
+The top status bar describes the actual runtime as `本地模式`, reports backend
+and data-date status, and always shows `SIMULATION ONLY`. It does not represent
+the local process as a cloud deployment.
+
+## Capability Labels
+
+Visual v1 labels capabilities by their actual runtime state, not by historical
+subscription tiers:
+
+```text
+Paper Trading Engine=ACTIVE
+AI Provider=DEFERRED
+Real Trading=DISABLED
+Minute K=DISABLED
+Financial Data=NOT CONNECTED
+Realtime Quote Provider=DEFERRED
+```
+
+Before the Data page starts its daily pipeline, Visual v1 persists minute sync
+as disabled. This prevents a historical `minute_sync_enabled=true` preference
+from silently reactivating minute requests behind the `DISABLED` label.
+
+`/review` presents the persisted deterministic ChenQuant Daily output and does
+not expose model generation. `/financials` is retained as a compatibility route
+that reports `NOT CONNECTED`. The Data page keeps its useful local data status
+and operations while hiding historical API Key and Provider configuration UX.
 
 ## Backend Availability
 

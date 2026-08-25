@@ -2,11 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Activity, Loader2, Lock, RefreshCw, Search } from 'lucide-react'
-import { api, type IndexInstrument, type KlineRow, type MinuteKlineRow } from '@/lib/api'
+import { api, type IndexInstrument, type KlineRow } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
-import { useCapabilities } from '@/lib/useSharedQueries'
 import { EChartsCandlestick, type OHLC } from '@/components/EChartsCandlestick'
-import { EChartsIntraday } from '@/components/EChartsIntraday'
 
 function defaultRange() {
   const now = new Date()
@@ -72,12 +70,6 @@ export function Indices() {
   const symbolParam = searchParams.get('symbol') ?? ''
   const [selected, setSelected] = useState<string>(symbolParam)
   const [range, setRange] = useState(defaultRange)
-  const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  const [linkedPrice, setLinkedPrice] = useState<number | null>(null)
-
-  // 分时数据需 Pro+ (kline.minute.batch) 能力
-  const caps = useCapabilities()
-  const hasMinuteCap = !!caps.data?.capabilities?.['kline.minute.batch']
 
   const list = useQuery({
     queryKey: QK.indexList,
@@ -125,13 +117,6 @@ export function Indices() {
     placeholderData: (prev) => prev,
   })
 
-  const minute = useQuery({
-    queryKey: QK.indexMinute(selectedSymbol, selectedDate ?? ''),
-    queryFn: () => api.indexMinute(selectedSymbol, selectedDate ?? undefined),
-    enabled: !!selectedSymbol && !!selectedDate && hasMinuteCap,
-    placeholderData: (prev) => prev,
-  })
-
   const syncInstruments = useMutation({
     mutationFn: api.syncIndexInstruments,
     onSuccess: () => {
@@ -160,24 +145,6 @@ export function Indices() {
 
   const chartRows = useMemo(() => toOHLC(daily.data?.rows ?? []), [daily.data?.rows])
   const selectedInfo = [...topRows, ...listRows].find(r => r.symbol === selectedSymbol) || daily.data?.index_info
-  const minuteRows: MinuteKlineRow[] = minute.data?.rows ?? []
-  const selectedIdx = selectedDate ? chartRows.findIndex(r => r.date === selectedDate) : -1
-  const prevClose = selectedIdx > 0
-    ? chartRows[selectedIdx - 1].close
-    : chartRows.length >= 2
-      ? chartRows[chartRows.length - 2].close
-      : undefined
-
-  useEffect(() => {
-    setSelectedDate(null)
-    setLinkedPrice(null)
-  }, [selectedSymbol])
-
-  useEffect(() => {
-    if ((!selectedDate || !chartRows.some(r => r.date === selectedDate)) && chartRows.length > 0 && daily.data?.symbol === selectedSymbol) {
-      setSelectedDate(chartRows[chartRows.length - 1].date)
-    }
-  }, [chartRows, daily.data?.symbol, selectedDate, selectedSymbol])
   const renderIndexItem = (item: IndexInstrument) => {
     const q = quoteBySymbol.get(item.symbol)
     const pct = q?.change_pct ?? q?.pct
@@ -202,15 +169,19 @@ export function Indices() {
   }
 
   return (
-    <div className="h-full overflow-auto bg-base p-4">
-      <div className="mb-4 flex items-center justify-between gap-3">
+    <div className="h-full overflow-auto bg-base p-3 sm:p-4">
+      <div className="mb-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-lg font-semibold text-foreground">指数</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-lg font-semibold text-foreground">市场</h1>
+            <span className="text-[10px] text-muted">分钟 K</span>
+            <span className="bg-warning/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-warning">DISABLED</span>
+          </div>
           <p className="mt-1 text-xs text-muted">
             指数使用独立 kline_index_* parquet，不进入股票选股和策略链路。
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => syncInstruments.mutate()}
             disabled={syncInstruments.isPending}
@@ -230,7 +201,7 @@ export function Indices() {
         </div>
       </div>
 
-      <div className="grid grid-cols-[15rem_1fr] gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[15rem_minmax(0,1fr)]">
         <aside className="rounded-card border border-border bg-surface p-3">
           <div className="relative mb-3">
             <Search className="pointer-events-none absolute left-2 top-2 h-3.5 w-3.5 text-muted" />
@@ -244,7 +215,7 @@ export function Indices() {
           <div className="mb-3 space-y-1 border-b border-border/60 pb-3">
             {topRows.map(renderIndexItem)}
           </div>
-          <div className="max-h-[calc(100vh-24rem)] space-y-1 overflow-auto pr-1">
+          <div className="max-h-64 space-y-1 overflow-auto pr-1 xl:max-h-[calc(100vh-24rem)]">
             {(list.isLoading || search.isLoading) && <div className="py-4 text-center text-xs text-muted">加载中…</div>}
             {!list.isLoading && listRows.length === 0 && (
               <div className="rounded-btn bg-elevated p-3 text-xs text-muted">
@@ -256,7 +227,7 @@ export function Indices() {
         </aside>
 
         <main className="min-w-0 rounded-card border border-border bg-surface p-3">
-          <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="mb-3 flex flex-col items-start justify-between gap-3 lg:flex-row lg:items-center">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <Activity className="h-4 w-4 text-accent" />
@@ -271,7 +242,7 @@ export function Indices() {
                 实时缓存 {quotes.data?.count ?? 0} 只指数 · 日K来源 {daily.data?.source ?? '--'}
               </div>
             </div>
-            <div className="flex items-center gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
               <input
                 type="date"
                 value={range.start}
@@ -296,7 +267,7 @@ export function Indices() {
             </div>
           )}
           {chartRows.length > 0 && (
-            <div className="flex items-start gap-3">
+            <div className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
               <div className="min-w-0 flex-1">
                 <EChartsCandlestick
                   data={chartRows}
@@ -305,40 +276,16 @@ export function Indices() {
                   showInfoBar={true}
                   showMarkers={false}
                   symbol={selectedSymbol}
-                  linkedPrice={linkedPrice}
-                  onDateClick={setSelectedDate}
                   visibleBars={48}
                   activeIndicators={['vol', 'macd']}
                 />
               </div>
-              <div className="min-w-0 flex-1 border-l border-border pl-3" style={{ height: 620 }}>
-                {!hasMinuteCap ? (
-                  <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-                    <Lock className="h-5 w-5 text-muted" />
-                    <div className="text-xs text-secondary">分时数据权限需 Pro+</div>
-                    <div className="text-[10px] text-muted">升级套餐后可查看指数分时走势</div>
-                  </div>
-                ) : (
-                  <>
-                    {minute.isLoading && <div className="py-2 text-xs text-muted">分时加载中…</div>}
-                    {!minute.isLoading && minuteRows.length === 0 && (
-                      <div className="flex h-full items-center justify-center text-xs text-muted">
-                        暂无分时数据
-                      </div>
-                    )}
-                    {minuteRows.length > 0 && (
-                      <EChartsIntraday
-                        data={minuteRows}
-                        height={620}
-                        prevClose={prevClose}
-                        date={selectedDate ?? undefined}
-                        showLimitLines={false}
-                        showAvgLine={false}
-                        onPriceHover={setLinkedPrice}
-                      />
-                    )}
-                  </>
-                )}
+              <div className="flex min-h-40 items-center justify-center border-t border-border pt-3 text-center 2xl:min-h-0 2xl:border-l 2xl:border-t-0 2xl:pl-3 2xl:pt-0" style={{ height: 620 }}>
+                <div className="flex flex-col items-center justify-center gap-2">
+                  <Lock className="h-5 w-5 text-muted" />
+                  <div className="text-xs text-secondary">分钟 K</div>
+                  <div className="text-[10px] font-semibold text-warning">DISABLED</div>
+                </div>
               </div>
             </div>
           )}

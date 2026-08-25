@@ -1,36 +1,33 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Sparkles, LineChart, History as HistoryIcon, Loader2, ExternalLink, Bell, AlertTriangle } from 'lucide-react'
+import { LineChart, History as HistoryIcon, Loader2, ExternalLink, Bell, AlertTriangle, BotOff, X } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
 import { StockFinancialSearch } from '@/components/financials/StockFinancialSearch'
 import { StockPreviewDialog } from '@/components/StockPreviewDialog'
 import { LastStockChip } from '@/components/LastStockChip'
 import { AnalysisKChart, type PriceLevel, type LevelType } from '@/components/stock-analysis/AnalysisKChart'
-import { api } from '@/lib/api'
+import { MarkdownRenderer } from '@/components/financials/MarkdownRenderer'
+import { api, type AiStockReport } from '@/lib/api'
 import { useLastStock } from '@/lib/useLastStock'
 import { QK } from '@/lib/queryKeys'
 import { toast } from '@/components/Toast'
 import {
-  startAnalysis, findTodayReport, useHistoryReports,
-  deleteReport, openHistoryReport, loadHistory,
+  useHistoryReports,
+  deleteReport, loadHistory,
 } from '@/lib/stockAnalysisStore'
 import { WORKSPACE_RESOURCE_EVENT, useWorkspaceStatus } from '@/lib/useWorkspaceEvents'
 
 /**
- * 个股分析页 —— 日 K + 关键价位(压力/支撑/密集区/枢轴/前高前低)+ AI 四维分析。
- *
- * 与财务分析页的区别:
- *  - 以【行情 + 关键价位】为视觉主体(专用日 K 图表,不复用个股对话框图表)
- *  - AI 分析输出客观技术状态与风险提示(非买卖建议、非财务质量评级)
- *  - 报告胶囊用蓝色系,与财务分析(紫色)并存
+ * 个股研究页 —— 日 K、关键价位和已保存研究报告。
+ * Visual v1 不调用真实 AI Provider。
  */
 export function StockAnalysis() {
   const [symbol, setSymbol] = useState<string>('')
   const [name, setName] = useState<string>('')
-  const [checking, setChecking] = useState(false)
-  const [confirmReport, setConfirmReport] = useState<{ id: string; created_at: string; focus: string } | null>(null)
   const [previewSymbol, setPreviewSymbol] = useState<string | null>(null)
+  const [historyReport, setHistoryReport] = useState<AiStockReport | null>(null)
+  const [historyLoadingId, setHistoryLoadingId] = useState<string | null>(null)
   const { last: lastStock, remember: rememberStock } = useLastStock('stock-analysis')
   const workspaceStatus = useWorkspaceStatus()
   const mutationsDisabled = workspaceStatus.offlineReadonly
@@ -58,44 +55,33 @@ export function StockAnalysis() {
   const onSelect = (sym: string, nm: string) => {
     setSymbol(sym)
     setName(nm)
-    setConfirmReport(null)
     rememberStock(sym, nm)
   }
 
-  const handleAnalyze = async () => {
-    if (!symbol || checking || mutationsDisabled) return
-    setChecking(true)
+  const openSavedReport = async (reportId: string) => {
+    if (historyLoadingId) return
+    setHistoryLoadingId(reportId)
     try {
-      // 当日已分析过 → 二次确认(查看今日报告 / 重新分析)
-      const today = await findTodayReport(symbol)
-      if (today) {
-        setConfirmReport({ id: today.id, created_at: today.created_at, focus: today.focus })
-      } else {
-        await doAnalysis()
-      }
+      const response = await api.stockAnalysisReportGet(reportId)
+      setHistoryReport(response.report)
     } catch {
-      await doAnalysis()
+      toast('历史研究报告读取失败', 'error')
     } finally {
-      setChecking(false)
+      setHistoryLoadingId(null)
     }
-  }
-
-  const doAnalysis = async () => {
-    const r = await startAnalysis(symbol, name)
-    if (r.error) toast(r.error, 'error')
   }
 
   return (
     <>
       <PageHeader
         className="flex-wrap sm:flex-nowrap"
-        title="个股分析"
-        titleExtra={
-          <span className="inline-flex items-center rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-400">
-            Beta
+        title="个股研究"
+        titleExtra={(
+          <span className="inline-flex items-center gap-1 border border-warning/30 bg-warning/5 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-warning">
+            <BotOff className="h-3 w-3" />AI Provider DEFERRED
           </span>
-        }
-        subtitle="日 K · 关键价位 · AI 四维分析(技术 / 基本面 / 财务 / 消息面)"
+        )}
+        subtitle="日 K · 关键价位 · 已保存研究报告"
         right={
           <div className="flex items-center gap-2">
             <LastStockChip stock={lastStock} onSelect={onSelect} />
@@ -121,16 +107,6 @@ export function StockAnalysis() {
                 <ExternalLink className="h-3 w-3 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
               </button>
               <button
-                onClick={handleAnalyze}
-                disabled={checking || mutationsDisabled}
-                aria-disabled={checking || mutationsDisabled}
-                title={mutationsDisabled ? '离线只读，暂不能生成并保存个股复盘' : undefined}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn bg-gradient-to-r from-sky-500/25 to-blue-500/15 border border-sky-400/30 text-sky-300 text-xs font-medium hover:from-sky-500/35 hover:to-blue-500/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {checking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                AI 个股分析
-              </button>
-              <button
                 onClick={() => toast('点位提醒功能开发中,敬请期待', 'error')}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn border border-border/40 bg-elevated/40 text-muted text-xs font-medium hover:border-border/70 hover:text-secondary transition-all"
                 title="当价格触及关键价位时提醒(开发中)"
@@ -152,34 +128,30 @@ export function StockAnalysis() {
               <EmptyState
                 icon={LineChart}
                 title="选择一只股票开始分析"
-                hint="搜索代码或名称,查看日 K 与关键价位,并可让 AI 进行技术面 / 基本面 / 财务面 / 消息面四维综合分析。"
+                hint="搜索代码或名称，查看日 K、关键价位与既有研究记录。"
               />
             ) : (
               <StockAnalysisBoard symbol={symbol} />
             )}
           </div>
-          <HistorySidebar mutationsDisabled={mutationsDisabled} />
+          <HistorySidebar
+            mutationsDisabled={mutationsDisabled}
+            loadingId={historyLoadingId}
+            onOpen={openSavedReport}
+          />
         </div>
       </div>
 
-      {/* 二次确认:已有历史报告 */}
-      {confirmReport && (
-        <ConfirmModal
-          report={confirmReport}
-          onView={() => { openHistoryReport(confirmReport.id); setConfirmReport(null) }}
-          onRedo={async () => { setConfirmReport(null); await doAnalysis() }}
-          onClose={() => setConfirmReport(null)}
-          mutationsDisabled={mutationsDisabled}
+      {/* 个股日 K 详情对话框(点击名称/代码打开) */}
+      {previewSymbol && (
+        <StockPreviewDialog
+          symbol={previewSymbol}
+          name={previewSymbol === symbol ? name : undefined}
+          triggerInfo={null}
+          onClose={() => setPreviewSymbol(null)}
         />
       )}
-
-      {/* 个股日 K 详情对话框(点击名称/代码打开) */}
-      <StockPreviewDialog
-        symbol={previewSymbol}
-        name={previewSymbol === symbol ? name : undefined}
-        triggerInfo={null}
-        onClose={() => setPreviewSymbol(null)}
-      />
+      <HistoryReportDialog report={historyReport} onClose={() => setHistoryReport(null)} />
     </>
   )
 }
@@ -260,7 +232,15 @@ function StockAnalysisBoard({ symbol }: { symbol: string }) {
 }
 
 // ===== 左侧常驻:历史报告侧栏(所有股票,按时间倒序平铺) =====
-function HistorySidebar({ mutationsDisabled }: { mutationsDisabled: boolean }) {
+function HistorySidebar({
+  mutationsDisabled,
+  loadingId,
+  onOpen,
+}: {
+  mutationsDisabled: boolean
+  loadingId: string | null
+  onOpen: (reportId: string) => void
+}) {
   const { reports, loaded } = useHistoryReports()
 
   return (
@@ -281,7 +261,7 @@ function HistorySidebar({ mutationsDisabled }: { mutationsDisabled: boolean }) {
         ) : reports.length === 0 ? (
           <div className="px-3 py-10 text-center">
             <p className="text-xs text-muted">还没有任何个股分析报告</p>
-            <p className="text-[10px] text-muted/60 mt-1">选一只股票,点「AI 个股分析」生成</p>
+            <p className="text-[10px] text-muted/60 mt-1">AI Provider 已延后；当前只展示确定性行情与既有研究记录。</p>
           </div>
         ) : (
           <div className="max-h-[calc(100vh-220px)] overflow-y-auto p-2 space-y-1.5">
@@ -292,10 +272,12 @@ function HistorySidebar({ mutationsDisabled }: { mutationsDisabled: boolean }) {
               >
                 <div className="flex items-center justify-between gap-2">
                   <button
-                    onClick={() => openHistoryReport(r.id)}
+                    onClick={() => onOpen(r.id)}
+                    disabled={loadingId !== null}
                     className="flex-1 text-left min-w-0"
                   >
                     <div className="flex items-center gap-1.5 min-w-0">
+                      {loadingId === r.id && <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted" />}
                       <span className="text-xs font-medium text-foreground truncate">{r.name || r.symbol}</span>
                       <span className="text-[10px] font-mono text-muted shrink-0">{r.symbol}</span>
                     </div>
@@ -327,44 +309,40 @@ function HistorySidebar({ mutationsDisabled }: { mutationsDisabled: boolean }) {
   )
 }
 
-// ===== 二次确认弹窗 =====
-function ConfirmModal({ report, onView, onRedo, onClose, mutationsDisabled }: {
-  report: { id: string; created_at: string; focus: string }
-  onView: () => void
-  onRedo: () => void
-  onClose: () => void
-  mutationsDisabled: boolean
-}) {
+function HistoryReportDialog({ report, onClose }: { report: AiStockReport | null; onClose: () => void }) {
+  if (!report) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
-      <div
-        className="w-full max-w-sm bg-surface border border-border rounded-2xl p-5 shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-2 mb-2">
-          <HistoryIcon className="h-4 w-4 text-sky-400" />
-          <span className="text-sm font-medium text-foreground">该个股已有分析报告</span>
-        </div>
-        <p className="text-xs text-secondary leading-relaxed mb-1">
-          最近一次报告生成于 <span className="text-foreground">{fmtRelative(report.created_at)}</span>。
-        </p>
-        {report.focus && <p className="text-xs text-muted mb-1">关注点: {report.focus}</p>}
-        <p className="text-xs text-muted mb-4">可直接查看历史,或重新生成一份新报告。</p>
-        <div className="flex gap-2">
-          <button onClick={onView}
-            className="flex-1 h-8 rounded-lg bg-elevated border border-border text-xs text-secondary hover:text-foreground transition-colors">
-            查看历史
-          </button>
+    <div
+      role="dialog"
+      aria-label="历史研究报告"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-3 backdrop-blur-sm sm:p-5"
+      onClick={event => { if (event.target === event.currentTarget) onClose() }}
+    >
+      <section className="flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-card border border-border bg-surface shadow-2xl">
+        <header className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-foreground">历史研究报告</h2>
+            <p className="mt-1 truncate text-xs text-muted">
+              {report.name || report.symbol} · {report.symbol} · {report.data_as_of ?? report.created_at.slice(0, 10)}
+            </p>
+          </div>
           <button
-            onClick={onRedo}
-            disabled={mutationsDisabled}
-            aria-disabled={mutationsDisabled}
-            title={mutationsDisabled ? '离线只读，暂不能重新分析' : undefined}
-            className="flex-1 h-8 rounded-lg bg-gradient-to-r from-sky-500/20 to-blue-500/15 border border-sky-400/30 text-xs text-sky-300 hover:from-sky-500/30 transition-all disabled:cursor-not-allowed disabled:opacity-40">
-            重新分析
+            type="button"
+            aria-label="关闭历史研究报告"
+            onClick={onClose}
+            className="rounded-btn p-2 text-muted transition-colors hover:bg-elevated hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
           </button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+          <MarkdownRenderer content={report.content} />
         </div>
-      </div>
+        <footer className="border-t border-border px-4 py-2 font-mono text-[10px] text-muted">
+          HISTORICAL MATERIAL · can_publish=false · AI Provider DEFERRED
+        </footer>
+      </section>
     </div>
   )
 }

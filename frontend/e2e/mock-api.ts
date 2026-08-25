@@ -162,6 +162,22 @@ const reviewReport = {
   trading_advice: false,
 }
 
+const stockReport = {
+  id: 'stock-report-e2e',
+  symbol: '000403.SZ',
+  name: '派林生物',
+  focus: '',
+  title: '派林生物 个股日线复盘',
+  content: '# 派林生物确定性研究记录\n\n仅展示历史素材，不调用模型。',
+  summary: '确定性历史素材',
+  close: 21.35,
+  created_at: '2026-07-20T16:20:00+08:00',
+  data_as_of: '2026-07-20',
+  verification_status: 'pending',
+  can_publish: false,
+  trading_advice: false,
+}
+
 const workspaceRevision = '1'.repeat(64)
 const workspaceUpdatedAt = '2026-07-20T20:00:00+08:00'
 const workspaceResources = {
@@ -199,7 +215,7 @@ const workspaceResources = {
     resource: 'stock_reports',
     revision: workspaceRevision,
     updated_at: workspaceUpdatedAt,
-    data: { reports: [] },
+    data: { reports: [stockReport] },
   },
   market_recaps: {
     resource: 'market_recaps',
@@ -278,16 +294,20 @@ function payloadFor(url: URL): unknown | undefined {
   if (pathname === '/api/settings/preferences/quote-interval') return { interval: 6, min_interval: 3, max_interval: 60 }
   if (pathname === '/api/intraday/status') return { enabled: false, running: false, interval_s: 6, symbol_count: 0, quote_age_ms: null, is_trading_hours: false, last_fetch_ms: null }
   if (pathname === '/api/intraday/indices') return { rows: [], count: 0 }
+  if (pathname === '/api/index/list') return { results: [], count: 0 }
+  if (pathname === '/api/index/daily') return { symbol: url.searchParams.get('symbol') ?? '', rows: [], source: 'mock' }
   if (pathname === '/api/analysis-menus') return { items: [] }
   if (pathname === '/api/gold/status') return { enabled: false }
   if (pathname === '/api/paper-trading/dashboard') return paperTradingDashboard
   if (pathname === '/api/pipeline/jobs') return { active_id: null, jobs: [] }
   if (pathname === '/api/alerts') return { alerts: [], total: 0 }
+  if (pathname === '/api/monitor-rules') return { rules: [] }
 
   if (pathname === '/api/watchlist') return { symbols: [{ symbol: '600000.SH', note: '' }] }
   if (pathname === '/api/watchlist/enriched') return { rows: [marketRows[0]], as_of: '2026-07-20', elapsed_ms: 1 }
   if (pathname === '/api/kline/daily-batch') return { data: { '600000.SH': [] } }
   if (pathname === '/api/stock-analysis/reports') return { reports: [] }
+  if (pathname === `/api/stock-analysis/reports/${stockReport.id}`) return { report: stockReport }
 
   if (pathname === '/api/overview/market') return overviewMarket
   if (pathname === '/api/market-recap/reports') {
