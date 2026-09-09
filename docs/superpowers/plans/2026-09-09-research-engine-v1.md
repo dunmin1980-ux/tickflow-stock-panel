@@ -50,5 +50,9 @@ Spec: user attachment `90752372-fc50-464d-90e3-a810f6bffd89/pasted-text.txt`.
 - [x] Offline twelve-date replay x3; hash checks on protected files and input/account directories.
 - [x] Focused Option C/Claims/Renderer/Paper compatibility; frontend tests, E2E,
   build, compileall, Ruff F821, independent review. Fix P0/P1 only.
-- [ ] Runbook, compact release evidence, commit + push, match fork, clean worktree,
+- [x] Runbook, compact release evidence, commit + push, match fork, clean worktree,
   local backend running, open Today Workbench; stop before Action Integration.
+
+Implementation: `98964b31d7a1e754f39d8ebdb40e5f3f1a7cbc4c`, pushed to fork.
+Verification: backend 388, frontend 141, E2E 16, independent NO_P0_P1_FINDINGS.
+Release marker and this checklist are documentation-only closeout.
