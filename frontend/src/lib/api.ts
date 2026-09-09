@@ -4,6 +4,7 @@
 // Prod:同源(FastAPI 托管前端 dist)
 
 import { toast } from '@/components/Toast'
+import type { ResearchEngine } from './research-engine'
 import { BACKEND_OFFLINE_MESSAGE, connectivityStore, offlineSessionAccess } from './connectivity'
 import { clearAllSnapshots, getSnapshot, putSnapshot } from './offlineDb'
 import { isOfflineCacheAllowed, isWriteMethod } from './offlinePolicy'
@@ -1451,6 +1452,44 @@ export interface PaperLatestDaily {
   [key: string]: unknown
 }
 
+export interface ResearchCondition {
+  label: string
+  required: string
+  actual: string
+  passed: boolean | null
+}
+
+export interface ResearchStrategy {
+  id: string
+  name: string
+  description: string
+  status: 'MATCHED' | 'NOT_MATCHED' | 'DATA_UNAVAILABLE'
+  previous_status: 'MATCHED' | 'NOT_MATCHED' | 'DATA_UNAVAILABLE'
+  change: 'NEW_MATCH' | 'MATCH_ENDED' | 'UNCHANGED' | 'UNAVAILABLE'
+  conditions: ResearchCondition[]
+  matched_conditions: number
+  risk_triggered: boolean | null
+  calculation_source: string
+}
+
+export type PaperResearchPanel = {
+  status: 'NOT_READY' | 'BLOCKED'
+  trade_date?: string
+} | {
+  status: 'READY'
+  trade_date: string
+  previous_trade_date: string
+  price_basis: 'qfq'
+  source_provider: string
+  affects_paper_action: false
+  chan_status: 'NOT_IMPLEMENTED' | 'READY'
+  matched_count: number
+  risk_count: number
+  strategies: ResearchStrategy[]
+  paper_rule: { signal: string; positive_conditions: ResearchCondition[] }
+  engine?: ResearchEngine
+}
+
 export interface PaperTradingDashboard {
   status: 'VISUAL_WORKBENCH_READY'
   symbol: '000403.SZ'
@@ -1473,6 +1512,7 @@ export interface PaperTradingDashboard {
   equity_history: PaperEquityPoint[]
   latest_daily: PaperLatestDaily | null
   chenquant_daily_markdown: string | null
+  research?: PaperResearchPanel
 }
 
 async function optionalClientStatus(): Promise<ClientStatus | null> {

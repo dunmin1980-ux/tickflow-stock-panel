@@ -15,6 +15,8 @@ import {
 } from 'lucide-react'
 
 import { PageHeader } from '@/components/PageHeader'
+import { ConditionList, ResearchPanel } from '@/components/paper-trading/ResearchPanel'
+import { ResearchOverview } from '@/components/paper-trading/ResearchEngineView'
 import {
   actionTone,
   dashboardErrorText,
@@ -94,6 +96,8 @@ export function PaperTrading() {
   const readiness = readinessCopy(data)
   const quantity = totalPositionQuantity(data)
   const sellable = sellableQuantity(data)
+  const research = data.research?.status === 'READY' && data.research.trade_date === data.requested_date
+    ? data.research : null
   const tradingDay = data.input_readiness.effective_trade_date === data.requested_date
     || data.latest_daily?.report_date === data.requested_date
 
@@ -107,7 +111,7 @@ export function PaperTrading() {
   const actionSummary = !action
     ? '等待今日确定性决策'
     : action === 'HOLD'
-    ? '无需交易'
+    ? quantity === 0 ? '当前空仓，无需交易' : '当前持仓不变，无需交易'
     : todayDaily?.pending_action
       ? `${todayDaily.pending_action} 等待执行`
       : `${action ?? '--'} 已记录`
@@ -145,6 +149,10 @@ export function PaperTrading() {
             </div>
             <span className="font-mono text-muted">今日范围 · {data.requested_date}</span>
           </div>
+
+          {data.research?.status === 'READY' && data.research.engine && (
+            <ResearchOverview engine={data.research.engine} requestedDate={data.requested_date} />
+          )}
 
           {(mutation.error || runMessage) && (
             <div
@@ -184,8 +192,17 @@ export function PaperTrading() {
 
             <section aria-label="今日 Paper Action" className="order-2 border-y border-border px-4 py-4 lg:col-span-2 lg:order-2">
               <div className="text-[10px] uppercase text-muted">Paper Action</div>
-              <div className={cn('mt-2 text-2xl font-semibold', actionTone(action))}>{action ?? '--'}</div>
+              <div className={cn('mt-2 text-xl font-semibold', actionTone(action))}>
+                {action === 'HOLD' ? quantity === 0 ? '空仓观望 · HOLD' : '持仓不变 · HOLD' : action ?? '--'}
+              </div>
               <div className="mt-2 text-xs text-secondary">{actionSummary}</div>
+              {research && action === 'HOLD' && <p className="mt-2 text-xs text-secondary">
+                {research.paper_rule.signal === 'RISK_OBSERVATION' && quantity === 0
+                  ? '指标偏弱，账户没有可卖持仓。'
+                  : research.paper_rule.signal === 'MIXED_OBSERVATION'
+                    ? 'MACD 与 RSI6 条件未同时同向满足。'
+                    : '当前规则不产生新增模拟订单。'}
+              </p>}
             </section>
 
             <section aria-label="今日待办" className="order-3 border-y border-border px-4 py-4 lg:col-span-3 lg:order-5">
@@ -225,6 +242,18 @@ export function PaperTrading() {
               <div className="mt-3 text-xs text-muted">总资产 <span className="font-mono text-foreground">{money(data.account.total_equity_cny)}</span></div>
             </section>
           </div>
+
+          {research && <section aria-label="本次模拟动作依据" className="border-y border-border px-4 py-4">
+            <h2 className="text-sm font-semibold">本次模拟动作依据 · MACD + RSI6</h2>
+            <p className="mb-3 mt-1 text-xs text-secondary">技术偏强条件：三项同时满足；空仓时才能产生模拟建仓决策。</p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {research.paper_rule.positive_conditions.map(condition => (
+                <ConditionList key={condition.label} conditions={[condition]} />
+              ))}
+            </div>
+          </section>}
+
+          <ResearchPanel research={data.research} requestedDate={data.requested_date} />
 
           <section aria-label="ChenQuant Daily 摘要" className="border-y border-border px-4 py-4">
             <div className="flex flex-wrap items-center justify-between gap-2">

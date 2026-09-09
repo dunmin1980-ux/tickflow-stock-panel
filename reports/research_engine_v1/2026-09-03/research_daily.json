@@ -1,0 +1,3781 @@
+{
+  "aggregate": {
+    "bearish_count": 2,
+    "bullish_count": 0,
+    "chan_structure": {
+      "bottom_fractals": [
+        {
+          "confirmed_at": "2025-03-28",
+          "date": "2025-03-27",
+          "price": 16.285,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-04-01",
+          "date": "2025-03-31",
+          "price": 16.262,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-04-07",
+          "date": "2025-04-03",
+          "price": 16.423,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-04-11",
+          "date": "2025-04-10",
+          "price": 18.269,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-04-29",
+          "date": "2025-04-28",
+          "price": 16.154,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-05-19",
+          "date": "2025-05-16",
+          "price": 16.162,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-06-10",
+          "date": "2025-06-05",
+          "price": 16.85,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-06-12",
+          "date": "2025-06-11",
+          "price": 16.75,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-06-24",
+          "date": "2025-06-23",
+          "price": 17.85,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-07-03",
+          "date": "2025-07-02",
+          "price": 17.98,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-07-07",
+          "date": "2025-07-04",
+          "price": 18.0,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-07-16",
+          "date": "2025-07-15",
+          "price": 17.4,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-07-30",
+          "date": "2025-07-29",
+          "price": 17.92,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-08-18",
+          "date": "2025-08-15",
+          "price": 17.9,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-08-21",
+          "date": "2025-08-20",
+          "price": 17.77,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-08-25",
+          "date": "2025-08-22",
+          "price": 17.78,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-09-17",
+          "date": "2025-09-16",
+          "price": 17.25,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-09-24",
+          "date": "2025-09-23",
+          "price": 16.39,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-10-14",
+          "date": "2025-10-13",
+          "price": 16.01,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-10-16",
+          "date": "2025-10-15",
+          "price": 16.09,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-10-22",
+          "date": "2025-10-21",
+          "price": 16.14,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-11-03",
+          "date": "2025-10-31",
+          "price": 15.57,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-12-01",
+          "date": "2025-11-28",
+          "price": 14.8,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-12-08",
+          "date": "2025-12-05",
+          "price": 14.3,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-01-05",
+          "date": "2025-12-31",
+          "price": 13.67,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-01-23",
+          "date": "2026-01-22",
+          "price": 13.89,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-01-30",
+          "date": "2026-01-29",
+          "price": 13.63,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-03-31",
+          "date": "2026-03-30",
+          "price": 12.81,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-04-08",
+          "date": "2026-04-07",
+          "price": 12.66,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-04-30",
+          "date": "2026-04-29",
+          "price": 11.83,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-05-08",
+          "date": "2026-05-07",
+          "price": 11.56,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-05-21",
+          "date": "2026-05-20",
+          "price": 10.48,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-06-12",
+          "date": "2026-06-11",
+          "price": 11.45,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-07-10",
+          "date": "2026-07-09",
+          "price": 8.83,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-07-21",
+          "date": "2026-07-20",
+          "price": 9.5,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-07-23",
+          "date": "2026-07-22",
+          "price": 9.43,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-08-07",
+          "date": "2026-08-06",
+          "price": 10.32,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-08-20",
+          "date": "2026-08-19",
+          "price": 10.6,
+          "type": "BOTTOM_FRACTAL"
+        }
+      ],
+      "central_zone": "DEFERRED",
+      "change": "UNCHANGED",
+      "current_structure": "RANGE_STRUCTURE",
+      "deterministic_contract_version": 1,
+      "latest_close": 10.32,
+      "mode": "CHAN_DAILY_STRUCTURE_V1",
+      "previous_structure": "RANGE_STRUCTURE",
+      "price_basis": "QFQ",
+      "price_location": "BELOW_CONFIRMED_RANGE",
+      "stroke_candidates": [
+        {
+          "confirmed_at": "2025-04-01",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-03-31",
+          "end_price": 16.262,
+          "source_bar_separation": 9,
+          "start_date": "2025-03-18",
+          "start_price": 17.177,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-04-14",
+          "direction": "UP_STROKE",
+          "end_date": "2025-04-11",
+          "end_price": 19.569,
+          "source_bar_separation": 8,
+          "start_date": "2025-03-31",
+          "start_price": 16.262,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-04-29",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-04-28",
+          "end_price": 16.154,
+          "source_bar_separation": 11,
+          "start_date": "2025-04-11",
+          "start_price": 19.569,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-05-08",
+          "direction": "UP_STROKE",
+          "end_date": "2025-05-07",
+          "end_price": 17.023,
+          "source_bar_separation": 4,
+          "start_date": "2025-04-28",
+          "start_price": 16.154,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-05-19",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-05-16",
+          "end_price": 16.162,
+          "source_bar_separation": 7,
+          "start_date": "2025-05-07",
+          "start_price": 17.023,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-06-18",
+          "direction": "UP_STROKE",
+          "end_date": "2025-06-17",
+          "end_price": 18.96,
+          "source_bar_separation": 19,
+          "start_date": "2025-05-16",
+          "start_price": 16.162,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-06-24",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-06-23",
+          "end_price": 17.85,
+          "source_bar_separation": 4,
+          "start_date": "2025-06-17",
+          "start_price": 18.96,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-07-04",
+          "direction": "UP_STROKE",
+          "end_date": "2025-07-03",
+          "end_price": 18.71,
+          "source_bar_separation": 8,
+          "start_date": "2025-06-23",
+          "start_price": 17.85,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-07-16",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-07-15",
+          "end_price": 17.4,
+          "source_bar_separation": 8,
+          "start_date": "2025-07-03",
+          "start_price": 18.71,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-07-29",
+          "direction": "UP_STROKE",
+          "end_date": "2025-07-28",
+          "end_price": 18.5,
+          "source_bar_separation": 9,
+          "start_date": "2025-07-15",
+          "start_price": 17.4,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-08-21",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-08-20",
+          "end_price": 17.77,
+          "source_bar_separation": 17,
+          "start_date": "2025-07-28",
+          "start_price": 18.5,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-09-10",
+          "direction": "UP_STROKE",
+          "end_date": "2025-09-09",
+          "end_price": 18.52,
+          "source_bar_separation": 14,
+          "start_date": "2025-08-20",
+          "start_price": 17.77,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-10-14",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-10-13",
+          "end_price": 16.01,
+          "source_bar_separation": 18,
+          "start_date": "2025-09-09",
+          "start_price": 18.52,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-10-20",
+          "direction": "UP_STROKE",
+          "end_date": "2025-10-17",
+          "end_price": 16.58,
+          "source_bar_separation": 4,
+          "start_date": "2025-10-13",
+          "start_price": 16.01,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-10-22",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-10-21",
+          "end_price": 16.14,
+          "source_bar_separation": 2,
+          "start_date": "2025-10-17",
+          "start_price": 16.58,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-10-27",
+          "direction": "UP_STROKE",
+          "end_date": "2025-10-24",
+          "end_price": 16.41,
+          "source_bar_separation": 3,
+          "start_date": "2025-10-21",
+          "start_price": 16.14,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-11-03",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-10-31",
+          "end_price": 15.57,
+          "source_bar_separation": 5,
+          "start_date": "2025-10-24",
+          "start_price": 16.41,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-11-17",
+          "direction": "UP_STROKE",
+          "end_date": "2025-11-14",
+          "end_price": 16.42,
+          "source_bar_separation": 10,
+          "start_date": "2025-10-31",
+          "start_price": 15.57,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-01-05",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-12-31",
+          "end_price": 13.67,
+          "source_bar_separation": 33,
+          "start_date": "2025-11-14",
+          "start_price": 16.42,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-01-14",
+          "direction": "UP_STROKE",
+          "end_date": "2026-01-13",
+          "end_price": 14.76,
+          "source_bar_separation": 7,
+          "start_date": "2025-12-31",
+          "start_price": 13.67,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-01-23",
+          "direction": "DOWN_STROKE",
+          "end_date": "2026-01-22",
+          "end_price": 13.89,
+          "source_bar_separation": 7,
+          "start_date": "2026-01-13",
+          "start_price": 14.76,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-01-27",
+          "direction": "UP_STROKE",
+          "end_date": "2026-01-26",
+          "end_price": 14.39,
+          "source_bar_separation": 2,
+          "start_date": "2026-01-22",
+          "start_price": 13.89,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-01-30",
+          "direction": "DOWN_STROKE",
+          "end_date": "2026-01-29",
+          "end_price": 13.63,
+          "source_bar_separation": 3,
+          "start_date": "2026-01-26",
+          "start_price": 14.39,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-03-04",
+          "direction": "UP_STROKE",
+          "end_date": "2026-03-03",
+          "end_price": 14.4,
+          "source_bar_separation": 17,
+          "start_date": "2026-01-29",
+          "start_price": 13.63,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-03-31",
+          "direction": "DOWN_STROKE",
+          "end_date": "2026-03-30",
+          "end_price": 12.81,
+          "source_bar_separation": 19,
+          "start_date": "2026-03-03",
+          "start_price": 14.4,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-04-03",
+          "direction": "UP_STROKE",
+          "end_date": "2026-04-02",
+          "end_price": 13.26,
+          "source_bar_separation": 3,
+          "start_date": "2026-03-30",
+          "start_price": 12.81,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-04-08",
+          "direction": "DOWN_STROKE",
+          "end_date": "2026-04-07",
+          "end_price": 12.66,
+          "source_bar_separation": 2,
+          "start_date": "2026-04-02",
+          "start_price": 13.26,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-04-22",
+          "direction": "UP_STROKE",
+          "end_date": "2026-04-21",
+          "end_price": 12.96,
+          "source_bar_separation": 10,
+          "start_date": "2026-04-07",
+          "start_price": 12.66,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-05-21",
+          "direction": "DOWN_STROKE",
+          "end_date": "2026-05-20",
+          "end_price": 10.48,
+          "source_bar_separation": 18,
+          "start_date": "2026-04-21",
+          "start_price": 12.96,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-06-01",
+          "direction": "UP_STROKE",
+          "end_date": "2026-05-29",
+          "end_price": 12.97,
+          "source_bar_separation": 7,
+          "start_date": "2026-05-20",
+          "start_price": 10.48,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-07-10",
+          "direction": "DOWN_STROKE",
+          "end_date": "2026-07-09",
+          "end_price": 8.83,
+          "source_bar_separation": 28,
+          "start_date": "2026-05-29",
+          "start_price": 12.97,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-07-20",
+          "direction": "UP_STROKE",
+          "end_date": "2026-07-17",
+          "end_price": 10.21,
+          "source_bar_separation": 6,
+          "start_date": "2026-07-09",
+          "start_price": 8.83,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-07-23",
+          "direction": "DOWN_STROKE",
+          "end_date": "2026-07-22",
+          "end_price": 9.43,
+          "source_bar_separation": 3,
+          "start_date": "2026-07-17",
+          "start_price": 10.21,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-08-17",
+          "direction": "UP_STROKE",
+          "end_date": "2026-08-14",
+          "end_price": 11.77,
+          "source_bar_separation": 17,
+          "start_date": "2026-07-22",
+          "start_price": 9.43,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-08-20",
+          "direction": "DOWN_STROKE",
+          "end_date": "2026-08-19",
+          "end_price": 10.6,
+          "source_bar_separation": 3,
+          "start_date": "2026-08-14",
+          "start_price": 11.77,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-08-27",
+          "direction": "UP_STROKE",
+          "end_date": "2026-08-26",
+          "end_price": 11.21,
+          "source_bar_separation": 5,
+          "start_date": "2026-08-19",
+          "start_price": 10.6,
+          "type": "STROKE_CANDIDATE"
+        }
+      ],
+      "structure_high": 11.21,
+      "structure_low": 10.6,
+      "timeframe": "1d",
+      "top_fractals": [
+        {
+          "confirmed_at": "2025-03-19",
+          "date": "2025-03-18",
+          "price": 17.177,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-03-27",
+          "date": "2025-03-26",
+          "price": 16.762,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-03-31",
+          "date": "2025-03-28",
+          "price": 16.792,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-04-14",
+          "date": "2025-04-11",
+          "price": 19.569,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-05-08",
+          "date": "2025-05-07",
+          "price": 17.023,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-06-05",
+          "date": "2025-06-04",
+          "price": 17.39,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-06-11",
+          "date": "2025-06-10",
+          "price": 18.66,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-06-18",
+          "date": "2025-06-17",
+          "price": 18.96,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-07-04",
+          "date": "2025-07-03",
+          "price": 18.71,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-07-08",
+          "date": "2025-07-07",
+          "price": 18.53,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-07-15",
+          "date": "2025-07-14",
+          "price": 18.13,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-07-29",
+          "date": "2025-07-28",
+          "price": 18.5,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-08-19",
+          "date": "2025-08-18",
+          "price": 18.17,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-08-22",
+          "date": "2025-08-21",
+          "price": 18.2,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-08-27",
+          "date": "2025-08-26",
+          "price": 18.4,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-09-10",
+          "date": "2025-09-09",
+          "price": 18.52,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-09-18",
+          "date": "2025-09-17",
+          "price": 17.53,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-09-25",
+          "date": "2025-09-24",
+          "price": 16.9,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-10-15",
+          "date": "2025-10-14",
+          "price": 16.29,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-10-20",
+          "date": "2025-10-17",
+          "price": 16.58,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-10-27",
+          "date": "2025-10-24",
+          "price": 16.41,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-11-17",
+          "date": "2025-11-14",
+          "price": 16.42,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-12-09",
+          "date": "2025-12-08",
+          "price": 14.73,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-12-23",
+          "date": "2025-12-22",
+          "price": 13.58,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-12-30",
+          "date": "2025-12-29",
+          "price": 14.3,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-01-14",
+          "date": "2026-01-13",
+          "price": 14.76,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-01-27",
+          "date": "2026-01-26",
+          "price": 14.39,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-02-02",
+          "date": "2026-01-30",
+          "price": 13.94,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-03-04",
+          "date": "2026-03-03",
+          "price": 14.4,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-04-03",
+          "date": "2026-04-02",
+          "price": 13.26,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-04-09",
+          "date": "2026-04-08",
+          "price": 13.05,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-04-22",
+          "date": "2026-04-21",
+          "price": 12.96,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-05-06",
+          "date": "2026-04-30",
+          "price": 12.31,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-06-01",
+          "date": "2026-05-29",
+          "price": 12.97,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-07-07",
+          "date": "2026-07-06",
+          "price": 9.99,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-07-20",
+          "date": "2026-07-17",
+          "price": 10.21,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-07-22",
+          "date": "2026-07-21",
+          "price": 9.9,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-08-17",
+          "date": "2026-08-14",
+          "price": 11.77,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-08-21",
+          "date": "2026-08-20",
+          "price": 11.28,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-08-27",
+          "date": "2026-08-26",
+          "price": 11.21,
+          "type": "TOP_FRACTAL"
+        }
+      ],
+      "trade_date": "2026-09-03"
+    },
+    "closest_trigger": {
+      "condition_ratio": 0.6666666666666666,
+      "conditions_met": 2,
+      "conditions_total": 3,
+      "distance_to_trigger": [
+        {
+          "actual": "收盘=10.2100 / 下轨=10.1772",
+          "gap": 0.0327606201171875,
+          "label": "前日触及下轨",
+          "margin": -0.0327606201171875,
+          "observed": 10.210000038146973,
+          "operator": "lte",
+          "passed": false,
+          "required": "前日收盘 ≤ 前日布林下轨",
+          "temporal_scope": "PREVIOUS_DAY",
+          "threshold": 10.177239418029785,
+          "unit": "QFQ_PRICE"
+        }
+      ],
+      "strategy_id": "boll_lower_reclaim",
+      "strategy_name": "布林下轨回升"
+    },
+    "conflicts": [
+      "MACD 与均线同向偏弱，但缠论工程结构尚未确认向下"
+    ],
+    "delta_vs_previous": {
+      "changed": false,
+      "current_consensus": "BEARISH_WITH_CONFLICTS",
+      "previous_consensus": "BEARISH_WITH_CONFLICTS",
+      "trade_date": "2026-09-02"
+    },
+    "limiting_factors": [
+      "MACD 金叉放量 / 今日 MACD：dif=0.0188 / dea=0.1046；条件 dif > dea",
+      "MACD 金叉放量 / 量能放大：量比=0.9974；条件 当日量 / 前5日均量 ≥ 1.5",
+      "均线多头 / 短期均线：ma5=10.3900 / ma10=10.5470；条件 ma5 > ma10",
+      "均线多头 / 中期均线：ma10=10.5470 / ma20=10.6880；条件 ma10 > ma20",
+      "均线多头 / 20日动量：百分比=-1.7143；条件 20日涨幅 > 0%",
+      "布林突破 / 收盘位置：close=10.3200 / boll_upper=11.2280；条件 close > boll_upper",
+      "布林突破 / 量能放大：量比=0.9974；条件 当日量 / 前5日均量 ≥ 1.5",
+      "量价齐升 / 今日站上 MA20：close=10.3200 / ma20=10.6880；条件 close > ma20",
+      "量价齐升 / 量能放大：量比=0.9974；条件 当日量 / 前5日均量 ≥ 2",
+      "缩量回踩 / MA20 附近：收盘=10.3200 / MA20=10.6880；条件 MA20 × 0.98 < 收盘 < MA20 × 1.02",
+      "缩量回踩 / 量能收缩：量比=0.9974；条件 当日量 / 前5日均量 < 0.8",
+      "缩量回踩 / 20日动量：百分比=-1.7143；条件 20日涨幅 > 0%",
+      "布林下轨回升 / 前日触及下轨：收盘=10.2100 / 下轨=10.1772；条件 前日收盘 ≤ 前日布林下轨",
+      "RSI6=39.0119；中性轴阈值 ≥ 50"
+    ],
+    "near_trigger_strategies": [],
+    "neutral_count": 4,
+    "research_confidence": {
+      "basis": "可用策略 6/6；结构 RANGE_STRUCTURE；分歧 1 项。仅指证据一致性，不是胜率。",
+      "category": "MODERATE",
+      "is_probability": false
+    },
+    "research_consensus": "BEARISH_WITH_CONFLICTS",
+    "rule_trace": [
+      "MACD_MA_BEARISH_WITH_CHAN_CONFIRMATION_GATE",
+      "MACD=BEARISH; MA=BEARISH; CHAN=RANGE_STRUCTURE",
+      "COUNTS_ARE_DESCRIPTIVE_NOT_MAJORITY_VOTE; ACTION_UNCHANGED"
+    ],
+    "setup_count": 0,
+    "supporting_factors": [
+      "均线多头 / 长期均线：ma20=10.6880 / ma60=10.1753；条件 ma20 > ma60",
+      "量价齐升 / 阳线：close=10.3200 / open=10.2100；条件 close > open",
+      "缩量回踩 / MA60 上方：close=10.3200 / ma60=10.1753；条件 close > ma60",
+      "布林下轨回升 / 今日回到下轨上方：close=10.3200 / boll_lower=10.1480；条件 close > boll_lower",
+      "布林下轨回升 / 收盘回升：今日=10.3200 / 前日=10.2100；条件 今日收盘 > 前日收盘"
+    ],
+    "triggered_strategies": []
+  },
+  "chan_structure": {
+    "bottom_fractals": [
+      {
+        "confirmed_at": "2025-03-28",
+        "date": "2025-03-27",
+        "price": 16.285,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-04-01",
+        "date": "2025-03-31",
+        "price": 16.262,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-04-07",
+        "date": "2025-04-03",
+        "price": 16.423,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-04-11",
+        "date": "2025-04-10",
+        "price": 18.269,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-04-29",
+        "date": "2025-04-28",
+        "price": 16.154,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-05-19",
+        "date": "2025-05-16",
+        "price": 16.162,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-06-10",
+        "date": "2025-06-05",
+        "price": 16.85,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-06-12",
+        "date": "2025-06-11",
+        "price": 16.75,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-06-24",
+        "date": "2025-06-23",
+        "price": 17.85,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-07-03",
+        "date": "2025-07-02",
+        "price": 17.98,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-07-07",
+        "date": "2025-07-04",
+        "price": 18.0,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-07-16",
+        "date": "2025-07-15",
+        "price": 17.4,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-07-30",
+        "date": "2025-07-29",
+        "price": 17.92,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-08-18",
+        "date": "2025-08-15",
+        "price": 17.9,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-08-21",
+        "date": "2025-08-20",
+        "price": 17.77,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-08-25",
+        "date": "2025-08-22",
+        "price": 17.78,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-09-17",
+        "date": "2025-09-16",
+        "price": 17.25,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-09-24",
+        "date": "2025-09-23",
+        "price": 16.39,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-10-14",
+        "date": "2025-10-13",
+        "price": 16.01,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-10-16",
+        "date": "2025-10-15",
+        "price": 16.09,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-10-22",
+        "date": "2025-10-21",
+        "price": 16.14,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-11-03",
+        "date": "2025-10-31",
+        "price": 15.57,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-12-01",
+        "date": "2025-11-28",
+        "price": 14.8,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-12-08",
+        "date": "2025-12-05",
+        "price": 14.3,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-01-05",
+        "date": "2025-12-31",
+        "price": 13.67,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-01-23",
+        "date": "2026-01-22",
+        "price": 13.89,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-01-30",
+        "date": "2026-01-29",
+        "price": 13.63,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-03-31",
+        "date": "2026-03-30",
+        "price": 12.81,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-04-08",
+        "date": "2026-04-07",
+        "price": 12.66,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-04-30",
+        "date": "2026-04-29",
+        "price": 11.83,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-05-08",
+        "date": "2026-05-07",
+        "price": 11.56,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-05-21",
+        "date": "2026-05-20",
+        "price": 10.48,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-06-12",
+        "date": "2026-06-11",
+        "price": 11.45,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-07-10",
+        "date": "2026-07-09",
+        "price": 8.83,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-07-21",
+        "date": "2026-07-20",
+        "price": 9.5,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-07-23",
+        "date": "2026-07-22",
+        "price": 9.43,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-08-07",
+        "date": "2026-08-06",
+        "price": 10.32,
+        "type": "BOTTOM_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-08-20",
+        "date": "2026-08-19",
+        "price": 10.6,
+        "type": "BOTTOM_FRACTAL"
+      }
+    ],
+    "central_zone": "DEFERRED",
+    "change": "UNCHANGED",
+    "current_structure": "RANGE_STRUCTURE",
+    "deterministic_contract_version": 1,
+    "latest_close": 10.32,
+    "mode": "CHAN_DAILY_STRUCTURE_V1",
+    "previous_structure": "RANGE_STRUCTURE",
+    "price_basis": "QFQ",
+    "price_location": "BELOW_CONFIRMED_RANGE",
+    "stroke_candidates": [
+      {
+        "confirmed_at": "2025-04-01",
+        "direction": "DOWN_STROKE",
+        "end_date": "2025-03-31",
+        "end_price": 16.262,
+        "source_bar_separation": 9,
+        "start_date": "2025-03-18",
+        "start_price": 17.177,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2025-04-14",
+        "direction": "UP_STROKE",
+        "end_date": "2025-04-11",
+        "end_price": 19.569,
+        "source_bar_separation": 8,
+        "start_date": "2025-03-31",
+        "start_price": 16.262,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2025-04-29",
+        "direction": "DOWN_STROKE",
+        "end_date": "2025-04-28",
+        "end_price": 16.154,
+        "source_bar_separation": 11,
+        "start_date": "2025-04-11",
+        "start_price": 19.569,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2025-05-08",
+        "direction": "UP_STROKE",
+        "end_date": "2025-05-07",
+        "end_price": 17.023,
+        "source_bar_separation": 4,
+        "start_date": "2025-04-28",
+        "start_price": 16.154,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2025-05-19",
+        "direction": "DOWN_STROKE",
+        "end_date": "2025-05-16",
+        "end_price": 16.162,
+        "source_bar_separation": 7,
+        "start_date": "2025-05-07",
+        "start_price": 17.023,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2025-06-18",
+        "direction": "UP_STROKE",
+        "end_date": "2025-06-17",
+        "end_price": 18.96,
+        "source_bar_separation": 19,
+        "start_date": "2025-05-16",
+        "start_price": 16.162,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2025-06-24",
+        "direction": "DOWN_STROKE",
+        "end_date": "2025-06-23",
+        "end_price": 17.85,
+        "source_bar_separation": 4,
+        "start_date": "2025-06-17",
+        "start_price": 18.96,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2025-07-04",
+        "direction": "UP_STROKE",
+        "end_date": "2025-07-03",
+        "end_price": 18.71,
+        "source_bar_separation": 8,
+        "start_date": "2025-06-23",
+        "start_price": 17.85,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2025-07-16",
+        "direction": "DOWN_STROKE",
+        "end_date": "2025-07-15",
+        "end_price": 17.4,
+        "source_bar_separation": 8,
+        "start_date": "2025-07-03",
+        "start_price": 18.71,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2025-07-29",
+        "direction": "UP_STROKE",
+        "end_date": "2025-07-28",
+        "end_price": 18.5,
+        "source_bar_separation": 9,
+        "start_date": "2025-07-15",
+        "start_price": 17.4,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2025-08-21",
+        "direction": "DOWN_STROKE",
+        "end_date": "2025-08-20",
+        "end_price": 17.77,
+        "source_bar_separation": 17,
+        "start_date": "2025-07-28",
+        "start_price": 18.5,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2025-09-10",
+        "direction": "UP_STROKE",
+        "end_date": "2025-09-09",
+        "end_price": 18.52,
+        "source_bar_separation": 14,
+        "start_date": "2025-08-20",
+        "start_price": 17.77,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2025-10-14",
+        "direction": "DOWN_STROKE",
+        "end_date": "2025-10-13",
+        "end_price": 16.01,
+        "source_bar_separation": 18,
+        "start_date": "2025-09-09",
+        "start_price": 18.52,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2025-10-20",
+        "direction": "UP_STROKE",
+        "end_date": "2025-10-17",
+        "end_price": 16.58,
+        "source_bar_separation": 4,
+        "start_date": "2025-10-13",
+        "start_price": 16.01,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2025-10-22",
+        "direction": "DOWN_STROKE",
+        "end_date": "2025-10-21",
+        "end_price": 16.14,
+        "source_bar_separation": 2,
+        "start_date": "2025-10-17",
+        "start_price": 16.58,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2025-10-27",
+        "direction": "UP_STROKE",
+        "end_date": "2025-10-24",
+        "end_price": 16.41,
+        "source_bar_separation": 3,
+        "start_date": "2025-10-21",
+        "start_price": 16.14,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2025-11-03",
+        "direction": "DOWN_STROKE",
+        "end_date": "2025-10-31",
+        "end_price": 15.57,
+        "source_bar_separation": 5,
+        "start_date": "2025-10-24",
+        "start_price": 16.41,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2025-11-17",
+        "direction": "UP_STROKE",
+        "end_date": "2025-11-14",
+        "end_price": 16.42,
+        "source_bar_separation": 10,
+        "start_date": "2025-10-31",
+        "start_price": 15.57,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2026-01-05",
+        "direction": "DOWN_STROKE",
+        "end_date": "2025-12-31",
+        "end_price": 13.67,
+        "source_bar_separation": 33,
+        "start_date": "2025-11-14",
+        "start_price": 16.42,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2026-01-14",
+        "direction": "UP_STROKE",
+        "end_date": "2026-01-13",
+        "end_price": 14.76,
+        "source_bar_separation": 7,
+        "start_date": "2025-12-31",
+        "start_price": 13.67,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2026-01-23",
+        "direction": "DOWN_STROKE",
+        "end_date": "2026-01-22",
+        "end_price": 13.89,
+        "source_bar_separation": 7,
+        "start_date": "2026-01-13",
+        "start_price": 14.76,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2026-01-27",
+        "direction": "UP_STROKE",
+        "end_date": "2026-01-26",
+        "end_price": 14.39,
+        "source_bar_separation": 2,
+        "start_date": "2026-01-22",
+        "start_price": 13.89,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2026-01-30",
+        "direction": "DOWN_STROKE",
+        "end_date": "2026-01-29",
+        "end_price": 13.63,
+        "source_bar_separation": 3,
+        "start_date": "2026-01-26",
+        "start_price": 14.39,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2026-03-04",
+        "direction": "UP_STROKE",
+        "end_date": "2026-03-03",
+        "end_price": 14.4,
+        "source_bar_separation": 17,
+        "start_date": "2026-01-29",
+        "start_price": 13.63,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2026-03-31",
+        "direction": "DOWN_STROKE",
+        "end_date": "2026-03-30",
+        "end_price": 12.81,
+        "source_bar_separation": 19,
+        "start_date": "2026-03-03",
+        "start_price": 14.4,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2026-04-03",
+        "direction": "UP_STROKE",
+        "end_date": "2026-04-02",
+        "end_price": 13.26,
+        "source_bar_separation": 3,
+        "start_date": "2026-03-30",
+        "start_price": 12.81,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2026-04-08",
+        "direction": "DOWN_STROKE",
+        "end_date": "2026-04-07",
+        "end_price": 12.66,
+        "source_bar_separation": 2,
+        "start_date": "2026-04-02",
+        "start_price": 13.26,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2026-04-22",
+        "direction": "UP_STROKE",
+        "end_date": "2026-04-21",
+        "end_price": 12.96,
+        "source_bar_separation": 10,
+        "start_date": "2026-04-07",
+        "start_price": 12.66,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2026-05-21",
+        "direction": "DOWN_STROKE",
+        "end_date": "2026-05-20",
+        "end_price": 10.48,
+        "source_bar_separation": 18,
+        "start_date": "2026-04-21",
+        "start_price": 12.96,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2026-06-01",
+        "direction": "UP_STROKE",
+        "end_date": "2026-05-29",
+        "end_price": 12.97,
+        "source_bar_separation": 7,
+        "start_date": "2026-05-20",
+        "start_price": 10.48,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2026-07-10",
+        "direction": "DOWN_STROKE",
+        "end_date": "2026-07-09",
+        "end_price": 8.83,
+        "source_bar_separation": 28,
+        "start_date": "2026-05-29",
+        "start_price": 12.97,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2026-07-20",
+        "direction": "UP_STROKE",
+        "end_date": "2026-07-17",
+        "end_price": 10.21,
+        "source_bar_separation": 6,
+        "start_date": "2026-07-09",
+        "start_price": 8.83,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2026-07-23",
+        "direction": "DOWN_STROKE",
+        "end_date": "2026-07-22",
+        "end_price": 9.43,
+        "source_bar_separation": 3,
+        "start_date": "2026-07-17",
+        "start_price": 10.21,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2026-08-17",
+        "direction": "UP_STROKE",
+        "end_date": "2026-08-14",
+        "end_price": 11.77,
+        "source_bar_separation": 17,
+        "start_date": "2026-07-22",
+        "start_price": 9.43,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2026-08-20",
+        "direction": "DOWN_STROKE",
+        "end_date": "2026-08-19",
+        "end_price": 10.6,
+        "source_bar_separation": 3,
+        "start_date": "2026-08-14",
+        "start_price": 11.77,
+        "type": "STROKE_CANDIDATE"
+      },
+      {
+        "confirmed_at": "2026-08-27",
+        "direction": "UP_STROKE",
+        "end_date": "2026-08-26",
+        "end_price": 11.21,
+        "source_bar_separation": 5,
+        "start_date": "2026-08-19",
+        "start_price": 10.6,
+        "type": "STROKE_CANDIDATE"
+      }
+    ],
+    "structure_high": 11.21,
+    "structure_low": 10.6,
+    "timeframe": "1d",
+    "top_fractals": [
+      {
+        "confirmed_at": "2025-03-19",
+        "date": "2025-03-18",
+        "price": 17.177,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-03-27",
+        "date": "2025-03-26",
+        "price": 16.762,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-03-31",
+        "date": "2025-03-28",
+        "price": 16.792,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-04-14",
+        "date": "2025-04-11",
+        "price": 19.569,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-05-08",
+        "date": "2025-05-07",
+        "price": 17.023,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-06-05",
+        "date": "2025-06-04",
+        "price": 17.39,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-06-11",
+        "date": "2025-06-10",
+        "price": 18.66,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-06-18",
+        "date": "2025-06-17",
+        "price": 18.96,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-07-04",
+        "date": "2025-07-03",
+        "price": 18.71,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-07-08",
+        "date": "2025-07-07",
+        "price": 18.53,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-07-15",
+        "date": "2025-07-14",
+        "price": 18.13,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-07-29",
+        "date": "2025-07-28",
+        "price": 18.5,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-08-19",
+        "date": "2025-08-18",
+        "price": 18.17,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-08-22",
+        "date": "2025-08-21",
+        "price": 18.2,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-08-27",
+        "date": "2025-08-26",
+        "price": 18.4,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-09-10",
+        "date": "2025-09-09",
+        "price": 18.52,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-09-18",
+        "date": "2025-09-17",
+        "price": 17.53,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-09-25",
+        "date": "2025-09-24",
+        "price": 16.9,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-10-15",
+        "date": "2025-10-14",
+        "price": 16.29,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-10-20",
+        "date": "2025-10-17",
+        "price": 16.58,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-10-27",
+        "date": "2025-10-24",
+        "price": 16.41,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-11-17",
+        "date": "2025-11-14",
+        "price": 16.42,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-12-09",
+        "date": "2025-12-08",
+        "price": 14.73,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-12-23",
+        "date": "2025-12-22",
+        "price": 13.58,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2025-12-30",
+        "date": "2025-12-29",
+        "price": 14.3,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-01-14",
+        "date": "2026-01-13",
+        "price": 14.76,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-01-27",
+        "date": "2026-01-26",
+        "price": 14.39,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-02-02",
+        "date": "2026-01-30",
+        "price": 13.94,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-03-04",
+        "date": "2026-03-03",
+        "price": 14.4,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-04-03",
+        "date": "2026-04-02",
+        "price": 13.26,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-04-09",
+        "date": "2026-04-08",
+        "price": 13.05,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-04-22",
+        "date": "2026-04-21",
+        "price": 12.96,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-05-06",
+        "date": "2026-04-30",
+        "price": 12.31,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-06-01",
+        "date": "2026-05-29",
+        "price": 12.97,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-07-07",
+        "date": "2026-07-06",
+        "price": 9.99,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-07-20",
+        "date": "2026-07-17",
+        "price": 10.21,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-07-22",
+        "date": "2026-07-21",
+        "price": 9.9,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-08-17",
+        "date": "2026-08-14",
+        "price": 11.77,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-08-21",
+        "date": "2026-08-20",
+        "price": 11.28,
+        "type": "TOP_FRACTAL"
+      },
+      {
+        "confirmed_at": "2026-08-27",
+        "date": "2026-08-26",
+        "price": 11.21,
+        "type": "TOP_FRACTAL"
+      }
+    ],
+    "trade_date": "2026-09-03"
+  },
+  "daily_markdown": "---\ntype: multi-strategy-research\nsource_system: tickflow-stock-panel\ndata_scope: watchlist-sample\ncan_publish: false\ntrading_advice: false\nverification_status: pending\ntimeframe: 1d\nprice_basis: QFQ\ntrade_date: 2026-09-03\nsymbol: 000403.SZ\n---\n\n# 今日研究结论\n\n2026-09-03 · 000403.SZ 派林生物\n\n综合状态：偏弱但有分歧（BEARISH_WITH_CONFLICTS）\n研究证据一致性：MODERATE；可用策略 6/6；结构 RANGE_STRUCTURE；分歧 1 项。仅指证据一致性，不是胜率。\nPaper Action：HOLD；HOLD 含义：FLAT_WAIT\n\n## HOLD 解释\n\n- 模拟动作读取当日已发布账本；多策略研究不参与现有动作规则。\n- 账户空仓，HOLD 表示不产生新模拟订单。\n- 现有方向与 RSI6 规则偏弱；空仓时没有可减少的模拟持仓。\n- MACD 线关系：DIF=0.0188 / DEA=0.1046；DIF > DEA（未满足）\n- MACD 柱值：柱值=-0.1716；柱值 > 0（未满足）\n- RSI6：RSI6=39.0119；RSI6 ≥ 50（未满足）\n\n## 策略矩阵\n\n| 策略 | 状态 | Bias | 满足条件 | 关键缺口 | 今日变化 |\n|---|---|---|---|---|---|\n| MACD 金叉放量 | NOT_TRIGGERED | BEARISH | 1/3 | 今日 MACD (dif=0.0188 / dea=0.1046)；量能放大 (量比=0.9974) | MIXED |\n| 均线多头 | NOT_TRIGGERED | BEARISH | 1/4 | 短期均线 (ma5=10.3900 / ma10=10.5470)；中期均线 (ma10=10.5470 / ma20=10.6880)；20日动量 (百分比=-1.7143) | MIXED |\n| 布林突破 | NOT_TRIGGERED | NEUTRAL | 0/2 | 收盘位置 (close=10.3200 / boll_upper=11.2280)；量能放大 (量比=0.9974) | IMPROVING |\n| 量价齐升 | NOT_TRIGGERED | NEUTRAL | 2/4 | 今日站上 MA20 (close=10.3200 / ma20=10.6880)；量能放大 (量比=0.9974) | IMPROVING |\n| 缩量回踩 | NOT_TRIGGERED | NEUTRAL | 1/4 | MA20 附近 (收盘=10.3200 / MA20=10.6880)；量能收缩 (量比=0.9974)；20日动量 (百分比=-1.7143) | MIXED |\n| 布林下轨回升 | NOT_TRIGGERED | NEUTRAL | 2/3 | 前日触及下轨 (收盘=10.2100 / 下轨=10.1772) | IMPROVING |\n| 缠论日线结构 | RANGE_STRUCTURE | 结构观察 | 不适用 | 中枢 DEFERRED | UNCHANGED |\n\n## 支持因素\n\n- 均线多头 / 长期均线：ma20=10.6880 / ma60=10.1753；条件 ma20 > ma60\n- 量价齐升 / 阳线：close=10.3200 / open=10.2100；条件 close > open\n- 缩量回踩 / MA60 上方：close=10.3200 / ma60=10.1753；条件 close > ma60\n- 布林下轨回升 / 今日回到下轨上方：close=10.3200 / boll_lower=10.1480；条件 close > boll_lower\n- 布林下轨回升 / 收盘回升：今日=10.3200 / 前日=10.2100；条件 今日收盘 > 前日收盘\n\n## 限制因素\n\n- MACD 金叉放量 / 今日 MACD：dif=0.0188 / dea=0.1046；条件 dif > dea\n- MACD 金叉放量 / 量能放大：量比=0.9974；条件 当日量 / 前5日均量 ≥ 1.5\n- 均线多头 / 短期均线：ma5=10.3900 / ma10=10.5470；条件 ma5 > ma10\n- 均线多头 / 中期均线：ma10=10.5470 / ma20=10.6880；条件 ma10 > ma20\n- 均线多头 / 20日动量：百分比=-1.7143；条件 20日涨幅 > 0%\n- 布林突破 / 收盘位置：close=10.3200 / boll_upper=11.2280；条件 close > boll_upper\n- 布林突破 / 量能放大：量比=0.9974；条件 当日量 / 前5日均量 ≥ 1.5\n- 量价齐升 / 今日站上 MA20：close=10.3200 / ma20=10.6880；条件 close > ma20\n- 量价齐升 / 量能放大：量比=0.9974；条件 当日量 / 前5日均量 ≥ 2\n- 缩量回踩 / MA20 附近：收盘=10.3200 / MA20=10.6880；条件 MA20 × 0.98 < 收盘 < MA20 × 1.02\n- 缩量回踩 / 量能收缩：量比=0.9974；条件 当日量 / 前5日均量 < 0.8\n- 缩量回踩 / 20日动量：百分比=-1.7143；条件 20日涨幅 > 0%\n- 布林下轨回升 / 前日触及下轨：收盘=10.2100 / 下轨=10.1772；条件 前日收盘 ≤ 前日布林下轨\n- RSI6=39.0119；中性轴阈值 ≥ 50\n\n## 策略冲突\n\n- MACD 与均线同向偏弱，但缠论工程结构尚未确认向下\n\n## 缠论日线结构\n\nCHAN_DAILY_STRUCTURE_V1：确定性工程解释，不代表完整缠论。\n结构：RANGE_STRUCTURE；较前日：UNCHANGED\n最近确认结构高/低：11.21 / 10.6（QFQ）\n当前收盘：10.32；相对确认区间：BELOW_CONFIRMED_RANGE。确认结构不等于当前价格仍在区间内。\nCENTRAL_ZONE=DEFERRED；笔仅为 STROKE_CANDIDATE，确认日不早于右侧日线日期。\n- 最近确认顶分型：2026-08-14 / 11.77 QFQ；确认日期 2026-08-17\n- 最近确认顶分型：2026-08-20 / 11.28 QFQ；确认日期 2026-08-21\n- 最近确认顶分型：2026-08-26 / 11.21 QFQ；确认日期 2026-08-27\n- 最近确认底分型：2026-07-22 / 9.43 QFQ；确认日期 2026-07-23\n- 最近确认底分型：2026-08-06 / 10.32 QFQ；确认日期 2026-08-07\n- 最近确认底分型：2026-08-19 / 10.6 QFQ；确认日期 2026-08-20\n- 候选笔 UP_STROKE：2026-07-22 → 2026-08-14；9.43 → 11.77 QFQ；确认日期 2026-08-17\n- 候选笔 DOWN_STROKE：2026-08-14 → 2026-08-19；11.77 → 10.6 QFQ；确认日期 2026-08-20\n- 候选笔 UP_STROKE：2026-08-19 → 2026-08-26；10.6 → 11.21 QFQ；确认日期 2026-08-27\n\n## 与昨日相比\n\n综合研究：BEARISH_WITH_CONFLICTS → BEARISH_WITH_CONFLICTS；前日 2026-09-02。\n- MACD 柱值：-0.16983435972704936 → -0.17157594280541955；变化 -0.0017415830783701902 QFQ_PRICE；WEAKENING\n- RSI6：32.0125403519027 → 39.01186288271196；变化 6.999322530809259 POINTS；RISING\n- 均线结构满足数：1 → 1；变化 0 CONDITIONS；UNCHANGED\n- 相对量能：0.7537006735801697 → 0.9974240064620972；变化 0.2437233328819275 RATIO；EXPANDING\n- 布林区间位置：0.031515517471394805 → 0.15923711670146；变化 0.1277215992300652 RATIO；RISING\n- 缠论日线结构：None → None；变化 None STRUCTURE；UNCHANGED\n\n## 最接近触发条件\n\n布林下轨回升：2/3。完成度不是胜率。\n- 前日触及下轨：当前 收盘=10.2100 / 下轨=10.1772；阈值 前日收盘 ≤ 前日布林下轨；数值缺口 0.0327606201171875 QFQ_PRICE。严格条件须跨越边界。\n差值只针对当前指标阈值，不是未来价格预测；历史事件条件须等待后续交易日重新确认。\n\n## 下一观察条件\n\n- 观察MACD 线关系是否满足 DIF > DEA；当前 DIF=0.0188 / DEA=0.1046\n- 观察MACD 柱值是否满足 柱值 > 0；当前 柱值=-0.1716\n- 观察RSI6是否满足 RSI6 ≥ 50；当前 RSI6=39.0119\n- 后续交易日重新确认布林下轨回升 / 前日触及下轨：前日收盘 ≤ 前日布林下轨；当前 收盘=10.2100 / 下轨=10.1772\n- 观察后续收盘是否确认新的日线分型；未确认结构不倒填到过去。\n\n## 数据质量\n\nClaims：VALID / 21；技术价格口径：QFQ。\n数据来源：stocksdk_tencent_fallback；财务/重大消息：NOT_CONNECTED。\n量额权威单位和其他供应商 pending 项继续保留；本报告不能替代公告与财务核验。\n\nRESEARCH ONLY · SIMULATION ONLY · NOT INVESTMENT ADVICE\n研究结论不改变现有模拟动作，不自动发布。\n",
+  "indicator_source": "app.services.phase2_visual_daily_input._indicator_values / app.indicators.pipeline.compute_indicators",
+  "indicators": {
+    "macd_dea": 0.10463056856554742,
+    "macd_dif": 0.01884259716283765,
+    "macd_hist": -0.17157594280541955,
+    "rsi6": 39.01186288271196
+  },
+  "price_basis": "QFQ",
+  "safety": {
+    "can_publish": false,
+    "real_trading": "DISABLED",
+    "research_only": true,
+    "simulation_only": true,
+    "trading_advice": false
+  },
+  "schema_version": 1,
+  "strategies": [
+    {
+      "calculation_source": "app.strategy.builtin.macd_golden.MATRIX_STRATEGY.compute_signals",
+      "condition_ratio": 0.3333333333333333,
+      "conditions_met": 1,
+      "conditions_total": 3,
+      "delta_vs_previous": {
+        "change": "MIXED",
+        "conditions": [
+          {
+            "change": "WEAKENING",
+            "current": 0.018842697143554688,
+            "label": "今日 MACD",
+            "margin_delta": -0.0008708462119102478,
+            "previous": 0.04116058349609375,
+            "unit": "QFQ_PRICE",
+            "value_delta": -0.022317886352539062
+          },
+          {
+            "change": "IMPROVING",
+            "current": 0.04116058349609375,
+            "label": "前一交易日 MACD",
+            "margin_delta": 0.017857983708381653,
+            "previous": 0.08024787902832031,
+            "unit": "QFQ_PRICE",
+            "value_delta": -0.03908729553222656
+          },
+          {
+            "change": "IMPROVING",
+            "current": 0.9974240064620972,
+            "label": "量能放大",
+            "margin_delta": 0.2437233328819275,
+            "previous": 0.7537006735801697,
+            "unit": "RATIO",
+            "value_delta": 0.2437233328819275
+          }
+        ],
+        "conditions_met_delta": 0,
+        "previous_conditions_met": 1
+      },
+      "distance_to_trigger": [
+        {
+          "actual": "dif=0.0188 / dea=0.1046",
+          "gap": 0.08578813821077347,
+          "label": "今日 MACD",
+          "margin": -0.08578813821077347,
+          "observed": 0.018842697143554688,
+          "operator": "gt",
+          "passed": false,
+          "required": "dif > dea",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 0.10463083535432816,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "量比=0.9974",
+          "gap": 0.5025759935379028,
+          "label": "量能放大",
+          "margin": -0.5025759935379028,
+          "observed": 0.9974240064620972,
+          "operator": "gte",
+          "passed": false,
+          "required": "当日量 / 前5日均量 ≥ 1.5",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 1.5,
+          "unit": "RATIO"
+        }
+      ],
+      "evidence": [
+        {
+          "actual": "dif=0.0188 / dea=0.1046",
+          "gap": 0.08578813821077347,
+          "label": "今日 MACD",
+          "margin": -0.08578813821077347,
+          "observed": 0.018842697143554688,
+          "operator": "gt",
+          "passed": false,
+          "required": "dif > dea",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 0.10463083535432816,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "DIF=0.0412 / DEA=0.1261",
+          "gap": 0.0,
+          "label": "前一交易日 MACD",
+          "margin": 0.08491729199886322,
+          "observed": 0.04116058349609375,
+          "operator": "lte",
+          "passed": true,
+          "required": "前日 DIF ≤ DEA，确认当日交叉",
+          "temporal_scope": "PREVIOUS_DAY",
+          "threshold": 0.12607787549495697,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "量比=0.9974",
+          "gap": 0.5025759935379028,
+          "label": "量能放大",
+          "margin": -0.5025759935379028,
+          "observed": 0.9974240064620972,
+          "operator": "gte",
+          "passed": false,
+          "required": "当日量 / 前5日均量 ≥ 1.5",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 1.5,
+          "unit": "RATIO"
+        }
+      ],
+      "failed_conditions": [
+        {
+          "actual": "dif=0.0188 / dea=0.1046",
+          "gap": 0.08578813821077347,
+          "label": "今日 MACD",
+          "margin": -0.08578813821077347,
+          "observed": 0.018842697143554688,
+          "operator": "gt",
+          "passed": false,
+          "required": "dif > dea",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 0.10463083535432816,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "量比=0.9974",
+          "gap": 0.5025759935379028,
+          "label": "量能放大",
+          "margin": -0.5025759935379028,
+          "observed": 0.9974240064620972,
+          "operator": "gte",
+          "passed": false,
+          "required": "当日量 / 前5日均量 ≥ 1.5",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 1.5,
+          "unit": "RATIO"
+        }
+      ],
+      "parameters": {
+        "require_macd_golden": true,
+        "use_volume_filter": true,
+        "vol_ratio_min": 1.5
+      },
+      "price_basis": "QFQ",
+      "research_bias": "BEARISH",
+      "risk_triggered": false,
+      "status": "NOT_TRIGGERED",
+      "strategy_id": "macd_golden",
+      "strategy_name": "MACD 金叉放量",
+      "timeframe": "1d",
+      "trade_date": "2026-09-03"
+    },
+    {
+      "calculation_source": "app.strategy.builtin.bullish_alignment.MATRIX_STRATEGY.compute_signals",
+      "condition_ratio": 0.25,
+      "conditions_met": 1,
+      "conditions_total": 4,
+      "delta_vs_previous": {
+        "change": "MIXED",
+        "conditions": [
+          {
+            "change": "IMPROVING",
+            "current": 10.390000343322754,
+            "label": "短期均线",
+            "margin_delta": 0.0019998550415039062,
+            "previous": 10.460000038146973,
+            "unit": "QFQ_PRICE",
+            "value_delta": -0.06999969482421875
+          },
+          {
+            "change": "WEAKENING",
+            "current": 10.54699993133545,
+            "label": "中期均线",
+            "margin_delta": -0.06299877166748047,
+            "previous": 10.618999481201172,
+            "unit": "QFQ_PRICE",
+            "value_delta": -0.07199954986572266
+          },
+          {
+            "change": "IMPROVING",
+            "current": 10.687999725341797,
+            "label": "长期均线",
+            "margin_delta": 0.017665863037109375,
+            "previous": 10.697000503540039,
+            "unit": "QFQ_PRICE",
+            "value_delta": -0.009000778198242188
+          },
+          {
+            "change": "IMPROVING",
+            "current": -1.7142891883850098,
+            "label": "20日动量",
+            "margin_delta": 1.0476171970367432,
+            "previous": -2.761906385421753,
+            "unit": "PERCENTAGE_POINTS",
+            "value_delta": 1.0476171970367432
+          }
+        ],
+        "conditions_met_delta": 0,
+        "previous_conditions_met": 1
+      },
+      "distance_to_trigger": [
+        {
+          "actual": "ma5=10.3900 / ma10=10.5470",
+          "gap": 0.1569995880126953,
+          "label": "短期均线",
+          "margin": -0.1569995880126953,
+          "observed": 10.390000343322754,
+          "operator": "gt",
+          "passed": false,
+          "required": "ma5 > ma10",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 10.54699993133545,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "ma10=10.5470 / ma20=10.6880",
+          "gap": 0.14099979400634766,
+          "label": "中期均线",
+          "margin": -0.14099979400634766,
+          "observed": 10.54699993133545,
+          "operator": "gt",
+          "passed": false,
+          "required": "ma10 > ma20",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 10.687999725341797,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "百分比=-1.7143",
+          "gap": 1.7142891883850098,
+          "label": "20日动量",
+          "margin": -1.7142891883850098,
+          "observed": -1.7142891883850098,
+          "operator": "gt",
+          "passed": false,
+          "required": "20日涨幅 > 0%",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 0.0,
+          "unit": "PERCENTAGE_POINTS"
+        }
+      ],
+      "evidence": [
+        {
+          "actual": "ma5=10.3900 / ma10=10.5470",
+          "gap": 0.1569995880126953,
+          "label": "短期均线",
+          "margin": -0.1569995880126953,
+          "observed": 10.390000343322754,
+          "operator": "gt",
+          "passed": false,
+          "required": "ma5 > ma10",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 10.54699993133545,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "ma10=10.5470 / ma20=10.6880",
+          "gap": 0.14099979400634766,
+          "label": "中期均线",
+          "margin": -0.14099979400634766,
+          "observed": 10.54699993133545,
+          "operator": "gt",
+          "passed": false,
+          "required": "ma10 > ma20",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 10.687999725341797,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "ma20=10.6880 / ma60=10.1753",
+          "gap": 0.0,
+          "label": "长期均线",
+          "margin": 0.5126667022705078,
+          "observed": 10.687999725341797,
+          "operator": "gt",
+          "passed": true,
+          "required": "ma20 > ma60",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 10.175333023071289,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "百分比=-1.7143",
+          "gap": 1.7142891883850098,
+          "label": "20日动量",
+          "margin": -1.7142891883850098,
+          "observed": -1.7142891883850098,
+          "operator": "gt",
+          "passed": false,
+          "required": "20日涨幅 > 0%",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 0.0,
+          "unit": "PERCENTAGE_POINTS"
+        }
+      ],
+      "failed_conditions": [
+        {
+          "actual": "ma5=10.3900 / ma10=10.5470",
+          "gap": 0.1569995880126953,
+          "label": "短期均线",
+          "margin": -0.1569995880126953,
+          "observed": 10.390000343322754,
+          "operator": "gt",
+          "passed": false,
+          "required": "ma5 > ma10",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 10.54699993133545,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "ma10=10.5470 / ma20=10.6880",
+          "gap": 0.14099979400634766,
+          "label": "中期均线",
+          "margin": -0.14099979400634766,
+          "observed": 10.54699993133545,
+          "operator": "gt",
+          "passed": false,
+          "required": "ma10 > ma20",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 10.687999725341797,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "百分比=-1.7143",
+          "gap": 1.7142891883850098,
+          "label": "20日动量",
+          "margin": -1.7142891883850098,
+          "observed": -1.7142891883850098,
+          "operator": "gt",
+          "passed": false,
+          "required": "20日涨幅 > 0%",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 0.0,
+          "unit": "PERCENTAGE_POINTS"
+        }
+      ],
+      "parameters": {
+        "require_ma_alignment": true,
+        "require_positive_momentum": true
+      },
+      "price_basis": "QFQ",
+      "research_bias": "BEARISH",
+      "risk_triggered": false,
+      "status": "NOT_TRIGGERED",
+      "strategy_id": "bullish_alignment",
+      "strategy_name": "均线多头",
+      "timeframe": "1d",
+      "trade_date": "2026-09-03"
+    },
+    {
+      "calculation_source": "app.strategy.builtin.boll_breakout.MATRIX_STRATEGY.compute_signals",
+      "condition_ratio": 0.0,
+      "conditions_met": 0,
+      "conditions_total": 2,
+      "delta_vs_previous": {
+        "change": "IMPROVING",
+        "conditions": [
+          {
+            "change": "IMPROVING",
+            "current": 10.319999694824219,
+            "label": "收盘位置",
+            "margin_delta": 0.09879684448242188,
+            "previous": 10.210000038146973,
+            "unit": "QFQ_PRICE",
+            "value_delta": 0.1099996566772461
+          },
+          {
+            "change": "IMPROVING",
+            "current": 0.9974240064620972,
+            "label": "量能放大",
+            "margin_delta": 0.2437233328819275,
+            "previous": 0.7537006735801697,
+            "unit": "RATIO",
+            "value_delta": 0.2437233328819275
+          }
+        ],
+        "conditions_met_delta": 0,
+        "previous_conditions_met": 0
+      },
+      "distance_to_trigger": [
+        {
+          "actual": "close=10.3200 / boll_upper=11.2280",
+          "gap": 0.9079647064208984,
+          "label": "收盘位置",
+          "margin": -0.9079647064208984,
+          "observed": 10.319999694824219,
+          "operator": "gt",
+          "passed": false,
+          "required": "close > boll_upper",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 11.227964401245117,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "量比=0.9974",
+          "gap": 0.5025759935379028,
+          "label": "量能放大",
+          "margin": -0.5025759935379028,
+          "observed": 0.9974240064620972,
+          "operator": "gte",
+          "passed": false,
+          "required": "当日量 / 前5日均量 ≥ 1.5",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 1.5,
+          "unit": "RATIO"
+        }
+      ],
+      "evidence": [
+        {
+          "actual": "close=10.3200 / boll_upper=11.2280",
+          "gap": 0.9079647064208984,
+          "label": "收盘位置",
+          "margin": -0.9079647064208984,
+          "observed": 10.319999694824219,
+          "operator": "gt",
+          "passed": false,
+          "required": "close > boll_upper",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 11.227964401245117,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "量比=0.9974",
+          "gap": 0.5025759935379028,
+          "label": "量能放大",
+          "margin": -0.5025759935379028,
+          "observed": 0.9974240064620972,
+          "operator": "gte",
+          "passed": false,
+          "required": "当日量 / 前5日均量 ≥ 1.5",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 1.5,
+          "unit": "RATIO"
+        }
+      ],
+      "failed_conditions": [
+        {
+          "actual": "close=10.3200 / boll_upper=11.2280",
+          "gap": 0.9079647064208984,
+          "label": "收盘位置",
+          "margin": -0.9079647064208984,
+          "observed": 10.319999694824219,
+          "operator": "gt",
+          "passed": false,
+          "required": "close > boll_upper",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 11.227964401245117,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "量比=0.9974",
+          "gap": 0.5025759935379028,
+          "label": "量能放大",
+          "margin": -0.5025759935379028,
+          "observed": 0.9974240064620972,
+          "operator": "gte",
+          "passed": false,
+          "required": "当日量 / 前5日均量 ≥ 1.5",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 1.5,
+          "unit": "RATIO"
+        }
+      ],
+      "parameters": {
+        "require_boll_breakout": true,
+        "use_volume_filter": true,
+        "vol_ratio_min": 1.5
+      },
+      "price_basis": "QFQ",
+      "research_bias": "NEUTRAL",
+      "risk_triggered": false,
+      "status": "NOT_TRIGGERED",
+      "strategy_id": "boll_breakout",
+      "strategy_name": "布林突破",
+      "timeframe": "1d",
+      "trade_date": "2026-09-03"
+    },
+    {
+      "calculation_source": "app.strategy.builtin.volume_price_surge.MATRIX_STRATEGY.compute_signals",
+      "condition_ratio": 0.5,
+      "conditions_met": 2,
+      "conditions_total": 4,
+      "delta_vs_previous": {
+        "change": "IMPROVING",
+        "conditions": [
+          {
+            "change": "IMPROVING",
+            "current": 10.319999694824219,
+            "label": "今日站上 MA20",
+            "margin_delta": 0.11900043487548828,
+            "previous": 10.210000038146973,
+            "unit": "QFQ_PRICE",
+            "value_delta": 0.1099996566772461
+          },
+          {
+            "change": "IMPROVING",
+            "current": 10.210000038146973,
+            "label": "前日位置",
+            "margin_delta": 0.1855001449584961,
+            "previous": 10.40999984741211,
+            "unit": "QFQ_PRICE",
+            "value_delta": -0.19999980926513672
+          },
+          {
+            "change": "IMPROVING",
+            "current": 0.9974240064620972,
+            "label": "量能放大",
+            "margin_delta": 0.2437233328819275,
+            "previous": 0.7537006735801697,
+            "unit": "RATIO",
+            "value_delta": 0.2437233328819275
+          },
+          {
+            "change": "IMPROVING",
+            "current": 10.319999694824219,
+            "label": "阳线",
+            "margin_delta": 0.3099994659423828,
+            "previous": 10.210000038146973,
+            "unit": "QFQ_PRICE",
+            "value_delta": 0.1099996566772461
+          }
+        ],
+        "conditions_met_delta": 1,
+        "previous_conditions_met": 1
+      },
+      "distance_to_trigger": [
+        {
+          "actual": "close=10.3200 / ma20=10.6880",
+          "gap": 0.3680000305175781,
+          "label": "今日站上 MA20",
+          "margin": -0.3680000305175781,
+          "observed": 10.319999694824219,
+          "operator": "gt",
+          "passed": false,
+          "required": "close > ma20",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 10.687999725341797,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "量比=0.9974",
+          "gap": 1.0025759935379028,
+          "label": "量能放大",
+          "margin": -1.0025759935379028,
+          "observed": 0.9974240064620972,
+          "operator": "gte",
+          "passed": false,
+          "required": "当日量 / 前5日均量 ≥ 2",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 2.0,
+          "unit": "RATIO"
+        }
+      ],
+      "evidence": [
+        {
+          "actual": "close=10.3200 / ma20=10.6880",
+          "gap": 0.3680000305175781,
+          "label": "今日站上 MA20",
+          "margin": -0.3680000305175781,
+          "observed": 10.319999694824219,
+          "operator": "gt",
+          "passed": false,
+          "required": "close > ma20",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 10.687999725341797,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "收盘=10.2100 / MA20=10.6970",
+          "gap": 0.0,
+          "label": "前日位置",
+          "margin": 0.4870004653930664,
+          "observed": 10.210000038146973,
+          "operator": "lte",
+          "passed": true,
+          "required": "前日收盘 ≤ 前日 MA20，确认当日突破",
+          "temporal_scope": "PREVIOUS_DAY",
+          "threshold": 10.697000503540039,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "量比=0.9974",
+          "gap": 1.0025759935379028,
+          "label": "量能放大",
+          "margin": -1.0025759935379028,
+          "observed": 0.9974240064620972,
+          "operator": "gte",
+          "passed": false,
+          "required": "当日量 / 前5日均量 ≥ 2",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 2.0,
+          "unit": "RATIO"
+        },
+        {
+          "actual": "close=10.3200 / open=10.2100",
+          "gap": 0.0,
+          "label": "阳线",
+          "margin": 0.1099996566772461,
+          "observed": 10.319999694824219,
+          "operator": "gt",
+          "passed": true,
+          "required": "close > open",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 10.210000038146973,
+          "unit": "QFQ_PRICE"
+        }
+      ],
+      "failed_conditions": [
+        {
+          "actual": "close=10.3200 / ma20=10.6880",
+          "gap": 0.3680000305175781,
+          "label": "今日站上 MA20",
+          "margin": -0.3680000305175781,
+          "observed": 10.319999694824219,
+          "operator": "gt",
+          "passed": false,
+          "required": "close > ma20",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 10.687999725341797,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "量比=0.9974",
+          "gap": 1.0025759935379028,
+          "label": "量能放大",
+          "margin": -1.0025759935379028,
+          "observed": 0.9974240064620972,
+          "operator": "gte",
+          "passed": false,
+          "required": "当日量 / 前5日均量 ≥ 2",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 2.0,
+          "unit": "RATIO"
+        }
+      ],
+      "parameters": {
+        "require_bullish_candle": true,
+        "require_ma20_breakout": true,
+        "use_volume_filter": true,
+        "vol_ratio_min": 2.0
+      },
+      "price_basis": "QFQ",
+      "research_bias": "NEUTRAL",
+      "risk_triggered": false,
+      "status": "NOT_TRIGGERED",
+      "strategy_id": "volume_price_surge",
+      "strategy_name": "量价齐升",
+      "timeframe": "1d",
+      "trade_date": "2026-09-03"
+    },
+    {
+      "calculation_source": "app.strategy.builtin.pullback_to_support.MATRIX_STRATEGY.compute_signals",
+      "condition_ratio": 0.25,
+      "conditions_met": 1,
+      "conditions_total": 4,
+      "delta_vs_previous": {
+        "change": "MIXED",
+        "conditions": [
+          {
+            "change": "IMPROVING",
+            "current": 10.319999694824219,
+            "label": "MA20 附近",
+            "margin_delta": 0.1188201904296875,
+            "previous": 10.210000038146973,
+            "unit": "QFQ_PRICE",
+            "value_delta": 0.1099996566772461
+          },
+          {
+            "change": "WEAKENING",
+            "current": 0.9974240064620972,
+            "label": "量能收缩",
+            "margin_delta": -0.2437233328819275,
+            "previous": 0.7537006735801697,
+            "unit": "RATIO",
+            "value_delta": 0.2437233328819275
+          },
+          {
+            "change": "IMPROVING",
+            "current": 10.319999694824219,
+            "label": "MA60 上方",
+            "margin_delta": 0.13666629791259766,
+            "previous": 10.210000038146973,
+            "unit": "QFQ_PRICE",
+            "value_delta": 0.1099996566772461
+          },
+          {
+            "change": "IMPROVING",
+            "current": -1.7142891883850098,
+            "label": "20日动量",
+            "margin_delta": 1.0476171970367432,
+            "previous": -2.761906385421753,
+            "unit": "PERCENTAGE_POINTS",
+            "value_delta": 1.0476171970367432
+          }
+        ],
+        "conditions_met_delta": -1,
+        "previous_conditions_met": 2
+      },
+      "distance_to_trigger": [
+        {
+          "actual": "收盘=10.3200 / MA20=10.6880",
+          "gap": 0.15424060821533203,
+          "label": "MA20 附近",
+          "margin": -0.15424060821533203,
+          "observed": 10.319999694824219,
+          "operator": "between",
+          "passed": false,
+          "required": "MA20 × 0.98 < 收盘 < MA20 × 1.02",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": [
+            10.47424030303955,
+            10.901759147644043
+          ],
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "量比=0.9974",
+          "gap": 0.1974239945411682,
+          "label": "量能收缩",
+          "margin": -0.1974239945411682,
+          "observed": 0.9974240064620972,
+          "operator": "lt",
+          "passed": false,
+          "required": "当日量 / 前5日均量 < 0.8",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 0.800000011920929,
+          "unit": "RATIO"
+        },
+        {
+          "actual": "百分比=-1.7143",
+          "gap": 1.7142891883850098,
+          "label": "20日动量",
+          "margin": -1.7142891883850098,
+          "observed": -1.7142891883850098,
+          "operator": "gt",
+          "passed": false,
+          "required": "20日涨幅 > 0%",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 0.0,
+          "unit": "PERCENTAGE_POINTS"
+        }
+      ],
+      "evidence": [
+        {
+          "actual": "收盘=10.3200 / MA20=10.6880",
+          "gap": 0.15424060821533203,
+          "label": "MA20 附近",
+          "margin": -0.15424060821533203,
+          "observed": 10.319999694824219,
+          "operator": "between",
+          "passed": false,
+          "required": "MA20 × 0.98 < 收盘 < MA20 × 1.02",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": [
+            10.47424030303955,
+            10.901759147644043
+          ],
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "量比=0.9974",
+          "gap": 0.1974239945411682,
+          "label": "量能收缩",
+          "margin": -0.1974239945411682,
+          "observed": 0.9974240064620972,
+          "operator": "lt",
+          "passed": false,
+          "required": "当日量 / 前5日均量 < 0.8",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 0.800000011920929,
+          "unit": "RATIO"
+        },
+        {
+          "actual": "close=10.3200 / ma60=10.1753",
+          "gap": 0.0,
+          "label": "MA60 上方",
+          "margin": 0.1446666717529297,
+          "observed": 10.319999694824219,
+          "operator": "gt",
+          "passed": true,
+          "required": "close > ma60",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 10.175333023071289,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "百分比=-1.7143",
+          "gap": 1.7142891883850098,
+          "label": "20日动量",
+          "margin": -1.7142891883850098,
+          "observed": -1.7142891883850098,
+          "operator": "gt",
+          "passed": false,
+          "required": "20日涨幅 > 0%",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 0.0,
+          "unit": "PERCENTAGE_POINTS"
+        }
+      ],
+      "failed_conditions": [
+        {
+          "actual": "收盘=10.3200 / MA20=10.6880",
+          "gap": 0.15424060821533203,
+          "label": "MA20 附近",
+          "margin": -0.15424060821533203,
+          "observed": 10.319999694824219,
+          "operator": "between",
+          "passed": false,
+          "required": "MA20 × 0.98 < 收盘 < MA20 × 1.02",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": [
+            10.47424030303955,
+            10.901759147644043
+          ],
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "量比=0.9974",
+          "gap": 0.1974239945411682,
+          "label": "量能收缩",
+          "margin": -0.1974239945411682,
+          "observed": 0.9974240064620972,
+          "operator": "lt",
+          "passed": false,
+          "required": "当日量 / 前5日均量 < 0.8",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 0.800000011920929,
+          "unit": "RATIO"
+        },
+        {
+          "actual": "百分比=-1.7143",
+          "gap": 1.7142891883850098,
+          "label": "20日动量",
+          "margin": -1.7142891883850098,
+          "observed": -1.7142891883850098,
+          "operator": "gt",
+          "passed": false,
+          "required": "20日涨幅 > 0%",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 0.0,
+          "unit": "PERCENTAGE_POINTS"
+        }
+      ],
+      "parameters": {
+        "ma_proximity": 0.02,
+        "require_above_ma60": true,
+        "require_positive_momentum": true,
+        "use_ma20_proximity": true,
+        "use_volume_filter": true,
+        "vol_ratio_max": 0.8
+      },
+      "price_basis": "QFQ",
+      "research_bias": "NEUTRAL",
+      "risk_triggered": false,
+      "status": "NOT_TRIGGERED",
+      "strategy_id": "pullback_to_support",
+      "strategy_name": "缩量回踩",
+      "timeframe": "1d",
+      "trade_date": "2026-09-03"
+    },
+    {
+      "calculation_source": "app.services.phase2_research_panel.evaluate_strategies:boll_lower_reclaim_v1",
+      "condition_ratio": 0.6666666666666666,
+      "conditions_met": 2,
+      "conditions_total": 3,
+      "delta_vs_previous": {
+        "change": "IMPROVING",
+        "conditions": [
+          {
+            "change": "IMPROVING",
+            "current": 10.210000038146973,
+            "label": "前日触及下轨",
+            "margin_delta": 0.1427154541015625,
+            "previous": 10.40999984741211,
+            "unit": "QFQ_PRICE",
+            "value_delta": -0.19999980926513672
+          },
+          {
+            "change": "IMPROVING",
+            "current": 10.319999694824219,
+            "label": "今日回到下轨上方",
+            "margin_delta": 0.1392040252685547,
+            "previous": 10.210000038146973,
+            "unit": "QFQ_PRICE",
+            "value_delta": 0.1099996566772461
+          },
+          {
+            "change": "IMPROVING",
+            "current": 10.319999694824219,
+            "label": "收盘回升",
+            "margin_delta": 0.3099994659423828,
+            "previous": 10.210000038146973,
+            "unit": "QFQ_PRICE",
+            "value_delta": 0.1099996566772461
+          }
+        ],
+        "conditions_met_delta": 1,
+        "previous_conditions_met": 1
+      },
+      "distance_to_trigger": [
+        {
+          "actual": "收盘=10.2100 / 下轨=10.1772",
+          "gap": 0.0327606201171875,
+          "label": "前日触及下轨",
+          "margin": -0.0327606201171875,
+          "observed": 10.210000038146973,
+          "operator": "lte",
+          "passed": false,
+          "required": "前日收盘 ≤ 前日布林下轨",
+          "temporal_scope": "PREVIOUS_DAY",
+          "threshold": 10.177239418029785,
+          "unit": "QFQ_PRICE"
+        }
+      ],
+      "evidence": [
+        {
+          "actual": "收盘=10.2100 / 下轨=10.1772",
+          "gap": 0.0327606201171875,
+          "label": "前日触及下轨",
+          "margin": -0.0327606201171875,
+          "observed": 10.210000038146973,
+          "operator": "lte",
+          "passed": false,
+          "required": "前日收盘 ≤ 前日布林下轨",
+          "temporal_scope": "PREVIOUS_DAY",
+          "threshold": 10.177239418029785,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "close=10.3200 / boll_lower=10.1480",
+          "gap": 0.0,
+          "label": "今日回到下轨上方",
+          "margin": 0.1719646453857422,
+          "observed": 10.319999694824219,
+          "operator": "gt",
+          "passed": true,
+          "required": "close > boll_lower",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 10.148035049438477,
+          "unit": "QFQ_PRICE"
+        },
+        {
+          "actual": "今日=10.3200 / 前日=10.2100",
+          "gap": 0.0,
+          "label": "收盘回升",
+          "margin": 0.1099996566772461,
+          "observed": 10.319999694824219,
+          "operator": "gt",
+          "passed": true,
+          "required": "今日收盘 > 前日收盘",
+          "temporal_scope": "CURRENT_DAY",
+          "threshold": 10.210000038146973,
+          "unit": "QFQ_PRICE"
+        }
+      ],
+      "failed_conditions": [
+        {
+          "actual": "收盘=10.2100 / 下轨=10.1772",
+          "gap": 0.0327606201171875,
+          "label": "前日触及下轨",
+          "margin": -0.0327606201171875,
+          "observed": 10.210000038146973,
+          "operator": "lte",
+          "passed": false,
+          "required": "前日收盘 ≤ 前日布林下轨",
+          "temporal_scope": "PREVIOUS_DAY",
+          "threshold": 10.177239418029785,
+          "unit": "QFQ_PRICE"
+        }
+      ],
+      "parameters": {
+        "boll_period": 20,
+        "ddof": 1,
+        "stddev": 2
+      },
+      "price_basis": "QFQ",
+      "research_bias": "NEUTRAL",
+      "risk_triggered": null,
+      "status": "NOT_TRIGGERED",
+      "strategy_id": "boll_lower_reclaim",
+      "strategy_name": "布林下轨回升",
+      "timeframe": "1d",
+      "trade_date": "2026-09-03"
+    }
+  ],
+  "summary": {
+    "chan_structure": {
+      "bottom_fractals": [
+        {
+          "confirmed_at": "2025-03-28",
+          "date": "2025-03-27",
+          "price": 16.285,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-04-01",
+          "date": "2025-03-31",
+          "price": 16.262,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-04-07",
+          "date": "2025-04-03",
+          "price": 16.423,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-04-11",
+          "date": "2025-04-10",
+          "price": 18.269,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-04-29",
+          "date": "2025-04-28",
+          "price": 16.154,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-05-19",
+          "date": "2025-05-16",
+          "price": 16.162,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-06-10",
+          "date": "2025-06-05",
+          "price": 16.85,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-06-12",
+          "date": "2025-06-11",
+          "price": 16.75,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-06-24",
+          "date": "2025-06-23",
+          "price": 17.85,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-07-03",
+          "date": "2025-07-02",
+          "price": 17.98,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-07-07",
+          "date": "2025-07-04",
+          "price": 18.0,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-07-16",
+          "date": "2025-07-15",
+          "price": 17.4,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-07-30",
+          "date": "2025-07-29",
+          "price": 17.92,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-08-18",
+          "date": "2025-08-15",
+          "price": 17.9,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-08-21",
+          "date": "2025-08-20",
+          "price": 17.77,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-08-25",
+          "date": "2025-08-22",
+          "price": 17.78,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-09-17",
+          "date": "2025-09-16",
+          "price": 17.25,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-09-24",
+          "date": "2025-09-23",
+          "price": 16.39,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-10-14",
+          "date": "2025-10-13",
+          "price": 16.01,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-10-16",
+          "date": "2025-10-15",
+          "price": 16.09,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-10-22",
+          "date": "2025-10-21",
+          "price": 16.14,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-11-03",
+          "date": "2025-10-31",
+          "price": 15.57,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-12-01",
+          "date": "2025-11-28",
+          "price": 14.8,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-12-08",
+          "date": "2025-12-05",
+          "price": 14.3,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-01-05",
+          "date": "2025-12-31",
+          "price": 13.67,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-01-23",
+          "date": "2026-01-22",
+          "price": 13.89,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-01-30",
+          "date": "2026-01-29",
+          "price": 13.63,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-03-31",
+          "date": "2026-03-30",
+          "price": 12.81,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-04-08",
+          "date": "2026-04-07",
+          "price": 12.66,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-04-30",
+          "date": "2026-04-29",
+          "price": 11.83,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-05-08",
+          "date": "2026-05-07",
+          "price": 11.56,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-05-21",
+          "date": "2026-05-20",
+          "price": 10.48,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-06-12",
+          "date": "2026-06-11",
+          "price": 11.45,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-07-10",
+          "date": "2026-07-09",
+          "price": 8.83,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-07-21",
+          "date": "2026-07-20",
+          "price": 9.5,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-07-23",
+          "date": "2026-07-22",
+          "price": 9.43,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-08-07",
+          "date": "2026-08-06",
+          "price": 10.32,
+          "type": "BOTTOM_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-08-20",
+          "date": "2026-08-19",
+          "price": 10.6,
+          "type": "BOTTOM_FRACTAL"
+        }
+      ],
+      "central_zone": "DEFERRED",
+      "change": "UNCHANGED",
+      "current_structure": "RANGE_STRUCTURE",
+      "deterministic_contract_version": 1,
+      "latest_close": 10.32,
+      "mode": "CHAN_DAILY_STRUCTURE_V1",
+      "previous_structure": "RANGE_STRUCTURE",
+      "price_basis": "QFQ",
+      "price_location": "BELOW_CONFIRMED_RANGE",
+      "stroke_candidates": [
+        {
+          "confirmed_at": "2025-04-01",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-03-31",
+          "end_price": 16.262,
+          "source_bar_separation": 9,
+          "start_date": "2025-03-18",
+          "start_price": 17.177,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-04-14",
+          "direction": "UP_STROKE",
+          "end_date": "2025-04-11",
+          "end_price": 19.569,
+          "source_bar_separation": 8,
+          "start_date": "2025-03-31",
+          "start_price": 16.262,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-04-29",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-04-28",
+          "end_price": 16.154,
+          "source_bar_separation": 11,
+          "start_date": "2025-04-11",
+          "start_price": 19.569,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-05-08",
+          "direction": "UP_STROKE",
+          "end_date": "2025-05-07",
+          "end_price": 17.023,
+          "source_bar_separation": 4,
+          "start_date": "2025-04-28",
+          "start_price": 16.154,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-05-19",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-05-16",
+          "end_price": 16.162,
+          "source_bar_separation": 7,
+          "start_date": "2025-05-07",
+          "start_price": 17.023,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-06-18",
+          "direction": "UP_STROKE",
+          "end_date": "2025-06-17",
+          "end_price": 18.96,
+          "source_bar_separation": 19,
+          "start_date": "2025-05-16",
+          "start_price": 16.162,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-06-24",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-06-23",
+          "end_price": 17.85,
+          "source_bar_separation": 4,
+          "start_date": "2025-06-17",
+          "start_price": 18.96,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-07-04",
+          "direction": "UP_STROKE",
+          "end_date": "2025-07-03",
+          "end_price": 18.71,
+          "source_bar_separation": 8,
+          "start_date": "2025-06-23",
+          "start_price": 17.85,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-07-16",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-07-15",
+          "end_price": 17.4,
+          "source_bar_separation": 8,
+          "start_date": "2025-07-03",
+          "start_price": 18.71,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-07-29",
+          "direction": "UP_STROKE",
+          "end_date": "2025-07-28",
+          "end_price": 18.5,
+          "source_bar_separation": 9,
+          "start_date": "2025-07-15",
+          "start_price": 17.4,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-08-21",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-08-20",
+          "end_price": 17.77,
+          "source_bar_separation": 17,
+          "start_date": "2025-07-28",
+          "start_price": 18.5,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-09-10",
+          "direction": "UP_STROKE",
+          "end_date": "2025-09-09",
+          "end_price": 18.52,
+          "source_bar_separation": 14,
+          "start_date": "2025-08-20",
+          "start_price": 17.77,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-10-14",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-10-13",
+          "end_price": 16.01,
+          "source_bar_separation": 18,
+          "start_date": "2025-09-09",
+          "start_price": 18.52,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-10-20",
+          "direction": "UP_STROKE",
+          "end_date": "2025-10-17",
+          "end_price": 16.58,
+          "source_bar_separation": 4,
+          "start_date": "2025-10-13",
+          "start_price": 16.01,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-10-22",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-10-21",
+          "end_price": 16.14,
+          "source_bar_separation": 2,
+          "start_date": "2025-10-17",
+          "start_price": 16.58,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-10-27",
+          "direction": "UP_STROKE",
+          "end_date": "2025-10-24",
+          "end_price": 16.41,
+          "source_bar_separation": 3,
+          "start_date": "2025-10-21",
+          "start_price": 16.14,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-11-03",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-10-31",
+          "end_price": 15.57,
+          "source_bar_separation": 5,
+          "start_date": "2025-10-24",
+          "start_price": 16.41,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2025-11-17",
+          "direction": "UP_STROKE",
+          "end_date": "2025-11-14",
+          "end_price": 16.42,
+          "source_bar_separation": 10,
+          "start_date": "2025-10-31",
+          "start_price": 15.57,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-01-05",
+          "direction": "DOWN_STROKE",
+          "end_date": "2025-12-31",
+          "end_price": 13.67,
+          "source_bar_separation": 33,
+          "start_date": "2025-11-14",
+          "start_price": 16.42,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-01-14",
+          "direction": "UP_STROKE",
+          "end_date": "2026-01-13",
+          "end_price": 14.76,
+          "source_bar_separation": 7,
+          "start_date": "2025-12-31",
+          "start_price": 13.67,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-01-23",
+          "direction": "DOWN_STROKE",
+          "end_date": "2026-01-22",
+          "end_price": 13.89,
+          "source_bar_separation": 7,
+          "start_date": "2026-01-13",
+          "start_price": 14.76,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-01-27",
+          "direction": "UP_STROKE",
+          "end_date": "2026-01-26",
+          "end_price": 14.39,
+          "source_bar_separation": 2,
+          "start_date": "2026-01-22",
+          "start_price": 13.89,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-01-30",
+          "direction": "DOWN_STROKE",
+          "end_date": "2026-01-29",
+          "end_price": 13.63,
+          "source_bar_separation": 3,
+          "start_date": "2026-01-26",
+          "start_price": 14.39,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-03-04",
+          "direction": "UP_STROKE",
+          "end_date": "2026-03-03",
+          "end_price": 14.4,
+          "source_bar_separation": 17,
+          "start_date": "2026-01-29",
+          "start_price": 13.63,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-03-31",
+          "direction": "DOWN_STROKE",
+          "end_date": "2026-03-30",
+          "end_price": 12.81,
+          "source_bar_separation": 19,
+          "start_date": "2026-03-03",
+          "start_price": 14.4,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-04-03",
+          "direction": "UP_STROKE",
+          "end_date": "2026-04-02",
+          "end_price": 13.26,
+          "source_bar_separation": 3,
+          "start_date": "2026-03-30",
+          "start_price": 12.81,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-04-08",
+          "direction": "DOWN_STROKE",
+          "end_date": "2026-04-07",
+          "end_price": 12.66,
+          "source_bar_separation": 2,
+          "start_date": "2026-04-02",
+          "start_price": 13.26,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-04-22",
+          "direction": "UP_STROKE",
+          "end_date": "2026-04-21",
+          "end_price": 12.96,
+          "source_bar_separation": 10,
+          "start_date": "2026-04-07",
+          "start_price": 12.66,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-05-21",
+          "direction": "DOWN_STROKE",
+          "end_date": "2026-05-20",
+          "end_price": 10.48,
+          "source_bar_separation": 18,
+          "start_date": "2026-04-21",
+          "start_price": 12.96,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-06-01",
+          "direction": "UP_STROKE",
+          "end_date": "2026-05-29",
+          "end_price": 12.97,
+          "source_bar_separation": 7,
+          "start_date": "2026-05-20",
+          "start_price": 10.48,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-07-10",
+          "direction": "DOWN_STROKE",
+          "end_date": "2026-07-09",
+          "end_price": 8.83,
+          "source_bar_separation": 28,
+          "start_date": "2026-05-29",
+          "start_price": 12.97,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-07-20",
+          "direction": "UP_STROKE",
+          "end_date": "2026-07-17",
+          "end_price": 10.21,
+          "source_bar_separation": 6,
+          "start_date": "2026-07-09",
+          "start_price": 8.83,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-07-23",
+          "direction": "DOWN_STROKE",
+          "end_date": "2026-07-22",
+          "end_price": 9.43,
+          "source_bar_separation": 3,
+          "start_date": "2026-07-17",
+          "start_price": 10.21,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-08-17",
+          "direction": "UP_STROKE",
+          "end_date": "2026-08-14",
+          "end_price": 11.77,
+          "source_bar_separation": 17,
+          "start_date": "2026-07-22",
+          "start_price": 9.43,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-08-20",
+          "direction": "DOWN_STROKE",
+          "end_date": "2026-08-19",
+          "end_price": 10.6,
+          "source_bar_separation": 3,
+          "start_date": "2026-08-14",
+          "start_price": 11.77,
+          "type": "STROKE_CANDIDATE"
+        },
+        {
+          "confirmed_at": "2026-08-27",
+          "direction": "UP_STROKE",
+          "end_date": "2026-08-26",
+          "end_price": 11.21,
+          "source_bar_separation": 5,
+          "start_date": "2026-08-19",
+          "start_price": 10.6,
+          "type": "STROKE_CANDIDATE"
+        }
+      ],
+      "structure_high": 11.21,
+      "structure_low": 10.6,
+      "timeframe": "1d",
+      "top_fractals": [
+        {
+          "confirmed_at": "2025-03-19",
+          "date": "2025-03-18",
+          "price": 17.177,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-03-27",
+          "date": "2025-03-26",
+          "price": 16.762,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-03-31",
+          "date": "2025-03-28",
+          "price": 16.792,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-04-14",
+          "date": "2025-04-11",
+          "price": 19.569,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-05-08",
+          "date": "2025-05-07",
+          "price": 17.023,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-06-05",
+          "date": "2025-06-04",
+          "price": 17.39,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-06-11",
+          "date": "2025-06-10",
+          "price": 18.66,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-06-18",
+          "date": "2025-06-17",
+          "price": 18.96,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-07-04",
+          "date": "2025-07-03",
+          "price": 18.71,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-07-08",
+          "date": "2025-07-07",
+          "price": 18.53,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-07-15",
+          "date": "2025-07-14",
+          "price": 18.13,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-07-29",
+          "date": "2025-07-28",
+          "price": 18.5,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-08-19",
+          "date": "2025-08-18",
+          "price": 18.17,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-08-22",
+          "date": "2025-08-21",
+          "price": 18.2,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-08-27",
+          "date": "2025-08-26",
+          "price": 18.4,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-09-10",
+          "date": "2025-09-09",
+          "price": 18.52,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-09-18",
+          "date": "2025-09-17",
+          "price": 17.53,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-09-25",
+          "date": "2025-09-24",
+          "price": 16.9,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-10-15",
+          "date": "2025-10-14",
+          "price": 16.29,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-10-20",
+          "date": "2025-10-17",
+          "price": 16.58,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-10-27",
+          "date": "2025-10-24",
+          "price": 16.41,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-11-17",
+          "date": "2025-11-14",
+          "price": 16.42,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-12-09",
+          "date": "2025-12-08",
+          "price": 14.73,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-12-23",
+          "date": "2025-12-22",
+          "price": 13.58,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2025-12-30",
+          "date": "2025-12-29",
+          "price": 14.3,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-01-14",
+          "date": "2026-01-13",
+          "price": 14.76,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-01-27",
+          "date": "2026-01-26",
+          "price": 14.39,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-02-02",
+          "date": "2026-01-30",
+          "price": 13.94,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-03-04",
+          "date": "2026-03-03",
+          "price": 14.4,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-04-03",
+          "date": "2026-04-02",
+          "price": 13.26,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-04-09",
+          "date": "2026-04-08",
+          "price": 13.05,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-04-22",
+          "date": "2026-04-21",
+          "price": 12.96,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-05-06",
+          "date": "2026-04-30",
+          "price": 12.31,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-06-01",
+          "date": "2026-05-29",
+          "price": 12.97,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-07-07",
+          "date": "2026-07-06",
+          "price": 9.99,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-07-20",
+          "date": "2026-07-17",
+          "price": 10.21,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-07-22",
+          "date": "2026-07-21",
+          "price": 9.9,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-08-17",
+          "date": "2026-08-14",
+          "price": 11.77,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-08-21",
+          "date": "2026-08-20",
+          "price": 11.28,
+          "type": "TOP_FRACTAL"
+        },
+        {
+          "confirmed_at": "2026-08-27",
+          "date": "2026-08-26",
+          "price": 11.21,
+          "type": "TOP_FRACTAL"
+        }
+      ],
+      "trade_date": "2026-09-03"
+    },
+    "changes_vs_previous": [
+      {
+        "current": -0.17157594280541955,
+        "delta": -0.0017415830783701902,
+        "direction": "WEAKENING",
+        "id": "macd_hist",
+        "label": "MACD 柱值",
+        "previous": -0.16983435972704936,
+        "unit": "QFQ_PRICE"
+      },
+      {
+        "current": 39.01186288271196,
+        "delta": 6.999322530809259,
+        "direction": "RISING",
+        "id": "rsi6",
+        "label": "RSI6",
+        "previous": 32.0125403519027,
+        "unit": "POINTS"
+      },
+      {
+        "current": 1,
+        "delta": 0,
+        "direction": "UNCHANGED",
+        "id": "ma_structure",
+        "label": "均线结构满足数",
+        "previous": 1,
+        "unit": "CONDITIONS"
+      },
+      {
+        "current": 0.9974240064620972,
+        "delta": 0.2437233328819275,
+        "direction": "EXPANDING",
+        "id": "volume_ratio",
+        "label": "相对量能",
+        "previous": 0.7537006735801697,
+        "unit": "RATIO"
+      },
+      {
+        "current": 0.15923711670146,
+        "delta": 0.1277215992300652,
+        "direction": "RISING",
+        "id": "boll_position",
+        "label": "布林区间位置",
+        "previous": 0.031515517471394805,
+        "unit": "RATIO"
+      },
+      {
+        "current": null,
+        "delta": null,
+        "direction": "UNCHANGED",
+        "id": "chan_structure",
+        "label": "缠论日线结构",
+        "previous": null,
+        "unit": "STRUCTURE"
+      }
+    ],
+    "claims_count": 21,
+    "closest_trigger": {
+      "condition_ratio": 0.6666666666666666,
+      "conditions_met": 2,
+      "conditions_total": 3,
+      "distance_to_trigger": [
+        {
+          "actual": "收盘=10.2100 / 下轨=10.1772",
+          "gap": 0.0327606201171875,
+          "label": "前日触及下轨",
+          "margin": -0.0327606201171875,
+          "observed": 10.210000038146973,
+          "operator": "lte",
+          "passed": false,
+          "required": "前日收盘 ≤ 前日布林下轨",
+          "temporal_scope": "PREVIOUS_DAY",
+          "threshold": 10.177239418029785,
+          "unit": "QFQ_PRICE"
+        }
+      ],
+      "strategy_id": "boll_lower_reclaim",
+      "strategy_name": "布林下轨回升"
+    },
+    "data_quality": {
+      "claims_status": "VALID",
+      "financial_data": "NOT_CONNECTED",
+      "material_news": "NOT_CONNECTED",
+      "price_basis": "QFQ",
+      "source_hashes": {
+        "claims.json": "42f4e876521d2559cefc91bc7620b2014097fd019772f7985c89c13d0c69038d",
+        "claims_validation.json": "4663de951941976db1512a4d4b438678f9f7e5116905eaf9d45769d3f54f9425",
+        "facts.json": "97c183ca7499a4d3038b0975e455eefbcb80135de5265b828aee8c991ea7fb1e",
+        "input.json": "e68bc436ea0fa4c31018ac5243f4d29b793db0c4bb184fd66151cf75d6c6962d",
+        "projection.json": "55a44c4b094dc56fa1b083725eec2f7af3f2043b91860d5e52860a0e9ff30ed4",
+        "qfq_daily.json": "b1db990ba331348cc090c0481ec47c2dd95287e968c0e4ae84c6d2dfa45c1510",
+        "raw_daily.json": "496f467442a9fd29dc00d0a3c0fab12fa4e58724537a7a502dafc47e7793966e"
+      },
+      "source_provider": "stocksdk_tencent_fallback",
+      "vendor_pending": [
+        "intraday_batch_entitlement",
+        "first_30m_bucket_includes_09_30",
+        "volume_unit",
+        "amount_unit"
+      ]
+    },
+    "hold_explanation": [
+      "模拟动作读取当日已发布账本；多策略研究不参与现有动作规则。",
+      "账户空仓，HOLD 表示不产生新模拟订单。",
+      "现有方向与 RSI6 规则偏弱；空仓时没有可减少的模拟持仓。",
+      "MACD 线关系：DIF=0.0188 / DEA=0.1046；DIF > DEA（未满足）",
+      "MACD 柱值：柱值=-0.1716；柱值 > 0（未满足）",
+      "RSI6：RSI6=39.0119；RSI6 ≥ 50（未满足）"
+    ],
+    "hold_reason": "FLAT_WAIT",
+    "limiting_factors": [
+      "MACD 金叉放量 / 今日 MACD：dif=0.0188 / dea=0.1046；条件 dif > dea",
+      "MACD 金叉放量 / 量能放大：量比=0.9974；条件 当日量 / 前5日均量 ≥ 1.5",
+      "均线多头 / 短期均线：ma5=10.3900 / ma10=10.5470；条件 ma5 > ma10",
+      "均线多头 / 中期均线：ma10=10.5470 / ma20=10.6880；条件 ma10 > ma20",
+      "均线多头 / 20日动量：百分比=-1.7143；条件 20日涨幅 > 0%",
+      "布林突破 / 收盘位置：close=10.3200 / boll_upper=11.2280；条件 close > boll_upper",
+      "布林突破 / 量能放大：量比=0.9974；条件 当日量 / 前5日均量 ≥ 1.5",
+      "量价齐升 / 今日站上 MA20：close=10.3200 / ma20=10.6880；条件 close > ma20",
+      "量价齐升 / 量能放大：量比=0.9974；条件 当日量 / 前5日均量 ≥ 2",
+      "缩量回踩 / MA20 附近：收盘=10.3200 / MA20=10.6880；条件 MA20 × 0.98 < 收盘 < MA20 × 1.02",
+      "缩量回踩 / 量能收缩：量比=0.9974；条件 当日量 / 前5日均量 < 0.8",
+      "缩量回踩 / 20日动量：百分比=-1.7143；条件 20日涨幅 > 0%",
+      "布林下轨回升 / 前日触及下轨：收盘=10.2100 / 下轨=10.1772；条件 前日收盘 ≤ 前日布林下轨",
+      "RSI6=39.0119；中性轴阈值 ≥ 50"
+    ],
+    "next_observation_conditions": [
+      "观察MACD 线关系是否满足 DIF > DEA；当前 DIF=0.0188 / DEA=0.1046",
+      "观察MACD 柱值是否满足 柱值 > 0；当前 柱值=-0.1716",
+      "观察RSI6是否满足 RSI6 ≥ 50；当前 RSI6=39.0119",
+      "后续交易日重新确认布林下轨回升 / 前日触及下轨：前日收盘 ≤ 前日布林下轨；当前 收盘=10.2100 / 下轨=10.1772",
+      "观察后续收盘是否确认新的日线分型；未确认结构不倒填到过去。"
+    ],
+    "paper_action": "HOLD",
+    "position_state": "FLAT",
+    "research_confidence": {
+      "basis": "可用策略 6/6；结构 RANGE_STRUCTURE；分歧 1 项。仅指证据一致性，不是胜率。",
+      "category": "MODERATE",
+      "is_probability": false
+    },
+    "research_consensus": "BEARISH_WITH_CONFLICTS",
+    "strategy_conflicts": [
+      "MACD 与均线同向偏弱，但缠论工程结构尚未确认向下"
+    ],
+    "supporting_factors": [
+      "均线多头 / 长期均线：ma20=10.6880 / ma60=10.1753；条件 ma20 > ma60",
+      "量价齐升 / 阳线：close=10.3200 / open=10.2100；条件 close > open",
+      "缩量回踩 / MA60 上方：close=10.3200 / ma60=10.1753；条件 close > ma60",
+      "布林下轨回升 / 今日回到下轨上方：close=10.3200 / boll_lower=10.1480；条件 close > boll_lower",
+      "布林下轨回升 / 收盘回升：今日=10.3200 / 前日=10.2100；条件 今日收盘 > 前日收盘"
+    ],
+    "symbol": "000403.SZ",
+    "trade_date": "2026-09-03"
+  },
+  "symbol": "000403.SZ",
+  "timeframe": "1d",
+  "trade_date": "2026-09-03"
+}

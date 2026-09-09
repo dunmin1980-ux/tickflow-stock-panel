@@ -1,0 +1,89 @@
+{
+  "research_date": "2026-09-09",
+  "viewports": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 1000,
+      "status": "PASSED",
+      "console_errors": 0,
+      "checks_passed": 8,
+      "checks": [
+        "overview_api_parity",
+        "seven_row_matrix",
+        "numeric_evidence",
+        "chan_confirmation_dates",
+        "daily_delta",
+        "json_markdown_download",
+        "refresh_persistence",
+        "no_page_overflow"
+      ]
+    },
+    {
+      "name": "mobile",
+      "width": 390,
+      "height": 844,
+      "status": "PASSED",
+      "console_errors": 0,
+      "checks_passed": 8,
+      "checks": [
+        "overview_api_parity",
+        "seven_row_matrix",
+        "numeric_evidence",
+        "chan_confirmation_dates",
+        "daily_delta",
+        "json_markdown_download",
+        "refresh_persistence",
+        "no_page_overflow"
+      ]
+    }
+  ],
+  "blocked_requests": [
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    }
+  ],
+  "external_font_requests_blocked": 8,
+  "account_unchanged": true,
+  "research_deterministic": true,
+  "daily_run_executed": false,
+  "provider_calls": 0,
+  "e2e_cases_passed": 16
+}

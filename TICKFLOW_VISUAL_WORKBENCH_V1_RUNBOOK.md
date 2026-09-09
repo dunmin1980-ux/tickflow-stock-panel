@@ -173,6 +173,82 @@ Signals use same-basis qfq Typed Claims. Raw prices are used for valuation and
 next-trading-day-open execution. Volume and amount units remain explicitly
 marked `VENDOR_CONFIRMATION_PENDING` and are not used to create the action.
 
+## Daily Research Panel
+
+`/paper-trading` now shows six independent daily research rules for `000403.SZ`:
+MACD golden cross with volume, bullish MA alignment, BOLL upper breakout,
+volume/price breakout, low-volume MA20 pullback, and BOLL lower-band reclaim.
+The first five reuse the builtin matrix strategies and their default parameters.
+The sixth is explicitly defined as prior close at/below the lower band, current
+close above the band, and current close above prior close.
+The seventh row is `CHAN_DAILY_STRUCTURE_V1`: QFQ daily fractals, candidate
+strokes, confirmed structure and recent structural levels. This is a bounded
+deterministic engineering interpretation, not complete Chan theory. Central
+zones, full strokes/segments, divergence and multitimeframe analysis are deferred.
+
+Each rule shows actual indicator values, required thresholds, condition results,
+and a comparison with the prior trading day from the same qfq snapshot. A match
+is an observation, not an order. A risk flag reuses the builtin exit condition;
+it is not a portfolio risk estimate. Insufficient or invalid data is shown
+separately from an unmet condition. All six rules are displayed even when
+none match.
+
+The panel reads the existing validated daily bundle locally, checks its hashes,
+and makes no new data or AI request. Price conditions use qfq; relative volume
+uses the same-source raw volume divided by the prior five bars' mean volume.
+Absolute volume/amount units remain vendor-pending. Older research is explicitly
+date-labelled. Display values are rounded; predicates retain builtin precision.
+
+`HOLD` now distinguishes an empty account waiting from an unchanged position and
+shows the existing MACD+RSI6 evidence. Multi-strategy research does not change
+the released Paper Trading rule, ledger, or ChenQuant Daily calculation.
+
+After the normal daily run, inspect the research panel. No additional run or
+API Key is needed. During development, frontend and backend changes require a
+build and restart of the identified local process; the normal launcher reuses
+an already healthy server.
+
+### Research Engine v1 Daily Use
+
+1. Double-click the existing desktop `TickFlow.app`; open Today Workbench.
+2. Check the displayed research date and data status. If today's input is missing,
+   use the existing daily workflow; do not interpret an older labelled snapshot
+   as current research. Opening research never requests new market data.
+3. Read the research consensus and **separate** Paper Action. `FLAT_WAIT` means
+   no current position; `POSITION_HOLD` means an unchanged position. A missing
+   published daily is `NOT_RUN`, not HOLD. Corrupt publication evidence blocks
+   research readback rather than fabricating account context.
+4. Inspect supporting/limiting factors, conflicts, the closest rule and its
+   measured gap, yesterday's changes, and the next observation conditions.
+5. Expand any of the seven matrix rows for actual values, thresholds, dated
+   fractals and candidate strokes. Confirmed structure and current price location
+   are separate: a previously confirmed range can coexist with a new close below it.
+6. Download JSON or Markdown from the matrix toolbar. These are local research
+   exports, not ChenQuant account replacements or automatic Obsidian publication.
+
+Technical prices are QFQ throughout. Condition completion is not a probability.
+Gaps retain their units and are never added across incompatible units. Strict
+threshold equality remains unmet even when a displayed numeric gap is zero.
+Confidence measures rule-evidence agreement, not prediction accuracy. Research
+consensus follows explicit MACD/MA direction and Chan/conflict rules, not majority
+voting into a trade action.
+
+Optional offline export from the project root, using already validated inputs:
+
+```bash
+backend/.venv/bin/python scripts/export_research_daily.py --date YYYY-MM-DD
+```
+
+Each export goes to `reports/research_engine_v1/YYYY-MM-DD/research_daily.json`
+and `research_daily.md`. The exporter checks three identical runs and writes
+`replay_verification.json` for the selected dates. Existing account/input files
+are read only. No automatic data fetch, AI request or new simulated trade occurs.
+The release's twelve-date evidence covers 2026-08-25 through 2026-09-09; later
+research exports do not imply those earlier results used later market data.
+
+Release evidence: `reports/tickflow_research_engine_v1_eval.md`.
+Bounded structure definition: `docs/research-chan-daily-structure-v1.md`.
+
 ## Account Semantics
 
 - A BUY or SELL decision is queued on the decision date.

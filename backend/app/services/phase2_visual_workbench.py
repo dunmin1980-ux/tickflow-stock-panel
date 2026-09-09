@@ -6,6 +6,8 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from polars.exceptions import PolarsError
+
 from app.schemas.phase2_option_c import (
     ContinuousDayInput,
     MvpChenQuantDaily,
@@ -22,6 +24,7 @@ from app.services.phase2_option_c_fixture import (
     load_reference_fixture,
 )
 from app.services.phase2_option_c_state import OptionCStateError, OptionCStateStore
+from app.services.phase2_research_panel import build_research_panel
 from app.services.phase2_visual_daily_input import (
     Phase2VisualDailyInputBuilder,
     VisualDailyInputError,
@@ -258,7 +261,22 @@ class Phase2VisualWorkbenchService:
             "equity_history": [_json_model(point) for point in state.equity_history],
             "latest_daily": latest_daily,
             "chenquant_daily_markdown": markdown,
+            "research": self._research(target, state),
         }
+
+    def _research(self, target: date, state) -> dict[str, Any]:
+        candidates = [target]
+        if state.last_completed_trade_date is not None and state.last_completed_trade_date < target:
+            candidates.append(state.last_completed_trade_date)
+        for trade_date in candidates:
+            day_root = self.input_root / trade_date.isoformat()
+            if not day_root.exists() and not day_root.is_symlink():
+                continue
+            try:
+                return build_research_panel(self.input_root, trade_date, state_root=self.state_root)
+            except (VisualDailyInputError, ValueError, OSError, PolarsError):
+                return {"status": "BLOCKED", "trade_date": trade_date.isoformat()}
+        return {"status": "NOT_READY"}
 
     def run(self, target: date) -> dict[str, Any]:
         state = self._state()

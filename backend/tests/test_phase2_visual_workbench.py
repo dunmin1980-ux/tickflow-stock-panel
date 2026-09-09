@@ -150,6 +150,47 @@ def test_one_click_prepares_current_input_once_and_persists_daily(tmp_path: Path
     assert gateway.calls == 1
 
 
+def test_dashboard_adds_research_without_reexecuting_daily(tmp_path: Path) -> None:
+    gateway = FakeDailyGateway()
+    service = service_for(tmp_path, builder=daily_builder(tmp_path, gateway))
+    first = service.run(TODAY)
+    again = service.dashboard(TODAY)
+    assert first['research']['status'] == 'READY'
+    assert len(first['research']['strategies']) == 6
+    assert first['research'] == again['research']
+    assert first['decisions'] == again['decisions']
+    assert first['trades'] == again['trades']
+    assert gateway.calls == 1
+
+
+def test_reference_only_account_does_not_claim_multi_strategy_research(tmp_path: Path) -> None:
+    service = service_for(tmp_path)
+    result = service.run(REFERENCE_DATE)
+    assert result['research']['status'] == 'NOT_READY'
+
+
+@pytest.mark.parametrize('failure', ['contract', 'dataframe'])
+def test_research_failure_is_visible_without_hiding_the_account(tmp_path: Path, monkeypatch, failure) -> None:
+    from polars.exceptions import ComputeError
+    from app.services import phase2_visual_workbench as visual
+    from app.services.phase2_visual_daily_input import VisualDailyInputError
+
+    gateway = FakeDailyGateway()
+    service = service_for(tmp_path, builder=daily_builder(tmp_path, gateway))
+    service.run(TODAY)
+
+    def broken(*args, **kwargs):
+        if failure == 'dataframe':
+            raise ComputeError('invalid input schema')
+        raise VisualDailyInputError('RESEARCH_RULE_EXPLANATION_MISMATCH')
+
+    monkeypatch.setattr(visual, 'build_research_panel', broken)
+    dashboard = service.dashboard(TODAY)
+    assert dashboard['research']['status'] == 'BLOCKED'
+    assert dashboard['account']['cash_cny'] == '100000.00'
+    assert gateway.calls == 1
+
+
 def test_exact_reference_run_is_idempotent(tmp_path: Path) -> None:
     service = service_for(tmp_path)
     first = service.run(REFERENCE_DATE)

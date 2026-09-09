@@ -1,0 +1,65 @@
+{
+  "research_date": "2026-09-09",
+  "viewports": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 1000,
+      "status": "PASSED",
+      "console_errors": 0
+    },
+    {
+      "name": "mobile",
+      "width": 390,
+      "height": 844,
+      "status": "PASSED",
+      "console_errors": 0
+    }
+  ],
+  "blocked_requests": [
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    }
+  ],
+  "external_font_requests_blocked": 8,
+  "account_unchanged": true,
+  "research_deterministic": true,
+  "daily_run_executed": false
+}
