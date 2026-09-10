@@ -5,6 +5,7 @@
 
 import { toast } from '@/components/Toast'
 import type { ResearchEngine } from './research-engine'
+import type { StrategyGraphicsData } from './strategy-graphics'
 import { BACKEND_OFFLINE_MESSAGE, connectivityStore, offlineSessionAccess } from './connectivity'
 import { clearAllSnapshots, getSnapshot, putSnapshot } from './offlineDb'
 import { isOfflineCacheAllowed, isWriteMethod } from './offlinePolicy'
@@ -1488,6 +1489,7 @@ export type PaperResearchPanel = {
   strategies: ResearchStrategy[]
   paper_rule: { signal: string; positive_conditions: ResearchCondition[] }
   engine?: ResearchEngine
+  graphics?: StrategyGraphicsData
 }
 
 export interface PaperTradingDashboard {

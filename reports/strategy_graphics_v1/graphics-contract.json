@@ -1,0 +1,112 @@
+{
+  "http_status": 200,
+  "research_date": "2026-09-10",
+  "signal": "RISK_OBSERVATION",
+  "research_consensus": "MIXED",
+  "paper_action": "HOLD",
+  "hold_reason": "FLAT_WAIT",
+  "closest": {
+    "strategy_id": "bullish_alignment",
+    "strategy_name": "均线多头",
+    "conditions_met": 2,
+    "conditions_total": 4,
+    "condition_ratio": 0.5,
+    "distance_to_trigger": [
+      {
+        "label": "中期均线",
+        "required": "ma10 > ma20",
+        "actual": "ma10=10.4230 / ma20=10.5985",
+        "passed": false,
+        "observed": 10.42300033569336,
+        "threshold": 10.59850025177002,
+        "operator": "gt",
+        "unit": "QFQ_PRICE",
+        "margin": -0.17549991607666016,
+        "gap": 0.17549991607666016,
+        "temporal_scope": "CURRENT_DAY"
+      },
+      {
+        "label": "20日动量",
+        "required": "20日涨幅 > 0%",
+        "actual": "百分比=-7.5201",
+        "passed": false,
+        "observed": -7.5201451778411865,
+        "threshold": 0,
+        "operator": "gt",
+        "unit": "PERCENTAGE_POINTS",
+        "margin": -7.5201451778411865,
+        "gap": 7.5201451778411865,
+        "temporal_scope": "CURRENT_DAY"
+      }
+    ]
+  },
+  "strategies": [
+    {
+      "id": "macd_golden",
+      "name": "MACD 金叉放量",
+      "status": "NOT_TRIGGERED",
+      "progress": "1/3"
+    },
+    {
+      "id": "bullish_alignment",
+      "name": "均线多头",
+      "status": "NOT_TRIGGERED",
+      "progress": "2/4"
+    },
+    {
+      "id": "boll_breakout",
+      "name": "布林突破",
+      "status": "NOT_TRIGGERED",
+      "progress": "0/2"
+    },
+    {
+      "id": "volume_price_surge",
+      "name": "量价齐升",
+      "status": "NOT_TRIGGERED",
+      "progress": "1/4"
+    },
+    {
+      "id": "pullback_to_support",
+      "name": "缩量回踩",
+      "status": "NOT_TRIGGERED",
+      "progress": "2/4"
+    },
+    {
+      "id": "boll_lower_reclaim",
+      "name": "布林下轨回升",
+      "status": "NOT_TRIGGERED",
+      "progress": "1/3"
+    }
+  ],
+  "graphics": {
+    "status": "READY",
+    "points": 30,
+    "first_date": "2026-07-31",
+    "last": {
+      "trade_date": "2026-09-10",
+      "close": 10.33,
+      "ma5": 10.456,
+      "ma10": 10.422999999999998,
+      "ma20": 10.5985,
+      "ma60": 10.072,
+      "boll_upper": 11.114976931770993,
+      "boll_middle": 10.5985,
+      "boll_lower": 10.082023068229006,
+      "macd_dif": -0.0048711923250692735,
+      "macd_dea": 0.03663709158764644,
+      "macd_hist": -0.08301656782543143,
+      "rsi6": 40.48173733415591
+    },
+    "markers": 29,
+    "price_basis": "QFQ",
+    "history_basis": "SAME_SNAPSHOT_PREFIX",
+    "source_hashes": {
+      "qfq_daily.json": "0aa76eed39ef1069cea1772123b13eb57d59240df91803ef5d328fbd9b3d424a",
+      "raw_daily.json": "b0fd18b1f6ff5b08330c0d48555b2ae40143cb3d600ad7b08f740813c2419e0d"
+    },
+    "indicator_source": "app.indicators.pipeline.compute_indicators",
+    "strategy_source": "app.services.phase2_research_panel.evaluate_strategies / app.services.phase2_research_daily.normalize_strategy"
+  },
+  "real_trading": "DISABLED",
+  "can_publish": false
+}

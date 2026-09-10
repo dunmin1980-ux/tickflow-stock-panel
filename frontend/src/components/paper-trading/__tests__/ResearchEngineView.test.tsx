@@ -134,6 +134,13 @@ function renderWorkbench(engine = engineFixture(), requestedDate = '2026-09-09')
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.clearAllMocks() })
 
 describe('Research Engine v1', () => {
+  it('adds shared strategy cards and graphic structure to the workbench without running daily', async () => {
+    renderWorkbench()
+    expect(await screen.findByRole('region', { name: '六策略总览' })).toBeVisible()
+    expect(screen.getByRole('link', { name: /完整个股研究/ })).toHaveAttribute('href', '/stock-research')
+    expect(api.paperTradingRun).not.toHaveBeenCalled()
+  })
+
   it('places current mixed research below safety and before status grids, separately from flat HOLD', async () => {
     renderWorkbench()
     const overview = await screen.findByRole('region', { name: 'Research Overview' })

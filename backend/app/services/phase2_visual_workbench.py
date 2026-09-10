@@ -273,7 +273,13 @@ class Phase2VisualWorkbenchService:
             if not day_root.exists() and not day_root.is_symlink():
                 continue
             try:
-                return build_research_panel(self.input_root, trade_date, state_root=self.state_root)
+                panel = build_research_panel(self.input_root, trade_date, state_root=self.state_root)
+                from app.services.phase2_strategy_graphics import build_strategy_graphics
+                try:
+                    panel['graphics'] = build_strategy_graphics(self.input_root, trade_date, panel)
+                except (VisualDailyInputError, ValueError, KeyError, TypeError, OSError, PolarsError):
+                    panel['graphics'] = {'status': 'BLOCKED', 'trade_date': trade_date.isoformat()}
+                return panel
             except (VisualDailyInputError, ValueError, OSError, PolarsError):
                 return {"status": "BLOCKED", "trade_date": trade_date.isoformat()}
         return {"status": "NOT_READY"}

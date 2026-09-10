@@ -39,7 +39,7 @@ type NavItem = { to: string; label: string; icon: React.ComponentType<{ classNam
 const nav: NavItem[] = [
   { to: '/paper-trading', label: '今日工作台', icon: LayoutDashboard },
   { to: '/paper-account', label: '模拟盘', icon: WalletCards },
-  { to: '/stock-analysis', label: '个股研究', icon: TrendingUp },
+  { to: '/stock-research', label: '个股研究', icon: TrendingUp },
   { to: '/indices', label: '市场', icon: BarChart3 },
   { to: '/monitor', label: '监控', icon: RadioTower },
   { to: '/data', label: '数据', icon: Database },

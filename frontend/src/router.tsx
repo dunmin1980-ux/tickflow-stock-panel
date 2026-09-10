@@ -26,6 +26,7 @@ const GoldWorkspace = lazy(() => import('./pages/GoldWorkspace').then(m => ({ de
 const ClientConnection = lazy(() => import('./pages/ClientConnection').then(m => ({ default: m.ClientConnection })))
 const PaperTrading = lazy(() => import('./pages/PaperTrading').then(m => ({ default: m.PaperTrading })))
 const PaperAccount = lazy(() => import('./pages/PaperAccount').then(m => ({ default: m.PaperAccount })))
+const StockResearch = lazy(() => import('./pages/StockResearch').then(m => ({ default: m.StockResearch })))
 
 export const router = createBrowserRouter([
   { path: '/onboarding', element: <Navigate to="/settings?tab=account" replace /> },
@@ -38,6 +39,7 @@ export const router = createBrowserRouter([
       { path: 'overview', element: <Navigate to="/paper-trading" replace /> },
       { path: 'paper-trading', element: <PaperTrading /> },
       { path: 'paper-account', element: <PaperAccount /> },
+      { path: 'stock-research', element: <StockResearch /> },
       { path: 'analysis', element: <Navigate to="/settings?tab=ext-pages" replace /> },
       { path: 'analysis/:menuId', element: <AnalysisDetail /> },
       { path: 'concept-analysis', element: <ConceptAnalysis /> },

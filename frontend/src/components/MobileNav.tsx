@@ -5,7 +5,7 @@ import { cn } from '@/lib/cn'
 const destinations = [
   { to: '/paper-trading', label: '今日', icon: LayoutDashboard },
   { to: '/paper-account', label: '模拟', icon: WalletCards },
-  { to: '/stock-analysis', label: '个股', icon: TrendingUp },
+  { to: '/stock-research', label: '个股', icon: TrendingUp },
   { to: '/indices', label: '市场', icon: BarChart3 },
   { to: '/monitor', label: '监控', icon: RadioTower },
   { to: '/data', label: '数据', icon: Database },

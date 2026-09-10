@@ -8,6 +8,8 @@
 
 `TICKFLOW_WORKBENCH_ACCOUNT_UX_SPLIT_RELEASED`
 
+`TICKFLOW_STRATEGY_GRAPHICS_V1_RELEASED`
+
 This is a local, single-symbol A-share research and Paper Trading workbench for
 `000403.SZ` 派林生物. It is always `SIMULATION ONLY`; real trading and broker
 connectivity are disabled.
@@ -72,7 +74,7 @@ sidebar:
 ```text
 今日工作台 -> /paper-trading
 模拟盘     -> /paper-account
-个股研究   -> /stock-analysis
+个股研究   -> /stock-research
 市场       -> /indices
 监控       -> /monitor
 数据       -> /data
@@ -248,6 +250,36 @@ research exports do not imply those earlier results used later market data.
 
 Release evidence: `reports/tickflow_research_engine_v1_eval.md`.
 Bounded structure definition: `docs/research-chan-daily-structure-v1.md`.
+
+## Strategy Graphics v1
+
+- Today Workbench and `/stock-research` share the same dashboard response:
+  research summary, six strategy cards, condition progress, QFQ close/MA/BOLL,
+  MACD and RSI6. The stock research page is read-only and has no daily-run button.
+- Check **research date** first. The cards show the current snapshot's actual
+  conditions, not a fixed demo. The closest card is not necessarily near-trigger:
+  it can be only 2/4 when no strategy is close enough. Progress is not a probability.
+- Expand a card to compare each observed value with its original threshold.
+  A historical condition cannot be satisfied by changing today's value. Missing
+  evidence remains unknown, not an unmet zero.
+- Charts show the last 30 available trading days. Indicators warm up on the full
+  validated history first; unavailable early MA60 points stay blank. All plotted
+  prices are QFQ, not raw execution or ledger prices.
+- Trigger/near-trigger markers are retrospective evaluations of each dated
+  prefix of the **same current QFQ snapshot**. They are not previously published
+  signals, executed orders, historical snapshots, or a strategy backtest.
+- MACD uses the existing DIF/DEA/histogram calculation; RSI6 includes the neutral
+  50 line. Chart legends toggle series and hover reveals dated values. Missing,
+  blocked and older snapshots are explicitly labelled.
+- `FLAT_WAIT` = empty-account waiting; canonical `POSITION_HOLD` = unchanged
+  position (the requested visual `HOLD_POSITION` meaning). No status or action
+  rule was renamed, loosened, or connected to trading.
+- Use the existing daily button only when you want to prepare a new day's inputs.
+  Viewing, expanding cards, changing pages and chart interaction never fetch
+  market data or contact an AI Provider. Chan uses the existing read-only
+  daily structure; central zones remain deferred.
+
+Graphics release evidence: `reports/tickflow_strategy_graphics_v1_eval.md`.
 
 ## Account Semantics
 

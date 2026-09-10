@@ -1,0 +1,425 @@
+{
+  "research_date": "2026-09-10",
+  "cases": [
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "summary_hold_api_parity",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "six_cards_closest_and_all_condition_values",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "价格与均线图_nonblank_framed_canvas",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "MACD 图_nonblank_framed_canvas",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "RSI6 图_nonblank_framed_canvas",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "price_legend_interactive",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "accessible_chart_values_api_parity",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "refresh_persistence_no_overflow_no_js_error",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "summary_hold_api_parity",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "six_cards_closest_and_all_condition_values",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "价格与均线图_nonblank_framed_canvas",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "MACD 图_nonblank_framed_canvas",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "RSI6 图_nonblank_framed_canvas",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "price_legend_interactive",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "accessible_chart_values_api_parity",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "refresh_persistence_no_overflow_no_js_error",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "chan_existing_readonly_no_daily_runner",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "summary_hold_api_parity",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "six_cards_closest_and_all_condition_values",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "价格与均线图_nonblank_framed_canvas",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "MACD 图_nonblank_framed_canvas",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "RSI6 图_nonblank_framed_canvas",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "price_legend_interactive",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "accessible_chart_values_api_parity",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "refresh_persistence_no_overflow_no_js_error",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "summary_hold_api_parity",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "six_cards_closest_and_all_condition_values",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "价格与均线图_nonblank_framed_canvas",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "MACD 图_nonblank_framed_canvas",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "RSI6 图_nonblank_framed_canvas",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "price_legend_interactive",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "accessible_chart_values_api_parity",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "refresh_persistence_no_overflow_no_js_error",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "chan_existing_readonly_no_daily_runner",
+      "status": "PASSED"
+    },
+    {
+      "view": "historical_local_response_2026-09-09",
+      "path": "stock-research",
+      "check": "three_of_four_actual_unmet_condition",
+      "status": "PASSED"
+    }
+  ],
+  "blocked_requests": [
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    }
+  ],
+  "canvas": [
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "label": "价格与均线图",
+      "width": 1176,
+      "height": 304,
+      "pixel_width": 1176,
+      "opaque_pixels": 31510,
+      "unique_colors": 2922
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "label": "MACD 图",
+      "width": 1176,
+      "height": 224,
+      "pixel_width": 1176,
+      "opaque_pixels": 32711,
+      "unique_colors": 812
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "label": "RSI6 图",
+      "width": 1176,
+      "height": 224,
+      "pixel_width": 1176,
+      "opaque_pixels": 13747,
+      "unique_colors": 213
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "label": "价格与均线图",
+      "width": 1176,
+      "height": 304,
+      "pixel_width": 1176,
+      "opaque_pixels": 31510,
+      "unique_colors": 2922
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "label": "MACD 图",
+      "width": 1176,
+      "height": 224,
+      "pixel_width": 1176,
+      "opaque_pixels": 32711,
+      "unique_colors": 812
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "label": "RSI6 图",
+      "width": 1176,
+      "height": 224,
+      "pixel_width": 1176,
+      "opaque_pixels": 13747,
+      "unique_colors": 213
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "label": "价格与均线图",
+      "width": 366,
+      "height": 304,
+      "pixel_width": 366,
+      "opaque_pixels": 12022,
+      "unique_colors": 1839
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "label": "MACD 图",
+      "width": 366,
+      "height": 224,
+      "pixel_width": 366,
+      "opaque_pixels": 15266,
+      "unique_colors": 598
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "label": "RSI6 图",
+      "width": 366,
+      "height": 224,
+      "pixel_width": 366,
+      "opaque_pixels": 5679,
+      "unique_colors": 172
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "label": "价格与均线图",
+      "width": 366,
+      "height": 304,
+      "pixel_width": 366,
+      "opaque_pixels": 12022,
+      "unique_colors": 1839
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "label": "MACD 图",
+      "width": 366,
+      "height": 224,
+      "pixel_width": 366,
+      "opaque_pixels": 15266,
+      "unique_colors": 598
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "label": "RSI6 图",
+      "width": 366,
+      "height": 224,
+      "pixel_width": 366,
+      "opaque_pixels": 5679,
+      "unique_colors": 172
+    }
+  ],
+  "checks_passed": 35,
+  "account_unchanged": true,
+  "provider_calls": 0,
+  "market_requests": 0,
+  "daily_run_executed": false,
+  "real_trades": 0
+}
