@@ -1,18 +1,33 @@
-import { useEffect, useId, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import * as echarts from 'echarts'
 import { Activity } from 'lucide-react'
 import type { ResearchEngine } from '@/lib/research-engine'
-import { buildStrategyGraphicsOptions, GRAPHICS_COLUMNS, strategyMarkerLabel, type StrategyGraphicsData } from '@/lib/strategy-graphics'
+import {
+  buildStrategyGraphicsOptions, DEFAULT_OVERLAY_FILTERS, GRAPHICS_COLUMNS, groupStrategyOverlayMarkers,
+  hasStrategyCandles, strategyGraphicsPoints, strategyOverlayLabel, strategyOverlayMarkers,
+  type StrategyGraphicsData, type StrategyOverlayFilters,
+} from '@/lib/strategy-graphics'
 import { useChartTheme } from '@/lib/theme'
+import { StrategyOverlayDetails } from './StrategyOverlayDetails'
 
-function ResearchChart({ name, option, height, descriptionId }: {
+function ResearchChart({ name, option, height, descriptionId, onSelectDate }: {
   name: string; option: echarts.EChartsOption; height: number; descriptionId: string
+  onSelectDate?: (date: string) => void
 }) {
   const root = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!root.current) return
     const chart = echarts.init(root.current, undefined, { renderer: 'canvas' })
     chart.setOption(option)
+    const select = (params: { seriesName?: string; data?: unknown }) => {
+      if (params.seriesName !== '策略观察') return
+      const date = (params.data as { group?: { trade_date?: string } } | undefined)?.group?.trade_date
+      if (date) onSelectDate?.(date)
+    }
+    if (onSelectDate) {
+      chart.on('click', select)
+      chart.on('mouseover', select)
+    }
     const resize = () => chart.resize()
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(resize)
     observer?.observe(root.current)
@@ -20,9 +35,13 @@ function ResearchChart({ name, option, height, descriptionId }: {
     return () => {
       observer?.disconnect()
       window.removeEventListener('resize', resize)
+      if (onSelectDate) {
+        chart.off('click', select)
+        chart.off('mouseover', select)
+      }
       chart.dispose()
     }
-  }, [option])
+  }, [option, onSelectDate])
   return <div ref={root} role="img" aria-label={name} aria-describedby={descriptionId}
     className="w-full min-w-0 max-w-full" style={{ height }} />
 }
@@ -34,13 +53,25 @@ export function StrategyGraphics({ graphics, requestedDate, engine }: {
 }) {
   const theme = useChartTheme()
   const id = useId()
+  const [filters, setFilters] = useState<StrategyOverlayFilters>(DEFAULT_OVERLAY_FILTERS)
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const selectDate = useCallback((date: string) => setSelectedDate(date), [])
   const tradeDate = graphics?.trade_date ?? engine?.trade_date
   const symbol = graphics?.symbol ?? engine?.symbol
   const priceBasis = graphics?.price_basis ?? engine?.price_basis
   const mismatch = Boolean(graphics && engine && graphics.trade_date !== engine.trade_date)
   const ready = graphics?.status === 'READY' && graphics.points.length > 0 && !mismatch
-  const options = useMemo(() => ready && graphics?.status === 'READY' ? buildStrategyGraphicsOptions(graphics, theme) : null,
-    [graphics, ready, theme])
+  const options = useMemo(() => ready && graphics?.status === 'READY' ? buildStrategyGraphicsOptions(graphics, theme, filters) : null,
+    [graphics, ready, theme, filters])
+  const points = graphics?.status === 'READY' ? strategyGraphicsPoints(graphics) : []
+  const groups = graphics?.status === 'READY' ? groupStrategyOverlayMarkers(graphics, filters) : []
+  const markers = graphics?.status === 'READY' ? strategyOverlayMarkers(graphics) : []
+  const strategies = new Map((engine?.strategies ?? []).map(strategy => [strategy.strategy_id, strategy.strategy_name]))
+  markers.forEach(marker => strategies.set(marker.strategy_id, marker.strategy_name))
+  if (!strategies.has('chan_daily_structure')) strategies.set('chan_daily_structure', 'Chan Daily Structure')
+  const dates = points.map(point => point.trade_date)
+  const date = selectedDate && dates.includes(selectedDate) ? selectedDate : groups.at(-1)?.trade_date ?? dates.at(-1) ?? ''
+  const group = groups.find(group => group.trade_date === date)
 
   return <section aria-label="策略图表" className="min-w-0 border-y border-border py-4 text-foreground [overflow-wrap:anywhere]">
     <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -60,11 +91,38 @@ export function StrategyGraphics({ graphics, requestedDate, engine }: {
       : !options ? <p role="status" className="py-4 text-sm text-secondary">暂无可绘制的日线数据。</p>
       : <>
         <p id={`${id}-basis`} className="mt-2 text-[11px] text-muted">
-          同一快照前缀回溯观察 · {graphics.points.length}/{graphics.window_requested} 个交易日 · 策略标记不是成交记录
+          同一快照前缀回溯观察 · {points.length}/{graphics.window_requested} 个交易日 · 策略标记不是成交记录
         </p>
+        <div className="mt-3 grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
+          <label className="min-w-0 text-xs text-secondary">策略筛选
+            <select aria-label="策略筛选" value={filters.strategy} onChange={event => setFilters(current => ({ ...current, strategy: event.target.value }))}
+              className="mt-1 block h-10 w-full min-w-0 rounded border border-border bg-surface px-2 text-xs text-foreground focus-visible:outline-accent">
+              <option value="ALL">全部策略</option>
+              {[...strategies].map(([key, name]) => <option key={key} value={key}>{name}</option>)}
+            </select>
+          </label>
+          <label className="min-w-0 text-xs text-secondary">状态筛选
+            <select aria-label="状态筛选" value={filters.status}
+              onChange={event => setFilters(current => ({ ...current, status: event.target.value as StrategyOverlayFilters['status'] }))}
+              className="mt-1 block h-10 w-full min-w-0 rounded border border-border bg-surface px-2 text-xs text-foreground focus-visible:outline-accent">
+              <option value="ACTIVE">活跃观察与结构</option>
+              <option value="ALL">全部状态</option>
+              <option value="TRIGGERED">仅已触发</option>
+              <option value="NEAR_TRIGGER">仅接近触发</option>
+            </select>
+          </label>
+        </div>
         <div className="mt-3 min-w-0 space-y-3">
+          <div className="min-w-0 border-t border-border pt-3">
+            <h3 className="mb-2 text-xs font-medium">QFQ 日K / 均线 / BOLL</h3>
+            {graphics.status === 'READY' && hasStrategyCandles(graphics)
+              ? <ResearchChart name="价格与均线图" option={options.price} height={344}
+                descriptionId={`${id}-date ${id}-basis`} onSelectDate={selectDate} />
+              : <p className="py-4 text-sm text-secondary">缺少完整 OHLC 数据，K 线图不可用。</p>}
+          </div>
+          <StrategyOverlayDetails dates={dates} selectedDate={date} onDateChange={selectDate} group={group}
+            record={graphics.paper_records?.[date]} />
           {([
-            ['价格 / 均线 / BOLL', '价格与均线图', options.price, 304],
             ['MACD', 'MACD 图', options.macd, 224],
             ['RSI6', 'RSI6 图', options.rsi, 224],
           ] as const).map(([title, name, option, height]) => <div key={name} className="min-w-0 border-t border-border pt-3">
@@ -79,11 +137,11 @@ export function StrategyGraphics({ graphics, requestedDate, engine }: {
               {GRAPHICS_COLUMNS.map(([key, label]) => <th scope="col" key={key}>{label}</th>)}
               <th scope="col">策略观察标记</th>
             </tr></thead>
-            <tbody>{graphics.points.map(point => <tr key={point.trade_date}>
+            <tbody>{points.map(point => <tr key={point.trade_date}>
               <th scope="row">{point.trade_date}</th>
               {GRAPHICS_COLUMNS.map(([key]) => <td key={key}>{point[key] ?? '--'}</td>)}
-              <td>{graphics.strategy_markers.filter(marker => marker.trade_date === point.trade_date)
-                .map(strategyMarkerLabel).join('；') || '无'}</td>
+              <td>{groups.find(group => group.trade_date === point.trade_date)?.markers
+                .map(strategyOverlayLabel).join('；') || '无'}</td>
             </tr>)}</tbody>
           </table>
         </div>

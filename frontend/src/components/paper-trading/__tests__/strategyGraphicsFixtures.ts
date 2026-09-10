@@ -6,10 +6,10 @@ export function graphicsFixture(): StrategyGraphicsReadyData {
     schema_version: 1, status: 'READY', symbol: '000403.SZ', trade_date: '2026-09-09',
     timeframe: '1d', price_basis: 'QFQ', history_basis: 'SAME_SNAPSHOT_PREFIX', window_requested: 30,
     points: [
-      { trade_date: '2026-09-08', close: 18.25, ma5: 18.1, ma10: 18.2, ma20: 18.3,
+      { trade_date: '2026-09-08', open: 18, high: 18.5, low: 17.9, close: 18.25, ma5: 18.1, ma10: 18.2, ma20: 18.3,
         ma60: null, boll_upper: 19.5, boll_middle: 18.3, boll_lower: 17.1,
         macd_dif: 0, macd_dea: 0.03, macd_hist: -0.06, rsi6: null },
-      { trade_date: '2026-09-09', close: 18.6, ma5: 18.35, ma10: 18.26, ma20: 18.31,
+      { trade_date: '2026-09-09', open: 18.7, high: 18.8, low: 18.4, close: 18.6, ma5: 18.35, ma10: 18.26, ma20: 18.31,
         ma60: 17.8, boll_upper: 19.6, boll_middle: 18.31, boll_lower: 17.02,
         macd_dif: 0.0105, macd_dea: 0.047, macd_hist: -0.073, rsi6: 50.0891 },
     ],
@@ -18,6 +18,55 @@ export function graphicsFixture(): StrategyGraphicsReadyData {
         status: 'TRIGGERED', price: 18.25, conditions_met: 4, conditions_total: 4 },
       { trade_date: '2026-09-09', strategy_id: 'pullback_to_support', strategy_name: '回踩支撑',
         status: 'NEAR_TRIGGER', price: 18.6, conditions_met: 3, conditions_total: 4 },
+    ],
+  }
+}
+
+export function overlayFixture(): StrategyGraphicsReadyData {
+  const graphics = graphicsFixture()
+  return {
+    ...graphics,
+    overlay_markers: [
+      ...engineFixture().strategies.map(strategy => ({
+        marker_id: `${strategy.trade_date}:${strategy.strategy_id}`,
+        trade_date: strategy.trade_date, strategy_id: strategy.strategy_id, strategy_name: strategy.strategy_name,
+        kind: 'STRATEGY' as const, canonical_status: strategy.status, price: 18.6,
+        conditions_met: strategy.conditions_met, conditions_total: strategy.conditions_total,
+        summary: `${strategy.strategy_name}：满足 3/4 条件`, evidence: strategy.evidence,
+        failed_conditions: strategy.failed_conditions, delta_vs_previous: strategy.delta_vs_previous, structure: null,
+      })),
+      { marker_id: 'chan:top', trade_date: '2026-09-09', strategy_id: 'chan_daily_structure',
+        strategy_name: 'Chan Daily Structure', kind: 'CHAN_STRUCTURE', canonical_status: 'NOT_AVAILABLE',
+        price: 18.6, conditions_met: null, conditions_total: null,
+        summary: '结构识别｜未定义策略触发合同', evidence: [], failed_conditions: [], delta_vs_previous: null,
+        structure: { type: 'TOP_FRACTAL', date: '2026-09-08', confirmed_at: '2026-09-09', price: 18.5 } },
+      { marker_id: 'chan:stroke', trade_date: '2026-09-09', strategy_id: 'chan_daily_structure',
+        strategy_name: 'Chan Daily Structure', kind: 'CHAN_STRUCTURE', canonical_status: 'NOT_AVAILABLE',
+        price: 18.6, conditions_met: null, conditions_total: null,
+        summary: '结构识别｜未定义策略触发合同', evidence: [], failed_conditions: [], delta_vs_previous: null,
+        structure: { type: 'STROKE_CANDIDATE', direction: 'UP_STROKE', start_date: '2026-09-07',
+          end_date: '2026-09-08', start_price: 17.8, end_price: 18.5, confirmed_at: '2026-09-09', source_bar_separation: 2 } },
+    ],
+    paper_records: {
+      '2026-09-09': { status: 'PUBLISHED', trade_date: '2026-09-09', paper_action: 'HOLD',
+        research_signal: 'WATCH', quantity: 0, hold_explanation: null,
+        source: 'days/2026-09-09/chenquant_daily.json', source_sha256: 'fixture-sha256' },
+    },
+  }
+}
+
+export function overlayWindowFixture(): StrategyGraphicsReadyData {
+  const graphics = overlayFixture()
+  const dates = Array.from({ length: 30 }, (_, index) => new Date(Date.UTC(2026, 7, 11 + index)).toISOString().slice(0, 10))
+  const rules = graphics.overlay_markers!.slice(0, 6)
+  const chan = graphics.overlay_markers![6]
+  return {
+    ...graphics,
+    points: dates.map(trade_date => ({ ...graphics.points[1], trade_date })),
+    overlay_markers: [
+      ...dates.flatMap(trade_date => rules.map(marker => ({ ...marker, trade_date, marker_id: `${trade_date}:${marker.strategy_id}` }))),
+      ...dates.slice(-8).map((trade_date, index) => ({ ...chan, trade_date, marker_id: `chan:${trade_date}`,
+        structure: { type: 'TOP_FRACTAL' as const, date: dates[21 + index], confirmed_at: trade_date, price: 18.8 } })),
     ],
   }
 }

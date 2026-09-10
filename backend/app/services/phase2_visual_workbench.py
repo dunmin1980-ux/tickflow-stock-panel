@@ -276,7 +276,7 @@ class Phase2VisualWorkbenchService:
                 panel = build_research_panel(self.input_root, trade_date, state_root=self.state_root)
                 from app.services.phase2_strategy_graphics import build_strategy_graphics
                 try:
-                    panel['graphics'] = build_strategy_graphics(self.input_root, trade_date, panel)
+                    panel['graphics'] = build_strategy_graphics(self.input_root, trade_date, panel, self.state_root)
                 except (VisualDailyInputError, ValueError, KeyError, TypeError, OSError, PolarsError):
                     panel['graphics'] = {'status': 'BLOCKED', 'trade_date': trade_date.isoformat()}
                 return panel

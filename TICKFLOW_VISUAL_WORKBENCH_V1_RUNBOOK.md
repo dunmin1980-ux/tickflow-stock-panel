@@ -10,6 +10,8 @@
 
 `TICKFLOW_STRATEGY_GRAPHICS_V1_RELEASED`
 
+`TICKFLOW_STRATEGY_OVERLAY_V2_RELEASED`
+
 This is a local, single-symbol A-share research and Paper Trading workbench for
 `000403.SZ` 派林生物. It is always `SIMULATION ONLY`; real trading and broker
 connectivity are disabled.
@@ -280,6 +282,33 @@ Bounded structure definition: `docs/research-chan-daily-structure-v1.md`.
   daily structure; central zones remain deferred.
 
 Graphics release evidence: `reports/tickflow_strategy_graphics_v1_eval.md`.
+
+## Strategy Overlay v2
+
+- On Today Workbench or Stock Research, the main chart now uses QFQ candles
+  with the existing MA/BOLL lines. Indicators and strategy conditions retain
+  their original calculations and thresholds.
+- Same-day observations share one chart marker. Hover or select it to inspect
+  the constituent strategies, canonical status, condition progress, met/unmet
+  conditions and their changes. A date selector also exposes these details
+  without precise pointer positioning, including on mobile.
+- Filter by strategy and trigger status. Default visibility prioritizes
+  triggered/near-trigger observations plus confirmed Chan structures. Explicitly
+  select all statuses to inspect inactive strategies. Progress is not a score,
+  probability or order instruction.
+- Chan is anchored to its confirmation day, not retroactively to its pivot day.
+  The original structure type and pivot/confirmation dates remain in the details.
+  Its label is `结构识别｜未定义策略触发合同`, canonical status is `NOT_AVAILABLE`,
+  and progress is `N/A`. It never represents a strategy trigger.
+- Historical Paper Action is a separate, date-bound read of a verified published
+  Daily. It is not inferred from retrospective chart markers. If no valid record
+  exists, it is unavailable. The current MVP did not publish HOLD-reason text;
+  the overlay therefore shows that reason as unavailable rather than filling it
+  from today's summary or recalculating it.
+- Filtering, hovering, selecting dates and refreshing do not run the Daily,
+  alter ledger/history, fetch market data or contact a Provider.
+
+Overlay release evidence: `reports/tickflow_strategy_overlay_v2_eval.md`.
 
 ## Account Semantics
 
