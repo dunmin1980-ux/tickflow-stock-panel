@@ -28,6 +28,7 @@ import { toggleTheme, useTheme } from '@/lib/theme'
 import { setCurrentTotal as setAlertTotal, useUnreadAlerts } from '@/lib/monitorBadge'
 import { ConnectionBanner } from './ConnectionBanner'
 import { MobileNav } from './MobileNav'
+import { WorkbenchDates } from './WorkbenchDates'
 import { WorkspaceEvents, useWorkspaceStatus } from '@/lib/useWorkspaceEvents'
 import type { WorkspaceStatus } from '@/lib/workspace'
 
@@ -72,10 +73,10 @@ function DesktopWorkbenchStatusBar({ workspace }: { workspace: WorkspaceStatus }
     <div
       role="status"
       aria-live="polite"
-      aria-label={`${modeLabel}，最后同步 ${syncLabel}，数据日期 ${workspace.dataAsOf ?? '未知'}`}
+      aria-label={`${modeLabel}，最后同步 ${syncLabel}`}
       className="sticky top-0 z-30 flex min-h-9 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border bg-base/90 px-3 py-1 backdrop-blur-md sm:px-5"
     >
-      <div className="flex min-w-0 items-center gap-2 text-[11px]">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px]">
         <span className={cn(
           'inline-flex items-center gap-1.5 font-semibold',
           isOffline ? 'text-warning' : 'text-secondary',
@@ -88,11 +89,9 @@ function DesktopWorkbenchStatusBar({ workspace }: { workspace: WorkspaceStatus }
           Backend {isOffline ? 'Offline' : 'Online'}
         </span>
         <span className="text-muted" aria-label={`最后同步时间 ${syncLabel}`}>同步 {syncLabel}</span>
-        <span className="font-mono text-muted" aria-label={`数据日期 ${workspace.dataAsOf ?? '未知'}`}>
-          数据 {workspace.dataAsOf ?? '--'}
-        </span>
       </div>
       <span className="font-mono text-[10px] font-semibold text-danger">SIMULATION ONLY</span>
+      <WorkbenchDates enrichedCacheDate={workspace.dataAsOf} />
     </div>
   )
 }

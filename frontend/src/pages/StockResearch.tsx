@@ -4,8 +4,7 @@ import { ArrowLeft, Loader2, ShieldCheck } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { ResearchOverview } from '@/components/paper-trading/ResearchEngineView'
 import { ResearchPanel } from '@/components/paper-trading/ResearchPanel'
-import { StrategyGraphics } from '@/components/paper-trading/StrategyGraphics'
-import { StrategyOverviewCards } from '@/components/paper-trading/StrategyOverviewCards'
+import { StrategyVisualization } from '@/components/paper-trading/StrategyVisualization'
 import { dashboardErrorText } from '@/components/paper-trading/presentation'
 import { api } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
@@ -36,9 +35,8 @@ export function StockResearch() {
         </p> : <>
           {research?.engine && <>
             <ResearchOverview engine={research.engine} requestedDate={data.requested_date} />
-            <StrategyOverviewCards engine={research.engine} />
           </>}
-          <StrategyGraphics graphics={research?.graphics} engine={research?.engine} requestedDate={data.requested_date} />
+          <StrategyVisualization graphics={research?.graphics} engine={research?.engine} requestedDate={data.requested_date} />
           <ResearchPanel research={data.research} requestedDate={data.requested_date} />
         </>}
       </div>

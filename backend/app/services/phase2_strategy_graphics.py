@@ -19,7 +19,7 @@ from app.services.phase2_visual_daily_input import VisualDailyInputError
 
 CHART_COLUMNS = {key: INDICATOR_COLUMNS[key] for key in (
     'ma5', 'ma10', 'ma20', 'ma60', 'boll_upper', 'boll_middle', 'boll_lower',
-    'macd_dif', 'macd_dea', 'macd_hist', 'rsi6',
+    'macd_dif', 'macd_dea', 'macd_hist', 'rsi6', 'volume_ma5', 'volume_ma10',
 )}
 
 
@@ -100,7 +100,7 @@ def build_strategy_graphics(input_root: Path, target: date, panel: dict,
         if (not dates or dates[-1] != target or dates != sorted(set(dates))
                 or any(d > target for d in dates)):
             raise VisualDailyInputError('GRAPHICS_DATES_INVALID')
-        if any(not math.isfinite(float(row[key])) for row in rows
+        if any(row[key] is None or not math.isfinite(float(row[key])) for row in rows
                for key in ('open', 'high', 'low', 'close', 'volume')):
             raise VisualDailyInputError('GRAPHICS_NONFINITE_SOURCE')
         sources[name] = rows
@@ -117,7 +117,7 @@ def build_strategy_graphics(input_root: Path, target: date, panel: dict,
     points = []
     for row in computed.tail(30).to_dicts():
         point = {'trade_date': row['date'].isoformat(),
-                 **{key: row[key] for key in ('open', 'high', 'low', 'close')}}
+                 **{key: row[key] for key in ('open', 'high', 'low', 'close', 'volume')}}
         for key, column in CHART_COLUMNS.items():
             value = row[column]
             if value is not None and not math.isfinite(value):
@@ -156,6 +156,10 @@ def build_strategy_graphics(input_root: Path, target: date, panel: dict,
         'overlay_markers': overlays + _chan_markers(panel, points),
         'paper_records': {p['trade_date']: _published_paper_record(state_root, p['trade_date']) for p in points},
         'source_provider': panel['source_provider'],
+        'volume_metadata': {
+            'source': 'raw_daily.json', 'data_basis': 'RAW',
+            'unit': 'relative', 'source_unit_unconfirmed': True,
+        },
         'indicator_source': 'app.indicators.pipeline.compute_indicators',
         'strategy_source': 'app.services.phase2_research_panel.evaluate_strategies / app.services.phase2_research_daily.normalize_strategy',
         'affects_paper_action': False, 'can_publish': False,

@@ -1,0 +1,404 @@
+{
+  "research_date": "2026-09-11",
+  "checks": [
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "four_nonblank_canvases",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "truthful_top_date_semantics",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "strategy_cards_focus_filters_and_exact_evidence",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "one_observation_date_for_cards_four_charts_values_and_record",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "actual_price_marker_click",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "actual_macd_marker_click",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "actual_volume_marker_click",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "same_day_expands_all_real_strategy_entries",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "chan_confirmation_structure_not_strategy",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "missing_history_is_not_backfilled",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "all_display_layer_toggles",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "stock-research",
+      "check": "refresh_theme_no_overflow_or_javascript_errors",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "four_nonblank_canvases",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "truthful_top_date_semantics",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "strategy_cards_focus_filters_and_exact_evidence",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "one_observation_date_for_cards_four_charts_values_and_record",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "actual_price_marker_click",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "actual_macd_marker_click",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "actual_volume_marker_click",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "same_day_expands_all_real_strategy_entries",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "chan_confirmation_structure_not_strategy",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "missing_history_is_not_backfilled",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "all_display_layer_toggles",
+      "status": "PASSED"
+    },
+    {
+      "view": "desktop",
+      "path": "paper-trading",
+      "check": "refresh_theme_no_overflow_or_javascript_errors",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "four_nonblank_canvases",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "truthful_top_date_semantics",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "strategy_cards_focus_filters_and_exact_evidence",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "one_observation_date_for_cards_four_charts_values_and_record",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "actual_price_marker_tap",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "actual_macd_marker_tap",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "actual_volume_marker_tap",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "same_day_expands_all_real_strategy_entries",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "chan_confirmation_structure_not_strategy",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "missing_history_is_not_backfilled",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "all_display_layer_toggles",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "stock-research",
+      "check": "refresh_theme_no_overflow_or_javascript_errors",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "four_nonblank_canvases",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "truthful_top_date_semantics",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "strategy_cards_focus_filters_and_exact_evidence",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "one_observation_date_for_cards_four_charts_values_and_record",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "actual_price_marker_tap",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "actual_macd_marker_tap",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "actual_volume_marker_tap",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "same_day_expands_all_real_strategy_entries",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "chan_confirmation_structure_not_strategy",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "missing_history_is_not_backfilled",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "all_display_layer_toggles",
+      "status": "PASSED"
+    },
+    {
+      "view": "mobile",
+      "path": "paper-trading",
+      "check": "refresh_theme_no_overflow_or_javascript_errors",
+      "status": "PASSED"
+    }
+  ],
+  "screenshots": [
+    "desktop-stock-research-overview.png",
+    "desktop-stock-research-price.png",
+    "desktop-stock-research-volume-macd.png",
+    "desktop-stock-research-detail.png",
+    "desktop-stock-research-light.png",
+    "desktop-paper-trading-overview.png",
+    "desktop-paper-trading-price.png",
+    "desktop-paper-trading-volume-macd.png",
+    "desktop-paper-trading-detail.png",
+    "desktop-paper-trading-light.png",
+    "mobile-stock-research-overview.png",
+    "mobile-stock-research-price.png",
+    "mobile-stock-research-volume-macd.png",
+    "mobile-stock-research-detail.png",
+    "mobile-stock-research-light.png",
+    "mobile-paper-trading-overview.png",
+    "mobile-paper-trading-price.png",
+    "mobile-paper-trading-volume-macd.png",
+    "mobile-paper-trading-detail.png",
+    "mobile-paper-trading-light.png"
+  ],
+  "blocked_requests": [
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    },
+    {
+      "method": "GET",
+      "host": "rsms.me",
+      "path": "/inter/inter.css"
+    },
+    {
+      "method": "GET",
+      "host": "fonts.googleapis.com",
+      "path": "/css2"
+    }
+  ],
+  "checks_passed": 48,
+  "state_sha256": "c22927981b83ab90246b4a02ec5e5e09e6e83eb6a9b8a27efc9813ff32488659",
+  "account_unchanged": true,
+  "provider_calls": 0,
+  "market_requests": 0,
+  "real_trades": 0,
+  "daily_executed": false
+}

@@ -73,33 +73,40 @@ function OverlayEntry({ marker }: { marker: StrategyOverlayMarker }) {
   </article>
 }
 
-export function StrategyOverlayDetails({ dates, selectedDate, onDateChange, group, record }: {
+export function ObservationDateControl({ dates, selectedDate, onDateChange }: {
+  dates: string[]; selectedDate: string; onDateChange: (date: string) => void
+}) {
+  const currentIndex = dates.indexOf(selectedDate)
+  const buttonClass = 'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded border border-border hover:bg-elevated disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent'
+  return <div className="flex min-w-0 items-end gap-2">
+    <label className="min-w-0 flex-1 text-xs text-secondary">观察日期
+      <select aria-label="观察日期" value={selectedDate} onChange={event => onDateChange(event.target.value)}
+        className="mt-1 block h-10 w-full min-w-0 rounded border border-border bg-surface px-2 text-xs text-foreground focus-visible:outline-accent">
+        {dates.map(date => <option key={date} value={date}>{date}</option>)}
+      </select>
+    </label>
+    <button type="button" aria-label="上一观察日" title="上一观察日" className={buttonClass}
+      disabled={currentIndex <= 0} onClick={() => onDateChange(dates[currentIndex - 1])}>
+      <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+    </button>
+    <button type="button" aria-label="下一观察日" title="下一观察日" className={buttonClass}
+      disabled={currentIndex < 0 || currentIndex >= dates.length - 1} onClick={() => onDateChange(dates[currentIndex + 1])}>
+      <ArrowRight aria-hidden="true" className="h-4 w-4" />
+    </button>
+  </div>
+}
+
+export function StrategyOverlayDetails({ dates, selectedDate, onDateChange, group, record, showDateControl = true }: {
   dates: string[]
   selectedDate: string
   onDateChange: (date: string) => void
   group: StrategyOverlayGroup | undefined
   record: StrategyPaperRecord | undefined
+  showDateControl?: boolean
 }) {
-  const currentIndex = dates.indexOf(selectedDate)
   const published = record?.status === 'PUBLISHED' && record.trade_date === selectedDate ? record : undefined
-  const buttonClass = 'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded border border-border hover:bg-elevated disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent'
   return <div className="min-w-0 space-y-3 border-t border-border pt-3">
-    <div className="flex min-w-0 items-end gap-2">
-      <label className="min-w-0 flex-1 text-xs text-secondary">观察日期
-        <select aria-label="观察日期" value={selectedDate} onChange={event => onDateChange(event.target.value)}
-          className="mt-1 block h-10 w-full min-w-0 rounded border border-border bg-surface px-2 text-xs text-foreground focus-visible:outline-accent">
-          {dates.map(date => <option key={date} value={date}>{date}</option>)}
-        </select>
-      </label>
-      <button type="button" aria-label="上一观察日" title="上一观察日" className={buttonClass}
-        disabled={currentIndex <= 0} onClick={() => onDateChange(dates[currentIndex - 1])}>
-        <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-      </button>
-      <button type="button" aria-label="下一观察日" title="下一观察日" className={buttonClass}
-        disabled={currentIndex < 0 || currentIndex >= dates.length - 1} onClick={() => onDateChange(dates[currentIndex + 1])}>
-        <ArrowRight aria-hidden="true" className="h-4 w-4" />
-      </button>
-    </div>
+    {showDateControl && <ObservationDateControl dates={dates} selectedDate={selectedDate} onDateChange={onDateChange} />}
     <section aria-label="当日模拟记录" className="min-w-0 space-y-1 text-xs">
       <h3 className="font-medium">{selectedDate} · 当日模拟记录</h3>
       {published ? <>

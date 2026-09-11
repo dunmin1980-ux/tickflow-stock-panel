@@ -31,12 +31,12 @@ beforeEach(() => { boundary.instances.length = 0; localStorage.clear() })
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe('StrategyGraphics', () => {
-  it('renders three named canvas charts with actual supplied values and accessible dated data', () => {
+  it('renders four named canvas charts with actual supplied values and accessible dated data', () => {
     render(<StrategyGraphics graphics={graphicsFixture()} requestedDate="2026-09-09" engine={engineFixture()} />)
     expect(screen.getByRole('img', { name: '价格与均线图' })).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'MACD 图' })).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'RSI6 图' })).toBeInTheDocument()
-    expect(boundary.instances).toHaveLength(3)
+    expect(boundary.instances).toHaveLength(4)
     expect(boundary.instances.every(chart => chart.renderer === 'canvas')).toBe(true)
     const macd = boundary.instances.find(chart => chart.root.getAttribute('aria-label') === 'MACD 图')!
     expect(macd.option?.series).toEqual(expect.arrayContaining([
@@ -124,7 +124,7 @@ describe('StrategyGraphics', () => {
     render(<StrategyGraphics graphics={graphicsFixture()} requestedDate="2026-09-09" />)
     const row = within(screen.getByRole('table', { name: '策略图表数据' })).getByRole('row', { name: /2026-09-08/ })
     const values = within(row).getAllByRole('cell').map(cell => cell.textContent)
-    expect(values).toEqual(['18', '18.5', '17.9', '18.25', '18.1', '18.2', '18.3', '--', '19.5', '18.3', '17.1', '0', '0.03', '-0.06', '--',
+    expect(values).toEqual(['18', '18.5', '17.9', '18.25', '18.1', '18.2', '18.3', '--', '19.5', '18.3', '17.1', '0', '0.03', '-0.06', '--', '--', '--', '--',
       'MACD 金叉放量 · 已触发 · 4/4 · 18.25'])
   })
 
@@ -137,7 +137,7 @@ describe('StrategyGraphics', () => {
       constructor(callback: ResizeObserverCallback) { callbacks.push(callback); observers.push(this) }
     })
     const { unmount } = render(<StrategyGraphics graphics={graphicsFixture()} requestedDate="2026-09-09" />)
-    expect(observers).toHaveLength(3)
+    expect(observers).toHaveLength(4)
     boundary.instances.forEach((chart, index) => {
       expect(observers[index].observe).toHaveBeenCalledWith(chart.root)
       expect(chart.root.style.height).not.toBe('')
@@ -152,13 +152,13 @@ describe('StrategyGraphics', () => {
     boundary.instances.forEach(chart => expect(chart.resize).toHaveBeenCalledTimes(2))
   })
 
-  it('rebuilds chart colors for a theme change and disposes charts when data becomes blocked', () => {
+  it('updates chart colors without losing instances and disposes charts when data becomes blocked', () => {
     const graphics = graphicsFixture()
     const { rerender } = render(<StrategyGraphics graphics={graphics} requestedDate="2026-09-09" />)
     const old = boundary.instances.slice()
     act(() => setTheme('light'))
-    expect(boundary.instances).toHaveLength(6)
-    old.forEach(chart => expect(chart.dispose).toHaveBeenCalledOnce())
+    expect(boundary.instances).toHaveLength(4)
+    old.forEach(chart => expect(chart.dispose).not.toHaveBeenCalled())
     expect(boundary.instances[3].option?.tooltip).toMatchObject({ textStyle: { color: '#27272A' } })
     rerender(<StrategyGraphics graphics={{ ...graphics, status: 'BLOCKED' }} requestedDate="2026-09-09" />)
     boundary.instances.forEach(chart => expect(chart.dispose).toHaveBeenCalledOnce())
@@ -172,7 +172,7 @@ describe('StrategyGraphics', () => {
     const engine = deepFreeze(engineFixture())
     const before = JSON.stringify({ graphics, engine })
     render(<StrategyGraphics graphics={graphics} requestedDate="2026-09-09" engine={engine} />)
-    expect(screen.getAllByRole('img')).toHaveLength(3)
+    expect(screen.getAllByRole('img')).toHaveLength(4)
     expect(JSON.stringify({ graphics, engine })).toBe(before)
     expect(fetchSpy).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: /买入|卖出|运行|发布/ })).not.toBeInTheDocument()
@@ -217,7 +217,7 @@ describe('StrategyGraphics', () => {
     expect(details).toHaveClass('overflow-y-auto')
     expect(details).toHaveAttribute('tabindex', '0')
     expect(screen.getByRole('img', { name: '价格与均线图' }).compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(details.compareDocumentPosition(screen.getByRole('img', { name: 'MACD 图' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole('img', { name: 'MACD 图' }).compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('applies strategy and status intersections to chart glyphs and details including explicit inactive rows', () => {
@@ -235,25 +235,29 @@ describe('StrategyGraphics', () => {
     expect(within(screen.getByRole('region', { name: '策略观察详情' })).getAllByRole('article')).toHaveLength(2)
     fireEvent.change(status, { target: { value: 'TRIGGERED' } })
     expect(within(screen.getByRole('region', { name: '策略观察详情' })).queryByRole('article')).not.toBeInTheDocument()
-    const chart = boundary.instances.filter(chart => chart.root.getAttribute('aria-label') === '价格与均线图').at(-1)!
-    expect((chart.option?.series as { name: string; data: unknown[] }[]).find(series => series.name === '策略观察')?.data).toEqual([])
+    for (const chart of boundary.instances) {
+      const markers = (chart.option?.series as { type: string; data: unknown[] }[]).filter(series => series.type === 'scatter')
+      expect(markers.flatMap(series => series.data)).toEqual([])
+    }
   })
 
-  it.each(['click', 'mouseover'])('selects every constituent observation through the real chart %s callback', event => {
+  it.each(['click', 'mouseover'])('selects dated semantic observations through the real chart %s callback', event => {
     const graphics = overlayFixture()
     graphics.overlay_markers!.push({ ...graphics.overlay_markers![0], marker_id: 'older', trade_date: '2026-09-08' })
     render(<StrategyGraphics graphics={graphics} requestedDate="2026-09-09" />)
-    const chart = boundary.instances.find(chart => chart.root.getAttribute('aria-label') === '价格与均线图')!
+    const chart = boundary.instances.find(chart => chart.root.getAttribute('aria-label') === 'MACD 图')!
     expect(chart.handlers.has(event)).toBe(true)
-    const data = (chart.option?.series as { name: string; data: unknown[] }[]).find(series => series.name === '策略观察')!.data
+    const data = (chart.option?.series as { type: string; data: { marker?: { strategy_id: string } }[] }[])
+      .filter(series => series.type === 'scatter').flatMap(series => series.data).filter(datum => datum.marker?.strategy_id === 'macd_golden')
+      .sort((a, b) => String((a as { name?: string }).name).localeCompare(String((b as { name?: string }).name)))
     act(() => chart.handlers.get(event)!({ componentType: 'series', seriesType: 'scatter', seriesName: '策略观察', data: data[0], name: '2026-09-08' }))
     expect(screen.getByRole('combobox', { name: '观察日期' })).toHaveValue('2026-09-08')
     expect(within(screen.getByRole('region', { name: '策略观察详情' })).getAllByRole('article')).toHaveLength(1)
     act(() => chart.handlers.get(event)!({ componentType: 'series', seriesType: 'scatter', seriesName: '策略观察', data: data[1], name: '2026-09-09' }))
-    expect(within(screen.getByRole('region', { name: '策略观察详情' })).getAllByRole('article')).toHaveLength(5)
-    expect(boundary.instances).toHaveLength(3)
+    expect(within(screen.getByRole('region', { name: '策略观察详情' })).getAllByRole('article')).toHaveLength(event === 'click' ? 1 : 5)
+    expect(boundary.instances).toHaveLength(4)
     act(() => chart.handlers.get(event)!({ componentType: 'series', seriesType: 'line', name: '2026-09-08' }))
-    expect(screen.getByRole('combobox', { name: '观察日期' })).toHaveValue('2026-09-09')
+    expect(screen.getByRole('combobox', { name: '观察日期' })).toHaveValue(event === 'click' ? '2026-09-08' : '2026-09-09')
   })
 
   it('supports native keyboard date controls and never substitutes current HOLD for missing historical records', () => {
@@ -301,7 +305,7 @@ describe('StrategyGraphics', () => {
     expect(screen.getByRole('img', { name: 'MACD 图' })).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'RSI6 图' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: '当日模拟记录' })).toHaveTextContent('当日模拟记录不可用')
-    expect(boundary.instances).toHaveLength(2)
+    expect(boundary.instances).toHaveLength(3)
   })
 
   it('replaces selected details with new snapshot data and unregisters chart interactions on filter, block and unmount', () => {
@@ -309,9 +313,8 @@ describe('StrategyGraphics', () => {
     const { rerender, unmount } = render(<StrategyGraphics graphics={graphics} requestedDate="2026-09-09" />)
     fireEvent.change(screen.getByRole('combobox', { name: '状态筛选' }), { target: { value: 'TRIGGERED' } })
     const first = boundary.instances[0]
-    expect(first.off).toHaveBeenCalledWith('click', expect.any(Function))
-    expect(first.off).toHaveBeenCalledWith('mouseover', expect.any(Function))
-    expect(first.handlers.size).toBe(0)
+    expect(first.off).not.toHaveBeenCalled()
+    expect(first.handlers.has('click')).toBe(true)
     rerender(<StrategyGraphics graphics={{ ...graphics, overlay_markers: [], paper_records: {} }} requestedDate="2026-09-09" />)
     expect(screen.getByRole('region', { name: '策略观察详情' })).toHaveTextContent('当日无符合筛选的观察')
     expect(screen.getByRole('region', { name: '当日模拟记录' })).not.toHaveTextContent('HOLD')

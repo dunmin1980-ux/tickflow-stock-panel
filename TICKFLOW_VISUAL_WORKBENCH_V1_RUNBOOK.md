@@ -12,6 +12,8 @@
 
 `TICKFLOW_STRATEGY_OVERLAY_V2_RELEASED`
 
+`TICKFLOW_STRATEGY_VISUALIZATION_V2_1_RELEASED`
+
 This is a local, single-symbol A-share research and Paper Trading workbench for
 `000403.SZ` 派林生物. It is always `SIMULATION ONLY`; real trading and broker
 connectivity are disabled.
@@ -309,6 +311,51 @@ Graphics release evidence: `reports/tickflow_strategy_graphics_v1_eval.md`.
   alter ledger/history, fetch market data or contact a Provider.
 
 Overlay release evidence: `reports/tickflow_strategy_overlay_v2_eval.md`.
+
+## Strategy Visualization V2.1 Daily Use
+
+V2.1 supersedes V2's count-only marker display with strategy-specific markers.
+The entry points remain `/stock-research` and `/paper-trading`.
+
+1. Read the top dates first: Shanghai system date, this symbol's cached validated
+   market date, READY research date, and last completed paper date. The old
+   `data_as_of` label is now **股票日线指标缓存日期**. It is not the research date.
+2. Select a strategy card to focus its markers, reveal the relevant MA/BOLL
+   evidence, center the current observation date and open its conditions. Cards
+   keep their true canonical status, including an unmet 2/4 condition count.
+3. Use **观察日期** or tap a chart marker. Cards, QFQ price, Volume, MACD, RSI6,
+   indicator values and the dated published paper record share that selection.
+   Zooming one chart synchronizes the visible date window of all four charts;
+   selecting the card again centers the chosen date.
+4. Price markers represent MA/BOLL/pullback and Chan price structure. MACD
+   markers represent the MACD strategy; volume markers show the volume evidence
+   of MACD, volume/price and pullback. RSI6 has no invented strategy marker.
+5. Marker abbreviations are MC, MA, BU, VP, PB, BL and CH, with full names in the
+   legend. Solid = triggered; hollow = near-trigger; faded = unmet; gray =
+   unavailable or Chan structure. Default visibility favors active observations
+   and Chan. **全部策略** restores this default; choose all statuses to inspect
+   inactive conditions. Mobile uses tap and the below-chart detail section.
+6. Display checkboxes control K, MA5/10/20/60, BOLL and strategies only. Default
+   is K + MA5 + MA20. They never alter calculations or Paper Action.
+
+Volume is the existing raw volume sequence used by research, with existing
+`volume_ma5`/`volume_ma10` indicators warmed on the full validated history.
+VOL5/VOL10 include the selected day; they are not the strategy's prior-five-bar
+comparison denominator. The chart says **相对量能**, not shares or lots. Unit
+authority remains pending. Compact axis labels affect display only; source
+values and detailed values retain their precision.
+
+Chan remains a confirmed structure, `NOT_AVAILABLE / N/A`, not a trigger.
+Retrospective observations of the current QFQ snapshot remain separate from
+published research and actual dated paper records. Missing paper records or
+HOLD-reason text stay unavailable; the UI does not infer or backfill them.
+
+Opening charts, changing dates, filters or layers performs no Daily execution,
+market fetch or AI call. To inspect without changing an account, stay on
+`/stock-research`. Close any concurrent Daily run before performing read-only
+acceptance: a new publication can legitimately change the latest chart date.
+
+Release evidence: `reports/tickflow_strategy_visualization_v2_1_eval.md`.
 
 ## Account Semantics
 

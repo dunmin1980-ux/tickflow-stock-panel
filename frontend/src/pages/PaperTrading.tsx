@@ -17,8 +17,7 @@ import {
 import { PageHeader } from '@/components/PageHeader'
 import { ConditionList, ResearchPanel } from '@/components/paper-trading/ResearchPanel'
 import { ResearchOverview } from '@/components/paper-trading/ResearchEngineView'
-import { StrategyGraphics } from '@/components/paper-trading/StrategyGraphics'
-import { StrategyOverviewCards } from '@/components/paper-trading/StrategyOverviewCards'
+import { StrategyVisualization } from '@/components/paper-trading/StrategyVisualization'
 import {
   actionTone,
   dashboardErrorText,
@@ -155,7 +154,6 @@ export function PaperTrading() {
           {data.research?.status === 'READY' && data.research.engine && (
             <>
               <ResearchOverview engine={data.research.engine} requestedDate={data.requested_date} />
-              <StrategyOverviewCards engine={data.research.engine} />
             </>
           )}
 
@@ -164,7 +162,7 @@ export function PaperTrading() {
               <TrendingUp className="h-4 w-4" />完整个股研究
             </Link>
           </div>
-          <StrategyGraphics graphics={data.research?.status === 'READY' ? data.research.graphics : undefined}
+          <StrategyVisualization graphics={data.research?.status === 'READY' ? data.research.graphics : undefined}
             engine={data.research?.status === 'READY' ? data.research.engine : undefined} requestedDate={data.requested_date} />
 
           {(mutation.error || runMessage) && (

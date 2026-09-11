@@ -1,12 +1,14 @@
 import type { EChartsOption, TooltipComponentOption } from 'echarts'
 import { describe, expect, it } from 'vitest'
-import { buildStrategyGraphicsOptions } from '../strategy-graphics'
+import { buildStrategyGraphicsOptions, groupStrategyOverlayMarkers, type StrategyOverlayMarker } from '../strategy-graphics'
 import { chartTheme } from '../theme'
 import { deepFreeze, graphicsFixture, overlayFixture } from '@/components/paper-trading/__tests__/strategyGraphicsFixtures'
 
 function series(option: EChartsOption, name: string) {
   return (option.series as { name: string; data: unknown[] }[]).find(item => item.name === name)
 }
+
+const allLayers = { candles: true, ma5: true, ma10: true, ma20: true, ma60: true, boll: true, strategies: true }
 
 function tooltipText(option: EChartsOption, params: unknown) {
   const formatter = (option.tooltip as TooltipComponentOption).formatter
@@ -17,7 +19,7 @@ function tooltipText(option: EChartsOption, params: unknown) {
 
 describe('strategy graphics options', () => {
   it('passes every supplied price indicator through without recalculating or filling nulls', () => {
-    const { price } = buildStrategyGraphicsOptions(graphicsFixture(), chartTheme('light'))
+    const { price } = buildStrategyGraphicsOptions(graphicsFixture(), chartTheme('light'), undefined, { layers: allLayers })
     expect(price.xAxis).toMatchObject({ type: 'category', data: ['2026-09-08', '2026-09-09'] })
     for (const [name, values] of [
       ['MA5', [18.1, 18.35]], ['MA10', [18.2, 18.26]],
@@ -44,9 +46,9 @@ describe('strategy graphics options', () => {
       markLine: { data: expect.arrayContaining([expect.objectContaining({ yAxis: 50 })]) } })
   })
 
-  it('highlights the actual observation date on all three charts', () => {
+  it('highlights the actual observation date on all four charts independently of candles', () => {
     const options = buildStrategyGraphicsOptions(graphicsFixture(), chartTheme('dark'))
-    for (const [option, name] of [[options.price, 'QFQ 日K'], [options.macd, 'DIF'], [options.rsi, 'RSI6']] as const) {
+    for (const [option, name] of [[options.price, '观察日'], [options.macd, 'DIF'], [options.volume, '相对量能'], [options.rsi, 'RSI6']] as const) {
       expect(series(option, name)).toMatchObject({ markLine: {
         data: expect.arrayContaining([expect.objectContaining({ xAxis: '2026-09-09',
           label: expect.objectContaining({ position: 'end', rotate: 0, align: 'right' }) })]),
@@ -55,14 +57,16 @@ describe('strategy graphics options', () => {
   })
 
   it('uses original marker date price status and counts without inferring trades', () => {
-    const { price } = buildStrategyGraphicsOptions(graphicsFixture(), chartTheme('light'))
-    expect(series(price, '策略观察')).toMatchObject({ type: 'scatter', data: [
-      expect.objectContaining({ name: '2026-09-08', group: { trade_date: '2026-09-08', markers: [expect.objectContaining({
+    const { price, macd } = buildStrategyGraphicsOptions(graphicsFixture(), chartTheme('light'))
+    expect(series(macd, '策略观察')).toMatchObject({ type: 'scatter', data: [
+      expect.objectContaining({ name: '2026-09-08', value: ['2026-09-08', 0], marker: expect.objectContaining({
         strategy_id: 'macd_golden', canonical_status: 'TRIGGERED', price: 18.25, conditions_met: 4, conditions_total: 4,
-      })] } }),
-      expect.objectContaining({ name: '2026-09-09', group: { trade_date: '2026-09-09', markers: [expect.objectContaining({
+      }) }),
+    ] })
+    expect(series(price, '策略观察')).toMatchObject({ type: 'scatter', data: [
+      expect.objectContaining({ name: '2026-09-09', value: ['2026-09-09', 18.6], marker: expect.objectContaining({
         strategy_id: 'pullback_to_support', canonical_status: 'NEAR_TRIGGER', price: 18.6, conditions_met: 3, conditions_total: 4,
-      })] } }),
+      }) }),
     ] })
   })
 
@@ -70,7 +74,7 @@ describe('strategy graphics options', () => {
     const graphics = graphicsFixture()
     const { price, macd } = buildStrategyGraphicsOptions(graphics, chartTheme('light'))
     expect(price.tooltip).toMatchObject({ trigger: 'axis', confine: true, renderMode: 'richText' })
-    const marker = series(price, '策略观察')!.data[1]
+    const marker = series(price, '策略观察')!.data[0]
     expect(tooltipText(price, [{ axisValue: '2026-09-09', name: '2026-09-09', seriesName: '接近触发',
       value: ['2026-09-09', 18.6], data: marker }])).toContain('回踩支撑 · 接近触发 · 3/4 · 18.6')
     const values = tooltipText(macd, [{ axisValue: '2026-09-09', name: '2026-09-09', seriesName: 'DIF', value: 0.0105 },
@@ -86,7 +90,7 @@ describe('strategy graphics options', () => {
     graphics.strategy_markers.push({ trade_date: '2026-09-09', strategy_id: 'boll_breakout',
       strategy_name: 'BOLL 突破', status: 'NEAR_TRIGGER', price: 18.6, conditions_met: 2, conditions_total: 4 })
     const { price } = buildStrategyGraphicsOptions(deepFreeze(graphics), chartTheme('light'))
-    const marker = series(price, '策略观察')!.data[1]
+    const marker = series(price, '策略观察')!.data[0]
     const text = tooltipText(price, [{ name: '2026-09-09', seriesName: '收盘', value: 18.6 },
       { name: '2026-09-09', seriesName: '接近触发', value: ['2026-09-09', 18.6], data: marker }])
     expect(text).toContain('收盘: 18.6')
@@ -127,22 +131,21 @@ describe('strategy graphics options', () => {
   it('does not fabricate points or markers for an empty snapshot', () => {
     const graphics = { ...graphicsFixture(), points: [], strategy_markers: [] }
     const options = buildStrategyGraphicsOptions(graphics, chartTheme('light'))
-    expect(options.price.series).toEqual([])
+    expect((options.price.series as { data: unknown[] }[]).every(item => item.data.length === 0)).toBe(true)
     expect(series(options.macd, 'DIF')?.data).toEqual([])
     expect(series(options.rsi, 'RSI6')?.data).toEqual([])
   })
 
-  it('groups all active observations and confirmed Chan into one count glyph per date above the candles', () => {
+  it('keeps active price observations and each confirmed Chan identity on the price axis', () => {
     const graphics = deepFreeze(overlayFixture())
     const { price } = buildStrategyGraphicsOptions(graphics, chartTheme('light'))
     const markerSeries = series(price, '策略观察')!
-    expect(markerSeries).toMatchObject({ type: 'scatter', yAxisIndex: 1, clip: false,
-      symbolOffset: [0, -30], symbolSize: 20, emphasis: { scale: false },
-      data: [expect.objectContaining({ name: '2026-09-09', value: ['2026-09-09', 1],
-        group: { trade_date: '2026-09-09', markers: [graphics.overlay_markers![0], graphics.overlay_markers![2],
-          graphics.overlay_markers![4], graphics.overlay_markers![6], graphics.overlay_markers![7]] } })] })
-    expect(price.yAxis).toEqual(expect.arrayContaining([expect.objectContaining({ min: 0, max: 1, show: false })]))
-    expect((price.grid as { top: number }).top).toBeGreaterThanOrEqual(104)
+    expect(markerSeries).toMatchObject({ type: 'scatter', clip: true, symbolSize: 20, emphasis: { scale: false } })
+    expect((markerSeries.data as { marker: StrategyOverlayMarker }[]).map(item => item.marker)).toEqual([
+      graphics.overlay_markers![2], graphics.overlay_markers![4], graphics.overlay_markers![6], graphics.overlay_markers![7],
+    ])
+    expect(price.yAxis).toMatchObject({ type: 'value', scale: true })
+    expect(Array.isArray(price.yAxis)).toBe(false)
     expect(price.media).toEqual(expect.arrayContaining([expect.objectContaining({ query: { maxWidth: 480 },
       option: expect.objectContaining({ dataZoom: expect.any(Array) }) })]))
   })
@@ -161,9 +164,11 @@ describe('strategy graphics options', () => {
     ['pullback_to_support', 'NEAR_TRIGGER', ['pullback_to_support']],
   ] as const)('intersects strategy %s with status %s without re-evaluating research', (strategy, status, ids) => {
     const graphics = deepFreeze(overlayFixture())
-    const { price } = buildStrategyGraphicsOptions(graphics, chartTheme('light'), { strategy, status })
-    const items = series(price, '策略观察')!.data as { group: { markers: { strategy_id: string }[] } }[]
-    expect(items.flatMap(item => item.group.markers.map(marker => marker.strategy_id))).toEqual(ids)
+    const groups = groupStrategyOverlayMarkers(graphics, { strategy, status })
+    expect(groups.flatMap(group => group.markers.map(marker => marker.strategy_id))).toEqual(ids)
+    const options = buildStrategyGraphicsOptions(graphics, chartTheme('light'), { strategy, status })
+    const items = Object.values(options).flatMap(option => (series(option, '策略观察')?.data ?? []) as { marker: StrategyOverlayMarker }[])
+    expect([...new Set(items.map(item => item.marker.marker_id))].sort()).toEqual(groups.flatMap(group => group.markers.map(marker => marker.marker_id)).sort())
   })
 
   it('uses overlay data as authoritative even when empty and ignores markers outside the last 30 supplied days', () => {
@@ -187,8 +192,8 @@ describe('strategy graphics options', () => {
     const text = tooltipText(price, [{ name: '2026-09-09', seriesName: 'QFQ 日K', seriesType: 'candlestick',
       value: [1, 18.7, 18.6, 18.4, 18.8], data: [18.7, 18.6, 18.4, 18.8] }])
     expect(text).toContain('开 18.7 · 收 18.6 · 低 18.4 · 高 18.8')
-    expect(text).toContain('5 条观察')
-    expect(text).toContain('已触发 1 · 接近触发 2 · 结构 2')
+    expect(text).toContain('4 条观察')
+    expect(text).toContain('已触发 0 · 接近触发 2 · 结构 2')
     expect(price.tooltip).toMatchObject({ confine: true, renderMode: 'richText' })
     expect(String(text).length).toBeLessThan(500)
   })
@@ -197,13 +202,13 @@ describe('strategy graphics options', () => {
     const graphics = graphicsFixture()
     delete graphics.points[0][key]
     const options = buildStrategyGraphicsOptions(graphics, chartTheme('light'))
-    expect(options.price.series).toEqual([])
+    expect(series(options.price, 'QFQ 日K')).toBeUndefined()
     expect(series(options.macd, 'DIF')!.data).toEqual([0, 0.0105])
   })
 
   it('does not plot invalid non-finite OHLC', () => {
     const graphics = graphicsFixture()
     graphics.points[0].high = Number.NaN
-    expect(buildStrategyGraphicsOptions(graphics, chartTheme('light')).price.series).toEqual([])
+    expect(series(buildStrategyGraphicsOptions(graphics, chartTheme('light')).price, 'QFQ 日K')).toBeUndefined()
   })
 })

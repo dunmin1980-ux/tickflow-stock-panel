@@ -1,7 +1,7 @@
 import { useId, useState } from 'react'
 import { CheckCircle2, ChevronDown, ChevronRight, CircleHelp, CircleMinus } from 'lucide-react'
 import type { Condition, ResearchEngine, StrategyResearch } from '@/lib/research-engine'
-import { STRATEGY_STATUS_LABELS } from '@/lib/strategy-graphics'
+import { STRATEGY_STATUS_LABELS, type StrategyOverlayMarker } from '@/lib/strategy-graphics'
 import { cn } from '@/lib/cn'
 
 const CHANGE = { IMPROVING: '改善', WEAKENING: '减弱', MIXED: '变化不一致', UNCHANGED: '未变化', NOT_AVAILABLE: '无法比较' }
@@ -32,46 +32,60 @@ function ConditionDetail({ condition }: { condition: Condition }) {
   </li>
 }
 
-function StrategyCard({ strategy, closest }: { strategy: StrategyResearch; closest: boolean }) {
+type CardData = Pick<StrategyResearch, 'strategy_id' | 'strategy_name' | 'trade_date' | 'status' | 'evidence' | 'failed_conditions' | 'calculation_source'> & {
+  conditions_met: number | null; conditions_total: number | null
+  condition_ratio?: number
+  delta_vs_previous: StrategyResearch['delta_vs_previous'] | null
+}
+
+function StrategyCard({ strategy, closest, selected, onSelect }: {
+  strategy: CardData; closest: boolean; selected: boolean; onSelect?: (id: string) => void
+}) {
   const [expanded, setExpanded] = useState(false)
   const id = useId()
   const delta = strategy.delta_vs_previous
   const disclosure = `${expanded ? '收起' : '展开'} ${strategy.strategy_name} 证据`
+  const select = () => { setExpanded(true); onSelect?.(strategy.strategy_id) }
+  const ratio = strategy.condition_ratio ?? (strategy.conditions_met !== null && strategy.conditions_total ? strategy.conditions_met / strategy.conditions_total : undefined)
   return <article aria-labelledby={`${id}-name`}
-    className={cn('min-w-0 rounded-lg border p-3', closest ? 'border-warning' : 'border-border')}>
+    onClick={event => { if (onSelect && !(event.target as HTMLElement).closest('button')) select() }}
+    className={cn('min-w-0 rounded-lg border p-3', selected ? 'border-accent bg-accent/5' : closest ? 'border-warning' : 'border-border')}>
     <div className="flex items-start justify-between gap-2">
       <div className="min-w-0">
-        <h3 id={`${id}-name`} className="text-sm font-semibold">{strategy.strategy_name}</h3>
+        <h3 id={`${id}-name`} className="text-sm font-semibold">{onSelect
+          ? <button type="button" aria-label={`定位 ${strategy.strategy_name}`} aria-pressed={selected} onClick={select}
+            className="min-h-9 text-left focus-visible:outline-accent">{strategy.strategy_name}</button>
+          : strategy.strategy_name}</h3>
         <p className={cn('mt-1 text-xs', strategy.status === 'NEAR_TRIGGER' ? 'text-warning' : 'text-secondary')}>
           {STRATEGY_STATUS_LABELS[strategy.status]}
         </p>
       </div>
       <button type="button" aria-label={disclosure} title={disclosure}
-        aria-expanded={expanded} aria-controls={`${id}-evidence`} onClick={() => setExpanded(value => !value)}
+        aria-expanded={expanded} aria-controls={`${id}-evidence`} onClick={() => { setExpanded(value => !value); onSelect?.(strategy.strategy_id) }}
         className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded hover:bg-elevated focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">
         {expanded ? <ChevronDown aria-hidden="true" className="h-4 w-4" /> : <ChevronRight aria-hidden="true" className="h-4 w-4" />}
       </button>
     </div>
     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
-      <span>条件满足 <strong className="font-mono">{strategy.conditions_met}/{strategy.conditions_total}</strong></span>
+      <span>条件满足 <strong className="font-mono">{strategy.conditions_met ?? '--'}/{strategy.conditions_total ?? '--'}</strong></span>
       {closest && <span className="text-warning">最接近触发</span>}
     </div>
     <progress aria-label={`${strategy.strategy_name} 条件满足进度`}
       aria-valuetext={`${strategy.conditions_met}/${strategy.conditions_total} 条件满足`}
-      max={1} value={strategy.condition_ratio} className={cn('mt-2 block h-1.5 w-full accent-current', closest ? 'text-warning' : 'text-secondary')} />
+      max={1} value={ratio} className={cn('mt-2 block h-1.5 w-full accent-current', closest ? 'text-warning' : 'text-secondary')} />
     <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-secondary">
       <span>支持 {strategy.conditions_met}</span><span>限制 {strategy.failed_conditions.length}</span>
     </p>
-    <p className="mt-2 text-xs text-secondary">较前日：{CHANGE[delta.change]}
-      {delta.change !== 'NOT_AVAILABLE' && <span> · 满足项 {signed(delta.conditions_met_delta)} · 前日 {delta.previous_conditions_met}</span>}
+    <p className="mt-2 text-xs text-secondary">较前日：{delta ? CHANGE[delta.change] : '无法比较'}
+      {delta && delta.change !== 'NOT_AVAILABLE' && <span> · 满足项 {signed(delta.conditions_met_delta)} · 前日 {delta.previous_conditions_met}</span>}
     </p>
     {expanded && <div id={`${id}-evidence`} role="region" aria-label={`${strategy.strategy_name} 证据`} className="mt-3 space-y-2">
-      <p className="text-[11px] text-muted">{strategy.trade_date} · {strategy.price_basis} · 日线</p>
+      <p className="text-[11px] text-muted">{strategy.trade_date} · QFQ · 日线</p>
       {strategy.evidence.length > 0 ? <ul className="space-y-3">
         {strategy.evidence.map((condition, index) => <ConditionDetail key={`${condition.label}-${index}`} condition={condition} />)}
       </ul> : <p className="text-xs text-muted">暂无条件证据</p>}
       <h4 className="border-t border-border pt-2 text-xs font-medium">逐条件较前日变化</h4>
-      {delta.conditions.length > 0 ? <ul className="space-y-2 text-xs text-secondary">
+      {delta && delta.conditions.length > 0 ? <ul className="space-y-2 text-xs text-secondary">
         {delta.conditions.map((condition, index) => <li key={`${condition.label}-${index}`}>
           {condition.label} · {numeric(condition.previous)} → {numeric(condition.current)} · 变化 {signed(condition.value_delta)} {UNITS[condition.unit] ?? condition.unit}
           {' · '}裕量变化 {signed(condition.margin_delta)} · {CHANGE[condition.change]}
@@ -82,15 +96,23 @@ function StrategyCard({ strategy, closest }: { strategy: StrategyResearch; close
   </article>
 }
 
-export function StrategyOverviewCards({ engine }: { engine: ResearchEngine }) {
+export function StrategyOverviewCards({ engine, observations, observationDate, selectedStrategy = 'ALL', onSelectStrategy }: {
+  engine: ResearchEngine; observations?: StrategyOverlayMarker[]; observationDate?: string
+  selectedStrategy?: string; onSelectStrategy?: (id: string) => void
+}) {
+  const date = observationDate ?? engine.trade_date
+  const strategies: CardData[] = observations === undefined ? engine.strategies : observations
+    .filter(marker => marker.kind === 'STRATEGY' && marker.trade_date === date)
+    .map(marker => ({ ...marker, status: marker.canonical_status, calculation_source: 'research.graphics / 同一 QFQ 快照回溯' }))
   return <section aria-label="六策略总览" className="min-w-0 border-y border-border py-4 text-foreground [overflow-wrap:anywhere]">
     <div className="flex flex-wrap items-baseline justify-between gap-2">
       <h2 className="text-[16px] font-semibold">策略概览</h2>
-      <p className="text-xs text-secondary">研究日期 {engine.trade_date} · {engine.symbol} · QFQ</p>
+      <p className="text-xs text-secondary">{observations ? '回溯观察日期' : '研究日期'} {date} · {engine.symbol} · QFQ</p>
     </div>
-    {engine.strategies.length > 0 ? <div className="mt-3 grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {engine.strategies.map(strategy => <StrategyCard key={strategy.strategy_id} strategy={strategy}
-        closest={engine.summary.closest_trigger?.strategy_id === strategy.strategy_id} />)}
+    {strategies.length > 0 ? <div className="mt-3 grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {strategies.map(strategy => <StrategyCard key={strategy.strategy_id} strategy={strategy}
+        selected={selectedStrategy === strategy.strategy_id} onSelect={onSelectStrategy}
+        closest={date === engine.trade_date && engine.summary.closest_trigger?.strategy_id === strategy.strategy_id} />)}
     </div> : <p role="status" className="py-4 text-sm text-secondary">暂无策略研究数据。</p>}
   </section>
 }
