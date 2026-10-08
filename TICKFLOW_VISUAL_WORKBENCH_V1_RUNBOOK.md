@@ -47,6 +47,18 @@ different local port:
 TICKFLOW_VISUAL_PORT=3020 ./scripts/start_tickflow_visual.sh
 ```
 
+### Physical Paths
+
+Startup resolves project and data-root aliases (including an iCloud directory
+alias) before passing `DATA_DIR` to the backend. Inspect the selected paths without
+starting a server or fetching data with `./scripts/start_tickflow_visual.sh --dry-run`.
+Default data must remain inside the physical project; an explicit `DATA_DIR`
+selects a separate allowed data root. Research and runtime descendants must remain
+inside that root and retain the existing no-symlink policy. A path error stops
+startup before any mkdir or HTTP request; do not disable research safety checks.
+After fixing a running instance's launch path, restart through the desktop App:
+an already-running healthy process is reused and does not reload its `DATA_DIR`.
+
 ## Runtime Status
 
 Visual v1 uses the released deterministic Option C engine:
